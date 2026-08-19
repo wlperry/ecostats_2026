@@ -1,0 +1,446 @@
+---
+title: "Describing Your Data"
+subtitle: "Mean, spread, counting correctly, and group summaries"
+description: "Mean, median, variance, standard deviation, and standard error; the length() trap and the sum(!is.na()) fix; and getting tidy per-group summaries with group_by() + summarize() — all on the pine needle dataset."
+categories: [Descriptive Statistics, R, tidyverse]
+order: 3
+week: 2
+author: "Bill Perry"
+
+format:
+  html:
+    downloads: [docx, pptx]
+  revealjs:
+    output-ext: "slides.html"
+  docx:
+    reference-doc: ../../ms_templates/custom-reference-compact.docx
+    fig-width: 3
+    fig-height: 3
+    fig-dpi: 300
+  pptx: default
+execute:
+  echo: true
+---
+
+# Where We Left Off
+
+::::::: columns
+:::: {.column width="60%"}
+Last time you:
+
+- Imported data two ways (`read_csv()`, `read_excel()`)
+- Wrangled with `filter()`, `select()`, `mutate()`, `arrange()`
+- Caught duplicate rows with `distinct()`
+- Saved a new file with `write_csv()`
+
+::: callout-note
+**✅ Key idea from Module 2**
+
+You can reshape a dataset and hand off a clean file. Today we start **describing** it — the step that comes before any formal test.
+:::
+::::
+
+:::: {.column width="40%"}
+::: callout-note
+**Today's roadmap**
+
+1.  Mean and median
+2.  Variance and standard deviation
+3.  The `length()` trap — and the fix
+4.  Standard error
+5.  `group_by()` + `summarize()`
+:::
+::::
+:::::::
+
+# Part 1 · Our Question, Revisited
+
+::::::: columns
+:::: {.column width="60%"}
+- **H₀:** No difference in needle length between the lee and windward sides
+- **Hₐ:** Needle length differs between the two sides
+
+Before we can formally *test* that with statistics, we need to *describe* what we actually measured.
+
+::: callout-note
+**Plan for this unit**
+
+1.  **Today** — describe the data: center, spread, and group summaries
+2.  **A later module** — formally test H₀ vs. Hₐ
+:::
+::::
+
+:::: {.column width="40%"}
+```{r}
+library(tidyverse)
+
+pine_df <- read_csv("data/pine_needles.csv")
+```
+
+::: callout-tip
+**🖐 Recap**
+
+`n_s` codes lee (`n`) vs. windward (`s`); `group` is the field team name. Four teams, four trees, six needles per side.
+:::
+::::
+:::::::
+
+# Part 2 · The Mean
+
+::::::: columns
+:::: {.column width="60%"}
+$$\bar{x} = \frac{\sum_{i=1}^{n} x_i}{n}$$
+
+- Add up every value, divide by *n*
+- The **balance point** of the distribution
+- **Sensitive to outliers** — one very large value pulls it
+
+**Example:** Values 5, 6, 7, 8, **50** → mean = 15.2. Is that a fair summary? Not really — the outlier dominates.
+
+::: callout-note
+**✅ Why it matters**
+
+The mean is the most commonly reported statistic — and it's the number every t-test, ANOVA, and regression is ultimately built around.
+:::
+::::
+
+:::: {.column width="40%"}
+```{r}
+# Pull one side's values out as a vector -----
+lee_lengths <- pine_df |>
+  filter(n_s == "n") |>
+  pull(length_mm)
+
+lee_lengths
+
+mean(lee_lengths)
+```
+
+::: callout-tip
+**📖 New pattern**
+
+`filter()` picks **rows**. `pull()` extracts one column as a plain **vector**, not a data frame.
+:::
+::::
+:::::::
+
+# Part 3 · The Median
+
+::::::: columns
+:::: {.column width="60%"}
+**The middle value once the data are sorted**
+
+| Sorted data            | Median                |
+|------------------------|------------------------|
+| 5, 6, **7**, 8, 50     | **7**                  |
+| 5, 6, **7, 8**, 50, 51 | **(7 + 8) / 2 = 7.5**  |
+
+- Not pulled around by outliers — it's **robust**
+- If mean ≫ median → right-skewed data
+- If mean ≈ median → roughly symmetric
+::::
+
+:::: {.column width="40%"}
+```{r}
+wind_lengths <- pine_df |>
+  filter(n_s == "s") |>
+  pull(length_mm)
+
+median(lee_lengths)
+median(wind_lengths)
+```
+
+::: callout-note
+**✅ Key idea**
+
+Report mean *and* median together the first time you look at a new variable — a big gap between them is a signal worth investigating.
+:::
+::::
+:::::::
+
+# Part 4 · Variance and Standard Deviation
+
+::::::: columns
+:::: {.column width="60%"}
+$$s^2 = \frac{\sum_{i=1}^{n}(x_i - \bar{x})^2}{n - 1} \qquad s = \sqrt{s^2}$$
+
+1.  Distance of each value from the mean
+2.  **Square** it — makes everything positive
+3.  Average those squared distances (over $n-1$)
+4.  **Square root** brings variance back into the original units
+
+**Larger spread = larger variance and SD.**
+
+::: callout-note
+Variance is in *squared* units (mm²) — hard to interpret directly. SD is why we usually report it instead.
+:::
+::::
+
+:::: {.column width="40%"}
+```{r}
+var(lee_lengths)
+sd(lee_lengths)
+
+var(wind_lengths)
+sd(wind_lengths)
+```
+
+::: callout-tip
+**📖 Rule of thumb**
+
+For roughly normal data: \~68% of values fall within mean ± 1 SD, \~95% within mean ± 2 SD.
+:::
+::::
+:::::::
+
+# Part 5 · The `length()` Trap
+
+::: callout-important
+**🔮 Predict first:** A vector has 5 slots, but 2 are `NA`. What does `length()` return? What *should* your sample size be for a mean or SE calculation?
+:::
+
+::::::: columns
+:::: {.column width="60%"}
+```{r}
+x <- c(4, 3, NA, 7, NA)   # a vector with missing values
+
+length(x)          # counts every slot — including NAs!
+sum(is.na(x))       # how many are missing?
+```
+
+```{r}
+# Using length() as n silently gives the WRONG answer
+wrong_n  <- length(x)
+wrong_se <- sd(x, na.rm = TRUE) / sqrt(wrong_n)
+
+wrong_n
+round(wrong_se, 3)
+```
+
+::: callout-warning
+**⚠️ Watch out!**
+
+R will **not** warn you. `length()` happily returns 5 when only 3 values are real — a silent, common error.
+:::
+::::
+
+:::: {.column width="40%"}
+::: callout-note
+**📖 New words**
+
+- **`is.na(x)`** — `TRUE` where a value is missing
+- **`!is.na(x)`** — the flip: `TRUE` where a value is real
+- **`sum(!is.na(x))`** — counts the real values = the correct *n*
+:::
+::::
+:::::::
+
+# Fix — `sum(!is.na())`
+
+::::::: columns
+:::: {.column width="60%"}
+```{r}
+is.na(x)          # TRUE where NA
+!is.na(x)         # flipped: TRUE where real
+sum(!is.na(x))    # count the TRUEs
+```
+
+```{r}
+# Applied to our real data — even with no NAs, make it a habit
+n_lee  <- sum(!is.na(lee_lengths))
+n_wind <- sum(!is.na(wind_lengths))
+
+n_lee
+n_wind
+```
+
+::: callout-tip
+**Best practice:** use `sum(!is.na(x))` for *n* every time you compute an SE — even when you're sure there are no missing values. Field data rarely stays that clean.
+:::
+::::
+
+:::: {.column width="40%"}
+**How it works, step by step:**
+
+1.  `is.na(x)` → `TRUE` for each missing value
+2.  `!is.na(x)` → flips it to `TRUE` for **real** values
+3.  `sum(...)` → adds up the `TRUE`s (`TRUE` = 1)
+
+📖 R4DS §18 — Missing Values
+::::
+:::::::
+
+# Part 6 · Standard Error
+
+::::::: columns
+:::: {.column width="60%"}
+$$SE = \frac{s}{\sqrt{n}}$$
+
+- Measures how precisely you know the **mean** — not the spread of raw data
+- Gets **smaller** as *n* grows: more data → a more precise estimate of the mean
+
+|        | Describes                          |
+|--------|-------------------------------------|
+| **SD** | spread of *individual* data points |
+| **SE** | precision of the *sample mean*     |
+
+We report SE whenever we're making a claim about a group mean.
+::::
+
+:::: {.column width="40%"}
+```{r}
+se_lee  <- sd(lee_lengths)  / sqrt(n_lee)
+se_wind <- sd(wind_lengths) / sqrt(n_wind)
+
+round(se_lee, 2)
+round(se_wind, 2)
+```
+
+::: callout-warning
+**⚠️ Watch out!**
+
+`sqrt(length(x))` and `sqrt(sum(!is.na(x)))` give the *same* answer only when there are zero missing values. Don't assume — check.
+:::
+::::
+:::::::
+
+# All Stats, One Group, Base R
+
+::::::: columns
+:::: {.column width="60%"}
+```{r}
+n_l    <- sum(!is.na(lee_lengths))
+mean_l <- mean(lee_lengths, na.rm = TRUE)
+med_l  <- median(lee_lengths, na.rm = TRUE)
+sd_l   <- sd(lee_lengths, na.rm = TRUE)
+se_l   <- sd_l / sqrt(n_l)
+
+cat("--- Lee side ---\n")
+cat("n      =", n_l, "\n")
+cat("Mean   =", round(mean_l, 2), "\n")
+cat("Median =", round(med_l, 2), "\n")
+cat("SD     =", round(sd_l, 2), "\n")
+cat("SE     =", round(se_l, 2), "\n")
+```
+::::
+
+:::: {.column width="40%"}
+- Every function takes `na.rm = TRUE`
+- `cat()` prints clean, labeled output
+- Clear — but repetitive the moment you have more than one group
+
+::: callout-note
+**✅ Key idea**
+
+Copy-pasting this block for every group is exactly the repetition `group_by()` + `summarize()` exists to remove.
+:::
+::::
+:::::::
+
+# Part 7 · Tidy Group Stats — `group_by()` + `summarize()`
+
+::: callout-note
+**🔮 Predict first:** How many **rows** will the result have? (Hint: how many values does `n_s` take?)
+:::
+
+::::::: columns
+:::: {.column width="60%"}
+```{r}
+side_stats_df <- pine_df |>
+  group_by(n_s) |>
+  summarize(
+    n       = sum(!is.na(length_mm)),
+    mean_mm = round(mean(length_mm, na.rm = TRUE), 2),
+    med_mm  = round(median(length_mm, na.rm = TRUE), 2),
+    sd_mm   = round(sd(length_mm, na.rm = TRUE), 2),
+    se_mm   = round(sd_mm / sqrt(n), 2)
+  )
+
+side_stats_df
+```
+::::
+
+:::: {.column width="40%"}
+- `group_by(n_s)` splits the data by side
+- `summarize()` collapses each group to **one row** of stats
+- Both groups, one clean table — no copy-paste
+- A column you just created (`sd_mm`) can feed the next one (`se_mm`)
+
+📖 R4DS §3.5 — `summarize()`
+::::
+:::::::
+
+# Grouping by More Than One Variable
+
+::::::: columns
+:::: {.column width="60%"}
+```{r}
+team_stats_df <- pine_df |>
+  group_by(group, n_s) |>
+  summarize(
+    n       = sum(!is.na(length_mm)),
+    mean_mm = round(mean(length_mm, na.rm = TRUE), 2),
+    se_mm   = round(sd(length_mm, na.rm = TRUE) / sqrt(n), 2),
+    .groups = "drop"
+  )
+
+team_stats_df
+```
+::::
+
+:::: {.column width="40%"}
+- `group_by(group, n_s)` splits by **field team, then side** — one row per combination
+- `.groups = "drop"` turns off the grouping once you're done — good habit, avoids surprises later
+
+::: callout-tip
+**🖐 Notice**
+
+Four teams × two sides = 8 rows. Does every team show the same lee-vs-windward pattern, or do some disagree?
+:::
+::::
+:::::::
+
+# Wrap-up
+
+::::::: columns
+:::: {.column width="60%"}
+Today you:
+
+- Computed **mean** and **median**, and know why they can disagree
+- Computed **variance** and **SD** by hand, with real formulas
+- Found the **`length()` trap** and fixed it with `sum(!is.na())`
+- Computed **SE** and know how it differs from SD
+- Used `group_by()` + `summarize()` to get every group's stats in one table
+
+::: callout-tip
+**🖐 Before next class**
+
+Finish the worksheet: compute n, mean, SD, and SE for `length_mm` grouped by `n_s`, and again grouped by `group`. Save the summary table with `write_csv()`.
+:::
+::::
+
+:::: {.column width="40%"}
+::: callout-note
+**Up next — Module 4**
+
+- Boxplots and jittered points, done right
+- Plotting mean ± SE directly with `stat_summary()`
+- Faceting, themes, and `ggsave()` for a publication-ready figure
+:::
+::::
+:::::::
+
+# Getting unstuck
+
+When code breaks — and it will, that is normal:
+
+1.  Read the **error message** out loud; it usually names the line
+2.  Check the usual suspects: `library(tidyverse)` loaded? Spelling? Did you forget `na.rm = TRUE`?
+3.  `?function_name` opens the help page
+4.  Bring the **exact error** (copy-paste it) to class or office hours
+
+::: callout-note
+**✅ Key idea**
+
+Every working scientist googles error messages daily. Getting stuck is not failing — it is the job.
+:::

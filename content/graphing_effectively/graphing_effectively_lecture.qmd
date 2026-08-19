@@ -1,0 +1,383 @@
+---
+title: "Graphing Effectively"
+subtitle: "Boxplots, group comparisons, and saving a publication-ready figure"
+description: "Boxplots with jittered raw points, mapping color and fill by group, plotting mean ± SE directly with stat_summary(), faceting, a quick theme tour, and a real ggsave() drill — all on the pine needle dataset."
+categories: [Graphing, ggplot2, R]
+order: 4
+week: 2
+author: "Bill Perry"
+
+format:
+  html:
+    downloads: [docx, pptx]
+  revealjs:
+    output-ext: "slides.html"
+  docx:
+    reference-doc: ../../ms_templates/custom-reference-compact.docx
+    fig-width: 3
+    fig-height: 3
+    fig-dpi: 300
+  pptx: default
+execute:
+  echo: true
+---
+
+# Where We Left Off
+
+::::::: columns
+:::: {.column width="60%"}
+Last time you:
+
+- Computed mean, median, SD, and SE — by hand and with `summarize()`
+- Fixed the `length()` trap with `sum(!is.na())`
+- Got tidy per-group tables with `group_by()` + `summarize()`
+
+::: callout-note
+**✅ Key idea from Module 3**
+
+You now have real numbers describing lee vs. windward needles. Today we make those numbers **visible** — and save the result properly.
+:::
+::::
+
+:::: {.column width="40%"}
+::: callout-note
+**Today's roadmap**
+
+1.  The `ggplot` grammar, recapped
+2.  Boxplots done right — with raw points
+3.  Plotting mean ± SE directly
+4.  Faceting and a quick theme tour
+5.  `ggsave()`, for real this time
+:::
+::::
+:::::::
+
+# Part 1 · The `ggplot` Grammar, Recapped
+
+::::::: columns
+:::: {.column width="60%"}
+Every `ggplot` is three pieces joined with `+`:
+
+1.  **data** — which data frame
+2.  **aes()** — which columns map to x, y, color, fill…
+3.  **geom** — how to draw it
+
+```{r}
+library(tidyverse)
+library(readxl)
+
+pine_df <- read_csv("data/pine_needles.csv")
+```
+
+::: callout-note
+**✅ Key idea**
+
+Everything today is the *same three pieces* — we're just adding more layers and more polish on top of them.
+:::
+::::
+
+:::: {.column width="40%"}
+::: callout-tip
+**🖐 Recap from Module 1**
+
+```{r}
+ggplot(pine_df, aes(x = n_s, y = length_mm)) +
+  geom_point()
+```
+:::
+::::
+:::::::
+
+# Part 2 · Boxplot Anatomy
+
+::::::: columns
+:::: {.column width="60%"}
+```{r}
+pine_box_plot <- ggplot(pine_df, aes(x = n_s, y = length_mm, fill = n_s)) +
+  geom_boxplot(alpha = 0.6, outlier.shape = NA) +
+  labs(
+    title = "Needle Length by Side of Tree",
+    x = "Side (n = lee, s = windward)",
+    y = "Needle length (mm)",
+    fill = "Side"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+pine_box_plot
+```
+::::
+
+:::: {.column width="40%"}
+**Boxplot anatomy:**
+
+- Middle line = **median**
+- Box edges = 25th and 75th percentile (**IQR**)
+- Whiskers = 1.5 × IQR
+- Dots beyond whiskers = **outliers**
+
+📖 R4DS §9 — Layers
+::::
+:::::::
+
+# Boxplot + Raw Points
+
+::: callout-note
+**🔮 Predict first:** With only 6 needles per side per tree, does a boxplot alone show you everything? What might it hide?
+:::
+
+::::::: columns
+:::: {.column width="60%"}
+```{r}
+pine_jitter_plot <- ggplot(pine_df, aes(x = n_s, y = length_mm, fill = n_s)) +
+  geom_boxplot(alpha = 0.5, outlier.shape = NA) +
+  geom_point(
+    position = position_jitter(width = 0.15, seed = 42),
+    alpha = 0.6,
+    size = 2
+  ) +
+  labs(
+    title = "Needle Length by Side of Tree",
+    x = "Side of tree",
+    y = "Needle length (mm)",
+    fill = "Side"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+pine_jitter_plot
+```
+::::
+
+:::: {.column width="40%"}
+- `position_jitter(width = 0.15)` spreads points sideways so they don't overlap
+- `seed = 42` — same jitter layout every time you render
+- `alpha = 0.6` — semi-transparent, so overlapping points are still visible
+
+::: callout-tip
+Always show the raw points alongside a boxplot when *n* is small — every point matters, and a box alone can hide a bimodal or lopsided pattern.
+:::
+::::
+:::::::
+
+# Part 3 · Mapping Color by Group
+
+::::::: columns
+:::: {.column width="60%"}
+```{r}
+pine_team_plot <- ggplot(pine_df, aes(x = n_s, y = length_mm, color = group)) +
+  geom_point(
+    position = position_jitter(width = 0.15, seed = 42),
+    size = 2.5,
+    alpha = 0.8
+  ) +
+  labs(
+    title = "Needle Length by Side, Colored by Team",
+    x = "Side of tree",
+    y = "Needle length (mm)",
+    color = "Field team"
+  ) +
+  theme_minimal()
+
+pine_team_plot
+```
+::::
+
+:::: {.column width="40%"}
+- `color = group` maps a **third variable** onto the plot — no new geom needed
+- `ggplot` auto-builds the legend and picks colors for you
+- Mapping inside `aes()` always means "vary this by data" — not "make everything this color"
+
+::: callout-warning
+**⚠️ Watch out!**
+
+`color = "steelblue"` **outside** `aes()` sets one fixed color. `color = group` **inside** `aes()` maps colors to a variable. Mixing these up is one of the most common `ggplot` mistakes.
+:::
+::::
+:::::::
+
+# Part 4 · Mean ± SE — Plotted Directly
+
+::::::: columns
+:::: {.column width="60%"}
+```{r}
+pine_mean_se_plot <- ggplot(pine_df, aes(x = n_s, y = length_mm, color = n_s)) +
+  geom_point(
+    position = position_jitter(width = 0.15, seed = 42),
+    alpha = 0.3,
+    size = 2
+  ) +
+  stat_summary(fun = mean, geom = "point", size = 4) +
+  stat_summary(
+    fun.data = mean_se,
+    geom = "errorbar",
+    width = 0.15,
+    linewidth = 0.9
+  ) +
+  labs(
+    title = "Mean ± SE Needle Length by Side",
+    x = "Side of tree",
+    y = "Needle length (mm)"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+pine_mean_se_plot
+```
+::::
+
+:::: {.column width="40%"}
+**Two `stat_summary()` layers:**
+
+| call | draws |
+|---|---|
+| `fun = mean` | one large point at the mean |
+| `fun.data = mean_se` | error bars for ± 1 SE |
+
+`stat_summary()` computes the mean and SE **for you**, straight from the raw data — no `summarize()` step required first.
+
+::: callout-note
+**✅ Key idea**
+
+This is the exact same mean and SE you calculated by hand in Module 3 — now you can see them.
+:::
+::::
+:::::::
+
+# Part 5 · Faceting — One Panel Per Group
+
+::::::: columns
+:::: {.column width="60%"}
+```{r}
+pine_facet_plot <- ggplot(pine_df, aes(x = n_s, y = length_mm, fill = n_s)) +
+  geom_boxplot(alpha = 0.6, outlier.shape = NA) +
+  facet_wrap(~group) +
+  labs(
+    title = "Needle Length by Side, Faceted by Team",
+    x = "Side of tree",
+    y = "Needle length (mm)"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+pine_facet_plot
+```
+::::
+
+:::: {.column width="40%"}
+- `facet_wrap(~group)` gives each field team its **own small panel**
+- Same x/y scale across panels — easy to compare
+- Useful the moment "does every group show the same pattern?" is the real question
+
+::: callout-tip
+**🖐 Notice**
+
+A faceted plot answers a different question than a single colored plot: not just "is there an overall pattern," but "does the pattern hold for *everyone*?"
+:::
+::::
+:::::::
+
+# Part 6 · A Quick Theme Tour
+
+::::::: columns
+:::: {.column width="60%"}
+```{r}
+#| fig-width: 3
+#| fig-height: 2.6
+pine_jitter_plot + theme_bw()
+```
+
+```{r}
+#| fig-width: 3
+#| fig-height: 2.6
+pine_jitter_plot + theme_classic()
+```
+::::
+
+:::: {.column width="40%"}
+- `theme_minimal()` — light, few gridlines (what we've used so far)
+- `theme_bw()` — white background, black-and-white frame
+- `theme_classic()` — just x/y axis lines, no gridlines at all
+
+::: callout-note
+**✅ Key idea**
+
+A theme changes *appearance* only — never the data or the statistics underneath. Pick one and use it consistently across a report.
+:::
+::::
+:::::::
+
+# Part 7 · Saving a Real Figure
+
+::::::: columns
+:::: {.column width="60%"}
+```{r}
+#| eval: false
+ggsave(
+  "figures/pine_needle_boxplot.png",
+  plot = pine_jitter_plot,
+  width = 3,
+  height = 3,
+  units = "in",
+  dpi = 300
+)
+```
+
+::: callout-warning
+**⚠️ Watch out!**
+
+`ggsave()` wants the **filename first**, then `plot =`. If you skip `plot =`, it saves whatever plot was drawn *last* — not necessarily the one you meant.
+:::
+::::
+
+:::: {.column width="40%"}
+::: callout-note
+**✅ Key idea**
+
+Always set `width`, `height`, `units`, and `dpi` explicitly. Letting `ggsave()` guess gives you a plot sized for your screen, not for a report or a poster.
+:::
+::::
+:::::::
+
+# Wrap-up
+
+::::::: columns
+:::: {.column width="60%"}
+Today you:
+
+- Built boxplots with raw points overlaid, not hidden
+- Mapped a third variable with `color =` / `fill =` inside `aes()`
+- Plotted mean ± SE directly with `stat_summary()` — no separate summary table needed
+- Faceted a plot with `facet_wrap()` to check every group at once
+- Compared themes, and saved a real, correctly-sized figure with `ggsave()`
+
+::: callout-tip
+**🖐 Before next class**
+
+Finish the worksheet: build a mean ± SE plot faceted by `group`, pick a theme, and save it to `figures/` at 3×3in, 300 dpi.
+:::
+::::
+
+:::: {.column width="40%"}
+::: callout-note
+**Where this leads**
+
+You can now import, wrangle, describe, and visualize a dataset end to end. That full pipeline — raw data → clean → summarize → visualize — is the foundation every later statistical test builds on.
+:::
+::::
+:::::::
+
+# Getting unstuck
+
+When code breaks — and it will, that is normal:
+
+1.  Read the **error message** out loud; it usually names the line
+2.  Check the usual suspects: `library(tidyverse)` loaded? Is `color`/`fill` inside `aes()` when it should be?
+3.  `?function_name` opens the help page
+4.  Bring the **exact error** (copy-paste it) to class or office hours
+
+::: callout-note
+**✅ Key idea**
+
+Every working scientist googles error messages daily. Getting stuck is not failing — it is the job.
+:::

@@ -1,0 +1,358 @@
+---
+order: 5
+week: 5
+title: "Worksheet — Module 5: Probability & Inference"
+subtitle: "Z-scores, the t-distribution, confidence intervals, and hypothesis testing"
+description: "Hands-on worksheet: the standard normal distribution, Z-scores, standard error and confidence intervals, Student's t-distribution, one- and two-sample t-tests, p-values, Type I/II errors, and power."
+author: "Bill Perry"
+
+format:
+  html:
+    css: custom.css
+    toc: false
+  docx:
+    reference-doc: ../reference-doc.docx
+    toc: false
+execute:
+  echo: true
+  warning: false
+  message: false
+  fig-width: 5
+  fig-height: 4
+  fig-dpi: 300
+---
+
+# Worksheet 5: Probability & Inference
+
+> ## How to use this worksheet
+>
+> Work through each part in order, at your own pace. Type every line of code yourself into a **plain R script** — do not copy-paste. Blocks marked **▶ Run this** are code you should type and execute. Blocks marked **✏️ Your turn** ask you to write, modify, or answer something. Boxes marked **🚀 If you finish early** are optional bonus material.
+>
+> This worksheet mirrors today's lecture step for step, using the same Arctic grayling length data (`data/gray_I3_I8.csv`) from lakes I3 and I8.
+>
+> 📖 Background reading: Whitlock & Schluter, *The Analysis of Biological Data*, Ch. 4–6; Gotelli & Ellison, *A Primer of Ecological Statistics*, Ch. 3–4.
+
+------------------------------------------------------------------------
+
+# Part 1 · Setup and descriptive statistics
+
+**▶ Run this in your Script:**
+
+``` r
+library(tidyverse)
+library(patchwork)
+
+# Read in the data file
+grayling_df <- read_csv("data/gray_I3_I8.csv")
+
+i3_df <- grayling_df %>% filter(lake == "I3")
+
+head(grayling_df)
+```
+
+**▶ Run this — summary statistics by lake:**
+
+``` r
+grayling_summary <- grayling_df %>%
+  group_by(lake) %>%
+  summarize(
+    mean_length = mean(length_mm, na.rm = TRUE),
+    sd_length = sd(length_mm, na.rm = TRUE),
+    se_length = sd_length / sqrt(sum(!is.na(length_mm))),
+    count = sum(!is.na(length_mm)),
+    .groups = "drop")
+
+grayling_summary
+```
+
+✏️ **Your turn:** Make a histogram (or boxplot) of `length_mm` for the two lakes, similar to what you built in earlier modules. Do the two lakes look like they come from the same distribution? `________________________`
+
+``` r
+# Write your code here:
+```
+
+------------------------------------------------------------------------
+
+# Part 2 · The standard normal distribution and Z-scores
+
+**Z score = (length − mean) / standard deviation**
+
+**▶ Run this:**
+
+``` r
+# Calculate the mean and standard deviation of fish lengths
+mean_length <- mean(i3_df$length_mm, na.rm = TRUE)
+sd_length <- sd(i3_df$length_mm, na.rm = TRUE)
+
+# Calculate Z-scores for fish lengths
+i3_df <- i3_df %>%
+  mutate(z_score = (length_mm - mean_length) / sd_length)
+
+# View the first few rows with Z-scores
+head(i3_df)
+```
+
+**▶ Run this — plot the Z-scores:**
+
+``` r
+z_fish_plot <- i3_df %>%
+  ggplot(aes(x = z_score)) +
+  geom_histogram()
+
+z_fish_plot
+```
+
+Remember, in a true normal distribution, approximately:
+
+-   68% of data within ±1σ of the mean
+-   **95% of data within ±2σ of the mean — really 1.96σ**
+-   99.7% of data within ±3σ of the mean
+
+**▶ Run this — check the 68% rule against our own data:**
+
+``` r
+# What proportion of fish are within 1 standard deviation of the mean?
+within_1sd <- sum(abs(i3_df$z_score) <= 1, na.rm = TRUE) / sum(!is.na(i3_df$z_score))
+cat("Proportion within 1 SD:", round(within_1sd * 100, 1), "%\n")
+```
+
+✏️ **Your turn:** Is the proportion you calculated close to 68%? If not, what might explain the difference (think about sample size and how closely I3 follows a true normal distribution)? `________________________`
+
+------------------------------------------------------------------------
+
+# Part 3 · Using R for Z-score probabilities
+
+R gives us `pnorm()`, `qnorm()`, and `dnorm()` so we never have to integrate area under the curve by hand.
+
+**▶ Run this:**
+
+``` r
+# For standard normal distribution (mean=0, sd=1):
+# pnorm(z)  gives cumulative probability (area to the left)
+# qnorm(p)  gives z-value for a given probability
+# dnorm(z)  gives probability density
+
+z_value <- 1.22
+prob_left <- pnorm(z_value)          # area to the left of z
+prob_right <- 1 - pnorm(z_value)     # area to the right of z
+prob_between <- pnorm(2) - pnorm(-2) # area between two z-values
+
+# To find z-value for a given probability:
+z_for_95_percent <- qnorm(0.888)
+
+print(prob_left)
+print(prob_right)
+print(prob_between)
+print(z_for_95_percent)
+```
+
+✏️ **Your turn:** By hand (or with `pnorm()`), for a fish that is 300 mm long: `z = (300 - 265.61)/28.3 = 1.215194`. What proportion of fish are expected to be **longer** than 300 mm? `________________________`
+
+**▶ Run this — the cutoff for an "unlikely" catch:**
+
+``` r
+# What fish length corresponds to the top 5% (unlikely)?
+top_5_percent_z <- qnorm(0.95)  # z-score for 95th percentile
+unlikely_length <- mean_length + (top_5_percent_z * sd_length)
+
+cat("Only 5% of fish are longer than:", round(unlikely_length, 1), "mm\n")
+cat("This corresponds to z-score:", round(top_5_percent_z, 3), "\n")
+```
+
+✏️ **Your turn:** In one sentence, explain what `unlikely_length` means in plain, non-statistical language — as if you were telling another angler. `________________________`
+
+::: callout-tip
+**🚀 If you finish early:** `pnorm()`/`qnorm()` give you the area under the *theoretical* standard normal curve. You can also estimate probability directly from your *own* data's empirical density curve with R's `density()` function — try `dens <- density(i3_df$length_mm)` and see if you can find the proportion of the area between 320 and 350 mm. Ask your instructor if you'd like the walk-through code for this.
+:::
+
+------------------------------------------------------------------------
+
+# Part 4 · Standard error, confidence intervals, and the t-distribution
+
+When the population standard deviation is unknown and *n* is small (\< \~30), we use the **Student's t-distribution** instead of the standard normal (z) distribution:
+
+$$\text{CI} = \bar{y} \pm t \cdot \frac{s}{\sqrt{n}}$$
+
+**▶ Run this — draw a small sample and compare a z-based CI to a t-based CI:**
+
+``` r
+small_sample <- grayling_df %>% filter(lake == "I3") %>% slice_sample(n = 10)
+sample_mean <- mean(small_sample$length_mm)
+sample_sd <- sd(small_sample$length_mm)
+sample_n <- nrow(small_sample)
+sample_se <- sample_sd / sqrt(sample_n)
+
+z_ci_lower <- sample_mean - 1.96 * sample_se
+z_ci_upper <- sample_mean + 1.96 * sample_se
+
+t_crit <- qt(0.975, df = sample_n - 1)
+t_ci_lower <- sample_mean - t_crit * sample_se
+t_ci_upper <- sample_mean + t_crit * sample_se
+
+cat("Mean:", round(sample_mean, 1), "mm\n")
+cat("Standard deviation:", round(sample_sd, 2), "mm\n")
+cat("Standard error:", round(sample_se, 2), "mm\n")
+cat("95% CI using z:", round(z_ci_lower, 1), "to", round(z_ci_upper, 1), "mm\n")
+cat("95% CI using t:", round(t_ci_lower, 1), "to", round(t_ci_upper, 1), "mm\n")
+cat("t critical value:", round(t_crit, 3), "vs z critical value: 1.96\n")
+```
+
+✏️ **Your turn:** Which interval is wider — the z-based or the t-based CI? Why does using the t-distribution make sense here instead of z? `________________________`
+
+::: callout-tip
+**🚀 If you finish early:** Re-run the `slice_sample(n = 10)` line a few times (each run draws a different random sample). Does the t-based CI change more, less, or about the same as the z-based CI each time?
+:::
+
+------------------------------------------------------------------------
+
+# Part 5 · One-sample t-test
+
+Does the mean fish length in Lake I3 differ from 260 mm?
+
+**▶ Run this:**
+
+``` r
+# get only lake I3
+i3_df <- grayling_df %>% filter(lake == "I3")
+
+# what is the mean
+i3_mean <- mean(i3_df$length_mm, na.rm = TRUE)
+cat("Mean:", round(i3_mean, 1), "mm\n")
+
+# Perform a one-sample t-test
+t_test_result <- t.test(i3_df$length_mm, mu = 260)
+
+# View the test results
+t_test_result
+```
+
+✏️ **Your turn:** Answer these questions about the test above:
+
+1.  What was the null hypothesis? `________________________`
+2.  What was the alternative hypothesis? `________________________`
+3.  What does the p-value tell us? `________________________`
+4.  Should we reject or fail to reject the null hypothesis at α = 0.05? `________________________`
+5.  What is the practical interpretation of this result for fish biologists? `________________________`
+
+------------------------------------------------------------------------
+
+# Part 6 · Two-sample t-test — comparing lakes
+
+**Research question:** Are fish in Lake I8 longer than fish in Lake I3?
+
+✏️ **Your turn — before running any code:** Write the null and alternative hypotheses for this question.
+
+```
+H0: ________________________
+Ha: ________________________
+```
+
+**▶ Run this:**
+
+``` r
+# Perform an independent t-test
+t_test_result <- t.test(length_mm ~ lake, data = grayling_df,
+                       alternative = "less")  # H0: mu_I3 >= mu_I8, H1: mu_I3 < mu_I8
+
+# Display the results
+t_test_result
+```
+
+✏️ **Your turn:** Based on this t-test, what can we conclude about the difference in fish length between the two lakes? `________________________`
+
+------------------------------------------------------------------------
+
+# Part 7 · P-values, Type I/II errors, and power
+
+A **p-value** is the probability of observing the sample result (or something more extreme) if the null hypothesis is true. Remember:
+
+-   p-value is NOT the probability that H₀ is true
+-   p-value is NOT the probability that results occurred by chance
+-   statistical significance ≠ practical significance
+
+✏️ **Your turn:** For each scenario below, identify whether a Type I or Type II error might have occurred.
+
+1.  A researcher concludes that a new fishing regulation increased grayling size, when in fact it had no effect. `________________________`
+2.  A study fails to detect a real decline in grayling population due to warming water, concluding there was no effect. `________________________`
+
+**▶ Run this — calculate the power of our t-test to detect a 30 mm difference in length between lakes:**
+
+``` r
+# First determine parameters
+lake_I3 <- grayling_df %>% filter(lake == "I3")
+lake_I8 <- grayling_df %>% filter(lake == "I8")
+
+n1 <- nrow(lake_I3)
+n2 <- nrow(lake_I8)
+sd_pooled <- sqrt((var(lake_I3$length_mm) * (n1 - 1) +
+                  var(lake_I8$length_mm) * (n2 - 1)) /
+                  (n1 + n2 - 2))
+
+# Calculate power
+effect_size <- 30 / sd_pooled  # Cohen's d
+df <- n1 + n2 - 2
+alpha <- 0.05
+power <- power.t.test(n = min(n1, n2),
+                     delta = effect_size,
+                     sd = 1,  # Using standardized effect size
+                     sig.level = alpha,
+                     type = "two.sample",
+                     alternative = "two.sided")
+
+power
+```
+
+✏️ **Your turn:** What does the `power` value tell you about our ability to detect a real 30 mm difference between lakes with our current sample size? Would a bigger sample size increase or decrease power? `________________________`
+
+------------------------------------------------------------------------
+
+# Part 8 · Save your work
+
+**▶ Run this:**
+
+``` r
+write_csv(grayling_summary, "data/grayling_lake_summary.csv")
+```
+
+Check your `data/` folder — the summary table should be there.
+
+------------------------------------------------------------------------
+
+# Part 9 · Review and checkpoint
+
+At this point you can:
+
+- [ ] Convert raw values to Z-scores and interpret them
+- [ ] Use `pnorm()`, `qnorm()`, and `dnorm()` to find probabilities and cutoffs under the standard normal distribution
+- [ ] Explain why the t-distribution replaces the z-distribution for small samples with unknown population σ
+- [ ] Compute and compare a z-based and t-based confidence interval
+- [ ] Run and interpret a one-sample t-test
+- [ ] Write null/alternative hypotheses and run a two-sample t-test
+- [ ] Explain what a p-value does and does not mean
+- [ ] Identify Type I vs. Type II errors, and explain what statistical power measures
+
+✏️ **Your turn — before you move on:** Run your whole script top to bottom. Ran cleanly? `Y / N` — if not, the error was: `________________________`
+
+::: callout-note
+**📤 What to turn in before next class**
+
+Upload both of these to the course management system:
+
+1.  Your code — the `scripts/` folder (or just `05_probability_inference.R`)
+2.  This worksheet, with your written answers
+:::
+
+------------------------------------------------------------------------
+
+# Getting unstuck
+
+When code breaks — and it will, that is normal:
+
+1.  **Read the error message out loud.** R usually names the line and the problem.
+2.  **Check the usual suspects:** did you run `library(tidyverse)`? Spelling? Did you forget `na.rm = TRUE`?
+3.  `?function_name` opens the built-in help page.
+4.  **Bring the exact error** (copy-paste it) to class or office hours.
+
+> 💡 **Key idea:** Every working scientist googles error messages daily. Getting stuck is not failing — it is the job.
+
+------------------------------------------------------------------------

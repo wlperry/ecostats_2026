@@ -1,0 +1,252 @@
+---
+order: 3
+week: 3
+title: "Worksheet — Module 3: Describing Your Data"
+subtitle: "Mean, spread, counting correctly, and group summaries"
+description: "Hands-on worksheet: mean, median, variance, SD, SE, the length() trap, and group_by() + summarize()."
+author: "Bill Perry"
+
+format:
+  html:
+    css: custom.css
+    toc: false
+  docx:
+    reference-doc: ../reference-doc.docx
+    toc: false
+execute:
+  echo: true
+  warning: false
+  message: false
+  fig-width: 3
+  fig-height: 3
+  fig-dpi: 300
+---
+
+# Worksheet 3: Describing Your Data
+
+> ## How to use this worksheet
+>
+> Work through each part in order, at your own pace. Type every line of code yourself into a **plain R script** — do not copy-paste. Blocks marked **▶ Run this** are code you should type and execute. Blocks marked **✏️ Your turn** ask you to write, modify, or answer something. Boxes marked **🚀 If you finish early** are optional bonus material.
+
+------------------------------------------------------------------------
+
+# Part 1 · Load and split the data
+
+**▶ Run this in your Script:**
+
+``` r
+library(tidyverse)
+
+pine_df <- read_csv("data/pine_needles.csv")
+
+lee_lengths  <- pine_df |> filter(n_s == "n") |> pull(length_mm)
+wind_lengths <- pine_df |> filter(n_s == "s") |> pull(length_mm)
+```
+
+✏️ **Your turn:** How many needles are in `lee_lengths`? In `wind_lengths`? `________________________`
+
+------------------------------------------------------------------------
+
+# Part 2 · Mean and median
+
+**▶ Run this:**
+
+``` r
+mean(lee_lengths)
+median(lee_lengths)
+
+mean(wind_lengths)
+median(wind_lengths)
+```
+
+✏️ **Your turn:** For each side, is the mean close to the median, or far from it? What would a big gap suggest about the shape of the data?
+
+```
+Lee   — mean vs. median: ________________________
+Wind  — mean vs. median: ________________________
+```
+
+------------------------------------------------------------------------
+
+# Part 3 · Variance and standard deviation
+
+**▶ Run this:**
+
+``` r
+var(lee_lengths)
+sd(lee_lengths)
+
+var(wind_lengths)
+sd(wind_lengths)
+```
+
+✏️ **Your turn:** Which side has more spread in its needle lengths — lee or windward? How do you know? `________________________`
+
+------------------------------------------------------------------------
+
+# Part 4 · The `length()` trap
+
+**▶ Run this:**
+
+``` r
+x <- c(4, 3, NA, 7, NA)
+
+length(x)
+sum(is.na(x))
+sum(!is.na(x))
+```
+
+✏️ **Your turn:** Explain in your own words why `length(x)` gives the wrong answer for a sample size when there are missing values.
+
+```
+________________________________________________________
+```
+
+**▶ Run this:**
+
+``` r
+wrong_n  <- length(x)
+wrong_se <- sd(x, na.rm = TRUE) / sqrt(wrong_n)
+
+right_n  <- sum(!is.na(x))
+right_se <- sd(x, na.rm = TRUE) / sqrt(right_n)
+
+wrong_se
+right_se
+```
+
+✏️ **Your turn:** Are `wrong_se` and `right_se` the same number? Why or why not? `________________________`
+
+::: callout-tip
+**🚀 If you finish early:** Add a third `NA` to `x` and rerun both calculations. What happens to `wrong_se` and `right_se` this time?
+:::
+
+------------------------------------------------------------------------
+
+# Part 5 · Standard error, on real data
+
+**▶ Run this:**
+
+``` r
+n_lee  <- sum(!is.na(lee_lengths))
+n_wind <- sum(!is.na(wind_lengths))
+
+se_lee  <- sd(lee_lengths)  / sqrt(n_lee)
+se_wind <- sd(wind_lengths) / sqrt(n_wind)
+
+se_lee
+se_wind
+```
+
+✏️ **Your turn:** In one sentence, explain the difference between what SD tells you and what SE tells you.
+
+```
+________________________________________________________
+```
+
+------------------------------------------------------------------------
+
+# Part 6 · All stats, one group, base R
+
+**▶ Run this:**
+
+``` r
+n_l    <- sum(!is.na(lee_lengths))
+mean_l <- mean(lee_lengths, na.rm = TRUE)
+med_l  <- median(lee_lengths, na.rm = TRUE)
+sd_l   <- sd(lee_lengths, na.rm = TRUE)
+se_l   <- sd_l / sqrt(n_l)
+
+cat("n =", n_l, " Mean =", round(mean_l, 2),
+    " Median =", round(med_l, 2),
+    " SD =", round(sd_l, 2), " SE =", round(se_l, 2), "\n")
+```
+
+✏️ **Your turn:** Copy this block and adapt it to compute the same five numbers for `wind_lengths`.
+
+``` r
+# Write your code here:
+```
+
+------------------------------------------------------------------------
+
+# Part 7 · Tidy group stats — `group_by()` + `summarize()`
+
+**▶ Run this:**
+
+``` r
+side_stats_df <- pine_df |>
+  group_by(n_s) |>
+  summarize(
+    n       = sum(!is.na(length_mm)),
+    mean_mm = round(mean(length_mm, na.rm = TRUE), 2),
+    med_mm  = round(median(length_mm, na.rm = TRUE), 2),
+    sd_mm   = round(sd(length_mm, na.rm = TRUE), 2),
+    se_mm   = round(sd_mm / sqrt(n), 2)
+  )
+
+side_stats_df
+```
+
+✏️ **Your turn:** Do the `mean_mm` and `se_mm` values match the ones you calculated by hand in Parts 2 and 5? `Y / N`
+
+✏️ **Your turn:** Now group by `group` (the field team) instead of `n_s`, and compute the same five statistics.
+
+``` r
+# Write your code here:
+```
+
+::: callout-tip
+**🚀 If you finish early:** Group by *both* `group` and `n_s` at once (`group_by(group, n_s)`). How many rows does the result have, and why?
+:::
+
+------------------------------------------------------------------------
+
+# Part 8 · Save your summary table
+
+**▶ Run this:**
+
+``` r
+write_csv(side_stats_df, "data/pine_needles_side_stats.csv")
+```
+
+Check your `data/` folder — the summary table should be there.
+
+------------------------------------------------------------------------
+
+# Part 9 · Review and checkpoint
+
+At this point you can:
+
+- [ ] Compute mean and median, and explain when they disagree
+- [ ] Compute variance and SD by hand from a vector
+- [ ] Explain the `length()` trap and fix it with `sum(!is.na())`
+- [ ] Compute SE and explain how it differs from SD
+- [ ] Use `group_by()` + `summarize()` to get n, mean, SD, and SE for every group at once
+- [ ] Save a summary table with `write_csv()`
+
+✏️ **Your turn — before you move on:** Run your whole script top to bottom. Ran cleanly? `Y / N` — if not, the error was: `________________________`
+
+::: callout-note
+**📤 What to turn in before next class**
+
+Upload both of these to the course management system:
+
+1.  Your code — the `scripts/` folder (or just `03_descriptive_stats.R`)
+2.  This worksheet, with your written answers
+:::
+
+------------------------------------------------------------------------
+
+# Getting unstuck
+
+When code breaks — and it will, that is normal:
+
+1.  **Read the error message out loud.** R usually names the line and the problem.
+2.  **Check the usual suspects:** did you run `library(tidyverse)`? Spelling? Did you forget `na.rm = TRUE`?
+3.  `?function_name` opens the built-in help page.
+4.  **Bring the exact error** (copy-paste it) to class or office hours.
+
+> 💡 **Key idea:** Every working scientist googles error messages daily. Getting stuck is not failing — it is the job.
+
+------------------------------------------------------------------------

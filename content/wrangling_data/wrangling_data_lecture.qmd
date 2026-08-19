@@ -1,0 +1,481 @@
+---
+title: "Wrangling Your Data"
+subtitle: "Importing more than one way, reshaping columns, and saving what you make"
+description: "Reading CSV and Excel files, the filter/select/mutate/arrange verbs, log and unit-conversion transforms, catching duplicate rows, and writing your cleaned data back out — all on the pine needle dataset."
+categories: [Wrangling, R, tidyverse]
+order: 2
+week: 1
+author: "Bill Perry"
+
+format:
+  html:
+    downloads: [docx, pptx]
+  revealjs:
+    output-ext: "slides.html"
+  docx:
+    reference-doc: ../../ms_templates/custom-reference-compact.docx
+    fig-width: 3
+    fig-height: 3
+    fig-dpi: 300
+  pptx: default
+execute:
+  echo: true
+---
+
+# Where We Left Off
+
+::::::: columns
+:::: {.column width="60%"}
+Last time you:
+
+- Turned a field observation into a testable **H₀ / Hₐ**
+- Built a project folder (`data/`, `scripts/`, `figures/`)
+- Loaded `pine_needles.csv` and made your first `ggplot`
+
+::: callout-note
+**✅ Key idea from Module 1**
+
+You can get data *into* R and make a plot. Today we learn to **reshape** what you have and **save** what you make — the two skills every later module depends on.
+:::
+::::
+
+:::: {.column width="40%"}
+::: callout-note
+**Today's roadmap**
+
+1.  Importing data more than one way
+2.  The five wrangling verbs
+3.  `mutate()` — unit conversions and log transforms
+4.  Catching duplicate rows
+5.  Saving your work with `write_csv()`
+:::
+::::
+:::::::
+
+# Part 1 · Importing Data More Than One Way
+
+### The same data, two file formats
+
+::::::: columns
+:::: {.column width="60%"}
+Field data doesn't always arrive as a `.csv`. Excel workbooks are everywhere in ecology — you need both tools.
+
+```{r}
+library(tidyverse)
+library(readxl)   # reading Excel files
+
+pine_csv_df   <- read_csv("data/pine_needles.csv")
+pine_excel_df <- read_excel("data/pine_needles.xlsx")
+```
+
+::: callout-note
+**✅ Key idea**
+
+`read_csv()` comes from `readr` (loaded with `tidyverse`). Excel files need the separate `readxl` package — install once, `library()` every session.
+:::
+::::
+
+:::: {.column width="40%"}
+::: callout-note
+**📖 New word**
+
+**Package vs. bundle** — `tidyverse` is a bundle of packages (`readr`, `dplyr`, `ggplot2`, …). `readxl` isn't included; it always needs its own `library()` line.
+:::
+::::
+:::::::
+
+### Look before you trust it — every time
+
+::::::: columns
+:::: {.column width="60%"}
+```{r}
+glimpse(pine_csv_df)
+```
+
+```{r}
+dim(pine_csv_df)
+```
+
+::: callout-tip
+**🖐 Notice**
+
+Six columns: `date`, `group` (field team name), `n_s`, `wind`, `tree_no`, `length_mm`. Same structure whether it came from the `.csv` or the `.xlsx`.
+:::
+::::
+
+:::: {.column width="40%"}
+::: callout-warning
+**⚠️ Watch out!**
+
+Excel loves to turn a plain number column into a date, or a `tree_no` like `1` into `1.0`. Always `glimpse()` an Excel import before doing anything else.
+:::
+::::
+:::::::
+
+# Part 2 · The Five Wrangling Verbs
+
+::::::: columns
+:::: {.column width="60%"}
+Almost everything you do to a data frame is one of these five functions, chained with the pipe `|>`:
+
+| Function      | What it does                       |
+|---------------|-------------------------------------|
+| `filter()`    | keep **rows** matching a condition |
+| `select()`    | keep **columns** by name           |
+| `mutate()`    | **add or change** a column         |
+| `arrange()`   | **sort** rows                      |
+| `summarize()` | **collapse** rows to a summary     |
+
+All take a data frame as input and return a data frame — that's what makes them chainable.
+
+::: callout-note
+**✅ Key idea**
+
+`summarize()` is Module 3's whole topic. Today: the other four, plus saving what you build.
+:::
+::::
+
+:::: {.column width="40%"}
+::: callout-tip
+**Read a pipeline out loud**
+
+```
+pine_csv_df |>
+  filter(...) |>   # then
+  select(...) |>   # then
+  mutate(...) |>   # then
+  arrange(...)     # then
+```
+
+Each `|>` reads as **"then."**
+:::
+::::
+:::::::
+
+# `filter()` — Picking Rows
+
+::::::: columns
+:::: {.column width="60%"}
+```{r}
+# Keep only the sheltered (lee) side
+pine_csv_df |> filter(n_s == "n") |> head()
+
+# Keep only needles longer than 20 mm
+pine_csv_df |> filter(length_mm > 20) |> head()
+
+# Combine two conditions with a comma (AND)
+pine_csv_df |> filter(n_s == "s", length_mm > 15) |> head()
+```
+
+::: callout-warning
+**⚠️ Watch out!**
+
+`=` assigns a value. `==` tests equality. `filter(n_s = "n")` is an error — you want `filter(n_s == "n")`.
+:::
+::::
+
+:::: {.column width="40%"}
+**Common comparison operators:**
+
+| Symbol    | Meaning                       |
+|-----------|--------------------------------|
+| `==`      | exactly equal                  |
+| `!=`      | not equal                      |
+| `>` `<`   | greater / less than            |
+| `>=` `<=` | greater / less / or equal      |
+| `is.na()` | is the value missing?          |
+| `!is.na()`| is the value **not** missing?  |
+::::
+:::::::
+
+# `select()` — Picking Columns
+
+::::::: columns
+:::: {.column width="60%"}
+```{r}
+# Keep only side and length
+pine_csv_df |> select(n_s, length_mm) |> head()
+
+# Drop the date column (minus sign)
+pine_csv_df |> select(-date) |> head()
+
+# Keep columns that contain a word
+pine_csv_df |> select(contains("n")) |> head()
+```
+
+::: callout-note
+**✅ Key idea**
+
+`select()` doesn't touch rows — it only trims the columns you're carrying forward. Useful the moment a dataset has 30+ columns and you need 4 of them.
+:::
+::::
+
+:::: {.column width="40%"}
+**Useful helpers:**
+
+- `starts_with("x")`
+- `ends_with("_mm")`
+- `contains("wind")`
+
+📖 R4DS §3.3 — `select()`
+::::
+:::::::
+
+# `mutate()` — Creating and Changing Columns
+
+::: callout-note
+**🔮 Predict first:** `length_mm / 10` converts millimeters to centimeters. Will `mutate()` **replace** `length_mm`, or **add** a new column? How many columns will the result have?
+:::
+
+::::::: columns
+:::: {.column width="60%"}
+```{r}
+# Add a converted-units column
+pine_csv_df |>
+  mutate(length_cm = length_mm / 10) |>
+  head()
+
+# Add a log-transformed column
+pine_csv_df |>
+  mutate(log_length = log(length_mm)) |>
+  head()
+
+# mutate() can build on a column it just created
+pine_csv_df |>
+  mutate(
+    length_cm  = length_mm / 10,
+    size_class = if_else(length_mm > 18, "long", "short")
+  ) |>
+  head()
+```
+::::
+
+:::: {.column width="40%"}
+::: callout-note
+**✅ Key idea**
+
+`mutate()` keeps every existing column and adds new ones to the right. To *overwrite* a column, reuse its name: `mutate(length_mm = round(length_mm, 1))`.
+:::
+
+::: callout-tip
+**📖 Why log-transform?**
+
+Many biological measurements are **right-skewed** — a log transform pulls extreme values in and can make a distribution more symmetric before you summarize or test it. We'll check whether it matters for our data in a later module.
+:::
+::::
+:::::::
+
+# `arrange()` — Sorting Rows
+
+::::::: columns
+:::: {.column width="60%"}
+```{r}
+# Shortest needles first
+pine_csv_df |> arrange(length_mm)
+
+# Longest first
+pine_csv_df |> arrange(desc(length_mm))
+
+# Sort by side, then by length within each side
+pine_csv_df |> arrange(n_s, desc(length_mm))
+```
+::::
+
+:::: {.column width="40%"}
+- Default is **ascending** (smallest first)
+- `desc()` reverses it
+- Most useful at the **end** of a pipeline, to inspect results in a sensible order
+
+::: callout-tip
+`arrange()` never changes *which* rows you have — only the order they print in.
+:::
+::::
+:::::::
+
+# The Full Pipeline
+
+::::::: columns
+:::: {.column width="60%"}
+```{r}
+pine_wrangled_df <- pine_csv_df |>
+  filter(length_mm > 0) |>                 # drop impossible values
+  select(group, n_s, wind, length_mm) |>   # keep what we need
+  mutate(
+    length_cm  = length_mm / 10,
+    log_length = log(length_mm)
+  ) |>
+  arrange(n_s, desc(length_mm))            # sort for inspection
+
+head(pine_wrangled_df)
+```
+
+::: callout-note
+**✅ Key idea**
+
+The pipe `|>` is what makes this readable top to bottom — a recipe, not a nest of parentheses.
+:::
+::::
+
+:::: {.column width="40%"}
+**Read it out loud:**
+
+> - Take `pine_csv_df`,
+>   - **then** filter to real values,
+>     - **then** select four columns,
+>       - **then** add two new columns,
+>         - **then** sort by side and length.
+::::
+:::::::
+
+# Part 3 · A Duplicate-Row Problem
+
+::::::: columns
+:::: {.column width="60%"}
+Remember **pseudoreplication** from Module 1 — one tree standing in for many? Duplicate rows are the data-entry version of the same mistake: the same measurement counted twice inflates your sample size without adding real information.
+
+```{r}
+needle_check_df <- read_csv("data/pine_needles_error.csv")
+
+nrow(needle_check_df)
+n_distinct(needle_check_df)
+```
+
+::: callout-important
+**Something's wrong:** `nrow()` and `n_distinct()` don't match. Some rows are exact repeats.
+:::
+::::
+
+:::: {.column width="40%"}
+::: callout-note
+**📖 New words**
+
+- **`n_distinct()`** — counts how many *unique* rows exist
+- **`distinct()`** — returns the data with duplicate rows removed
+:::
+::::
+:::::::
+
+### Finding and removing the duplicates
+
+::::::: columns
+:::: {.column width="60%"}
+```{r}
+# Which rows are exact duplicates of an earlier row?
+needle_check_df |> filter(duplicated(needle_check_df))
+
+# Keep only one copy of each unique row
+needle_clean_df <- needle_check_df |> distinct()
+
+nrow(needle_check_df)
+nrow(needle_clean_df)
+```
+
+::: callout-warning
+**⚠️ Watch out!**
+
+`distinct()` only catches *exact* duplicate rows. A typo'd duplicate (`John` vs `john`) slips right through — always eyeball your data too.
+:::
+::::
+
+:::: {.column width="40%"}
+::: callout-tip
+**🖐 Field habit**
+
+Before you trust any dataset — yours or a collaborator's — check `nrow()` against `n_distinct()`. It takes five seconds and catches a real, common mistake.
+:::
+::::
+:::::::
+
+# Part 4 · Saving Your Work
+
+### `write_csv()` — the mirror image of `read_csv()`
+
+::::::: columns
+:::: {.column width="60%"}
+```{r}
+#| eval: false
+write_csv(pine_wrangled_df, "data/pine_needles_wrangled.csv")
+```
+
+::: callout-important
+**Raw data is read-only.** `pine_needles.csv` never gets overwritten — `write_csv()` always creates a **new, separate file**. That's why we named it `pine_needles_wrangled.csv`, not `pine_needles.csv`.
+:::
+::::
+
+:::: {.column width="40%"}
+::: callout-note
+**✅ Key idea**
+
+If you can't reproduce a result from raw data + a script, something's wrong with the script — never with the raw file. Keeping raw data untouched is what makes that guarantee possible.
+:::
+::::
+:::::::
+
+### Naming your saved files
+
+::::::: columns
+:::: {.column width="60%"}
+- Never overwrite `data/pine_needles.csv` — that file is raw
+- Save wrangled output with a name that says what happened: `pine_needles_wrangled.csv`, not `pine_needles2.csv` or `final.csv`
+- Anyone re-running your script from scratch should get the exact same output file
+
+::: callout-warning
+**⚠️ Watch out!**
+
+`final.csv`, `final_v2.csv`, `final_FINAL.csv` — this is exactly the mess a project folder with relative paths and clear names is meant to prevent.
+:::
+::::
+
+:::: {.column width="40%"}
+::: callout-tip
+**🖐 Try it yourself**
+
+Predict what `write_csv(pine_wrangled_df, "data/pine_needles_wrangled.csv")` does if that file doesn't exist yet. What if it already does?
+:::
+::::
+:::::::
+
+# Wrap-up
+
+::::::: columns
+:::: {.column width="60%"}
+Today you:
+
+- Imported the same data from a `.csv` **and** an `.xlsx`
+- Used `filter()`, `select()`, `mutate()`, and `arrange()` — and chained them into a pipeline
+- Converted units and log-transformed a column with `mutate()`
+- Caught and removed duplicate rows with `distinct()`
+- Saved a new file with `write_csv()` without touching the raw data
+
+::: callout-tip
+**🖐 Before next class**
+
+Finish the worksheet: wrangle `pine_needles.csv` into a new data frame with at least one unit conversion and one log transform, then save it with `write_csv()`.
+:::
+::::
+
+:::: {.column width="40%"}
+::: callout-note
+**Up next — Module 3**
+
+- Mean, median, variance, SD, SE
+- The `length()` trap and the `sum(!is.na())` fix
+- `group_by()` + `summarize()` for tidy group comparisons
+:::
+::::
+:::::::
+
+# Getting unstuck
+
+When code breaks — and it will, that is normal:
+
+1.  Read the **error message** out loud; it usually names the line
+2.  Check the usual suspects: `library(tidyverse)` and `library(readxl)` loaded? Spelling? A missing `)` or `|>` at the *start* of a line?
+3.  `?function_name` opens the help page
+4.  Bring the **exact error** (copy-paste it) to class or office hours
+
+::: callout-note
+**✅ Key idea**
+
+Every working scientist googles error messages daily. Getting stuck is not failing — it is the job.
+:::
