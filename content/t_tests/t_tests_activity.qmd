@@ -3,7 +3,7 @@ order: 6
 week: 3
 title: "T-Tests: One, Two, Paired"
 subtitle: "Comparing means"
-description: "Hands-on activity: running t-tests in R."
+description: "Hands-on worksheet: hypothesis testing framework, assumption checks, and one-sample, two-sample (Student's and Welch's), and paired t-tests on the class pine needle dataset."
 author: "Bill Perry"
 metadata-files:
   - ../../_templates/activities.yml
@@ -12,562 +12,376 @@ format:
   docx: default
 ---
 
-# In-Class Activity 5: Probability and Statistical Inference
+# Worksheet 6: T-Tests — One, Two, Paired
 
-## What did we do last time?
+> ## How to use this worksheet
+>
+> Work through each part in order, at your own pace. Type every line of code yourself into a **plain R script** — do not copy-paste. Blocks marked **▶ Run this** are code you should type and execute. Blocks marked **✏️ Your turn** ask you to write, modify, or answer something. Boxes marked **🚀 If you finish early** are optional bonus material that goes a bit further than what we covered in lecture.
 
-In our previous activity, we:
+------------------------------------------------------------------------
 
--   Created and interpreted frequency distributions (histograms)
--   Compared data between groups using side-by-side histograms
--   Explored how sample size affects our understanding of populations
--   Created density plots and calculated probabilities
+# Part 1 · Setup — Load and De-Pseudoreplicate the Data
 
-## Today's focus:
+**▶ Run this in your Script:**
 
-Today we'll focus on:
-
--   t-distribution and when to use it
--   Calculating and interpreting standard error
--   Creating confidence intervals
--   Conducting **one-sample and two-sample t-tests**
--   **Understanding statistical assumptions and their importance**
-
-# Setup
-
-First, let's load the packages and data we'll be using:
-
-```{r setup}
-# Load required packages
+``` r
 library(readxl)
 library(tidyverse)
 library(patchwork)
-library(car)  # For diagnostic tests
+library(car)   # For diagnostic tests
 
-pine_df <- read_excel("data/class_pine needle length.xlsx") 
+pine_df        <- read_excel("data/class_pine needle length.xlsx")
 pine_switch_df <- read_excel("data/class_pine needle length switched.xlsx")
 
 head(pine_df)
-
- 
 ```
 
-# An issue we have is pseudoreplication
+✏️ **Your turn:** What is our true sample unit here — needles? branches? trees? sides? Why does that matter for how we analyze this data?
 
-What is our sample unit? branches? needles? trees? sides?
+```
+________________________________________________________
+```
 
--   We need to get the averages of the data so it is no psudoreplicated!
--   We will group data by group, tree, tree_char, side and take the
-    averages and save the average as length_mm
--   We will also need to make dataframes of sunny and shady side of the
-    data
+We need to average the sunny and shady sides so the data is not pseudoreplicated — multiple needles per tree side are not independent observations.
 
-```{r depseudo_data}
-# Now we need to average the sunny and shady sides as these are all pseudoreplicated
-p_df <- pine_df %>% 
-  group_by(group, tree_no, tree_char, side) %>% 
-  summarise(length_mm = mean(length_mm, na.rm=TRUE))
+**▶ Run this:**
 
-ps_df <- pine_switch_df %>% 
-  group_by(group, tree_no, tree_char, side) %>% 
-  summarise(length_mm = mean(length_mm, na.rm=TRUE))
+``` r
+p_df <- pine_df %>%
+  group_by(group, tree_no, tree_char, side) %>%
+  summarise(length_mm = mean(length_mm, na.rm = TRUE))
 
-ps_shady_df <- ps_df %>% 
-  filter(side == "shady")
+ps_df <- pine_switch_df %>%
+  group_by(group, tree_no, tree_char, side) %>%
+  summarise(length_mm = mean(length_mm, na.rm = TRUE))
 
-ps_sunny_df <- ps_df %>% 
-  filter(side == "sunny")
+ps_shady_df <- ps_df %>% filter(side == "shady")
+ps_sunny_df <- ps_df %>% filter(side == "sunny")
 
 head(ps_shady_df) %>% arrange(tree_no)
 ```
 
-# Part 1: Exploring the Data
-
-Before conducting statistical tests, it's important to understand your
-data.
+> ⚠️ **Watch out!** `class_pine needle length switched.xlsx` has corrected `sunny`/`shady` labels compared to the original file. From here on we use **`ps_df`** — it's the version that matches the field notes.
 
 ::: callout-tip
-## Practice Exercise 1: Summary data
+**🚀 If you finish early:** Write a `group_by()` + `summarize()` pipeline that gets `n`, `mean_length`, `sd_length`, and `se_length` for `ps_df`, grouped by `side` — the same summary the lecture built as `stats_df`.
+:::
 
-Let's create summary data of needle lengths from each side to visualize
-their distributions.
+------------------------------------------------------------------------
 
-```{r summary}
-stats_df <- ps_df %>% 
-  group_by(side) %>% 
-  summarize(
-    mean_length = mean(length_mm, na.rm = TRUE),
-    sd_length = sd(length_mm, na.rm = TRUE),
-    se_length = sd(length_mm, na.rm = TRUE)/ sum(!is.na(length_mm))^.5,
-    count = sum(!is.na(length_mm)),
-    .groups = "drop"
-  )
-stats_df
+# Part 2 · Hypothesis Testing Framework
 
-# CAN YOU THINK OF AN EASIER WAY?
+Every t-test starts the same way: state H₀ and Hₐ, and pick α *before* you look at the result.
+
+✏️ **Your turn:** For the question "Do needle lengths differ between the sunny and shady sides?", write out:
+
+```
+H0 = ________________________________________________________
+Ha = ________________________________________________________
+alpha = ________
+```
+
+✏️ **Your turn:** In your own words, what does a p-value actually tell you? (Hint: it is a statement about the data *given* H₀ — not a statement about whether H₀ is true.)
+
+```
+________________________________________________________
+```
+
+::: callout-tip
+**🚀 If you finish early:** A two-sample t-test on 14 degrees of freedom produces an observed t-statistic of 2.31. Use `2 * (1 - pt(2.31, df = 14))` to compute the two-tailed p-value by hand, then compare it to the p-value table from lecture (p < 0.05 = moderate-to-strong evidence). Is H₀ rejected at α = 0.05?
+
+``` r
+# Write your code here:
 ```
 :::
 
-# Part 1: Exploring the Data
+------------------------------------------------------------------------
 
-Before conducting statistical tests, it's important to understand your
-data.
+# Part 3 · One-Sample t-Test
 
-::: callout-tip
-## Practice Exercise 1: Creating Histograms
+A one-sample t-test compares a sample mean to a specific hypothesized value. Let's test whether the mean needle length on the shady side is 15mm.
 
-Let's create histograms of needle lengths from each lake to visualize
-their distributions.
+✏️ **Your turn:** Before testing, write the hypotheses:
 
-```{r boxplot}
-needle_box_plot <- ps_df %>% 
-ggplot(aes(x=side, y=length_mm, fill = side))+
-geom_boxplot()
-needle_box_plot
 ```
-:::
-
-# Part 2: Exploring data a different way
-
-We want to see variation in a different way and how groups measured data
-on sunny and shady sides
-
-```{r spaghetti}
-pd <- position_dodge2(width = 0.2)
-p_plot <- ps_df %>% 
-  ggplot(aes(side, length_mm, fill=side)) + 
-  geom_boxplot(alpha = 0.7) +
-  geom_point(aes(group = group, color= group),
-             position = pd)+
-  geom_line(aes(group = group, color= group),
-             position = pd)+
-  labs(x = "Length (mm)", y = "Count", caption = "Pine needles")
-p_plot
+H0: mu = _____ (the mean needle length on the shady side is _____ mm)
+Ha: mu ≠ _____ (the mean needle length on the shady side is not _____ mm)
 ```
 
-# Part 3: Testing Assumptions
+**Check assumptions first — normality:**
 
-Before conducting a t-test, we need to check if our data meets the
-necessary assumptions:
+**▶ Run this:**
 
-1.  **Normality**: The data should be approximately normally distributed
-2.  **Independence**: Observations should be independent
-3.  **No extreme outliers**: Outliers can heavily influence t-test
-    results
-
-Let's check the normality assumption for shady needle lengths:
-
-::: callout-tip
-## Practice Exercise 2: Checking Normality of all data but does not do by group!
-
-```{r qq_all}
-#| paged-print: false
-# Create a QQ plot to check normality
-# QQ plots compare our data to a theoretical normal distribution
-# Points should roughly follow the line if data is normally distributed
-qqPlot(ps_df$length_mm, 
-       main = "QQ Plot for Needle Lengths",
+``` r
+qqPlot(ps_df$length_mm,
+       main = "QQ Plot for length of pine needles",
        ylab = "Sample Quantiles")
-```
-:::
 
-## Shapiro-Wilk test on all data
-
-What do we look at here and how do we interpret?
-
-Hoping for non significant!!!
-
-```{r shapiro_all}
-# Also perform a formal test of normality using the Shapiro-Wilk test
-# Null hypothesis: Data is normally distributed
-# If p > 0.05, we don't reject the assumption of normality
-shapiro_test <- shapiro.test(ps_df$length_mm)
-print(shapiro_test)
-
+shapiro.test(ps_df$length_mm)
 ```
 
-# QQ Plot for Sunny Data
+✏️ **Your turn:** For the Shapiro-Wilk test, what is the null hypothesis? Do we want a significant or a non-significant result here? `________________________`
 
-::: callout-tip
-## Practice Exercise 8: Test normality of pine needle lengths on sunny side
+**Check assumptions — outliers:**
 
-qqplots
+**▶ Run this:**
 
-Note you need to test each groups separately...
-
-```{r}
-#| message: false
-#| warning: false
-#| paged-print: false
-# QQ Plot for sunny group
-qqPlot(ps_sunny_df$length_mm, 
-       main = "QQ Plot for sunny needle length",
-       ylab = "Sample Quantiles")
-```
-:::
-
-# Shapiro-Wilk Test for Sunny data
-
-::: callout-tip
-## Practice Exercise 9: Test normality of sunny needle lengths
-
-Shapiro-Wilk test
-
-Note you need to test each groups separately...
-
-```{r}
-# Shapiro-Wilk test for sunny group
-shapiro.test(ps_sunny_df$length_mm)
-
-```
-:::
-
-# Combined QQ plots with GGPLOT
-
-We can use ggplot which you are more familiar with to also do qqPlots
-
-```{r ggplot_qqplot_combined}
-ggplot(ps_df, aes(sample = length_mm)) +
-  stat_qq() +
-  stat_qq_line(color = "red") +
-  facet_wrap(~ side) +
-  labs(title = "QQ Plots for Needle Length by Side",
-       x = "Theoretical Quantiles",
-       y = "Sample Quantiles") +
-  theme_minimal()
+``` r
+ps_df %>%
+  ggplot(aes(x = side, y = length_mm, fill = side)) +
+  geom_boxplot() +
+  labs(x = "side", y = "Length (mm)", fill = "side")
 ```
 
-# Combined Normality Test
+**Run the one-sample t-test:**
 
-Note you can do this a lot easier with piping of the data...
+**▶ Run this:**
 
-::: callout-tip
-## Practice Exercise 12: Test Normality at one time
-
-There are always a lot of ways to do everything in R and is sometimes
-frustrating
-
-```{r}
-# there are always two ways
-# Test for normality using Shapiro-Wilk test for each wind group
-# All in one pipeline using tidyverse approach
-normality_results <- ps_df %>%
-  group_by(side) %>%
-  summarize(
-    shapiro_stat = shapiro.test(length_mm)$statistic,
-    shapiro_p_value = shapiro.test(length_mm)$p.value,
-    normal_distribution = if_else(shapiro_p_value > 0.05, "Normal", "Non-normal")
-    # above wwe are using an ifelse test which is a great oneliner
-  )
-
-# Print the results
-print(normality_results)
-```
-:::
-
-# Test for Equal Variances of Sunny and Shady
-
-::: callout-tip
-## Practice Exercise 13: Test equal variances
-
-Levene's test can be done on the original dataframe
-
-```{r}
-#| message: false
-#| warning: false
-#| paged-print: false
-# Method 1: Using car package's leveneTest
-# This is often preferred as it's more robust to departures from normality
-levene_result <- leveneTest(length_mm ~ side, data = ps_df)
-levene_result
-```
-:::
-
-# Check for outliers
-
-```{r}
-# Check for outliers using a boxplot
-needle_box_plot
-```
-
-::: callout-tip
-How to interpret these results:
-
--   The QQ plot: Points should follow the straight line if data is
-    normally distributed
--   Shapiro-Wilk test: If p \> 0.05, we don't reject the assumption of
-    normality
--   Boxplot: Look for points beyond the whiskers as potential outliers
-:::
-
-# Part 4: One-Sample t-Test
-
-A one-sample t-test compares a sample mean to a specific value.
-
-Let's test if the mean needle length on the shady side is 15 or not?
-
-::: callout-tip
-## Practice Exercise: One-Sample t-Test
-
-```{r one_sample_t}
-# Calculate the mean of shady needles?
-shady_mean <- mean(ps_shady_df$length_mm, na.rm=TRUE)
-shady_mean
-# what is the mean
-# 17.60561
-
+``` r
 ps_shade_mean <- mean(ps_shady_df$length_mm, na.rm = TRUE)
 cat("Mean:", round(ps_shade_mean, 1), "mm\n")
 
-# Perform a one-sample t-test
 t_test_result <- t.test(ps_shady_df$length_mm, mu = 15)
-
-# View the test results
 t_test_result
 ```
-:::
 
-```{r}
-# Create a visualization of the test
-ps_shady_df %>%
-  ggplot(aes(x = length_mm)) +
-  geom_histogram(binwidth = 1, fill = "blue", alpha = 0.7) +
-  geom_vline(xintercept = 15, color = "red", linetype = "dashed", linewidth = 1) +
-  geom_vline(xintercept = shady_mean, color = "green", linewidth = 1) +
-  annotate("text", x = 15, y = 5, label = "H0: μ = 15", color = "red", hjust = -0.1) +
-  annotate("text", x = ps_shade_mean, y = 5, 
-           label = paste("Sample mean =", round(ps_shade_mean, 1)), 
-           color = "green", hjust = -0.1) +
-  labs(
-    title = "One-Sample t-Test: Shady Needle Lengths",
-    subtitle = paste(
-      "t =", round(t_test_result$statistic, 2),
-      ", p =", format.pval(t_test_result$p.value, digits = 3)),
-    x = "Length (mm)",
-    y = "Count")
-```
-
-::: callout-tip
-Interpret the results:
-
-1.  What was the null hypothesis? H0: μ = 15mm
-2.  What was the alternative hypothesis? H1: μ ≠ 15mm
-3.  What does the p-value tell us? (Is p \< 0.05?)
-4.  Should we reject or fail to reject the null hypothesis?
-5.  What is the practical interpretation for biologists?
-:::
-
-# Part 5: Confidence Intervals
-
-A confidence interval gives us a range of plausible values for the
-population mean.
-
-For a 95% confidence interval using the t-distribution:
-
-## $$ 95\% \text{ CI} = \bar{x} \pm t_{\alpha/2, n-1} \times \frac{s}{\sqrt{n}} $$
-
-Where:
-
--   \- $\bar{x}$ is the sample mean
--   \- $s$ is the sample standard deviation
--   \- $n$ is the sample size
--   \- $t_{\alpha/2, n-1}$ is the critical t-value with n-1 degrees of
-    freedom
-
-::: callout-tip
-## Practice Exercise 4: Calculating Confidence Intervals
-
-Let's calculate the 95% confidence interval for shady needle lengths:
-
-```{r confidence_interval}
-# Extract sample statistics
-shady_stats <- ps_shady_df 
-shady_mean <- mean(ps_shady_df$length_mm, na.rm=TRUE)
-shady_se <- sd(ps_shady_df$length_mm, na.rm=TRUE)/sum(!is.na(ps_shady_df$length_mm))^.5
-shady_n <- sum(!is.na(ps_shady_df$length_mm))
-
-# Find the critical t-value for 95% confidence with n-1 degrees of freedom
-# qt(0.975, df) gives the t-value for a 95% confidence interval (two-tailed)
-t_critical <- qt(0.975, df = shady_n - 1)
-cat("Critical t-value for", shady_n-1, "degrees of freedom:", round(t_critical, 3), "\n")
-
-# Calculate the confidence interval
-shady_ci_lower <- shady_mean - t_critical * shady_se
-shady_ci_upper <- shady_mean + t_critical * shady_se
-
-# Display the confidence interval
-cat("95% Confidence Interval for Shady needle mean length:", 
-    round(shady_ci_lower, 1), "to", round(shady_ci_upper, 1), "mm\n")
-
-# Compare this to a confidence interval using the normal approximation (z = 1.96)
-z_ci_lower <- shady_mean - 1.96 * shady_se
-z_ci_upper <- shady_mean + 1.96 * shady_se
-
-cat("95% CI using normal approximation:", 
-    round(z_ci_lower, 1), "to", round(z_ci_upper, 1), "mm\n")
-
-
-```
-:::
-
-```{r}
-# Visualize the confidence interval
-ggplot() +
-  geom_errorbar(aes(x = "Shady Needle", 
-                   ymin = z_ci_lower, 
-                   ymax = z_ci_upper),
-               width = 0.2) +
-  geom_point(aes(x = "Shady Needle", y = shady_mean), size = 3) +
-  labs(title = "Mean Needle Length with 95% Confidence Interval",
-       subtitle = "Shady Needle",
-       x = NULL,
-       y = "Length (mm)")
-```
-
-# Part 6: Two-Sample t-Test
-
-A two-sample t-test compares means from two independent groups.
-
-Let's compare needle lengths between sunny and shady sides
-
-```{r two_sample_setup}
-# Summarize pine needle data by wind exposure
-stats_df
-
-```
-
-## Look a the plot of needle lengths
-
-```{r}
-# Create a boxplot to visualize the data
-p_plot
-```
-
-# Now let's conduct the two-sample t-test:
-
-::: callout-tip
-## Practice Exercise 6: Two-Sample t-Test
-
-## Calculate the T Test
-
-```{r two_sample_t}
-# Perform a two-sample t-test
-# H0: μ1 = μ2 (The mean needle lengths are equal)
-# H1: μ1 ≠ μ2 (The mean needle lengths are different)
-
-# var.equal=TRUE uses the standard t-test (pooled variance)
-# var.equal=FALSE uses Welch's t-test (for unequal variances)
-t_test_result <- t.test(length_mm ~ side, data = ps_df, var.equal = TRUE)
-
-# Display the test results
-t_test_result
-
-
-```
-:::
-
-## Compare to a Welch's Two Sample T Test when variance is unequal
-
-```{r}
-# Perform a two-sample t-test
-# H0: μ1 = μ2 (The mean needle lengths are equal)
-# H1: μ1 ≠ μ2 (The mean needle lengths are different)
-
-# var.equal=TRUE uses the standard t-test (pooled variance)
-# var.equal=FALSE uses Welch's t-test (for unequal variances)
-welch_test_result <- t.test(length_mm ~ side, data = ps_df, var.equal = FALSE)
-
-# Display the test results
-welch_test_result
-```
-
-## Compare to a Paired T Test
-
-```{r}
-# Perform a two-sample t-test
-# H0: μ1 = μ2 (The mean needle lengths are equal)
-# H1: μ1 ≠ μ2 (The mean needle lengths are different)
-
-# var.equal=TRUE uses the standard t-test (pooled variance)
-# var.equal=FALSE uses Welch's t-test (for unequal variances)
-paired_test_result <- t.test(length_mm ~ side, data = ps_df, pair = TRUE)
-
-# Display the test results
-paired_test_result
-```
-
-## Visualize the plot
-
-::: callout-tip
-```{r}
-# Visualize the results with a mean and error bar plot
-ggplot(stats_df, aes(x = side, y = mean_length, color=side, fill = side)) +
-  geom_point(stat = "identity", alpha = 0.7) +
-  geom_errorbar(aes(ymin = mean_length - se_length, 
-                   ymax = mean_length + se_length),
-               width = 0.2) 
-```
-:::
-
-## Interpretation:
-
-::: callout-tip
-Interpret the results:
+✏️ **Your turn:** Interpret the test result:
 
 1.  What was the null hypothesis?
 2.  What was the alternative hypothesis?
 3.  What does the p-value tell us?
-4.  Should we reject or fail to reject the null hypothesis?
-5.  What is the practical interpretation for botanists?
-:::
+4.  Should we reject or fail to reject the null hypothesis at α = 0.05?
+5.  What is the practical interpretation of this result for botanists?
 
-# Part 8: Communicating Statistical Results
+```
+________________________________________________________
+```
 
-In scientific writing, it's important to report statistical results
-clearly and consistently.
+✏️ **Your turn:** Write a properly formatted results sentence: "A one-sample t-test at α = 0.05 showed that the mean needle length (shady side) (M = ..., SD = ...) [was/was not] significantly different from the expected 15mm, t(...) = ..., p = ..."
 
-Here's a standard format for reporting t-test results:
-
-For a one-sample t-test: "A one-sample t-test showed that the mean
-needle length shady side (M = \[mean\], SD = \[sd\]) was
-\[significantly/not significantly\] different from 15 mm, t(\[df\]) =
-\[t-value\], p = \[p-value\]."
-
-For a two-sample t-test: "A two-sample t-test revealed that pine needle
-lengths on the sunny side (M = \[mean1\], SD = \[sd1\]) were
-\[significantly/not significantly\] \[longer/shorter\] than on the shady
-side (M = \[mean2\], SD = \[sd2\]), t(\[df\]) = \[t-value\], p =
-\[p-value\]."
+```
+________________________________________________________
+```
 
 ::: callout-tip
-## Practice Exercise 8: Writing Statistical Results
+**🚀 If you finish early — calculate the 95% confidence interval by hand:**
 
-Write properly formatted statements reporting the results of:
+$$95\% \text{ CI} = \bar{x} \pm t_{\alpha/2, n-1} \times \frac{s}{\sqrt{n}}$$
 
-1.  The one-sample t-test comparing mean shady needle lenght to 15mm
+``` r
+shady_mean <- mean(ps_shady_df$length_mm, na.rm = TRUE)
+shady_se   <- sd(ps_shady_df$length_mm, na.rm = TRUE) / sum(!is.na(ps_shady_df$length_mm))^.5
+shady_n    <- sum(!is.na(ps_shady_df$length_mm))
 
-2.  The two-sample t-test comparing pine needle lengths
+t_critical <- qt(0.975, df = shady_n - 1)
+shady_ci_lower <- shady_mean - t_critical * shady_se
+shady_ci_upper <- shady_mean + t_critical * shady_se
 
-3.  The two-sample t-test comparing needle lengths between sides
+cat("95% CI for shady mean length:", round(shady_ci_lower, 1), "to", round(shady_ci_upper, 1), "mm\n")
+```
 
-Remember to include:
-
--   Means and standard deviations for each group
-
--   The t-value with degrees of freedom
-
--   The p-value and whether the result is significant
+Does 15mm fall inside or outside this interval? How does that relate to your t-test conclusion above?
 :::
+
+------------------------------------------------------------------------
+
+# Part 4 · Two-Sample t-Test
+
+A two-sample t-test compares means from two independent groups — here, needle length on the sunny vs. shady sides.
+
+✏️ **Your turn:** Write the hypotheses for this comparison:
+
+```
+H0 = ________________________________________________________
+Ha = ________________________________________________________
+```
+
+**Summary statistics and a first look:**
+
+**▶ Run this:**
+
+``` r
+group_summary <- ps_df %>%
+  group_by(side) %>%
+  summarize(
+    mean_length = mean(length_mm),
+    sd_length   = sd(length_mm),
+    n           = n(),
+    se_length   = sd_length / sqrt(n)
+  )
+group_summary
+
+group_summary %>%
+  summarize(difference = mean_length[side == "shady"] - mean_length[side == "sunny"])
+```
+
+**▶ Run this** — plot the mean ± SE directly:
+
+``` r
+ggplot(ps_df, aes(x = side, y = length_mm, color = side)) +
+  stat_summary(fun = mean, geom = "point") +
+  stat_summary(fun.data = mean_se, geom = "errorbar", width = 0.2) +
+  labs(x = "side", y = "Mean Length (mm)") +
+  theme_classic()
+```
+
+**Check assumptions — normality by group:**
+
+**▶ Run this:**
+
+``` r
+normality_results <- ps_df %>%
+  group_by(side) %>%
+  summarize(
+    shapiro_stat    = shapiro.test(length_mm)$statistic,
+    shapiro_p_value = shapiro.test(length_mm)$p.value,
+    normal_distribution = if_else(shapiro_p_value > 0.05, "Normal", "Non-normal"))
+normality_results
+```
+
+**Check assumptions — equal variances:**
+
+**▶ Run this:**
+
+``` r
+levene_result <- leveneTest(length_mm ~ side, data = ps_df)
+levene_result
+```
+
+✏️ **Your turn:** What is the null hypothesis of Levene's test? Do we want it to be significant or non-significant? Based on your result, should you use the standard t-test or Welch's t-test? `________________________`
+
+**Run both versions of the two-sample t-test:**
+
+**▶ Run this:**
+
+``` r
+# Standard t-test (equal variances assumed)
+t_test_result <- t.test(length_mm ~ side, data = ps_df, var.equal = TRUE)
+print("Standard two-sample t-test:")
+print(t_test_result)
+
+# Welch's t-test (unequal variances allowed)
+welch_test_result <- t.test(length_mm ~ side, data = ps_df, var.equal = FALSE)
+print("Welch's two-sample t-test:")
+print(welch_test_result)
+```
+
+✏️ **Your turn:** Compare the two results — the t-statistic, degrees of freedom, and p-value. Are your conclusions the same either way? `________________________`
+
+✏️ **Your turn:** Write a properly formatted results sentence: "A two-tailed, two-sample t-test at α = 0.05 showed [a significant/no significant] difference in needle length between sunny (M = ..., SD = ...) and shady (M = ..., SD = ...) sides, t(...) = ..., p = ..."
+
+```
+________________________________________________________
+```
+
+::: callout-tip
+**🚀 If you finish early — calculate the two-sample t-statistic by hand** and confirm it matches `t.test()`:
+
+$$t = \frac{\bar{x}_1 - \bar{x}_2}{S_p\sqrt{\frac{1}{n_1} + \frac{1}{n_2}}}$$
+
+``` r
+n1 <- nrow(ps_shady_df); n2 <- nrow(ps_sunny_df)
+s1 <- sd(ps_shady_df$length_mm); s2 <- sd(ps_sunny_df$length_mm)
+
+sp <- sqrt(((n1 - 1) * s1^2 + (n2 - 1) * s2^2) / (n1 + n2 - 2))
+t_by_hand <- (mean(ps_shady_df$length_mm) - mean(ps_sunny_df$length_mm)) /
+  (sp * sqrt(1/n1 + 1/n2))
+
+t_by_hand
+```
+
+Does `t_by_hand` match the `t` value from your standard `t.test()` output above?
+:::
+
+------------------------------------------------------------------------
+
+# Part 5 · Paired t-Test
+
+A paired t-test compares two measurements taken from the *same* subject — here, the sunny and shady side of the *same* tree. It uses the differences between pairs as the data, and is generally more powerful than a two-sample test because it removes tree-to-tree variation from the noise.
+
+**▶ Run this:**
+
+``` r
+ps_wide_df <- ps_df %>%
+  pivot_wider(
+    names_from = "side",
+    values_from = length_mm
+  )
+
+paired_t_test_result <- t.test(ps_wide_df$sunny, ps_wide_df$shady, paired = TRUE)
+paired_t_test_result
+```
+
+✏️ **Your turn:** What does pairing control for here that the two-sample test in Part 4 does not? `________________________`
+
+::: callout-tip
+**🚀 If you finish early — compare the paired and two-sample p-values side by side:**
+
+``` r
+cat("Two-sample p-value:", t_test_result$p.value, "\n")
+cat("Paired p-value:     ", paired_t_test_result$p.value, "\n")
+```
+
+Which p-value is smaller? Does that match the lecture's claim that a paired design is "generally more powerful because it controls for individual variation"?
+:::
+
+------------------------------------------------------------------------
+
+# Part 6 · Communicating Results and Reflection
+
+In scientific writing, statistical results are reported clearly and consistently. Standard formats:
+
+-   **One-sample:** "A one-sample t-test showed that the mean needle length on the shady side (M = \[mean\], SD = \[sd\]) was \[significantly/not significantly\] different from 15mm, t(\[df\]) = \[t-value\], p = \[p-value\]."
+-   **Two-sample:** "A two-sample t-test revealed that pine needle lengths on the sunny side (M = \[mean1\], SD = \[sd1\]) were \[significantly/not significantly\] \[longer/shorter\] than on the shady side (M = \[mean2\], SD = \[sd2\]), t(\[df\]) = \[t-value\], p = \[p-value\]."
+
+✏️ **Your turn:** Write all three results statements — one-sample, two-sample (or Welch's), and paired — using your own numbers from Parts 3–5.
+
+```
+________________________________________________________
+________________________________________________________
+________________________________________________________
+```
 
 # Reflection Questions
 
-1.  How does the t-distribution differ from the normal distribution, and
-    why does this matter for small samples?
-2.  What assumptions must be met to use a t-test, and what alternatives
-    exist if these assumptions are violated?
-3.  What is the difference between statistical significance and
-    practical importance?
-4.  How would the confidence interval change if we used a 99% confidence
-    level instead of 95%?
-5.  How would you explain the concept of a p-value to someone with no
-    statistical background?
+1.  How does the t-distribution differ from the normal distribution, and why does this matter for small samples?
+2.  What assumptions must be met to use a t-test, and what alternatives exist if these assumptions are violated?
+3.  What is the difference between statistical significance and practical importance?
+4.  How would the confidence interval change if we used a 99% confidence level instead of 95%?
+5.  How would you explain the concept of a p-value to someone with no statistical background?
+
+# Review and checkpoint
+
+At this point you can:
+
+- [ ] State H₀, Hₐ, and α *before* running a test
+- [ ] Check normality with a QQ plot and the Shapiro-Wilk test
+- [ ] Check equal variances with Levene's test
+- [ ] Run and interpret a one-sample t-test, including its confidence interval
+- [ ] Choose between a standard and Welch's two-sample t-test based on Levene's test
+- [ ] Run and interpret a paired t-test, and explain why it's often more powerful
+- [ ] Write a properly formatted results sentence for each test type
+
+::: callout-note
+**📤 What to turn in before next class**
+
+Upload both of these to the course management system:
+
+1.  Your code — the `scripts/` folder (or just `06_t_tests.R`)
+2.  This worksheet, with your written answers
+:::
+
+------------------------------------------------------------------------
+
+# Getting unstuck
+
+When code breaks — and it will, that is normal:
+
+1.  **Read the error message out loud.** R usually names the line and the problem.
+2.  **Check the usual suspects:** did you run `library(tidyverse)`, `library(car)`, and `library(readxl)`? Spelling? A missing `)` or `|>`/`%>%` at the *start* of a line?
+3.  `?function_name` opens the built-in help page.
+4.  **Bring the exact error** (copy-paste it) to class or office hours.
+
+> 💡 **Key idea:** Every working scientist googles error messages daily. Getting stuck is not failing — it is the job.
+
+------------------------------------------------------------------------

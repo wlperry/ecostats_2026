@@ -1,7 +1,7 @@
 ---
 title: "Graphing Effectively"
 subtitle: "Boxplots, group comparisons, and saving a publication-ready figure"
-description: "Boxplots with jittered raw points, mapping color and fill by group, plotting mean ± SE directly with stat_summary(), faceting, a quick theme tour, and a real ggsave() drill — all on the pine needle dataset."
+description: "Boxplots with jittered raw points, writing axis labels and titles properly with labs(), mapping color and fill by group, histograms and density curves, plotting mean ± SE directly with stat_summary(), faceting, a quick theme tour, custom colors and legends with scale_color_manual(), and a real ggsave() drill — all on the pine needle dataset."
 categories: [Graphing, ggplot2, R]
 order: 4
 week: 2
@@ -45,9 +45,13 @@ You now have real numbers describing lee vs. windward needles. Today we make tho
 
 1.  The `ggplot` grammar, recapped
 2.  Boxplots done right — with raw points
-3.  Plotting mean ± SE directly
-4.  Faceting and a quick theme tour
-5.  `ggsave()`, for real this time
+3.  Axis labels and titles, done right
+4.  Mapping color by group
+5.  Histograms and density curves
+6.  Plotting mean ± SE directly
+7.  Faceting and a quick theme tour
+8.  Custom colors and legends with `scale_color_manual()`
+9.  `ggsave()`, for real this time
 :::
 ::::
 :::::::
@@ -168,6 +172,99 @@ Always show the raw points alongside a boxplot when *n* is small — every point
 ::::
 :::::::
 
+## Part 2b · Axis Labels and Titles, Done Right {.divider}
+
+## Before `labs()` — Never Ship This
+
+::::::: columns
+:::: {.column width="60%"}
+```{r}
+#| fig-width: 3
+#| fig-height: 2.6
+ggplot(pine_df, aes(x = n_s, y = length_mm, fill = n_s)) +
+  geom_boxplot(alpha = 0.6, outlier.shape = NA) +
+  theme_minimal() +
+  theme(legend.position = "none")
+```
+
+::: callout-important
+The x-axis reads `n_s` and the y-axis reads `length_mm` — the literal **column names**, not something a reader outside your lab would understand.
+:::
+::::
+
+:::: {.column width="40%"}
+::: callout-warning
+**⚠️ Watch out!**
+
+A plot with default column-name axes is a plot that only makes sense to *you*, today. Six months from now, even you may not remember what `n_s` meant.
+:::
+::::
+:::::::
+
+## `labs()` — Every Piece of Text on the Plot
+
+::::::: columns
+:::: {.column width="60%"}
+```{r}
+#| fig-width: 3
+#| fig-height: 2.6
+ggplot(pine_df, aes(x = n_s, y = length_mm, fill = n_s)) +
+  geom_boxplot(alpha = 0.6, outlier.shape = NA) +
+  labs(
+    title    = "Needle Length by Side of Tree",
+    subtitle = "Four field teams, four trees",
+    x        = "Side of tree (lee = n, windward = s)",
+    y        = "Needle length (mm)",
+    fill     = "Side",
+    caption  = "Data: pine_needles.csv"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+```
+::::
+
+:::: {.column width="40%"}
+**One function, five jobs:**
+
+| Argument    | Controls                    |
+|-------------|------------------------------|
+| `title`     | main title                  |
+| `subtitle`  | smaller text under the title |
+| `x` / `y`   | axis labels                 |
+| `caption`   | small text, bottom-right    |
+| `color`/`fill` | **legend title** for that aesthetic |
+
+::: callout-note
+**✅ Key idea**
+
+`labs()` never touches the data or the statistics — only what a reader sees written on the plot. Change it freely.
+:::
+::::
+:::::::
+
+## `labs()` — the Legend Title Trap
+
+:::::: columns
+::: {.column width="60%"}
+```{r}
+#| fig-width: 3
+#| fig-height: 2.6
+# Whichever aesthetic name you mapped, use that same name in labs()
+ggplot(pine_df, aes(x = n_s, y = length_mm, color = group)) +
+  geom_point(position = position_jitter(width = 0.15, seed = 42)) +
+  labs(color = "Field team")   # matches aes(color = group)
+```
+:::
+
+:::: {.column width="40%"}
+::: callout-warning
+**⚠️ Watch out!**
+
+The legend title comes from whatever you write for **the aesthetic you mapped** — `color = "Field team"` in `labs()` relabels a `color =` mapping. Write `fill = "..."` instead and it does nothing, because this plot never mapped `fill`.
+:::
+::::
+::::::
+
 ## Part 3 · Mapping Color by Group {.divider}
 
 ## Mapping Color by Group
@@ -207,6 +304,95 @@ pine_team_plot
 :::
 ::::
 :::::::
+
+## Part 3b · Histograms and Density — Seeing the Whole Distribution {.divider}
+
+## Histograms — the Shape Behind the Summary
+
+::: callout-note
+**🔮 Predict first:** Module 3 found `mean(length_mm)` ≈ 17.7 and a fairly small gap from the median. What shape do you expect the full distribution to have — symmetric, or skewed?
+:::
+
+::::::: columns
+:::: {.column width="60%"}
+```{r}
+#| fig-width: 3
+#| fig-height: 2.6
+ggplot(pine_df, aes(x = length_mm)) +
+  geom_histogram(binwidth = 2, fill = "steelblue", color = "white") +
+  labs(
+    title = "Distribution of Needle Length",
+    x = "Needle length (mm)",
+    y = "Count"
+  ) +
+  theme_minimal()
+```
+::::
+
+:::: {.column width="40%"}
+- `binwidth` sets the width of each bar in **data units** (here, 2mm)
+- Too wide hides structure; too narrow shows noise — try a few values
+
+::: callout-tip
+**🖐 Try it yourself**
+
+Change `binwidth = 2` to `binwidth = 0.5` and to `binwidth = 5`. Which tells the real story?
+:::
+::::
+:::::::
+
+## Histograms by Group — `fill` and `facet_wrap()` Together
+
+:::::: columns
+::: {.column width="60%"}
+```{r}
+#| fig-width: 3
+#| fig-height: 2.6
+ggplot(pine_df, aes(x = length_mm, fill = n_s)) +
+  geom_histogram(binwidth = 2, color = "white", alpha = 0.7) +
+  facet_wrap(~n_s, ncol = 1) +
+  labs(x = "Needle length (mm)", y = "Count", fill = "Side") +
+  theme_minimal() +
+  theme(legend.position = "none")
+```
+:::
+
+:::: {.column width="40%"}
+::: callout-note
+**✅ Key idea**
+
+Overlapping histograms on one panel are hard to read. Faceting stacks them into separate panels sharing an x-axis — same comparison, much clearer.
+:::
+::::
+::::::
+
+## Density Curves — a Smoothed Alternative
+
+:::::: columns
+::: {.column width="60%"}
+```{r}
+#| fig-width: 3
+#| fig-height: 2.6
+ggplot(pine_df, aes(x = length_mm, fill = n_s)) +
+  geom_density(alpha = 0.5) +
+  labs(
+    title = "Needle Length Density by Side",
+    x = "Needle length (mm)",
+    y = "Density",
+    fill = "Side"
+  ) +
+  theme_minimal()
+```
+:::
+
+:::: {.column width="40%"}
+::: callout-tip
+**📖 Histogram vs. density**
+
+A density curve is a smoothed histogram, rescaled so the area under each curve sums to 1. It overlays cleanly for group comparisons — no faceting required, at the cost of hiding the raw bin counts.
+:::
+::::
+::::::
 
 ## Part 4 · Mean ± SE — Plotted Directly {.divider}
 
@@ -363,6 +549,104 @@ Always set `width`, `height`, `units`, and `dpi` explicitly. Letting `ggsave()` 
 ::::
 :::::::
 
+## Part 8 · Custom Colors and Legends — `scale_color_manual()` {.divider}
+
+## `scale_color_manual()` — Choosing Your Own Colors
+
+::: callout-tip
+**🚀 Advanced / extra work** — `ggplot`'s default colors are fine for exploring data, but a real figure often needs specific colors (journal style, colorblind-safe palettes, matching a poster). This is how you take control.
+:::
+
+::::::: columns
+:::: {.column width="60%"}
+```{r}
+#| fig-width: 3
+#| fig-height: 2.6
+ggplot(pine_df, aes(x = n_s, y = length_mm, color = n_s)) +
+  geom_point(
+    position = position_jitter(width = 0.15, seed = 42),
+    size = 2.5
+  ) +
+  stat_summary(fun = mean, geom = "point", size = 4, color = "black") +
+  scale_color_manual(
+    name   = "Side of tree",
+    labels = c(n = "Lee (sheltered)", s = "Windward"),
+    values = c(n = "#2c7fb8", s = "#d95f0e")
+  ) +
+  labs(x = "Side of tree", y = "Needle length (mm)") +
+  theme_minimal()
+```
+::::
+
+:::: {.column width="40%"}
+**Three arguments, matched by name:**
+
+| Argument | Does what |
+|---|---|
+| `name`   | the legend title |
+| `labels` | text shown for each level |
+| `values` | the actual color for each level |
+
+::: callout-note
+**✅ Key idea**
+
+`labels` and `values` are both **named vectors**, keyed by the *raw values in your data* (`n`, `s`) — not by the pretty text you want to display. `ggplot` looks up each raw value and substitutes the label/color you gave it.
+:::
+::::
+:::::::
+
+## `scale_color_manual()` — Getting the Names Wrong
+
+::::::: columns
+::: {.column width="60%"}
+```{r}
+#| eval: false
+# Typo: "wind" instead of the real value "s"
+ggplot(pine_df, aes(x = n_s, y = length_mm, color = n_s)) +
+  geom_point() +
+  scale_color_manual(
+    values = c(n = "#2c7fb8", wind = "#d95f0e")
+  )
+```
+:::
+
+:::: {.column width="40%"}
+::: callout-warning
+**⚠️ Watch out!**
+
+Every level that appears in your data **must** get an entry in `values` (and in `labels`, if you supply it), spelled exactly as it appears in the column — check with `unique(pine_df$n_s)` first if you're not sure. A missing or misspelled level draws as grey with a warning.
+:::
+::::
+::::::
+
+## `scale_fill_manual()` — the `fill` Twin
+
+:::::: columns
+::: {.column width="60%"}
+```{r}
+#| fig-width: 3
+#| fig-height: 2.6
+ggplot(pine_df, aes(x = n_s, y = length_mm, fill = n_s)) +
+  geom_boxplot(alpha = 0.7, outlier.shape = NA) +
+  scale_fill_manual(
+    name   = "Side of tree",
+    labels = c(n = "Lee (sheltered)", s = "Windward"),
+    values = c(n = "#2c7fb8", s = "#d95f0e")
+  ) +
+  labs(x = "Side of tree", y = "Needle length (mm)") +
+  theme_minimal()
+```
+:::
+
+:::: {.column width="40%"}
+::: callout-tip
+**🖐 Notice**
+
+Same three arguments, same pattern — `scale_fill_manual()` is `scale_color_manual()` for the `fill` aesthetic instead of `color`. A boxplot's box is `fill`; its jittered points (if you added `geom_point(color = ...)`) would be `color`. A plot can need both at once.
+:::
+::::
+::::::
+
 ## Wrap-up
 
 ::::::: columns
@@ -370,10 +654,13 @@ Always set `width`, `height`, `units`, and `dpi` explicitly. Letting `ggsave()` 
 Today you:
 
 - Built boxplots with raw points overlaid, not hidden
+- Wrote real axis labels, titles, and legend titles with `labs()` — never shipped a default column name
 - Mapped a third variable with `color =` / `fill =` inside `aes()`
+- Built histograms and density curves to see a whole distribution's shape
 - Plotted mean ± SE directly with `stat_summary()` — no separate summary table needed
 - Faceted a plot with `facet_wrap()` to check every group at once
 - Compared themes, and saved a real, correctly-sized figure with `ggsave()`
+- *(Advanced)* Set exact colors and legend text by hand with `scale_color_manual()` / `scale_fill_manual()`
 
 ::: callout-tip
 **🖐 Before next class**

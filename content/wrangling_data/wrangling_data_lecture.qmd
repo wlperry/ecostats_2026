@@ -1,7 +1,7 @@
 ---
 title: "Wrangling Your Data"
 subtitle: "Importing more than one way, reshaping columns, and saving what you make"
-description: "Reading CSV and Excel files, the filter/select/mutate/arrange verbs, log and unit-conversion transforms, catching duplicate rows, and writing your cleaned data back out — all on the pine needle dataset."
+description: "Reading CSV and Excel files, the filter/select/mutate/arrange verbs, the full boolean-operator toolkit (==, !=, >, <, is.na(), %in%, & vs. |), recoding and binning with case_when(), log and unit-conversion transforms, catching duplicate rows, and writing your cleaned data back out — all on the pine needle dataset."
 categories: [Wrangling, R, tidyverse]
 order: 2
 week: 1
@@ -45,9 +45,11 @@ You can get data *into* R and make a plot. Today we learn to **reshape** what yo
 
 1.  Importing data more than one way
 2.  The five wrangling verbs
-3.  `mutate()` — unit conversions and log transforms
-4.  Catching duplicate rows
-5.  Saving your work with `write_csv()`
+3.  `filter()` in depth — every boolean operator, `%in%`, AND vs. OR
+4.  `mutate()` — unit conversions and log transforms
+5.  `case_when()` — recoding and binning
+6.  Catching duplicate rows
+7.  Saving your work with `write_csv()`
 :::
 ::::
 :::::::
@@ -206,6 +208,90 @@ A comma between conditions means **AND** — every condition must be true for a 
 ::::
 ::::::
 
+## `filter()` — OR, With a Real Example
+
+::: callout-note
+**🔮 Predict first:** `n_s == "n" | length_mm > 22` keeps a row if the side is lee **or** the needle is longer than 22mm. Will this ever keep a *windward* needle? Under what condition?
+:::
+
+:::::: columns
+::: {.column width="60%"}
+```{r}
+# Lee-side needles, OR any exceptionally long needle
+pine_csv_df |>
+  filter(n_s == "n" | length_mm > 22) |>
+  head()
+```
+:::
+
+:::: {.column width="40%"}
+::: callout-warning
+**⚠️ Watch out!**
+
+`|` is the pipe **character**, not the pipe **operator** `|>`. They look related but do completely different jobs — one is logical OR, the other chains steps together.
+:::
+::::
+::::::
+
+## `filter()` — Matching One of Several Values with `%in%`
+
+:::::: columns
+::: {.column width="60%"}
+```{r}
+# Keep rows where group is one of two named teams
+pine_csv_df |>
+  filter(group %in% c("cephalopods", "salmon")) |>
+  head()
+```
+
+```{r}
+# The long way, for comparison — %in% replaces a chain of |
+pine_csv_df |>
+  filter(group == "cephalopods" | group == "salmon") |>
+  head()
+```
+:::
+
+:::: {.column width="40%"}
+::: callout-note
+**✅ Key idea**
+
+`x %in% c(a, b, c)` asks "is `x` equal to *any* of these?" — it's the clean way to write an OR across many possible values without a long chain of `|`.
+:::
+::::
+::::::
+
+## `filter()` — Missing Values with `is.na()`
+
+::::::: columns
+:::: {.column width="60%"}
+```{r}
+# A tiny illustrative dataset with missing values
+survey_df <- tibble(
+  site  = c("A", "B", "C", "D"),
+  count = c(12, NA, 8, NA)
+)
+
+survey_df |> filter(is.na(count))    # rows that ARE missing
+survey_df |> filter(!is.na(count))   # rows that are NOT missing
+```
+
+::: callout-note
+**✅ Key idea**
+
+`is.na(x)` is itself a boolean test — `TRUE`/`FALSE` — so it plugs into `filter()` exactly like `==` or `>` does.
+:::
+::::
+
+:::: {.column width="40%"}
+::: callout-tip
+**📖 Coming up**
+
+`pine_csv_df` has no missing values, so `is.na()` has nothing to catch here. Module 3 digs into *why* missing values matter so much once you're computing a sample size or a mean.
+:::
+::::
+:::::::
+
 ## `select()` — Picking Columns
 
 :::::: columns
@@ -306,6 +392,96 @@ Many biological measurements are **right-skewed** — a log transform pulls extr
 ::::
 ::::::
 
+## Part 2b · `case_when()` — Recoding and Binning {.divider}
+
+## `case_when()` — Turning a Number into a Category
+
+::: callout-note
+**🔮 Predict first:** We're about to bin `length_mm` into `"short"`, `"medium"`, and `"long"`. Needle 1 in the data is 20mm. Which bin does it land in — and does that depend on whether the cutoff is `<` or `<=`?
+:::
+
+:::::: columns
+:::: {.column width="60%"}
+```{r}
+pine_csv_df |>
+  mutate(
+    size_class = case_when(
+      length_mm < 16 ~ "short",
+      length_mm < 20 ~ "medium",
+      TRUE           ~ "long"
+    )
+  ) |>
+  count(size_class)
+```
+::::
+
+:::: {.column width="40%"}
+::: callout-note
+**✅ Key idea**
+
+`case_when()` checks conditions **top to bottom** and uses the *first* one that's `TRUE`. Once a row matches `length_mm < 16`, R never even looks at the later conditions for that row.
+:::
+::::
+::::::
+
+## `case_when()` — Always End With `TRUE ~`
+
+:::::: columns
+::: {.column width="60%"}
+```{r}
+# What happens if we forget the catch-all?
+pine_csv_df |>
+  mutate(
+    size_class = case_when(
+      length_mm < 16 ~ "short",
+      length_mm < 20 ~ "medium"
+      # no TRUE ~ ... here
+    )
+  ) |>
+  count(size_class)
+```
+:::
+
+:::: {.column width="40%"}
+::: callout-warning
+**⚠️ Watch out!**
+
+Drop the `TRUE ~ "long"` line and every "long" needle silently becomes `NA` instead of erroring. `case_when()` never warns you — always finish with a `TRUE ~ ...` catch-all, even when you're sure you've covered every case.
+:::
+::::
+::::::
+
+## `case_when()` — Recoding Categories, Not Just Numbers
+
+:::::: columns
+::: {.column width="60%"}
+```{r}
+# Give each field team a short code
+pine_csv_df |>
+  mutate(
+    team_code = case_when(
+      group == "cephalopods" ~ "CEPH",
+      group == "salmon"      ~ "SALM",
+      group == "crayfish"    ~ "CRAY",
+      group == "snail"       ~ "SNAI",
+      TRUE                   ~ "UNK"
+    )
+  ) |>
+  distinct(group, team_code)
+```
+:::
+
+:::: {.column width="40%"}
+::: callout-tip
+**🖐 Notice**
+
+`case_when()` isn't just for numeric cutoffs — every condition on the left of a `~` can be any boolean test: `==`, `%in%`, `>`, even combinations with `&` and `|`.
+
+The `"UNK"` catch-all should never actually appear here — if it does, that's your signal a team name was misspelled somewhere upstream.
+:::
+::::
+::::::
+
 ## `arrange()` — Sorting Rows
 
 ::::: columns
@@ -354,7 +530,12 @@ pine_wrangled_df <- pine_csv_df |>
   select(group, n_s, wind, length_mm) |>   # keep what we need
   mutate(
     length_cm  = length_mm / 10,
-    log_length = log(length_mm)
+    log_length = log(length_mm),
+    size_class = case_when(
+      length_mm < 16 ~ "short",
+      length_mm < 20 ~ "medium",
+      TRUE           ~ "long"
+    )
   ) |>
   arrange(n_s, desc(length_mm))            # sort for inspection
 
@@ -374,7 +555,7 @@ The pipe `|>` is what makes this readable top to bottom — a recipe, not a nest
 > - Take `pine_csv_df`,
 >   - **then** filter to real values,
 >     - **then** select four columns,
->       - **then** add two new columns,
+>       - **then** add three new columns,
 >         - **then** sort by side and length.
 :::
 ::::::
@@ -507,6 +688,8 @@ Today you:
 
 - Imported the same data from a `.csv` **and** an `.xlsx`
 - Used `filter()`, `select()`, `mutate()`, and `arrange()` — and chained them into a pipeline
+- Filtered with the full boolean toolkit: `==`, `!=`, `>`/`<`, `%in%`, `is.na()`, AND (`,`) vs. OR (`|`)
+- Recoded and binned columns with `case_when()` — always ending in a `TRUE ~` catch-all
 - Converted units and log-transformed a column with `mutate()`
 - Caught and removed duplicate rows with `distinct()`
 - Saved a new file with `write_csv()` without touching the raw data
@@ -514,7 +697,7 @@ Today you:
 ::: callout-tip
 **🖐 Before next class**
 
-Finish the worksheet: wrangle `pine_needles.csv` into a new data frame with at least one unit conversion and one log transform, then save it with `write_csv()`.
+Finish the worksheet: wrangle `pine_needles.csv` into a new data frame with at least one unit conversion, one log transform, and one `case_when()` category, then save it with `write_csv()`.
 :::
 ::::
 

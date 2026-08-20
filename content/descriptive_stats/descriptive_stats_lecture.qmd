@@ -1,7 +1,7 @@
 ---
 title: "Describing Your Data"
 subtitle: "Mean, spread, counting correctly, and group summaries"
-description: "Mean, median, variance, standard deviation, and standard error; the length() trap and the sum(!is.na()) fix; and getting tidy per-group summaries with group_by() + summarize() — all on the pine needle dataset."
+description: "Mean, median, variance, standard deviation, and standard error; quantiles, range, and IQR; the length() trap and the sum(!is.na()) fix; a fast full-dataset overview with skimr; and getting tidy per-group summaries with group_by() + summarize() — all on the pine needle dataset."
 categories: [Descriptive Statistics, R, tidyverse]
 order: 3
 week: 2
@@ -46,9 +46,11 @@ You can reshape a dataset and hand off a clean file. Today we start **describing
 
 1.  Mean and median
 2.  Variance and standard deviation
-3.  The `length()` trap — and the fix
-4.  Standard error
-5.  `group_by()` + `summarize()`
+3.  Quantiles, range, and IQR
+4.  The `length()` trap — and the fix
+5.  Standard error
+6.  `skimr` — a fast full-dataset overview
+7.  `group_by()` + `summarize()`
 :::
 ::::
 :::::::
@@ -197,6 +199,57 @@ sd(wind_lengths)
 **📖 Rule of thumb**
 
 For roughly normal data: \~68% of values fall within mean ± 1 SD, \~95% within mean ± 2 SD.
+:::
+::::
+:::::::
+
+## Part 4b · Quantiles, Range, and IQR {.divider}
+
+## Quantiles, Range, and IQR
+
+::::::: columns
+:::: {.column width="60%"}
+```{r}
+range(lee_lengths)              # min and max
+max(lee_lengths) - min(lee_lengths)  # range as a single number
+
+quantile(lee_lengths)           # 0/25/50/75/100th percentiles
+IQR(lee_lengths)                # 75th percentile minus 25th
+```
+
+::: callout-note
+**✅ Key idea**
+
+The **IQR** is the range of the *middle 50%* of the data — it ignores the most extreme quarter on each end, which makes it robust to outliers the same way the median is.
+:::
+::::
+
+:::: {.column width="40%"}
+::: callout-tip
+**🖐 Notice**
+
+`quantile()`'s 50th percentile is exactly the median. `IQR()` is just `quantile(x, 0.75) - quantile(x, 0.25)` computed for you.
+
+📖 R4DS §12 — EDA
+:::
+::::
+:::::::
+
+## Quantiles — Why This Matters for Module 4
+
+::::::: columns
+:::: {.column width="60%"}
+```{r}
+quantile(wind_lengths)
+IQR(wind_lengths)
+```
+:::
+
+:::: {.column width="40%"}
+::: callout-tip
+**📖 Preview**
+
+The box in a boxplot **is** the IQR — its bottom and top edges are the 25th and 75th percentiles you just computed. Module 4's boxplots are these five numbers, drawn.
 :::
 ::::
 :::::::
@@ -368,6 +421,54 @@ Copy-pasting this block for every group is exactly the repetition `group_by()` +
 ::::
 :::::::
 
+## Part 6b · `skimr` — a Fast Full-Dataset Overview {.divider}
+
+## `skimr` — Every Column, One Command
+
+::::::: columns
+:::: {.column width="60%"}
+```{r}
+#| eval: false
+install.packages("skimr")   # once per machine
+```
+
+```{r}
+library(skimr)
+
+skim(pine_df)
+```
+::::
+
+:::: {.column width="40%"}
+::: callout-note
+**✅ Key idea**
+
+`skim()` gives you n, missing count, mean, SD, and a tiny inline histogram for **every numeric column** — and counts for every character column — in one call. It's the fastest way to sanity-check a dataset the moment you load it.
+:::
+::::
+:::::::
+
+## `skimr` — Doesn't Replace, Just Speeds Up
+
+::::::: columns
+:::: {.column width="60%"}
+```{r}
+# Same idea, restricted to numeric columns
+pine_df |>
+  select(length_mm, tree_no) |>
+  skim()
+```
+::::
+
+:::: {.column width="40%"}
+::: callout-warning
+**⚠️ Watch out!**
+
+`skim()` is a first look, not a final answer. It doesn't know that `length_mm` should be split by `n_s` — for real per-group comparisons, you still need `group_by()` + `summarize()`, next.
+:::
+::::
+:::::::
+
 ## Part 7 · Tidy Group Stats — `group_by()` + `summarize()` {.divider}
 
 ## Tidy Group Stats — `group_by()` + `summarize()`
@@ -433,6 +534,45 @@ Four teams × two sides = 8 rows. Does every team show the same lee-vs-windward 
 ::::
 :::::::
 
+## Part 7b · Bringing Back `case_when()` from Module 2 {.divider}
+
+## Summarizing the Categories You Built Last Class
+
+::: callout-note
+**🔮 Predict first:** We're grouping by the `size_class` bins (`"short"`/`"medium"`/`"long"`) from Module 2's `case_when()`. How many rows will the summary have?
+:::
+
+::::::: columns
+:::: {.column width="60%"}
+```{r}
+size_class_stats_df <- pine_df |>
+  mutate(
+    size_class = case_when(
+      length_mm < 16 ~ "short",
+      length_mm < 20 ~ "medium",
+      TRUE           ~ "long"
+    )
+  ) |>
+  group_by(size_class) |>
+  summarize(
+    n       = sum(!is.na(length_mm)),
+    mean_mm = round(mean(length_mm, na.rm = TRUE), 2),
+    se_mm   = round(sd(length_mm, na.rm = TRUE) / sqrt(n), 2)
+  )
+
+size_class_stats_df
+```
+::::
+
+:::: {.column width="40%"}
+::: callout-note
+**✅ Key idea**
+
+`mutate()` and `group_by()` + `summarize()` chain together like any other verbs — you don't need to save the `case_when()` column separately first. This is the wrangling → describing pipeline in one block.
+:::
+::::
+:::::::
+
 ## Wrap-up
 
 ::::::: columns
@@ -441,9 +581,11 @@ Today you:
 
 - Computed **mean** and **median**, and know why they can disagree
 - Computed **variance** and **SD** by hand, with real formulas
+- Computed **quantiles**, **range**, and **IQR** — and saw the IQR is literally the boxplot's box
 - Found the **`length()` trap** and fixed it with `sum(!is.na())`
 - Computed **SE** and know how it differs from SD
-- Used `group_by()` + `summarize()` to get every group's stats in one table
+- Got a fast full-dataset overview with **`skimr::skim()`**
+- Used `group_by()` + `summarize()` to get every group's stats in one table — including the `case_when()` categories from Module 2
 
 ::: callout-tip
 **🖐 Before next class**

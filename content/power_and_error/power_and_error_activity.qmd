@@ -3,7 +3,7 @@ order: 7
 week: 4
 title: "Power and Type I & II Error"
 subtitle: "Power and error rates"
-description: "Hands-on activity: power and error rates."
+description: "Hands-on activity: p-values and errors, statistical power, and a publication-quality mean ± SE plot with custom colors, on the class pine needle dataset."
 author: "Bill Perry"
 metadata-files:
   - ../../_templates/activities.yml
@@ -12,376 +12,346 @@ format:
   docx: default
 ---
 
-# In class activity 6:
+# Worksheet 7: Power and Type I & II Error
 
-## What did we do last time in activity 5?
+> ## How to use this worksheet
+>
+> Work through each part in order, at your own pace. Type every line of code yourself into a **plain R script** — do not copy-paste. Blocks marked **▶ Run this** are code you should type and execute. Blocks marked **✏️ Your turn** ask you to write, modify, or answer something. Boxes marked **🚀 If you finish early** are optional bonus material that goes a bit further than what we covered in lecture.
 
--   Understanding standard normal distributions and z-scores
--   Calculating and interpreting standard error
--   Creating confidence intervals
--   Working with the Student’s t-distribution
+------------------------------------------------------------------------
 
-## Today's focus:
+# Part 1 · Setup — Load and Explore
 
--   Review more r code
--   understand α alpha and **β** beta errors
--   do more
-    -   1 sample t tests
-    -   2 sample t tests
+**▶ Run this in your Script:**
 
-::::: columns
-::: {.column width="60%"}
-```{r setup}
-# Install packages if needed (uncomment if necessary)
-# install.packages("readr")
-# install.packages("tidyverse")
-# install.packages("car")
-# install.packages("here")
-
-# Load libraries
+``` r
 library(patchwork)
 library(car)          # For diagnostic tests
 library(tidyverse)    # For data manipulation and visualization
 library(readxl)
-# Load the pine needle data
-# Use here() function to specify the path
-pine_switch_df <- read_excel("data/class_pine needle length switched.xlsx")
 
-# Examine the first few rows
+pine_switch_df <- read_excel("data/class_pine needle length switched.xlsx")
 head(pine_switch_df)
 
-```
-:::
+ps_df <- pine_switch_df %>%
+  group_by(group, tree_no, tree_char, side) %>%
+  summarise(length_mm = mean(length_mm, na.rm = TRUE))
 
-::: {.column width="40%"}
-```{r load_data}
-ps_df <- pine_switch_df %>% 
-  group_by(group, tree_no, tree_char, side) %>% 
-  summarise(length_mm = mean(length_mm, na.rm=TRUE))
-
-ps_shady_df <- ps_df %>% 
-  filter(side == "shady")
-
-ps_sunny_df <- ps_df %>% 
-  filter(side == "sunny")
+ps_shady_df <- ps_df %>% filter(side == "shady")
+ps_sunny_df <- ps_df %>% filter(side == "sunny")
 
 head(ps_df)
 ```
-:::
-:::::
 
-# **Part 1:** Exploratory Data Analysis
+✏️ **Your turn:** Why do we average by `group`, `tree_no`, `tree_char`, and `side` before doing anything else? `________________________`
 
-Before conducting hypothesis tests, we should always explore our data to
-understand its characteristics.
+------------------------------------------------------------------------
 
-Let's calculate summary statistics and create visualizations.
+# Part 2 · Hypothesis Testing Recap
 
-**Activity: Calculate basic summary statistics for pine needle length**
+Before we test anything, review the framework from lecture: H₀, Hₐ, and α are all decided *before* you look at the data.
 
-```{r summary_stats, exercise=TRUE}
-
-
-# YOUR TASK: Calculate summary statistics for pine needle length
-# Hint: Use summarize() function to calculate mean, sd, n, etc.
-
-# Create a summary table for all pine needles
-pine_summary <- ps_df %>%
-  group_by(side) %>% 
-  summarize(
-    mean_length = mean(length_mm, na.rm=TRUE),
-    sd_length = sd(length_mm, na.rm=TRUE),
-    n = sum(!is.na(length_mm)),
-    se_length = sd_length / (n^0.5),
-    t_critical = qt(0.975, df = n - 1),  # 95% CI uses 0.975 (two-tailed)
-    ci_lower = mean_length - t_critical * se_length,
-    ci_upper = mean_length + t_critical * se_length
-  )
-
-print(pine_summary)
-
-# Now calculate summary statistics by wind exposure
-# YOUR CODE HERE
+✏️ **Your turn:** For the question "Do needle lengths differ between the sunny and shady sides?", write:
 
 ```
+H0 = ________________________________________________________
+Ha = ________________________________________________________
+alpha = ________
+```
 
-# **Part 1:** Visualizing the Data
+✏️ **Your turn:** In one sentence, what's the difference between a Type I error and a Type II error?
 
-::::: columns
-::: {.column width="60%"}
-**Activity: Create visualizations of pine needle length**
+```
+________________________________________________________
+```
 
-Create a histogram and a boxplot to visualize the distribution of pine
-needle length values.
+::: callout-tip
+**🚀 If you finish early:** With df = 14 and a two-tailed α = 0.05, find the critical t-value with `qt(0.975, df = 14)`. Then use `pt()` to find the p-value for an observed t of 2.8 on the same df: `2 * (1 - pt(2.8, df = 14))`. Is 2.8 inside or outside the rejection region?
+
+``` r
+# Write your code here:
+```
 :::
 
-::: {.column width="40%"}
-Effective data visualization helps us understand:
+------------------------------------------------------------------------
 
--   The central tendency
--   The spread of the data
--   Potential outliers
--   Shape of distribution
-:::
-:::::
+# Part 3 · Exploratory Data Analysis and Effect Size
 
-# Your Task
+**▶ Run this:**
 
-```{r visualize, exercise=TRUE}
-# YOUR TASK: Create a histogram of pine needle length
-# Hint: Use ggplot() and geom_histogram()
+``` r
+pine_summary <- ps_df %>%
+  group_by(side) %>%
+  summarize(
+    mean_length = mean(length_mm, na.rm = TRUE),
+    sd_length   = sd(length_mm, na.rm = TRUE),
+    n           = sum(!is.na(length_mm)),
+    se_length   = sd_length / (n^0.5),
+    t_critical  = qt(0.975, df = n - 1),  # 95% CI uses 0.975 (two-tailed)
+    ci_lower    = mean_length - t_critical * se_length,
+    ci_upper    = mean_length + t_critical * se_length
+  )
+print(pine_summary)
+```
 
-# Histogram of all pine needle lengths
+**▶ Run this** — visualize the distribution:
+
+``` r
 ggplot(ps_df, aes(x = length_mm, fill = side)) +
   geom_histogram(binwidth = 2) +
   labs(title = "Distribution of Pine Needle Lengths",
-       x = "Length (mm)",
-       y = "Frequency") +
-  theme_minimal()+ facet_wrap("side", ncol = 1)
-
-# how can you do this by side to see both plots
-
+       x = "Length (mm)", y = "Frequency") +
+  theme_minimal() +
+  facet_wrap("side", ncol = 1)
 ```
 
-# What is the Effect size or difference in means?
+**▶ Run this** — the effect size (difference in means):
+
+``` r
+pine_summary %>%
+  summarize(difference = mean_length[side == "sunny"] - mean_length[side == "shady"])
+```
+
+✏️ **Your turn:** Looking at the histogram, do the two distributions look like they overlap a lot, or are they clearly separated? Does that match the size of the `difference` you just calculated? `________________________`
 
 ::: callout-tip
-## Practice Exercise: Calculate Effect size
+**🚀 If you finish early:** Recompute `pine_summary`, but group by `group` (field team) instead of `side`. Do all teams show a similar mean and spread, or does one team look different?
 
-We could also look at the difference in means... some cool code here
-
-```{r}
-# Assuming your dataframe is called df
-pine_summary %>%
-  summarize(difference =  mean_length[side == "sunny"] -mean_length[side == "shady"])
+``` r
+# Write your code here:
 ```
 :::
 
-# **Part 2:** Conducting the Two-Sample T-Test
+------------------------------------------------------------------------
 
-**Activity: Conduct a two-sample t-test**
+# Part 4 · The Two-Sample t-Test
 
-Now we can compare the mean pine needle lengths between sunny and shady
-sides.
+H₀: μ₁ = μ₂ (the mean needle lengths are equal)
 
-H₀: μ₁ = μ₂ (The mean needle lengths are equal)
+Hₐ: μ₁ ≠ μ₂ (the mean needle lengths are different)
 
-H₁: μ₁ ≠ μ₂ (The mean needle lengths are different)
+Deciding between the standard t-test (equal variances) and Welch's t-test (unequal variances) depends on a Levene's test result — review Worksheet 6 if you need a refresher.
 
-Deciding between:
+**▶ Run this:**
 
--   Standard t-test (equal variances)
--   Welch's t-test (unequal variances)
-
-# Based on our Levene's test result.
-
-```{r two_sample_ttest, exercise=TRUE}
-# YOUR TASK: Conduct a two-sample t-test
-# Use var.equal=TRUE for standard t-test or var.equal=FALSE for Welch's t-test
-
-# Standard t-test (if variances are equal)
+``` r
 t_test_result <- t.test(length_mm ~ side, data = ps_df, var.equal = TRUE)
 print("Standard two-sample t-test:")
 print(t_test_result)
-
 ```
 
-# What is Power
+✏️ **Your turn:** What is the t-statistic, degrees of freedom, and p-value? Do you reject or fail to reject H₀ at α = 0.05?
 
-Statistical power represents the probability of detecting a true effect
-(rejecting the null hypothesis when it is false). In this case, with a
-power of 97%, there's a 97% chance of detecting a true difference of 30
-units between the means of the two groups if such a difference actually
-exists.
+```
+t = ________  df = ________  p = ________
+Decision: ________________________
+```
 
-A power analysis like this is typically done for one of these purposes:
+::: callout-tip
+**🚀 If you finish early:** Rerun the test with `var.equal = FALSE` (Welch's t-test) and compare the p-value to the standard version above. How different are they?
 
-1.  Before data collection to determine required sample size
-2.  After a study to evaluate if the sample size was adequate
-3.  To determine the minimum detectable effect size with the given
-    sample
+``` r
+# Write your code here:
+```
+:::
 
-With 97% power, this test has excellent ability to detect the specified
-effect size. Generally, **80% power is considered acceptable**, so 97%
-indicates a very well-powered study for detecting a difference of 30mm
-between the groups.
+------------------------------------------------------------------------
+
+# Part 5 · Statistical Power
+
+Statistical power is the probability of detecting a true effect — rejecting H₀ when it is actually false. A power analysis is typically done to determine the required sample size before a study, to evaluate whether a completed study's sample size was adequate, or to find the minimum detectable effect size for a given sample. **80% power is generally considered acceptable.**
 
 $$s_p = \sqrt{\frac{(n_1 - 1)s_1^2 + (n_2 - 1)s_2^2}{n_1 + n_2 - 2}}$$
 
-```{r}
-# Calculate power for detecting a 1 mm difference
+**▶ Run this** — power to detect a 1mm difference:
+
+``` r
 side_diff <- 1
 
-# Get sample sizes # note assumes no missing values
 sunny_n <- nrow(ps_sunny_df)
 shady_n <- nrow(ps_shady_df)
 
-# Calculate pooled standard deviation
-sun_sd_pooled <- sqrt((var(ps_sunny_df$length_mm) * (sunny_n - 1) + 
-                      var(ps_shady_df$length_mm) * (shady_n - 1)) / 
+sun_sd_pooled <- sqrt((var(ps_sunny_df$length_mm) * (sunny_n - 1) +
+                      var(ps_shady_df$length_mm) * (shady_n - 1)) /
                       (sunny_n + shady_n - 2))
 
-# Calculate Cohen's d effect size
 sun_effect_size <- side_diff / sun_sd_pooled
-
-# Calculate degrees of freedom
 sun_df <- sunny_n + shady_n - 2
-
-# Set significance level
 sun_alpha <- 0.05
 
-# Calculate power (fixed parameters)
-sun_power <- power.t.test(n = min(sunny_n, shady_n), 
-                         delta = side_diff,  # Raw difference, not effect size
-                         sd = sun_sd_pooled,  # Use pooled SD, not side_diff
-                         sig.level = sun_alpha,  # Use 0.05, not 0.5
+sun_power <- power.t.test(n = min(sunny_n, shady_n),
+                         delta = side_diff,        # Raw difference, not effect size
+                         sd = sun_sd_pooled,        # Use pooled SD
+                         sig.level = sun_alpha,
                          type = "two.sample",
                          alternative = "two.sided")
 
-# Display results
 print("Sample sizes:")
 print(paste("Sunny:", sunny_n, "Shady:", shady_n))
 print(paste("Pooled SD:", round(sun_sd_pooled, 3)))
 print(paste("Effect size (Cohen's d):", round(sun_effect_size, 3)))
-print("")
 print("Power analysis results:")
 print(sun_power)
 ```
 
-# Now to make a final plot
+✏️ **Your turn:** Is the power above 80%? If our study is underpowered, what are two things we could change to increase power? `________________________`
 
-Typically we will make a plot that has the mean and standard error on it
-to represent the data
+::: callout-tip
+**🚀 If you finish early:** `power.t.test()` can also solve for **sample size** instead of power — leave `n` out and add `power = 0.80` instead. How many needles per side would you need to reliably (80% power) detect a 1mm difference?
 
-## Your task is to make a more publication quality final plot
+``` r
+power.t.test(delta = side_diff,
+             sd = sun_sd_pooled,
+             sig.level = sun_alpha,
+             power = 0.80,
+             type = "two.sample",
+             alternative = "two.sided")
+```
+:::
 
-```{r}
-pine_mean_se <- ps_df %>% 
-  ggplot(aes(side, length_mm, color = side))+
-  stat_summary(fun = "mean", na.rm=TRUE, geom="point", size = 3)+
+------------------------------------------------------------------------
+
+# Part 6 · A Publication-Quality Plot
+
+Typically we present a plot with the mean and standard error to represent the data.
+
+**▶ Run this:**
+
+``` r
+pine_mean_se <- ps_df %>%
+  ggplot(aes(side, length_mm, color = side)) +
+  stat_summary(fun = "mean", na.rm = TRUE, geom = "point", size = 3) +
   stat_summary(fun.data = "mean_se", width = 0.2, geom = "errorbar")
 pine_mean_se
-
 ```
 
-# Now make a new theme
+**▶ Run this** — a custom theme you can reuse on any plot:
 
-This is how you can customize a plot with your own theme
-
-Run this block or ctrl/command + enter on the very start of the code as
-running inside the function fails.
-
-```{r}
-# Load your custom theme -----
-theme_class <- function(base_size = 14, base_family = "Sans")
-{theme(
-  # REMOVE PLOT FILL AND GRIDS
-    panel.background=element_rect(fill = "transparent", colour = "transparent"), 
-    plot.background=element_rect(fill="transparent", colour=NA),
-  # removes the grid lines
+``` r
+theme_class <- function(base_size = 14, base_family = "Sans") {
+  theme(
+    panel.background = element_rect(fill = "transparent", colour = "transparent"),
+    plot.background  = element_rect(fill = "transparent", colour = NA),
     panel.grid.major = element_line(linetype = "blank"),
-    panel.grid.minor = element_line(linetype = "blank"),  
-  # X and Y LABELS APPEARANCE
-    axis.text = element_text(colour = "black"), # this is for the text on ticks and overrides all below if not set
-    axis.title.x=element_text(size=18, face="bold"), # this is for the x title
-    axis.title.y=element_text(size=18, face="bold"), # this is for the y title
-    axis.text.x = element_text(size=16, face="bold", angle=0, vjust = .5, hjust=.5), # for X tick labels
-    axis.text.y = element_text(size=16, face="bold"),# for Y tick labels
-    # plot.title = element_text(hjust = 0.5, colour="black", size=22, face="bold"),
-  # ADD AXES LINES AND SIZE
-    axis.ticks = element_line(colour = "black"),
-    axis.line.x = element_line(color="black", linewidth = 0.5,linetype = "solid" ),
-    axis.line.y = element_line(color="black", linewidth = 0.5, linetype = "solid"),
-  # LEGEND
-    # LEGEND TEXT
-    legend.text = element_text(colour="black", size = 16, face = "bold"),
-    # LEGEND TITLE
-    legend.title = element_text(colour="black", size=18, face="bold"),
-    # LEGEND POSITION AND JUSTIFICATION 
-    # legend.justification=c(0.1,1),
-    legend.position="right",
-    # REMOVE BOX BEHIND LEGEND SYMBOLS
-    legend.key = element_rect(fill = "transparent", colour = "transparent"),
-    # REMOVE LEGEND BOX
+    panel.grid.minor = element_line(linetype = "blank"),
+    axis.text        = element_text(colour = "black"),
+    axis.title.x     = element_text(size = 18, face = "bold"),
+    axis.title.y     = element_text(size = 18, face = "bold"),
+    axis.text.x      = element_text(size = 16, face = "bold", angle = 0, vjust = .5, hjust = .5),
+    axis.text.y      = element_text(size = 16, face = "bold"),
+    axis.ticks       = element_line(colour = "black"),
+    axis.line.x      = element_line(color = "black", linewidth = 0.5, linetype = "solid"),
+    axis.line.y      = element_line(color = "black", linewidth = 0.5, linetype = "solid"),
+    legend.text      = element_text(colour = "black", size = 16, face = "bold"),
+    legend.title     = element_text(colour = "black", size = 18, face = "bold"),
+    legend.position  = "right",
+    legend.key        = element_rect(fill = "transparent", colour = "transparent"),
     legend.background = element_rect(fill = "transparent", colour = "transparent"),
-  # ADD PLOT BOX
-    # panel.border = element_rect(color = "black", fill = NA, size=2),
-    # turn off an element element_blank()
-    panel.border = element_blank(),
-    plot.title = element_text(hjust = 0, vjust=2.12),
-    plot.caption = element_text(hjust = 0, vjust=1.12))
+    panel.border     = element_blank(),
+    plot.title       = element_text(hjust = 0, vjust = 2.12),
+    plot.caption     = element_text(hjust = 0, vjust = 1.12)
+  )
 }
-
-
 ```
 
-# Now apply your theme to the plot above
+> ⚠️ **Watch out!** Run the whole `theme_class <- function(...) {...}` block at once (select it all and run) — running just the inside line by line will fail, since those lines only make sense as part of the function.
 
-We can add things to an existing plot as we go.. and it is not over
-writing the plot as we are not using the `<-`
+**▶ Run this** — apply your theme to the plot (note `+`, not `<-`, so the original `pine_mean_se` object is untouched):
 
-```{r}
+``` r
 pine_mean_se +
   theme_class()
 ```
 
-# Further modifications
+**▶ Run this** — put it all together with proper labels, a fixed y-axis range, and custom colors:
 
-```{r}
-
-pine_mean_se <- ps_df %>% 
-  ggplot(aes(side, length_mm, color = side))+
-  stat_summary(fun = "mean", na.rm=TRUE, geom="point", 
-               size = 4)+
-  stat_summary(fun.data = "mean_se", geom = "errorbar",
-               width = 0.1, linewidth = 0.35) +
-  labs(x = "Side of Tree",
-       y = "Mean Length (mm \u00B1 1 SE)")+
-  coord_cartesian(ylim = c(15, 20))+
-  theme_class()+
+``` r
+pine_mean_se <- ps_df %>%
+  ggplot(aes(side, length_mm, color = side)) +
+  stat_summary(fun = "mean", na.rm = TRUE, geom = "point", size = 4) +
+  stat_summary(fun.data = "mean_se", geom = "errorbar", width = 0.1, linewidth = 0.35) +
+  labs(x = "Side of Tree", y = "Mean Length (mm ± 1 SE)") +
+  coord_cartesian(ylim = c(15, 20)) +
+  theme_class() +
   scale_color_manual(
     name = "Side of tree",
-    labels = c(
-      "shady" = "Shady Side",
-      "sunny" = "Sunny Side"),
-    values = c(
-      "shady" = "darkgreen",
-      "sunny" = "coral")
+    labels = c("shady" = "Shady Side", "sunny" = "Sunny Side"),
+    values = c("shady" = "darkgreen", "sunny" = "coral")
   )
 pine_mean_se
-
 ```
 
-\
+✏️ **Your turn:** Change the two hex-ish color names in `values =` to two colors of your own choosing (e.g., `"steelblue"`, `"darkorange"`). Re-run and confirm the plot updates.
 
-# **Summary and Conclusions**
+``` r
+# Write your code here:
+```
+
+::: callout-tip
+**🚀 If you finish early:** `pine_mean_se` currently uses `color =`, which only affects points and error bars — not a filled shape. Build a boxplot version using `aes(side, length_mm, fill = side)` + `geom_boxplot()` + `scale_fill_manual()` with the same `labels`/`values` pattern.
+
+``` r
+# Write your code here:
+```
+:::
+
+------------------------------------------------------------------------
+
+# Summary and Conclusions
 
 In this activity, we've:
 
-1.  Formulated hypotheses about pine needle length
-2.  Tested assumptions for parametric tests
-3.  Conducted a two-sample t-tests
-4.  Visualized data using appropriate methods
-5.  Learned how to interpret and report t-test results
+1. Formulated hypotheses about pine needle length
+2. Reviewed Type I and Type II error and statistical power
+3. Conducted a two-sample t-test
+4. Calculated statistical power for our observed effect size
+5. Built a publication-quality mean ± SE plot with a custom theme and custom colors
 
 **Key takeaways:**
 
--   Always check assumptions before conducting tests
--   Visualize your data to understand patterns
--   Report results comprehensively
--   Consider alternatives when assumptions are violated
+- Always check assumptions before conducting tests
+- Visualize your data to understand patterns
+- Report results comprehensively, including effect size and power when relevant
+- Consider alternatives when assumptions are violated
 
 # Reflection Questions
 
-After completing the activities, discuss these questions with your
-group:
+1. How does sample size affect our confidence in estimating the population mean?
+2. Why is the t-distribution more appropriate than the normal distribution when working with small samples?
+3. When comparing two populations, what can we learn from confidence intervals that a t-test alone doesn't tell us?
+4. How would you explain the concept of statistical power to someone who has never taken a statistics course?
+5. What do we do if assumptions fail?
 
-1.  How does sample size affect our confidence in estimating the
-    population mean?
-2.  Why is the t-distribution more appropriate than the normal
-    distribution when working with small samples?
-3.  When comparing two populations, what can we learn from looking at
-    confidence intervals versus performing a t-test?
-4.  How would you explain the concept of statistical significance to
-    someone who has never taken a statistics course?
-5.  What do we do if assumptions FAIL!!!
+# Review and checkpoint
+
+At this point you can:
+
+- [ ] State H₀, Hₐ, and α *before* running a test
+- [ ] Explain the difference between a Type I and a Type II error
+- [ ] Run and interpret a two-sample t-test
+- [ ] Calculate statistical power (and required sample size) with `power.t.test()`
+- [ ] Build a mean ± SE plot with a reusable custom theme and `scale_color_manual()`
+
+::: callout-note
+**📤 What to turn in before next class**
+
+Upload both of these to the course management system:
+
+1. Your code — the `scripts/` folder (or just `07_power_and_error.R`)
+2. This worksheet, with your written answers
+:::
+
+------------------------------------------------------------------------
+
+# Getting unstuck
+
+When code breaks — and it will, that is normal:
+
+1. **Read the error message out loud.** R usually names the line and the problem.
+2. **Check the usual suspects:** did you run `library(tidyverse)`, `library(car)`, and `library(readxl)`? Spelling? A missing `)` or `%>%` at the *start* of a line?
+3. `?function_name` opens the built-in help page.
+4. **Bring the exact error** (copy-paste it) to class or office hours.
+
+> 💡 **Key idea:** Every working scientist googles error messages daily. Getting stuck is not failing — it is the job.
+
+------------------------------------------------------------------------
