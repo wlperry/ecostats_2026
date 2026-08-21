@@ -1,22 +1,28 @@
 ---
 order: 17
 week: 9
-title: "Multivariate Statistics (MANOVA)"
+title: "Activity: Multivariate Statistics (MANOVA)"
 subtitle: "MANOVA"
-description: "Hands-on activity: MANOVA and multivariate methods."
+description: "Hands-on activity: principal component analysis on the Darlingtonia (cobra lily) morphology dataset — standardization, correlations, PCA, loadings, scores, and distances between site centroids."
 author: "Bill Perry"
 format:
   html: default
   docx: default
 ---
 
-```{r setup}
-#| message: false
-#| warning: false
+# Worksheet: Multivariate Statistics
 
-# Load required packages
-library(car)          # For ANOVA tests
-library(emmeans)      # For estimated marginal means
+> ## How to use this worksheet
+>
+> Work through each part in order, at your own pace. Type every line of code yourself into a **plain R script** — do not copy-paste. Blocks marked **▶ Run this** are code you should type and execute. Blocks marked **✏️ Your turn** ask you to write, modify, or answer something. Boxes marked **🚀 If you finish early** are optional bonus material that goes a bit further than what we covered in lecture.
+>
+> This worksheet uses the same Darlingtonia (cobra lily) morphology dataset from lecture — 89 plants measured on 10 morphological and biomass variables across 4 sites.
+
+**▶ Run this in your Script:**
+
+```r
+library(car)
+library(emmeans)
 library(psych)
 library(vegan)
 library(ggfortify)
@@ -25,56 +31,58 @@ library(FactoMineR)
 library(factoextra)
 library(ggrepel)
 library(plotly)
-library(broom)        # For model summaries
-library(patchwork)    # For combining plots
-library(janitor)      # For cleaning names
-library(tidyverse)    # For data manipulation and visualization
+library(broom)
+library(patchwork)
+library(janitor)
+library(tidyverse)
 
-# Set theme for all plots
-theme_set(theme_minimal(base_size = 12))
-
-
-# # Set options
-# options(scipen = 999)
+theme_set(theme_minimal(base_size = 9))
 ```
 
-# Lecture 16: PCA
+------------------------------------------------------------------------
 
-```{r}
-# read file
-# Load the data
+# Part 1 · Load and Explore the Data
+
+**▶ Run this:**
+
+```r
 darlingtonia <- read_csv("darlingtonia.csv")
 
-# View the structure
 head(darlingtonia)
 
 darlingtonia %>%
   count(site, name = "n_plants")
-
 ```
 
-```{r}
-# Create long format for easier plotting
+**▶ Run this** — visualize the raw data by site (notice the different scales!):
+
+```r
 darl_long <- darlingtonia %>%
   pivot_longer(cols = -site,
                names_to = "variable",
                values_to = "value")
 
-# Box plots by site
 ggplot(darl_long, aes(x = site, y = value, fill = site)) +
   geom_boxplot() +
   facet_wrap(~variable, scales = "free_y", ncol = 2) +
-  theme_minimal() +
+  theme_minimal(base_size = 7) +
   theme(legend.position = "none",
         axis.text.x = element_text(angle = 45, hjust = 1)) +
   labs(title = "Raw Data by Site",
        subtitle = "Notice the different scales!")
 ```
 
-```{r}
-# Example: standardize height
-darlingtonia %>% 
-  group_by(site) %>% 
+✏️ **Your turn:** Which variable(s) have the largest values (dominating the raw scale), and which have the smallest? `________________________`
+
+------------------------------------------------------------------------
+
+# Part 2 · Standardization
+
+**▶ Run this** — check means and SDs by site before standardizing:
+
+```r
+darlingtonia %>%
+  group_by(site) %>%
   summarize(
     mean_height = mean(height),
     sd_height = sd(height),
@@ -86,32 +94,36 @@ darlingtonia %>%
 # mean = 0, sd = 1
 ```
 
-```{r}
-# Select only numeric variables for PCA
+**▶ Run this** — standardize all numeric variables and visualize:
+
+```r
 darl_numeric <- darlingtonia %>%
   dplyr::select(-site)
 
-# Standardize using scale()
-# This centers (mean=0) and scales (sd=1) each variable
+# Standardize using scale() - centers (mean=0) and scales (sd=1) each variable
 darl_scaled <- scale(darl_numeric)
 
-darl_scaled_df  <- as.data.frame(darl_scaled)
+darl_scaled_df <- as.data.frame(darl_scaled)
 
 darl_scaled_df %>%
   select(height, mouth_diam, wingmass_g) %>%
-  pivot_longer(cols = c(height, mouth_diam, wingmass_g) , names_to = "variable", values_to = "value") %>%
-  ggplot(aes(x = variable, y = value, fill  = variable)) +
+  pivot_longer(cols = c(height, mouth_diam, wingmass_g), names_to = "variable", values_to = "value") %>%
+  ggplot(aes(x = variable, y = value, fill = variable)) +
   geom_boxplot() +
   labs(title = "Standardized Data (same scale)") +
   theme(legend.position = "none")
 ```
 
-```{r}
-# Calculate correlation matrix
+------------------------------------------------------------------------
+
+# Part 3 · Correlations
+
+**▶ Run this:**
+
+```r
 cor_matrix <- cor(darl_numeric)
 
-# Visualize with corrplot
-corrplot(cor_matrix, 
+corrplot(cor_matrix,
          method = "color",
          type = "upper",
          order = "hclust",
@@ -121,52 +133,56 @@ corrplot(cor_matrix,
          number.cex = 0.6,
          title = "Correlation Matrix\n(Darlingtonia variables)",
          mar = c(0,0,2,0))
-```
 
-```{r}
-# Calculate correlation matrix
-cor_matrix <- cor(darl_numeric)
-
-# Display rounded values
 round(cor_matrix, 2)
 ```
 
-```{r}
-# Perform PCA using prcomp()
-# center = TRUE: center variables (mean = 0)
-# scale. = TRUE: scale variables (sd = 1)
-pca_result <- prcomp(darl_numeric, 
-                     center = TRUE, 
+✏️ **Your turn:** Which pair of variables has the strongest correlation? Does that make biological sense? `________________________`
+
+------------------------------------------------------------------------
+
+# Part 4 · Running PCA
+
+**▶ Run this:**
+
+```r
+pca_result <- prcomp(darl_numeric,
+                     center = TRUE,
                      scale = TRUE)
 
-
-# View summary
 summary(pca_result)
 ```
 
-```{r}
-# Create scree plot
-fviz_eig(pca_result, 
-         addlabels = TRUE, 
+**▶ Run this** — a scree plot to decide how many components to keep:
+
+```r
+fviz_eig(pca_result,
+         addlabels = TRUE,
          ylim = c(0, 50))
 ```
 
-```{r}
-# View loadings for first 3 PCs
+✏️ **Your turn:** Based on the scree plot, how many components would you retain, and why? `________________________`
+
+------------------------------------------------------------------------
+
+# Part 5 · Interpreting Loadings
+
+**▶ Run this** — view the loadings for the first 3 PCs:
+
+```r
 loadings <- pca_result$rotation[, 1:3]
 round(loadings, 3)
 ```
 
-```{r}
+**▶ Run this** — PC1 loadings, sorted and visualized:
+
+```r
 pc1_loads <- tibble(
   Variable = rownames(pca_result$rotation),
   Loading = pca_result$rotation[, 1]) %>%
   arrange(desc(abs(Loading)))
 pc1_loads
-```
 
-```{r}
-# Visualize PC1 loadings
 pc1_loads %>%
   ggplot(aes(x = reorder(Variable, Loading), y = Loading)) +
   geom_col(aes(fill = Loading > 0), show.legend = FALSE) +
@@ -180,7 +196,9 @@ pc1_loads %>%
   theme_minimal()
 ```
 
-```{r}
+**▶ Run this** — same for PC2:
+
+```r
 pc2_loads <- tibble(
   Variable = rownames(pca_result$rotation),
   Loading = pca_result$rotation[, 2]
@@ -188,10 +206,7 @@ pc2_loads <- tibble(
   arrange(desc(abs(Loading)))
 
 pc2_loads
-```
 
-```{r}
-# Visualize PC2 loadings
 pc2_loads %>%
   ggplot(aes(x = reorder(Variable, Loading), y = Loading)) +
   geom_col(aes(fill = Loading > 0), show.legend = FALSE) +
@@ -205,20 +220,40 @@ pc2_loads %>%
   theme_minimal()
 ```
 
-```{r}
-# PC scores are in pca_result$x
+✏️ **Your turn:** Based on the loadings, write a one-sentence biological interpretation of PC1 and PC2 (what does a high score on each mean?).
+
+```
+PC1 = ________________________________________________
+PC2 = ________________________________________________
+```
+
+::: callout-tip
+**🚀 If you finish early:** Repeat this loadings analysis for PC3 (`pca_result$rotation[, 3]`). What does PC3 seem to represent?
+
+```r
+# Write your code here:
+```
+:::
+
+------------------------------------------------------------------------
+
+# Part 6 · Scores and Ordination
+
+**▶ Run this** — view PC scores for individual plants:
+
+```r
 pc_scores <- as_tibble(pca_result$x) %>%
   mutate(site = darlingtonia$site,
          plant_id = 1:n())
 
-# First few plants
 pc_scores %>%
   select(plant_id, site, PC1, PC2, PC3) %>%
   head(10)
 ```
 
-```{r}
-# Basic scores plot
+**▶ Run this** — a basic scores plot:
+
+```r
 ggplot(pc_scores, aes(x = PC1, y = PC2, color = site)) +
   geom_point(size = 3, alpha = 0.7) +
   stat_ellipse(level = 0.68, linetype = 2) +
@@ -226,15 +261,17 @@ ggplot(pc_scores, aes(x = PC1, y = PC2, color = site)) +
        x = paste0("PC1: Overall Size"),
        y = paste0("PC2: Shapeb%)"),
        color = "Site") +
-  theme_minimal(base_size = 12) +
+  theme_minimal(base_size = 9) +
   theme(legend.position = "right")
 ```
 
-```{r}
+**▶ Run this** — an interactive 3D version using `plotly`:
+
+```r
 pc_data <- as.data.frame(pca_result$x) %>%
   mutate(site = darlingtonia$site)
 
-plot_ly(pc_data, 
+plot_ly(pc_data,
         x = ~PC1, y = ~PC2, z = ~PC3,
         color = ~site,
         type = "scatter3d",
@@ -246,28 +283,77 @@ plot_ly(pc_data,
   ))
 ```
 
-```{r}
-# 1. Prepare PC Scores with Site
+✏️ **Your turn:** Looking at the scores plot, do the sites appear to separate from each other, or do they overlap heavily? `________________________`
+
+------------------------------------------------------------------------
+
+# Part 7 · Distances Between Sites
+
+**▶ Run this** — calculate site centroids (mean PC scores) and the Euclidean distance between them:
+
+```r
 pc_scores_for_dist <- as.data.frame(pca_result$x) %>%
   mutate(site = darlingtonia$site)
 
-# 2. Calculate the mean PC scores for each site (the site "centroids")
 site_centroids <- pc_scores_for_dist %>%
   group_by(site) %>%
   summarise(across(starts_with("PC"), mean)) %>%
   ungroup()
 
-# 3. Set site names as row names BEFORE calculating distances
 site_centroids_matrix <- site_centroids %>%
-  column_to_rownames("site")  # This keeps site names as row names
+  column_to_rownames("site")
 
-# 4. Calculate the Euclidean distance matrix between site centroids
 dist_matrix <- dist(site_centroids_matrix, method = "euclidean")
 
-# Display the distance matrix
 dist_matrix
 
-# Visualize the distance matrix
-fviz_dist(dist_matrix, 
+fviz_dist(dist_matrix,
           gradient = list(low = "#00AFBB", high = "#FC4E07"))
 ```
+
+✏️ **Your turn:** Which two sites are the most different from each other (largest centroid distance)? Which two are the most similar? `________________________`
+
+::: callout-tip
+**🚀 If you finish early:** Run a quick one-way ANOVA testing whether `PC1` differs by `site` (`aov(PC1 ~ site, data = pc_scores)`), just like we did in lecture. Is the site effect significant?
+
+```r
+# Write your code here:
+```
+:::
+
+------------------------------------------------------------------------
+
+# Review and checkpoint
+
+At this point you can:
+
+- [ ] Explain why standardization matters before PCA
+- [ ] Interpret a correlation matrix in the context of PCA
+- [ ] Run a PCA with `prcomp()` and read a scree plot
+- [ ] Interpret loadings to give principal components biological meaning
+- [ ] Plot and interpret PC scores, including an interactive 3D version
+- [ ] Calculate Euclidean distances between group centroids in PC space
+
+::: callout-note
+**📤 What to turn in before next class**
+
+Upload both of these to the course management system:
+
+1. Your code — the `scripts/` folder (or just `09_multivariate_statistics.R`)
+2. This worksheet, with your written answers
+:::
+
+------------------------------------------------------------------------
+
+# Getting unstuck
+
+When code breaks — and it will, that is normal:
+
+1. **Read the error message out loud.** R usually names the line and the problem.
+2. **Check the usual suspects:** did you run all the `library()` calls at the top? Spelling? A missing `)` or `%>%` at the *start* of a line?
+3. `?function_name` opens the built-in help page.
+4. **Bring the exact error** (copy-paste it) to class or office hours.
+
+> 💡 **Key idea:** Every working scientist googles error messages daily. Getting stuck is not failing — it is the job.
+
+------------------------------------------------------------------------

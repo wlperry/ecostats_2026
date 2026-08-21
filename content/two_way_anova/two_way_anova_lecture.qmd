@@ -1,12 +1,11 @@
 ---
-title: "Two-Way ANOVA"
+title: "Lecture: Two-Way ANOVA"
 subtitle: "Factorial designs"
-description: "Factorial (two-factor) ANOVA and interactions."
+description: "Factorial (two-factor) ANOVA, main effects and interactions, estimated marginal means, Type I/II/III sums of squares, and balanced vs. unbalanced designs — on the palmerpenguins species-by-sex dataset."
 categories: [ANOVA]
 order: 13
 week: 7
 author: "Bill Perry"
-
 
 knitr:
   opts_chunk:
@@ -18,119 +17,20 @@ format:
     downloads: [docx, pptx]  # This creates download links for all three
   revealjs:
     output-ext: "slides.html"
-  docx: default
+  docx:
+    reference-doc: ../../ms_templates/custom-reference-compact.docx
+    fig-width: 3
+    fig-height: 3
+    fig-dpi: 300
   pptx: default
+execute:
+  echo: true
 ---
 
-# Lecture 11: Review
-
-::::: columns
-::: {.column width="60%"}
-### ANOVA
-
--   Analysis of variance: single and multi-factor designs
--   Examples: diatoms, circadian rhythms
--   Predictor variables: fixed vs. random
--   ANOVA model
--   Analysis and partitioning of variance
--   Null hypothesis
--   Assumptions and diagnostics
--   Post F Tests - Tukey and others
--   Reporting the results
-:::
-
-::: {.column width="40%"}
-![](images/clipboard-1642768928.png){width="301"}
-:::
-:::::
-
-# Lecture 12: Factorial ANOVA
-
-::::: columns
-::: {.column width="60%"}
-### 2-factor designs (2-way ANOVA)
-
--   very common in ecology
--   can have more factors (e.g., 3-way ANOVA) but interpretation gets
-    very challenging...
--   Most multifactor designs: are factorial or nested
--   We will cover a 2 Factor Anova - this could be fertilizer and
-    sunlight for plant biomass produced...
-    -   each can have an effect independently
-    -   the effect of one factor may interact with the other factor
-    -   in this example...
-        -   a low light and high light treatment might affect biomass
-
-        -   fertilizer also might affect plant biomass
-
-        -   but when you have higher light the high fertilizer treatment
-            may grow better than expected
-:::
-
-::: {.column width="40%"}
-![](images/clipboard-3287272591.png){width="233"}
-
-![](images/clipboard-327078330.png)
-:::
-:::::
-
-# Factorial ANOVA: Design Structure
-
-::::: columns
-::: {.column width="60%"}
-### Consider two factors:
-
--   Factorial/crossed:
-    -   every level of B in every level of A\
-
-        ![](images/clipboard-1581875934.png){width="316"}
-:::
-
-::: {.column width="40%"}
-![](images/clipboard-2737690912.png){width="345"}
-:::
-:::::
-
-# Factorial ANOVA: Effect Types
-
-::::: columns
-::: {.column width="60%"}
-### In factorial designs
-
--   look at two types of factor effects:
-    -   **Main effect of each factor** (polling across other factor)
-    -   **Interaction effects;** is there synergistic/ antagonistic
-        effect of factors?
-:::
-
-::: {.column width="40%"}
-![](images/clipboard-1252866044.png){width="495"}
-:::
-:::::
-
-# Introduction to Two-Way ANOVA
-
-::::: columns
-::: {.column width="60%"}
-## Factorial Designs
-
-Two-way ANOVA examines:
-
--   Main effect of Factor A (Species)
--   Main effect of Factor B (Sex)
--   Interaction between A × B
--   Balanced design: equal sample sizes in all cells
--   Type III sums of squares for unbiased estimates - if balanced it
-    does not matter
-:::
-
-::: {.column width="40%"}
-```{r load_packages_data}
+```{r}
 #| echo: false
 #| message: false
 #| warning: false
-#| paged-print: false
-# Load required packages
 library(palmerpenguins)
 library(emmeans)
 library(ggfortify)
@@ -138,13 +38,122 @@ library(car)
 library(broom)
 library(patchwork)
 library(tidyverse)
-# Load the penguin data
+
 p_df <- penguins %>%
-  filter(!is.na(body_mass_g), 
+  filter(!is.na(body_mass_g),
          !is.na(sex),
          !is.na(species)) %>%
   select(species, sex, body_mass_g)
-# Calculate group means and SDs
+```
+
+## Where We Left Off
+
+::::::: columns
+:::: {.column width="60%"}
+Covered last time — one-way ANOVA:
+
+- Analysis of variance: single and multi-factor designs
+- Examples: diatoms, circadian rhythms
+- Predictor variables: fixed vs. random
+- The ANOVA model
+- Analysis and partitioning of variance
+- Null hypothesis
+- Assumptions and diagnostics
+- Post-hoc F-tests — Tukey and others
+- Reporting the results
+
+::: callout-note
+**✅ Key idea from last lecture**
+
+One-way ANOVA asks "do these groups differ?" for one factor. Today: what happens when two factors act *together* — separately, and possibly interacting?
+:::
+::::
+
+:::: {.column width="40%"}
+![](images/clipboard-1642768928.png){width="300"}
+::::
+:::::::
+
+## Part 1 · Factorial ANOVA — the Concept {.divider}
+
+## Two-Factor Designs (2-Way ANOVA)
+
+::::::: columns
+:::: {.column width="60%"}
+- Very common in ecology
+- Can have more factors (e.g., 3-way ANOVA), but interpretation gets very challenging
+- Most multifactor designs are factorial or nested
+- We'll cover a 2-factor ANOVA — this could be fertilizer and sunlight for plant biomass produced:
+  - each can have an effect independently
+  - the effect of one factor may interact with the other factor
+  - example: a low- vs. high-light treatment might affect biomass; fertilizer might also affect biomass; but under higher light, the high-fertilizer treatment may grow better than expected
+
+::: callout-note
+**📖 Reference**
+
+Gotelli & Ellison, *A Primer of Ecological Statistics*, Ch. 10 — The Analysis of Variance, extends to factorial designs like the one covered today.
+:::
+::::
+
+:::: {.column width="40%"}
+![](images/clipboard-3287272591.png){width="220"}
+
+![](images/clipboard-327078330.png){width="220"}
+::::
+:::::::
+
+## Factorial ANOVA: Design Structure
+
+::::::: columns
+:::: {.column width="60%"}
+Consider two factors:
+
+- **Factorial/crossed:** every level of B in every level of A
+
+![](images/clipboard-1581875934.png){width="280"}
+::::
+
+:::: {.column width="40%"}
+![](images/clipboard-2737690912.png){width="280"}
+::::
+:::::::
+
+## Factorial ANOVA: Effect Types
+
+::::::: columns
+:::: {.column width="60%"}
+In factorial designs, we look at two types of factor effects:
+
+- **Main effect of each factor** (pooling across the other factor)
+- **Interaction effects** — is there a synergistic/antagonistic effect between factors?
+::::
+
+:::: {.column width="40%"}
+![](images/clipboard-1252866044.png){width="300"}
+::::
+:::::::
+
+## Part 2 · Setting Up — the Penguin Data {.divider}
+
+## Introduction to Two-Way ANOVA
+
+::::::: columns
+:::: {.column width="60%"}
+Two-way ANOVA examines:
+
+- Main effect of Factor A (Species)
+- Main effect of Factor B (Sex)
+- Interaction between A × B
+- **Balanced design:** equal sample sizes in all cells
+- **Type III sums of squares** for unbiased estimates — if the design is balanced, the choice of SS type doesn't matter
+::::
+
+:::: {.column width="40%"}
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+#| paged-print: false
 summaryu_df <- p_df %>%
   group_by(species, sex) %>%
   summarise(
@@ -155,102 +164,75 @@ summaryu_df <- p_df %>%
     .groups = 'drop'
   ) %>%
   arrange(species, sex)
-
 print(summaryu_df)
-
-
 ```
-:::
-:::::
+::::
+:::::::
 
-# Data Preparation - Creating Balanced Design
+## Data Preparation — Creating a Balanced Design
 
-::::: columns
-::: {.column width="60%"}
-### Balancing the Penguin Data
+::::::: columns
+:::: {.column width="60%"}
+The penguin data frame is unbalanced — there are unequal samples per cell.
 
-The dataframe of penguins is unbalanced - there are unequal samples per
-cell
-
-```{r prepare_data}
+```{r}
 #| echo: false
 #| message: false
 #| warning: false
 #| paged-print: false
-#| 
-# Check original sample sizes
 original_n <- p_df %>%
   count(species, sex) %>%
   arrange(species, sex)
 
 p_df %>%
   count(species, sex) %>%
-  pivot_wider(names_from = sex, 
+  pivot_wider(names_from = sex,
               values_from = n,
-              values_fill = 0) 
-
+              values_fill = 0)
 ```
-:::
+::::
 
-::: {.column width="40%"}
-```{r balance_data}
+:::: {.column width="40%"}
+```{r}
 #| echo: false
 #| message: false
 #| warning: false
 #| paged-print: false
 #| collapse: true
-
-# Find minimum sample size
 min_n <- min(original_n$n)
 cat(paste("Minimum n =", min_n, "\n\n"))
 
-# Create balanced dataset
-set.seed(123) # for reproducibility
+set.seed(123)
 balanced_df <- p_df %>%
   group_by(species, sex) %>%
   sample_n(min_n) %>%
   ungroup()
 
-# Verify balanced design
-balanced_n <- balanced_df %>% 
+balanced_n <- balanced_df %>%
   count(species, sex) %>%
-  pivot_wider(names_from = sex, 
+  pivot_wider(names_from = sex,
               values_from = n,
-              values_fill = 0) 
+              values_fill = 0)
 balanced_n
 ```
 
-Statistical Mode
-$Y_{ijk} = \mu + \alpha_i + \beta_j + (\alpha\beta)_{ij} + \varepsilon_{ijk}$
+**Statistical model:**
 
-Where:
+$$Y_{ijk} = \mu + \alpha_i + \beta_j + (\alpha\beta)_{ij} + \varepsilon_{ijk}$$
 
-$\mu$ = grand mean
+μ = grand mean, α_i = effect of species i, β_j = effect of sex j, (αβ)_ij = interaction effect, ε_ijk = random error.
+::::
+:::::::
 
-$\alpha_i$ = effect of species i
+## Descriptive Statistics
 
-$\beta_j$ = effect of sex j
-
-$(\alpha\beta)_{ij}$ = interaction effect
-
-$\varepsilon_{ijk}$ = random error
-:::
-:::::
-
-# Descriptive Statistics
-
-::::: columns
-::: {.column width="60%"}
-## Summary Statistics by Groups
-
-```{r descriptive_stats}
+::::::: columns
+:::: {.column width="60%"}
+```{r}
 #| echo: false
 #| message: false
 #| warning: false
 #| paged-print: false
-
-
-# Calculate group means and SDs
 summary_df <- balanced_df %>%
   group_by(species, sex) %>%
   summarise(
@@ -261,514 +243,473 @@ summary_df <- balanced_df %>%
     .groups = 'drop'
   ) %>%
   arrange(species, sex)
-
 print(summary_df)
 ```
-:::
+::::
 
-::: {.column width="40%"}
-```{r box_plot}
+:::: {.column width="40%"}
+```{r}
 #| echo: false
-p_box_plot <- balanced_df %>% 
-  ggplot(aes(species, body_mass_g, fill=sex))+
+#| fig-width: 3.4
+#| fig-height: 3
+p_box_plot <- balanced_df %>%
+  ggplot(aes(species, body_mass_g, fill = sex)) +
   geom_boxplot() +
-  theme(axis.text = element_text(size = 14),
-        legend.text = element_text(size = 14))
+  theme_minimal(base_size = 9)
 p_box_plot
-
 ```
-:::
-:::::
+::::
+:::::::
 
-# Factorial ANOVA Models
+## Part 3 · The Factorial Model {.divider}
 
+## Factorial ANOVA Models
+
+::::::: columns
+:::: {.column width="60%"}
 Factorial designs can be of 3 types:
 
--   **Model 1** - 2 fixed factors - the focus for today....
--   Model 2 - 2 random
--   **Model 3** - 1 fixed, 1 random (mixed model) - often nested
+- **Model 1** — 2 fixed factors (the focus for today)
+- **Model 2** — 2 random factors
+- **Model 3** — 1 fixed, 1 random (mixed model) — often nested
 
-Model 1 ANOVA:
+**Model 1 ANOVA:**
 
-### $$y_{ijk} = \mu + \alpha_i + \beta_j + (\alpha\beta)_{ij} + \varepsilon_{ijk}$$
+$$y_{ijk} = \mu + \alpha_i + \beta_j + (\alpha\beta)_{ij} + \varepsilon_{ijk}$$
+::::
 
-# Model Components Explained
+:::: {.column width="40%"}
+::: callout-tip
+**🖐 Notice**
 
-### $$y_{ijk} = \mu + \alpha_i + \beta_j + (\alpha\beta)_{ij} + \varepsilon_{ijk}$$
+The formula looks identical to Model 2 and Model 3 — what changes between them is whether α, β are treated as *fixed* effects (specific groups you care about) or *random* effects (a sample from a larger population of possible groups).
+:::
+::::
+:::::::
 
--   $y_{ijk}$: value of the k~th~ observation from jth and ith
-    combination of B and A (sex m of species y)
--   µ: overall mean (overall mass)
--   αi: effect of the ith level of A, pooling across all levels of B:
-    µi- µ (difference between average mass in all "males " for species x
-    and overall mean)
+## Model Components — the Main Effects
 
-# Interaction Effects
+::::::: columns
+:::: {.column width="60%"}
+$$y_{ijk} = \mu + \alpha_i + \beta_j + (\alpha\beta)_{ij} + \varepsilon_{ijk}$$
 
-### $$y_{ijk} = \mu + \alpha_i + \beta_j + (\alpha\beta)_{ij} + \varepsilon_{ijk}$$
+- $y_{ijk}$: value of the k-th observation from the j-th and i-th combination of B and A (sex j of species i)
+- μ: overall mean (overall mass)
+- $\alpha_i$: effect of the i-th level of A, pooling across all levels of B — $\mu_i - \mu$ (difference between the average mass of all "species i" penguins and the overall mean)
+::::
 
--   Βj: effect of jth level of B, pooling across all levels of A: µj- µ
-    (difference between average mass in all males treatments and overall
-    mean)
--   (αβ)ij: effect of interaction of ith level of A and jth level of B
-    (µij - µi - µj + µ).
-    -   Does effect of B depend on level of A? (is effect of sex
-        different in the 3 species?)
+:::: {.column width="40%"}
+::: callout-tip
+**🖐 Notice**
 
-# Model Types and Interpretation
+Every effect in this model is defined as a deviation from a mean — the grand mean, or a group mean. This is exactly the same logic as a t-test or one-way ANOVA, just with more terms.
+:::
+::::
+:::::::
 
-### $$y_{ijk} = \mu + \alpha_i + \beta_j + (\alpha\beta)_{ij} + \varepsilon_{ijk}$$
+## Model Components — the Interaction
 
--   Model 2 ANOVA rare in ecology
--   **Model 3 interpretation is different:**
-    -   βj: random variable measuring variance in y across all possible
-        levels of B, pooling across all levels of A
-    -   (αβ)ij is random variable measuring variance of interaction
-        between A and B across all possible levels of B ("is effect of A
-        consistent across all possible levels of B that could have been
-        chosen?")
+::::::: columns
+:::: {.column width="60%"}
+$$y_{ijk} = \mu + \alpha_i + \beta_j + (\alpha\beta)_{ij} + \varepsilon_{ijk}$$
 
-# Estimated Marginal Means
+- $\beta_j$: effect of the j-th level of B, pooling across all levels of A — $\mu_j - \mu$ (difference between the average mass of all "sex j" penguins and the overall mean)
+- $(\alpha\beta)_{ij}$: effect of the interaction of level i of A and level j of B — $\mu_{ij} - \mu_i - \mu_j + \mu$. Does the effect of B depend on the level of A? (Is the effect of sex different across the 3 species?)
+::::
 
-::::: columns
-::: {.column width="60%"}
--   Before we go further we need to define what estimated marginal means
-    are
+:::: {.column width="40%"}
+::: callout-note
+**✅ Key idea**
 
--   Balanced data - it is just the means of the groups... easy
+The interaction term is what's *left over* after you subtract out both main effects and the grand mean — it's literally "the part the additive model can't explain."
+:::
+::::
+:::::::
 
--   Unbalanced data - it is the mean of cells that represent the lowest
-    average of the groups
+## Model Types and Interpretation
 
-```{r means_table}
+::::::: columns
+:::: {.column width="60%"}
+$$y_{ijk} = \mu + \alpha_i + \beta_j + (\alpha\beta)_{ij} + \varepsilon_{ijk}$$
+
+- Model 2 ANOVA is rare in ecology
+- **Model 3 interpretation is different:**
+  - $\beta_j$: random variable measuring variance in y across *all possible* levels of B, pooling across A
+  - $(\alpha\beta)_{ij}$ is a random variable measuring variance of the interaction between A and B across all possible levels of B ("is the effect of A consistent across all possible levels of B that could have been chosen?")
+::::
+
+:::: {.column width="40%"}
+::: callout-warning
+**⚠️ Watch out!**
+
+Fixed vs. random isn't about the *data* — it's about the *question*. Are you interested in these specific 3 species (fixed), or in "species" as a general source of variation (random)?
+:::
+::::
+:::::::
+
+## Part 4 · Estimated Marginal Means {.divider}
+
+## Estimated Marginal Means — Species
+
+::::::: columns
+:::: {.column width="60%"}
+- Before we go further, we need to define estimated marginal means (EMMs)
+- **Balanced data:** it's just the means of the groups — easy
+- **Unbalanced data:** it's the mean of *cell means*, not a simple average of all raw observations
+
+```{r}
 #| echo: false
 #| message: false
 #| warning: false
 #| paged-print: false
-# First, calculate cell means (species x sex combinations)
 cell_means <- p_df %>%
   group_by(species, sex) %>%
   summarise(
-    n = sum(!is.na(body_mass_g)), 
+    n = sum(!is.na(body_mass_g)),
     cell_mean = mean(body_mass_g),
     .groups = 'drop'
-  ) 
-cell_means_wide <- cell_means %>% select(-n) %>% 
-  pivot_wider(
-              names_from = sex,
-              values_from = cell_mean)
+  )
+cell_means_wide <- cell_means %>% select(-n) %>%
+  pivot_wider(names_from = sex, values_from = cell_mean)
 cell_counts <- p_df %>%
   count(species, sex) %>%
-  pivot_wider(names_from = sex, 
-              values_from = n,
-              values_fill = 0) 
-# Join the tables
+  pivot_wider(names_from = sex, values_from = n, values_fill = 0)
 combined_table <- cell_means_wide %>%
   left_join(cell_counts, by = "species", suffix = c("_mean", "_n"))
-
 cat("Combined table with means and counts:\n\n")
 print(combined_table)
 
-# Show the WRONG way (regular means - weighted by sample size)
 regular_species_means <- p_df %>%
   group_by(species) %>%
-  summarise(total_n = n(),
-    regular_mean = mean(body_mass_g),
-    .groups = 'drop')
+  summarise(total_n = n(), regular_mean = mean(body_mass_g), .groups = 'drop')
 cat("\n\nRegular means (WRONG for marginal means):\n\n")
 print(regular_species_means)
-
 ```
-:::
+::::
 
-::: {.column width="40%"}
-```{r marginal_means_2a}
+:::: {.column width="40%"}
+```{r}
 #| echo: false
 #| paged-print: false
-
-# Show the CORRECT way (EMMs - average of cell means)
-# For species marginal means: average the male and female means for each species
 emm_species <- cell_means %>%
   group_by(species) %>%
   summarise(
-    emm_mean = mean(cell_mean),  # Average of cell means!
-    calculation = paste0("(", 
-                        paste(round(cell_mean, 1), collapse = " + "), 
-                        ") / 2 = ", 
+    emm_mean = mean(cell_mean),
+    calculation = paste0("(",
+                        paste(round(cell_mean, 1), collapse = " + "),
+                        ") / 2 = ",
                         round(mean(cell_mean), 1)),
     .groups = 'drop'
   )
-
 cat("Estimated Marginal Means for Species (CORRECT):")
 print(emm_species)
 
-# Create a comparison table to show the difference
 comparison <- cell_means %>%
-  pivot_wider(names_from = sex, 
-              values_from = c(n, cell_mean)) %>%
+  pivot_wider(names_from = sex, values_from = c(n, cell_mean)) %>%
   mutate(
-    # Show the calculation explicitly
     species_emm = (cell_mean_female + cell_mean_male) / 2,
-    # Compare with regular mean
     regular_mean = regular_species_means$regular_mean[match(species, regular_species_means$species)],
     difference = species_emm - regular_mean
   )
 cat("\n\nComparison showing EMM calculation:\n\n")
 print(comparison %>% select(species, cell_mean_female, cell_mean_male, species_emm, regular_mean, difference))
 ```
-:::
-:::::
+::::
+:::::::
 
-# Estimated Marginal Means
+## Estimated Marginal Means — Sex
 
-::::: columns
-::: {.column width="60%"}
--   Before we go further we need to define what estimated marginal means
-    are
+::::::: columns
+:::: {.column width="60%"}
+- Balanced data: just the means of the groups
+- Unbalanced data: mean of cell means
 
--   Balanced data - it is just the means of the groups... easy
-
--   Unbalanced data - it is the mean of cells that represent the lowest
-    average of the groups
-
-```{r l12-01}
+```{r}
 #| echo: false
 #| message: false
 #| warning: false
 #| paged-print: false
-# First, calculate cell means (species x sex combinations)
-cell_means <- p_df %>%
-  group_by(species, sex) %>%
-  summarise(
-    n = sum(!is.na(body_mass_g)), 
-    cell_mean = mean(body_mass_g),
-    .groups = 'drop'
-  ) 
-cell_means_wide <- cell_means %>% select(-n) %>% 
-  pivot_wider(
-              names_from = sex,
-              values_from = cell_mean)
-cell_counts <- p_df %>%
-  count(species, sex) %>%
-  pivot_wider(names_from = sex, 
-              values_from = n,
-              values_fill = 0) 
-# Join the tables
-combined_table <- cell_means_wide %>%
-  left_join(cell_counts, by = "species", suffix = c("_mean", "_n"))
-
 cat("Combined table with means and counts:\n\n")
 print(combined_table)
-
-
 ```
-:::
+::::
 
-::: {.column width="40%"}
-```{r marginal_means_2}
+:::: {.column width="40%"}
+```{r}
 #| echo: false
 #| message: false
 #| warning: false
 #| paged-print: false
-# Regular Means for sex
 regular_sex_means <- p_df %>%
   group_by(sex) %>%
-  summarise(
-    total_n = n(),
-    regular_mean = mean(body_mass_g, na.rm = TRUE),  # Added na.rm for safety
-    .groups = 'drop'
-  )
+  summarise(total_n = n(), regular_mean = mean(body_mass_g, na.rm = TRUE), .groups = 'drop')
 cat("\nRegular means sex (WRONG for marginal means):")
 print(regular_sex_means)
 
-# For sex marginal means: average across all species for each sex
 emm_sex <- cell_means %>%
   group_by(sex) %>%
   summarise(
-    emm_mean = mean(cell_mean),  # Average of cell means!
-    calculation = paste0("(", 
-                        paste(round(cell_mean, 1), collapse = " + "), 
-                        ") / 3 = ", 
+    emm_mean = mean(cell_mean),
+    calculation = paste0("(",
+                        paste(round(cell_mean, 1), collapse = " + "),
+                        ") / 3 = ",
                         round(mean(cell_mean), 1)),
     .groups = 'drop'
   )
 cat("\n\nEstimated Marginal Means for Sex (CORRECT):\n\n")
 print(emm_sex)
 
-# Create a comparison table to show the difference
-comparison <- emm_sex %>%
+comparison_sex <- emm_sex %>%
   left_join(regular_sex_means, by = "sex") %>%
-  mutate(
-    difference = emm_mean - regular_mean
-  ) %>%
+  mutate(difference = emm_mean - regular_mean) %>%
   select(sex, total_n, regular_mean, emm_mean, difference)
-
-cat("\\n\nComparison showing difference between regular and marginal means:\n\n")
-print(comparison)
-
+cat("\n\nComparison showing difference between regular and marginal means:\n\n")
+print(comparison_sex)
 ```
-:::
-:::::
+::::
+:::::::
 
-# ANOVA Table Structure
+## Part 5 · The Two-Way ANOVA Table {.divider}
 
--   SStotal = SSA + SSB + SSAB + SSresidual
--   SStotal = (Y - Grand Mean Y)\^2
--   SSresidual = (Y -Yhat)\^2 or the difference between each observation
-    and the appropriate cell mean, summed over all observations
+## ANOVA Table Structure
 
-::: {style="font-size: 1.4em;"}
-| Source | SS | df | MS |
+::::::: columns
+:::: {.column width="60%"}
+- $SS_{total} = SS_A + SS_B + SS_{AB} + SS_{residual}$
+- $SS_{total} = \sum(Y - \bar{Y})^2$
+- $SS_{residual}$: the difference between each observation and its cell mean, summed over all observations
+::::
+
+:::: {.column width="40%"}
+| Source | df |
+|:---|:---|
+| A | p − 1 |
+| B | q − 1 |
+| AB | (p−1)(q−1) |
+| Residual | pq(n−1) |
+| Total | pqn − 1 |
+
+where p = levels of A, q = levels of B, n = replicates per cell.
+::::
+:::::::
+
+## SSA: Factor A Effects
+
+::::::: columns
+:::: {.column width="60%"}
+- $SS_A$ is the SS of differences between each marginal mean of A and the overall mean
+- If A is species, take the EMMs for factor A and subtract from the overall mean
+::::
+
+:::: {.column width="40%"}
+![](images/clipboard-4218970939.png){width="250"}
+
+![](images/clipboard-4251414171.png){width="250"}
+::::
+:::::::
+
+## SSB: Factor B Effects
+
+::::::: columns
+:::: {.column width="60%"}
+- $SS_B$ is the SS of differences between each marginal mean of B and the overall mean
+- If B is sex, take the EMMs for factor B and subtract from the overall mean
+::::
+
+:::: {.column width="40%"}
+![](images/clipboard-4218970939.png){width="250"}
+
+![](images/clipboard-4251414171.png){width="250"}
+::::
+:::::::
+
+## SSAB: Interaction Effects
+
+::::::: columns
+:::: {.column width="60%"}
+$SS_{AB}$ is the SS of cell means minus marginal means plus the overall mean.
+::::
+
+:::: {.column width="40%"}
+![](images/clipboard-3485990288.png){width="250"}
+
+![](images/clipboard-4251414171.png){width="250"}
+::::
+:::::::
+
+## F-Ratio Calculations
+
+::::::: columns
+:::: {.column width="60%"}
+SS converts to MS; F-ratio calculations differ depending on whether factors are fixed, random, or mixed.
+::::
+
+:::: {.column width="40%"}
+| Source | A, B fixed | A, B random | A fixed, B random |
 |:---|:---|:---|:---|
-| A | $nq \sum_{i=1
-            }^{p} (\bar
-            {y}_{i.} -
-            \bar{y})^2$ | $p-1$ | $\frac{SS_A}
-                                           {p-1}$ |
-| B | $np \sum_{j=1
-            }^{q} (\bar
-            {y}_{.j} -
-            \bar{y})^2$ | $q-1$ | $\frac{SS_B}
-                                           {q-1}$ |
-| AB | $n \sum_{i=1
-            }^{p} \sum_{
-            j=1}^{q} (\ 
-            bar{y}_{ij}
-            - \bar{y}_
-            {i.} - \bar
-            {y}_{.j} +
-            \bar{y})^2$ | $(p-1)(q-1)$ | $\frac{SS_{AB
-                                           }}{(p-1)(q-1)
-                                           }$ |
-| Residual | $\sum_{i=1}
-            ^{p} \sum_{
-            j=1}^{q}
-            \sum_{k=1}^{
-            n} (y_{ijk}
-            - \bar{y}_{
-            ij})^2$ | $pq(n-1)$ | $\frac{SS_{\ 
-                                           text{Residual
-                                           }}}{pq(n-1)}$ |
-| Total | $\sum_{i=1}
-            ^{p} \sum_{
-            j=1}^{q}
-            \sum_{k=1}^{
-            n} (y_{ijk}
-            - \bar{y})^2$ | $pqn-1$ |  |
+| A | $MS_A/MS_{Res}$ | $MS_A/MS_{AB}$ | $MS_A/MS_{AB}$ |
+| B | $MS_B/MS_{Res}$ | $MS_B/MS_{AB}$ | $MS_B/MS_{AB}$ |
+| AB | $MS_{AB}/MS_{Res}$ | $MS_{AB}/MS_{Res}$ | $MS_{AB}/MS_{Res}$ |
+::::
+:::::::
 
-: {tbl-colwidths="\[10,40,15,15\]"}
+## Hypotheses — Both Factors Fixed
+
+::::::: columns
+:::: {.column width="60%"}
+3 hypotheses are tested in a two-way factorial ANOVA: A, B, A×B. **Both factors fixed:**
+
+- $H_0(A)$: $\mu_1 = \mu_2 = ... = \mu_p$ (no difference in marginal means of A, pooling across B)
+- $H_0(B)$: $\mu_1 = \mu_2 = ... = \mu_q$ (no difference in marginal means of B, pooling across A)
+- $H_0(AB)$: $\mu_{ij} - \mu_i - \mu_j + \mu = 0$ (no interaction effect)
+::::
+
+:::: {.column width="40%"}
+::: callout-tip
+**🖐 Notice**
+
+These are exactly the two main-effect hypotheses from a one-way ANOVA, plus one new hypothesis just for the interaction.
 :::
+::::
+:::::::
 
-# SSA: Factor A Effects
+## Hypotheses — Mixed Model
 
--   SSA is SS of differences between each marginal mean of A and overall
-    mean
--   If A is species then get the emmeans for factor A down and subtract
-    from overall mean
+::::::: columns
+:::: {.column width="60%"}
+3 hypotheses: A, B, A×B. **One fixed, one random:**
 
-![](images/clipboard-4218970939.png){width="75%"}
+- $H_0(A)$: $\mu_1 = \mu_2 = ... = \mu_p$ (no difference in marginal means of A, pooling across B)
+- $H_0(B)$: $\sigma^2_B = 0$ (no added variance due to levels of B that could have been used)
+- $H_0(AB)$: $\sigma^2_{AB} = 0$ (no added variance due to interaction between all levels of A and B that could have been used)
+::::
 
-![](images/clipboard-4251414171.png){width="75%"}
+:::: {.column width="40%"}
+::: callout-warning
+**⚠️ Watch out!**
 
-# SSB: Factor B Effects
-
--   SSB is SS of differences between each marginal mean of B and overall
-    mean
--   If B is sex then get the emmeans for factor B across and subtract
-    from overall mean
-
-![](images/clipboard-4218970939.png){width="75%"}
-
-![](images/clipboard-4251414171.png){width="75%"}
-
-# SSAB: Interaction Effects
-
--   SSAB is SS of cell means minus marginal means plus overall mean
-
-![](images/clipboard-3485990288.png){width="70%"}
-
-![](images/clipboard-4251414171.png){width="70%"}
-
-# F-ratio Calculations
-
-::: {style="font-size: 1.4em;"}
--   SS converted to MS;
--   F-ratio calculations are different depending on whether factors are
-    fixed, random or mixed
-
-| Source | A and B fixed | A and B random | A fixed, B random |
-|:---|:---|:---|:---|
-| A | $\frac{MS_A}{MS_{
-          Residual}}$ | $\frac{MS_A}{MS_{AB}}$ | $\frac{MS_A}{MS_{AB}}$ |
-| B | $\frac{MS_B}{MS_{
-          Residual}}$ | $\frac{MS_B}{MS_{AB}}$ | $\frac{MS_B}{MS_{AB}}$ |
-| AB | $\frac{MS_{AB}}{MS_{
-          Residual}}$ | $\frac{MS_{AB}}{MS_{
-                                 Residual}}$ | $\frac{MS_{AB}}{MS_{
-                                                          Residual}}$ |
+Notice the switch from "means are equal" (fixed) to "variance is zero" (random) — that's the fundamental difference in what a random-effect hypothesis is even asking.
 :::
+::::
+:::::::
 
-# Hypotheses: Fixed Factors
+## Part 6 · Fitting the Balanced Model {.divider}
 
--   3 hypotheses are tested in a two-way factorial ANOVA:
--   A, B, A\*B Both factors fixed:
-    -   Ho(A): µ1= µ2= µ3=…. µi= µp (no diff. in marginal means of A,
-        pooling across all levels of B)
-    -   Ho(B): µ1= µ2= µ3=…. µj= µq (no diff. in marginal means of B,
-        pooling across all levels of A)
-    -   Ho(AB): µij- µi - µj + µ = 0 (no effect of interaction)
+## Example Study Details
 
-# Hypotheses: Mixed Model
+::::::: columns
+:::: {.column width="60%"}
+Let's try the example with the `palmerpenguins` package data:
 
--   3 hypotheses are tested in a two-way factorial ANOVA: A, B, A\*B
--   One fixed, one random:
-    -   Ho(A): µ1= µ2= µ3=…. µi= µp (no diff. in marginal means of A,
-        pooling across all levels of B)
-    -   Ho(B): σB2= 0 (no added variance due to levels of B that could
-        have been used)
-    -   Ho(AB): σAB2= 0 (no added variance due to interaction between
-        all levels of A and B that could have been used)
+- Effect of species and sex on `body_mass_g`
+- 3 species (Factor A)
+- 2 sexes (Factor B)
+- 34 replicates in each cell
+::::
 
-# Example Study Details
+:::: {.column width="40%"}
+![](images/clipboard-1581875934.png){width="280"}
+::::
+:::::::
 
-::::: columns
-::: {.column width="60%"}
-So lets try the example with the penguin data that is in the package
-penguin
+## Two-Way ANOVA with Type III Sums of Squares
 
--   Effect of species and sex on body_mass_g
-    -   3 species (factor A)
-    -   2 sexes (factor B)
-    -   34 replicates in each cell
-    -   This analysis examines the effects of species and sex on the
-        body mass of penguins.
-:::
-
-::: {.column width="40%"}
-![](images/clipboard-1581875934.png){width="487"}
-:::
-:::::
-
-# Two-Way ANOVA with Type III Sums of Squares
-
-::::: columns
-::: {.column width="60%"}
-## Fitting the Model
-
-```{r anova_model}
+::::::: columns
+:::: {.column width="60%"}
+```{r}
 #| echo: false
-# Set contrasts for Type III SS
 options(contrasts = c("contr.sum", "contr.poly"))
 
-# Fit the two-way ANOVA model with interaction
-anova_model <- lm(body_mass_g ~ species * sex, 
+anova_model <- lm(body_mass_g ~ species * sex,
                   data = balanced_df)
-# Model summary
 summary(anova_model)
-
 ```
-:::
+::::
 
-::: {.column width="40%"}
-```{r model_summary}
+:::: {.column width="40%"}
+```{r}
 #| echo: false
-# Type III ANOVA table using car::Anova
 anova_type3 <- Anova(anova_model, type = "III")
 cat("Type III Sums of Squares ANOVA:")
 print(anova_type3)
-
 ```
-:::
-:::::
+::::
+:::::::
 
-# Understanding Type III SS
+## Understanding Type III SS
 
-::::: columns
-::: {.column width="60%"}
-Type III sums of squares test each effect after adjusting for all other
-effects in the model:
+::::::: columns
+:::: {.column width="60%"}
+Type III sums of squares test each effect after adjusting for all other effects in the model:
 
--   **Species effect**: Tested after adjusting for sex and interaction
--   **Sex effect**: Tested after adjusting for species and interaction
--   **Interaction**: Tested after adjusting for both main effects
+- **Species effect:** tested after adjusting for sex and interaction
+- **Sex effect:** tested after adjusting for species and interaction
+- **Interaction:** tested after adjusting for both main effects
 
-This is especially important for unbalanced designs, but we're using it
-here for consistency with the next analysis.
-:::
+This is especially important for unbalanced designs, but we're using it here for consistency with the next analysis.
+::::
 
-::: {.column width="40%"}
-```{r effect_sizes}
+:::: {.column width="40%"}
+```{r}
 #| echo: false
 #| message: false
 #| warning: false
 #| paged-print: false
-
-# Calculate effect sizes (eta-squared)
-ss_total <- sum(anova_type3$`Sum Sq`[2:4]) + 
+ss_total <- sum(anova_type3$`Sum Sq`[2:4]) +
             anova_type3$`Sum Sq`[5]
 
 eta_squared_df <- data.frame(
   Effect = c("Species", "Sex", "Interaction"),
   Eta_Squared = anova_type3$`Sum Sq`[2:4] / ss_total
 )
-
 cat("Effect Sizes (Eta-squared):")
 print(eta_squared_df)
 ```
-:::
-:::::
+::::
+:::::::
 
-```{r diagnostics_1aa}
+## Checking Model Assumptions
+
+::::::: columns
+:::: {.column width="50%"}
+```{r}
 #| include: false
-
-# Creates all 4 diagnostic plots automatically
-plot_assump_plot <-  autoplot(anova_model, which = 1:4, ncol = 2, nrow = 2)
-# plot_assump_plot
-# print(plot_assump_plot)
-# Save with better parameters
-ggsave("images/assumpt_1.jpg", 
-       plot = plot_assump_plot, 
-       width = 5, 
-       height = 5, 
+plot_assump_plot <- autoplot(anova_model, which = 1:4, ncol = 2, nrow = 2)
+ggsave("images/assumpt_1.jpg",
+       plot = plot_assump_plot,
+       width = 7,
+       height = 6,
        dpi = 300,
        bg = "white")
-
 ```
 
-# Checking Model Assumptions
+The four standard diagnostic plots, built automatically with `ggfortify::autoplot()`.
+::::
 
-::::: columns
-::: {.column width="50%"}
-Assumption Plots
-:::
+:::: {.column width="50%"}
+![](images/assumpt_1.jpg){width="4in" fig-align="center"}
+::::
+:::::::
 
-::: {.column width="50%"}
-![should be the plot of the 4 assumption
-plots](images/assumpt_1.jpg){fig-align="center"}
-:::
-:::::
+## Formal Tests — Normality and Homogeneity
 
-# Formal Tests
+::::::: columns
+:::: {.column width="60%"}
+The formal tests of normality of residuals and homogeneity of variances.
+::::
 
--   These are the formal tests of
-    -   normality of residuals
-    -   homogeneity of variances
-
-```{r assumption_tests}
+:::: {.column width="40%"}
+```{r}
 #| echo: false
-
-# Normality test
 shapiro_test <- shapiro.test(residuals(anova_model))
 cat("Shapiro-Wilk Normality Test:")
 print(shapiro_test)
 
-# Homogeneity of variance
 levene_test <- leveneTest(body_mass_g ~ species * sex,
                           data = balanced_df)
 cat("Levene's Test for Homogeneity:")
 print(levene_test)
 
-# Check for outliers
 outliers_df <- balanced_df %>%
   mutate(
     fitted = fitted(anova_model),
@@ -776,118 +717,94 @@ outliers_df <- balanced_df %>%
     std_resid = rstandard(anova_model)
   ) %>%
   filter(abs(std_resid) > 3)
-
-cat(paste("Number of outliers (|z| > 3):",
-            nrow(outliers_df)))
+cat(paste("Number of outliers (|z| > 3):", nrow(outliers_df)))
 ```
+::::
+:::::::
 
-# Estimated Marginal Means (EMMs)
+## Part 7 · EMMs and Post-Hoc for the Balanced Model {.divider}
 
-::::: columns
-::: {.column width="60%"}
 ## Computing EMMs
 
-```{r emmeans_computation}
+::::::: columns
+:::: {.column width="60%"}
+```{r}
 #| echo: false
 #| message: false
 #| warning: false
 #| paged-print: false
 #| collapse: true
-
-# EMMs for species
 species_emm <- emmeans(anova_model, ~ species)
 cat("Species EMMs:\n\n")
 print(species_emm)
 
-
-# EMMs for sex
 sex_emm <- emmeans(anova_model, ~ sex)
 cat("Sex EMMs:\n\n")
 print(sex_emm)
-cat("\n")
 
-# EMMs for interaction
 interaction_emm <- emmeans(anova_model, ~ species * sex)
 cat("Species by Sex EMMs:\n\n")
 print(interaction_emm)
 ```
-:::
+::::
 
-::: {.column width="40%"}
-## Pairwise Comparisons
-
-```{r pairwise_comparisons}
+:::: {.column width="40%"}
+```{r}
 #| echo: false
 #| message: false
 #| warning: false
 #| paged-print: false
 #| collapse: true
-
-# Pairwise comparisons for species
-species_pairs <- pairs(species_emm, 
-                       adjust = "tukey")
-print("Species pairwise comparisons:\n")
-cat("\n")
+species_pairs <- pairs(species_emm, adjust = "tukey")
+print("Species pairwise comparisons:")
 print(species_pairs)
 
-# Pairwise comparisons for interaction
 interaction_pairs <- pairs(interaction_emm,
                           by = "sex",
                           adjust = "tukey")
 print("Species comparisons within sex:")
 print(interaction_pairs)
 ```
-:::
-:::::
+::::
+:::::::
 
-# Post F Test of the interaction
+## Post F-Test of the Interaction
 
-What we need to do if the interaction is significant is to test the
-overall interaction and ignore the main effects!!!
+::::::: columns
+:::: {.column width="60%"}
+When the interaction is significant, we test the overall interaction and ignore the main effects!
 
-```{r emm_interaction_post}
+```{r}
 #| echo: false
-# Get estimated marginal means for the interaction
-emm_interaction <- emmeans(anova_model, ~ species * sex)  # Replace factor1 and factor2 with your actual factor names
-
-# Pairwise comparisons with Tukey adjustment
+emm_interaction <- emmeans(anova_model, ~ species * sex)
 pairs_interaction <- pairs(emm_interaction, adjust = "tukey")
-
-
 ```
+::::
 
-# Interaction tests continued
-
-```{r l12-02}
+:::: {.column width="40%"}
+```{r}
 #| echo: false
-# Get compact letter display (cld)
-cld_interaction <- multcomp::cld(emm_interaction, 
+cld_interaction <- multcomp::cld(emm_interaction,
                        Letters = letters,
                        adjust = "sidak")
-
-# Display the results
-# print(cld_interaction)
-
 cld_df <- as.data.frame(cld_interaction) %>%
-  arrange(species, sex)  # Sort by estimated marginal mean
-
-# View the results with means and grouping letters
+  arrange(species, sex)
 print(cld_df)
-
 ```
+::::
+:::::::
 
-# interaction plot
+## The Interaction Plot
 
-::: panel
-```{r interaction_plot}
+```{r}
 #| echo: false
-
+#| fig-width: 3.6
+#| fig-height: 3
 emm_plotting_df <- as.data.frame(emm_interaction)
-# Create interaction plot
-interaction_plot <- ggplot(emm_plotting_df, 
-       aes(x = species, 
-           y = emmean, 
-           color = sex, 
+interaction_plot <- ggplot(emm_plotting_df,
+       aes(x = species,
+           y = emmean,
+           color = sex,
            group = sex)) +
   geom_point(size = 3) +
   geom_line(linewidth = 1) +
@@ -895,177 +812,127 @@ interaction_plot <- ggplot(emm_plotting_df,
                     ymax = emmean + SE),
                 width = 0.1) +
   scale_color_manual(values = c("#1f78b4", "#b2df8a")) +
-  labs(title = "Interaction Plot: Species × Sex",
-       x = "Species",
-       y = "Mean Body Mass (g)",
-       color = "Sex") +
-  theme_minimal() +
+  labs(title = "Interaction Plot: Species x Sex",
+       x = "Species", y = "Mean Body Mass (g)", color = "Sex") +
+  theme_minimal(base_size = 9) +
   theme(legend.position = "right")
 interaction_plot
-
 ```
-:::
 
-# Introduction to Unbalanced Designs
+## Part 8 · Unbalanced Designs {.divider}
 
-::::: columns
-::: {.column width="60%"}
-The Challenge of Unbalanced Data
+## Introduction to Unbalanced Designs
 
--   Real-world data is often unbalanced:
-    -   Unequal sample sizes across groups
-    -   Missing data patterns
-    -   Natural variation in sampling
--   Key Issues:
-    -   Type I, II, and III SS give different results
-    -   Order of terms matters for Type I SS
-    -   Marginal means ≠ Simple averages Interpretation becomes complex
+::::::: columns
+:::: {.column width="60%"}
+**The challenge of unbalanced data:** real-world data is often unbalanced — unequal sample sizes across groups, missing data patterns, natural variation in sampling.
 
-Statistical Model (same as balanced):
-$$Y_{ijk} = \mu + \alpha_i + \beta_j + (\alpha\beta)_{ij} + \varepsilon_{ijk}$$
+**Key issues:** Type I, II, and III SS give different results; order of terms matters for Type I SS; marginal means ≠ simple averages, so interpretation becomes complex.
 
-But parameter estimation differs!
+Statistical model (same as balanced): $Y_{ijk} = \mu + \alpha_i + \beta_j + (\alpha\beta)_{ij} + \varepsilon_{ijk}$ — but parameter estimation differs!
 
-### Data Preparation - Using Natural Unbalanced Data
-
-```{r unbalanced_new}
+```{r}
 #| echo: false
 #| message: false
 #| warning: false
 #| paged-print: false
-# Check sample sizes - naturally unbalanced
 unbalanced_n <- p_df %>%
   count(species, sex) %>%
   arrange(species, sex)
-
 print("Unbalanced sample sizes:")
 print(unbalanced_n)
 
-# Calculate total N and imbalance ratio
 total_n <- sum(unbalanced_n$n)
 max_n <- max(unbalanced_n$n)
 min_n <- min(unbalanced_n$n)
 imbalance_ratio <- max_n / min_n
-
 print(paste("Total N =", total_n))
 print(paste("Imbalance ratio =", round(imbalance_ratio, 2)))
 ```
-:::
+::::
 
-::: {.column width="40%"}
-## Visualizing Imbalance
-
-```{r visualize_imbalance}
+:::: {.column width="40%"}
+```{r}
 #| echo: false
-
-
-# Create sample size plot
-imbalance_plot <- ggplot(unbalanced_n, 
+#| fig-width: 3.4
+#| fig-height: 3
+imbalance_plot <- ggplot(unbalanced_n,
        aes(x = species, y = n, fill = sex)) +
   geom_col(position = "dodge") +
-  geom_text(aes(label = n), 
+  geom_text(aes(label = n),
             position = position_dodge(0.9),
             vjust = -0) +
   scale_fill_manual(values = c("#1f78b4", "#b2df8a")) +
   labs(title = "Sample Sizes by Group",
        subtitle = "Unbalanced Design",
-       x = "Species", 
-       y = "Sample Size",
-       fill = "Sex") +
-  theme_minimal() +
+       x = "Species", y = "Sample Size", fill = "Sex") +
+  theme_minimal(base_size = 8) +
   theme(legend.position = "top")
-
 print(imbalance_plot)
 ```
-:::
-:::::
+::::
+:::::::
 
-# Understanding Sums of Squares Types
-
-::::: columns
-::: {.column width="60%"}
 ## Type I (Sequential) SS
 
-```{r type1_ss}
+::::::: columns
+:::: {.column width="60%"}
+```{r}
 #| echo: false
 #| message: false
 #| warning: false
 #| paged-print: false
-
-# Type I SS - Order matters!
-# Model 1: Species then Sex
 model1_type1 <- lm(body_mass_g ~ species + sex + species:sex,
                    data = p_df)
 anova1_type1 <- anova(model1_type1)
-cat("Type I SS (Species → Sex → Interaction):\n\n")
+cat("Type I SS (Species -> Sex -> Interaction):\n\n")
 print(anova1_type1)
 
-# Model 2: Sex then Species (different order)
 model2_type1 <- lm(body_mass_g ~ sex + species + sex:species,
                    data = p_df)
 anova2_type1 <- anova(model2_type1)
-cat("\n\nType I SS (Sex → Species → Interaction):\n\n")
+cat("\n\nType I SS (Sex -> Species -> Interaction):\n\n")
 print(anova2_type1)
 
-# Compare SS for main effects
 ss_comparison_df <- data.frame(
   Effect = c("Species", "Sex"),
-  Order1_SS = c(anova1_type1$`Sum Sq`[1], 
+  Order1_SS = c(anova1_type1$`Sum Sq`[1],
                 anova1_type1$`Sum Sq`[2]),
-  Order2_SS = c(anova2_type1$`Sum Sq`[2], 
+  Order2_SS = c(anova2_type1$`Sum Sq`[2],
                 anova2_type1$`Sum Sq`[1])
 )
 cat("\n\nType I SS depends on order:\n\n")
 print(ss_comparison_df)
 ```
-:::
+::::
 
-::: {.column width="40%"}
-## How Type I SS Works
+:::: {.column width="40%"}
+**How Type I SS works — sequential decomposition:**
 
-**Sequential decomposition:**
+1. First term gets all SS it can explain
+2. Second term gets SS after removing the first
+3. Third term gets SS after removing the first two
 
-1.  **First term** gets all SS it can explain
-2.  **Second term** gets SS after removing first
-3.  **Third term** gets SS after removing first two
+**Problems with unbalanced data:** order dependency, biased if factors are correlated, not invariant to coding.
+::::
+:::::::
 
--   **Example calculation:**
-    -   SS(Species) = reduction in SS from null to species-only model
-    -   SS(Sex\|Species) = additional reduction adding sex
-    -   SS(Interaction\|Species,Sex) = additional reduction adding
-        interaction
--   **Problems with unbalanced data:**
-    -   Order dependency
-    -   Biased if factors are correlated
-    -   Not invariant to coding
-:::
-:::::
+## Type III Sums of Squares
 
-# Type III Sums of Squares
-
-::::: columns
-::: {.column width="60%"}
-## Type III (Marginal) SS
-
-```{r type3_ss}
+::::::: columns
+:::: {.column width="60%"}
+```{r}
 #| echo: false
 #| message: false
 #| warning: false
 #| paged-print: false
-
-# Set contrasts for Type III SS
 options(contrasts = c("contr.sum", "contr.poly"))
-
-# Fit model for Type III SS
-model_u <- lm(body_mass_g ~ species * sex, 
+model_u <- lm(body_mass_g ~ species * sex,
               data = p_df)
-
-# Type III ANOVA
 anova_type3_u <- Anova(model_u, type = "III")
 print("Type III Sums of Squares:")
 print(anova_type3_u)
 
-# Compare with Type I
 print("Comparison of F-values:")
 comparison_f_df <- data.frame(
   Effect = c("Species", "Sex", "Interaction"),
@@ -1074,68 +941,46 @@ comparison_f_df <- data.frame(
 )
 print(comparison_f_df)
 ```
-:::
+::::
 
-::: {.column width="40%"}
-## How Type III SS Works
+:::: {.column width="40%"}
+**How Type III SS works — marginal decomposition:** each effect tested after adjusting for all others.
 
--   **Marginal decomposition:**
-    -   Each effect tested after adjusting for all others:
-        -   SS(Species\|Sex,Interaction)
-        -   SS(Sex\|Species,Interaction)
-        -   SS(Interaction\|Species,Sex)
--   **Advantages:**
-    -   Order invariant
-    -   Tests hypotheses about unweighted means
-    -   Standard in most software
--   **Disadvantages:**
-    -   Lower power with missing cells
+**Advantages:** order invariant, tests hypotheses about unweighted means, standard in most software.
 
-    -   Tests may not be orthogonal
+**Disadvantages:** lower power with missing cells, tests may not be orthogonal, requires careful interpretation.
 
-    -   Requires careful interpretation
-
-```{r effect_sizes_unbalanced}
+```{r}
 #| echo: false
 #| message: false
 #| warning: false
 #| paged-print: false
-
-# Calculate effect sizes
 ss_total_u <- sum(anova_type3_u$`Sum Sq`[-1])
-
 eta_squared_p_df <- data.frame(
   Effect = c("Species", "Sex", "Interaction"),
-  Eta_Squared = round(
-    anova_type3_u$`Sum Sq`[2:4] / ss_total_u, 4)
+  Eta_Squared = round(anova_type3_u$`Sum Sq`[2:4] / ss_total_u, 4)
 )
 print("Effect Sizes (Type III):")
 print(eta_squared_p_df)
 ```
-:::
-:::::
+::::
+:::::::
 
-# Manual SS Calculation Demonstration
+## Manual SS Calculation, Step by Step
 
-::::: columns
-::: {.column width="60%"}
-## Computing SS Step-by-Step
-
-```{r manual_ss_calculation}
+::::::: columns
+:::: {.column width="60%"}
+```{r}
 #| echo: false
 #| message: false
 #| warning: false
 #| paged-print: false
-
-# Grand mean
 grand_mean <- mean(p_df$body_mass_g)
 print(paste("Grand mean:", round(grand_mean, 1)))
 
-# Total SS
 ss_total_manual <- sum((p_df$body_mass_g - grand_mean)^2)
 print(paste("Total SS:", round(ss_total_manual, 0)))
 
-# Between-group SS (full model)
 group_means_df <- p_df %>%
   group_by(species, sex) %>%
   mutate(group_mean = mean(body_mass_g)) %>%
@@ -1144,238 +989,186 @@ group_means_df <- p_df %>%
 ss_between <- sum((group_means_df$group_mean - grand_mean)^2)
 print(paste("Between-groups SS:", round(ss_between, 0)))
 
-# Within-group SS (Error SS)
-ss_within <- sum((group_means_df$body_mass_g - 
+ss_within <- sum((group_means_df$body_mass_g -
                   group_means_df$group_mean)^2)
 print(paste("Within-groups SS:", round(ss_within, 0)))
 
-# Verify: Total = Between + Within
-print(paste("Check: Between + Within =", 
+print(paste("Check: Between + Within =",
             round(ss_between + ss_within, 0)))
 ```
-:::
+::::
 
-::: {.column width="40%"}
-## Decomposing Between-Group SS
-
-```{r decompose_ss}
+:::: {.column width="40%"}
+```{r}
 #| echo: false
 #| message: false
 #| warning: false
 #| paged-print: false
-
-# For Type I SS (sequential)
-# SS for species (ignoring sex)
-species_only_model <- lm(body_mass_g ~ species, 
+species_only_model <- lm(body_mass_g ~ species,
                          data = p_df)
-ss_species_only <- sum((fitted(species_only_model) - 
+ss_species_only <- sum((fitted(species_only_model) -
                        grand_mean)^2)
-cat(paste("SS(Species alone):", 
+cat(paste("SS(Species alone):",
             round(ss_species_only, 0)))
 
-# SS for sex (ignoring species)  
-sex_only_model <- lm(body_mass_g ~ sex, 
+sex_only_model <- lm(body_mass_g ~ sex,
                      data = p_df)
-ss_sex_only <- sum((fitted(sex_only_model) - 
+ss_sex_only <- sum((fitted(sex_only_model) -
                    grand_mean)^2)
-cat(paste("SS(Sex alone):", 
+cat(paste("SS(Sex alone):",
             round(ss_sex_only, 0)))
 
-# Note: These don't add up to between SS
-# because effects are not orthogonal!
-cat(paste("\n\nSum of main effects:", 
+cat(paste("\n\nSum of main effects:",
             round(ss_species_only + ss_sex_only, 0)))
-cat(paste("Actual between SS:", 
+cat(paste("Actual between SS:",
             round(ss_between, 0)))
-cat(paste("\n\nDifference (due to correlation):", 
-            round(ss_between - 
+cat(paste("\n\nDifference (due to correlation):",
+            round(ss_between -
                   (ss_species_only + ss_sex_only), 0)))
 ```
+
+::: callout-note
+**✅ Key idea**
+
+Main effects don't add up to the between-groups SS here because the effects aren't orthogonal in an unbalanced design — proof that "unbalanced" really does change the arithmetic, not just the p-values.
 :::
-:::::
+::::
+:::::::
 
-# Estimated Marginal Means - Unbalanced Data
+## Part 9 · EMMs and Diagnostics — the Unbalanced Model {.divider}
 
-### Computing EMMs
+## Estimated Marginal Means — Unbalanced Data
 
-```{r emmeans_unbalanced}
+::::::: columns
+:::: {.column width="60%"}
+```{r}
 #| echo: false
 #| message: false
 #| warning: false
 #| paged-print: false
-
-# EMMs for main effects
 species_emm_u <- emmeans(model_u, ~ species)
 sex_emm_u <- emmeans(model_u, ~ sex)
 
 cat("Species EMMs (model-based):")
 print(species_emm_u)
-
 cat("\n\nSex EMMs (model-based):")
 print(sex_emm_u)
 
-# Get estimated marginal means for the interaction
-emm_interaction_u <- emmeans(model_u, ~ species * sex)  # Replace factor1 and factor2 with your actual factor names
-
-# Pairwise comparisons with Tukey adjustment
+emm_interaction_u <- emmeans(model_u, ~ species * sex)
 pairs_interaction_u <- pairs(emm_interaction, adjust = "tukey")
 pairs_interaction_u
-
 ```
+::::
 
-# Interaction tests continued
-
-```{r l12-03}
+:::: {.column width="40%"}
+```{r}
 #| echo: false
 #| message: false
 #| warning: false
 #| paged-print: false
-# Get compact letter display (cld)
-cld_interaction_u <- multcomp::cld(emm_interaction_u, 
+cld_interaction_u <- multcomp::cld(emm_interaction_u,
                        Letters = letters,
                        adjust = "sidak")
-
-# Display the results
-# print(cld_interaction)
-
 cld_df_u <- as.data.frame(cld_interaction_u) %>%
-  arrange(species, sex)  # Sort by estimated marginal mean
-
-# View the results with means and grouping letters
+  arrange(species, sex)
 print(cld_df_u)
-
 ```
+::::
+:::::::
 
-# Pairwise Comparisons
+## Pairwise Comparisons — Unbalanced Data
 
-::::: columns
-::: {.column width="60%"}
-### Tukey HSD Comparisons
-
-```{r pairwise_unbalanced}
+::::::: columns
+:::: {.column width="60%"}
+```{r}
 #| echo: false
 #| message: false
 #| warning: false
 #| paged-print: false
-
-# Pairwise comparisons for species
-species_pairs_u <- pairs(species_emm_u, 
-                         adjust = "tukey")
+species_pairs_u <- pairs(species_emm_u, adjust = "tukey")
 cat("Species pairwise comparisons (Tukey):")
 print(species_pairs_u)
 
-# Effect of sex within each species
 sex_by_species_emm <- emmeans(model_u, ~ sex | species)
 sex_effects_df <- pairs(sex_by_species_emm)
 cat("\n\nSex effect within each species:")
 print(sex_effects_df)
 ```
-:::
+::::
 
-::: {.column width="40%"}
-### Interaction Contrasts
-
-```{r interaction_contrasts}
+:::: {.column width="40%"}
+```{r}
 #| echo: false
 #| message: false
 #| warning: false
 #| paged-print: false
-
-# Test if sex effect differs across species
-interaction_test <- emmeans(model_u, 
+interaction_test <- emmeans(model_u,
                             pairwise ~ sex | species)
-
-# Extract contrasts
 contrasts_df <- as.data.frame(interaction_test$contrasts)
 
-# Calculate difference in sex effects
 sex_diff_adelie <- contrasts_df[1, "estimate"]
 sex_diff_chinstrap <- contrasts_df[2, "estimate"]
 sex_diff_gentoo <- contrasts_df[3, "estimate"]
 
 interaction_summary_df <- data.frame(
   Species = c("Adelie", "Chinstrap", "Gentoo"),
-  Sex_Effect = round(c(sex_diff_adelie, 
+  Sex_Effect = round(c(sex_diff_adelie,
                        sex_diff_chinstrap,
                        sex_diff_gentoo), 0)
 )
-
 cat("Sex effect (Male - Female) by species:")
 print(interaction_summary_df)
 
-# Test if these differ significantly
 cat("\n\nInteraction interpretation:")
-if(anova_type3_u$`Pr(>F)`[4] < 0.05) {
+if (anova_type3_u$`Pr(>F)`[4] < 0.05) {
   print("Sex effects differ across species")
 } else {
   print("Sex effects similar across species")
 }
 ```
-:::
-:::::
+::::
+:::::::
 
-# Diagnostic Plots - Unbalanced Design
+## Diagnostic Plots — Unbalanced Design
 
-::::: columns
-::: {.column width="60%"}
-## Model Diagnostics
-
-```{r diagnostics_unbalanced}
+::::::: columns
+:::: {.column width="60%"}
+```{r}
 #| echo: false
 #| message: false
 #| warning: false
 #| paged-print: false
-#| fig-height: 4
-#| fig-width: 4
-
-# Diagnostic plots
+#| fig-height: 3.6
+#| fig-width: 3.6
 par(mfrow = c(2, 2))
-
-# Residuals vs Fitted
-plot(model_u, which = 1,
-     main = "Residuals vs Fitted")
-
-# Q-Q plot
-plot(model_u, which = 2,
-     main = "Normal Q-Q")
-
-# Scale-Location  
-plot(model_u, which = 3,
-     main = "Scale-Location")
-
-# Residuals by group
+plot(model_u, which = 1, main = "Residuals vs Fitted")
+plot(model_u, which = 2, main = "Normal Q-Q")
+plot(model_u, which = 3, main = "Scale-Location")
 plot(fitted(model_u), residuals(model_u),
-     col = as.numeric(interaction(p_df$species, 
-                                  p_df$sex)),
+     col = as.numeric(interaction(p_df$species, p_df$sex)),
      main = "Residuals by Group",
-     xlab = "Fitted values",
-     ylab = "Residuals")
+     xlab = "Fitted values", ylab = "Residuals")
 abline(h = 0, lty = 2)
+par(mfrow = c(1, 1))
 ```
-:::
+::::
 
-::: {.column width="40%"}
-## Assumption Tests
-
-```{r assumption_tests_unbalanced}
+:::: {.column width="40%"}
+```{r}
 #| echo: false
 #| message: false
 #| warning: false
 #| paged-print: false
-
-# Normality test
 shapiro_u <- shapiro.test(residuals(model_u))
 print("Shapiro-Wilk test:")
 print(shapiro_u)
 
-# Homogeneity of variance
 levene_u <- leveneTest(body_mass_g ~ species * sex,
                        data = p_df,
                        center = median)
-print("\nLevene's test:")
+print("Levene's test:")
 print(levene_u)
 
-# Check residuals by group
 residual_summary_df <- p_df %>%
   mutate(
     residuals = residuals(model_u),
@@ -1388,39 +1181,33 @@ residual_summary_df <- p_df %>%
     sd_resid = sd(residuals),
     .groups = 'drop'
   )
-
-print("\nResidual SD by group:")
-print(residual_summary_df[, c("species", "sex", 
-                              "sd_resid")])
+print("Residual SD by group:")
+print(residual_summary_df[, c("species", "sex", "sd_resid")])
 ```
-:::
-:::::
+::::
+:::::::
 
-# Comparing Balanced vs Unbalanced Results
+## Part 10 · Comparing Balanced vs. Unbalanced {.divider}
 
-::::: columns
-::: {.column width="60%"}
 ## Side-by-Side Comparison
 
-```{r compare_designs}
+::::::: columns
+:::: {.column width="60%"}
+```{r}
 #| echo: false
 #| message: false
 #| warning: false
 #| paged-print: false
-
-# Load balanced results (simulated)
 set.seed(123)
 b_df <- p_df %>%
   group_by(species, sex) %>%
   sample_n(34) %>%
   ungroup()
 
-# Fit balanced model
 options(contrasts = c("contr.sum", "contr.poly"))
 model_b <- lm(body_mass_g ~ species * sex, data = b_df)
 anova_b <- Anova(model_b, type = "III")
 
-# Create comparison table
 comparison_results_df <- data.frame(
   Effect = c("Species", "Sex", "Interaction"),
   Balanced_F = round(anova_b$`F value`[2:4], 2),
@@ -1428,100 +1215,88 @@ comparison_results_df <- data.frame(
   Unbalanced_F = round(anova_type3_u$`F value`[2:4], 2),
   Unbalanced_p = round(anova_type3_u$`Pr(>F)`[2:4], 4)
 )
-
 cat("Balanced vs Unbalanced Results:")
 print(comparison_results_df)
 
-# Compare power
 cat("\n\nSample sizes:")
 cat(paste("Balanced total N:", nrow(b_df)))
 cat(paste("Unbalanced total N:", nrow(p_df), "\n\n"))
-cat(paste("Data discarded:", 
-            nrow(p_df) - nrow(b_df), 
+cat(paste("Data discarded:",
+            nrow(p_df) - nrow(b_df),
             "observations"))
 ```
-:::
+::::
 
-::: {.column width="40%"}
-## Visual Comparison
-
-```{r visual_comparison}
+:::: {.column width="40%"}
+```{r}
 #| echo: false
 #| message: false
 #| warning: false
 #| paged-print: false
-
-# Combine EMMs from both analyses
+#| fig-width: 3.4
+#| fig-height: 3
 emm_b <- as.data.frame(emmeans(model_b, ~ species))
 emm_u <- as.data.frame(emmeans(model_u, ~ species))
 
 comparison_plot_df <- data.frame(
   Species = rep(levels(as.factor(p_df$species)), 2),
-  Design = rep(c("Balanced", "Unbalanced"), 
-               each = 3),
-  EMM = c(as.numeric(emm_b$emmean),
-          as.numeric(emm_u$emmean)),
-  SE = c(as.numeric(emm_b$SE),
-         as.numeric(emm_u$SE))
+  Design = rep(c("Balanced", "Unbalanced"), each = 3),
+  EMM = c(as.numeric(emm_b$emmean), as.numeric(emm_u$emmean)),
+  SE = c(as.numeric(emm_b$SE), as.numeric(emm_u$SE))
 )
 
-comparison_plot <- ggplot(comparison_plot_df, 
-       aes(x = Species, y = EMM, 
-           color = Design, group = Design)) +
-  geom_point(position = position_dodge(0.3), 
-             size = 3) +
-  geom_errorbar(aes(ymin = EMM - SE, 
-                    ymax = EMM + SE),
-                position = position_dodge(0.3),
-                width = 0.2) +
+comparison_plot <- ggplot(comparison_plot_df,
+       aes(x = Species, y = EMM, color = Design, group = Design)) +
+  geom_point(position = position_dodge(0.3), size = 3) +
+  geom_errorbar(aes(ymin = EMM - SE, ymax = EMM + SE),
+                position = position_dodge(0.3), width = 0.2) +
   labs(title = "EMMs: Balanced vs Unbalanced",
-       y = "Estimated Marginal Mean (g)",
-       color = "Design") +
-  theme_minimal() +
+       y = "Estimated Marginal Mean (g)", color = "Design") +
+  theme_minimal(base_size = 8) +
   theme(legend.position = "top")
-
 print(comparison_plot)
 ```
-:::
-:::::
+::::
+:::::::
 
-# Summary and Best Practices
+## Part 11 · Summary and Best Practices {.divider}
 
-### Key Takeaways
+## Summary — Unbalanced Designs
 
-### Unbalanced Designs:
+::::::: columns
+:::: {.column width="60%"}
+**Challenges:** Type I SS depends on order; simple means ≠ EMMs; reduced power for interactions; complex interpretation.
 
-**Challenges:** - Type I SS depends on order - Simple means ≠ EMMs -
-Reduced power for interactions - Complex interpretation
+**Solutions:** use Type III SS for main effects; report EMMs, not simple means; check assumptions carefully; consider the impact of imbalance.
+::::
 
-**Solutions:** - Use Type III SS for main effects - Report EMMs, not
-simple means - Check assumptions carefully - Consider impact of
-imbalance
+:::: {.column width="40%"}
+**Recommendations:**
 
-### Recommendations:
+1. **Always report:** sample sizes per cell, type of SS used, EMMs with CIs
+2. **Visualization:** show actual data points, include error bars, note unequal sample sizes
+3. **Interpretation:** focus on effect sizes, consider practical significance, acknowledge limitations
+::::
+:::::::
 
-1.  **Always report:**
-    -   Sample sizes per cell
-    -   Type of SS used
-    -   EMMs with CIs
-2.  **Visualization:**
-    -   Show actual data points
-    -   Include error bars
-    -   Note unequal sample sizes
-3.  **Interpretation:**
-    -   Focus on effect sizes
-    -   Consider practical significance
-    -   Acknowledge limitations
+## Final Recommendations
 
-# Final Recommendations
+::::::: columns
+:::: {.column width="60%"}
+**For experimental studies:** design for balance when possible, randomize allocation, plan for attrition.
 
-**For Experimental Studies:** - Design for balance when possible -
-Randomize allocation - Plan for attrition
+**For observational studies:** accept imbalance as reality, use Type III SS, report EMMs, consider covariates (ANCOVA).
+::::
 
-**For Observational Studies:** - Accept imbalance as reality - Use Type
-III SS - Report EMMs - Consider covariates (ANCOVA)
+:::: {.column width="40%"}
+::: callout-note
+**Statistical software defaults**
 
-**Statistical Software Defaults:** - R: Type I (sequential) - SAS: Type
-III (marginal) - SPSS: Type III (marginal)
+- R: Type I (sequential)
+- SAS: Type III (marginal)
+- SPSS: Type III (marginal)
 
 Always specify which type you're using!
+:::
+::::
+:::::::

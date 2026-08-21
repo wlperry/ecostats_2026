@@ -1,387 +1,237 @@
 ---
 order: 14
 week: 7
-title: "Nested / Multifactor ANOVA"
+title: "Activity: Nested ANOVA"
 subtitle: "Nested designs"
-description: "Hands-on activity: nested and multifactor ANOVA."
+description: "Hands-on activity: nested ANOVA the traditional way (aov with an Error term, afex), the modern way (lmer mixed models), DHARMa diagnostics, and post-hoc comparisons on the sea urchin grazing / algae cover dataset."
 author: "Bill Perry"
+metadata-files:
+  - ../../_templates/activities.yml
 format:
   html: default
   docx: default
 ---
 
-```{r setup}
-#| include: false
-#| message: false
-#| warning: false
-#| collapese: true
+# Worksheet: Nested ANOVA
 
-# Load required packages
-# install.packages("performance")
-# install.packages("DHARMa")
- # install.packages("dotwhisker")
+> ## How to use this worksheet
+>
+> Work through each part in order, at your own pace. Type every line of code yourself into a **plain R script** — do not copy-paste. Blocks marked **▶ Run this** are code you should type and execute. Blocks marked **✏️ Your turn** ask you to write, modify, or answer something. Boxes marked **🚀 If you finish early** are optional bonus material that goes a bit further than what we covered in lecture.
+>
+> This worksheet uses the sea urchin grazing / algae cover dataset from lecture, where `patch` is nested within `treat` (each patch received only one urchin-density treatment).
+
+------------------------------------------------------------------------
+
+# Part 1 · Setup and Data
+
+**▶ Run this in your Script:**
+
+``` r
 library(dotwhisker)
 library(janitor)
 library(car)          # For Levene's test and Type III SS
-library(lme4)         # For mixed-effects models
-library(lmerTest)     # For p-values in mixed models
-library(emmeans)      # For estimated marginal means
-library(ggfortify)   # For nicer assumption test
-library(performance)  # For model diagnostics
-library(DHARMa)       # For residual diagnostics
+library(lme4)          # For mixed-effects models
+library(lmerTest)      # For p-values in mixed models
+library(emmeans)       # For estimated marginal means
+library(performance)   # For model diagnostics
+library(DHARMa)        # For residual diagnostics
 library(patchwork)
 library(afex)
-library(tidyverse)    # For data manipulation and visualization
+library(tidyverse)
 
-# no sci notation
-options(scipen=999)
-
-## Set the options to poly
-# options(contrasts = c("contr.sum", "contr.poly"))
-
-# Set the options to default and ordered
+options(scipen = 999)
 options(contrasts = c("contr.treatment", "contr.poly"))
 
-# Load and prepare data
 u_df <- read_csv("data/andrew.csv") %>% clean_names()
 
-# Convert treat to factor with meaningful labels and order them correctly
-u_df <- u_df %>% 
+u_df <- u_df %>%
   mutate(treat = case_when(
-         treat == "removal" ~ "none"   ,
-         treat == "control" ~ "high"    ,
-         treat == "dens_33" ~ "low" ,
-         treat == "dens_66" ~ "medium"  , 
-         TRUE ~ "other")) %>% 
-  mutate(treat = factor(treat, 
+         treat == "removal" ~ "none",
+         treat == "control" ~ "high",
+         treat == "dens_33" ~ "low",
+         treat == "dens_66" ~ "medium",
+         TRUE ~ "other")) %>%
+  mutate(treat = factor(treat,
                         levels = c("none", "low", "medium", "high"),
                         labels = c("none", "low", "medium", "high")),
          patch = as_factor(patch))
 
-cat("Data\n\n")
 head(u_df)
-cat("\n\nTreatment levels:\n\n")
 levels(u_df$treat)
-
 ```
 
-# Lecture 13: Data Overview
+`u_df` contains: `patch` (random patches 1–16 where treatments were applied), `treat` (urchin density treatment — none, low, medium, high), `quad` (replicate quadrats within each patch:treatment combination), `algae` (percentage cover of filamentous algae — the response variable).
 
-- The **u_df** dataframe contains observations with the following variables:
-  - **patch**: Random patches (1-16) where treatments were applied
-  - **treat**: Urchin density treatment - none, low, medium, high
-  - **quad**: Replicate quadrats within each patch: treatment combination
-  - **algae**: Percentage cover of filamentous algae (response variable)
+**▶ Run this** — summary statistics and a first plot:
 
-```{r summary-table}
-#| message: false
-#| warning: false
-#| paged-print: true
-#| collapese: true
-
-# Summary statistics
+``` r
 summary_stats <- u_df %>%
   group_by(treat) %>%
   summarise(
     n = sum(!is.na(algae)),
-    mean = mean(algae, na.rm=TRUE),
-    sd = sd(algae, na.rm=TRUE),
+    mean = mean(algae, na.rm = TRUE),
+    sd = sd(algae, na.rm = TRUE),
     se = sd / sqrt(n),
-    min = min(algae, na.rm=TRUE),
-    max = max(algae, na.rm=TRUE),
+    min = min(algae, na.rm = TRUE),
+    max = max(algae, na.rm = TRUE),
     .groups = 'drop'
   )
-
 summary_stats
-
-```
-
-# Plots
-
-```{r}
-#| message: false
-#| warning: false
-#| paged-print: true
-#| collapese: true
-
 
 dodge_position <- position_dodge(width = 0.3)
 
-u_df %>% 
-  ggplot(aes(treat, algae, color = patch ))+
-  stat_summary(fun = "mean", geom="point",
-               position = dodge_position)+
-  stat_summary(fun.data = "mean_se", geom = "errorbar", width = 0.2,
-               position = dodge_position)
+u_df %>%
+  ggplot(aes(treat, algae, color = patch)) +
+  stat_summary(fun = "mean", geom = "point", position = dodge_position) +
+  stat_summary(fun.data = "mean_se", geom = "errorbar", width = 0.2, position = dodge_position)
 ```
 
-# Nested ANOVA Analysis
+✏️ **Your turn:** How many patches are nested within each treatment? `________________________`
 
-In this experimental design, patch is nested within treat because each patch received only one treatment level. This is a hierarchical design where the effect of patches must be considered within each treatment. Following the approach used in Quinn & Keough (2002), we'll use a traditional nested ANOVA.
+------------------------------------------------------------------------
 
-# nested Anova with base R
+# Part 2 · Fitting the Nested Model — Base R and afex
 
-```{r base_AOV}
-#| message: false
-#| warning: false
-#| paged-print: true
-#| collapese: true
+Since `patch` is nested within `treat`, we need the correct error term — the traditional `aov()` approach lets us specify this directly.
 
+**▶ Run this:**
 
-# other ways using aov built in
-# This will give you the correct F-test using PATCH within TREAT as error term
+``` r
+# This gives you the correct F-test using PATCH within TREAT as error term
 nested_model <- aov(algae ~ treat + Error(treat:patch), data = u_df)
 summary(nested_model)
 ```
 
-# Nested ANOVA with AFEX package
+**▶ Run this** — the `afex` package, recommended for unbalanced designs:
 
-- Using afex package (recommended for unbalanced designs)
-- The afex package is specifically designed for ANOVA with Type III SS
-  - handles nested designs well
-
-```{r afex_model}
-#| message: false
-#| warning: false
-#| paged-print: true
-#| collapese: true
-
-
-# This works and gives you the correct answer
-model_afx <- aov_car(algae ~ treat + Error(patch), 
-                     data = u_df) # note this is not the best but would work as its less powerful
-
-# ,fun_aggregate = mean
+``` r
+model_afx <- aov_car(algae ~ treat + Error(patch),
+                     data = u_df)
 summary(model_afx)
 ```
 
-# Mixed Model ANOVA with random effects
+✏️ **Your turn:** Do `nested_model` and `model_afx` agree on whether the treatment effect is significant? `________________________`
 
-- BOBYQA (Bound Optimization BY Quadratic Approximation)
-  - optimization algorithm used in mixed-effects modeling
-  - finds the best parameter values that maximize the likelihood function
-  - especially useful when fitting complex models
-- So the way to code
-  - fixed effects is to put in the variable name
-  - **random effects can be coded in a range of ways**
-    - samples within a larger grouping - treatment and subsample...
-    - ![](images/paste-1.png){width="357"}
-    - **RANDOM INTERCEPT - FIXED SLOPE - `+ (1|random)`**
-      - so color \~ fixed + (1\|group)
-    - **RANDOM INTERCEPT - RANDOM SLOPE - `+ (fixed|random)`**
-      - so color \~ fixed + (fixed\|group)
-      - equivalent to `algae ~ treat + (1 + fixed | random)`
-  - **Nested Design** - such that a sample can exist only within a larger grouping
-  - ![](images/paste-2.png){width="478"}
-    - **RANDOM INTERCEPT - FIXED SLOPE -** `y ~ color + (1|green_box/grey_box)`
-    - `y ~ color + (1 | greenbox) + (1 | green_box:grey_box)`. It models random variation in the intercept for each patch, and also for each quadrat within each patch
-    - **RANDOM INTERCEPT - RANDOM SLOPE** `y ~ color + (color|green_box/grey_box)`
-  - Fully crossed design
-    - ![](images/paste-3.png){width="492"}
-      - crossed design **random intercept and random slope**
-        - y \~ color + (1 \| green_box) + (1 \| gray_box)
-      - crossed design **random intercept and random slope**\
-        `y~ color + (color|green_box) + (color|gray_box)`
-        - `(color | green_box)` is shorthand for `(1 + color | green_box)`. This part of the formula specifies a random intercept and a random slope for the `color` variable within the levels of `green_box`.
-        - `(color | gray_box)` is shorthand for `(1 + color | gray_box)`. Similarly, this specifies a random intercept and a random slope for `color` within the levels of `gray_box`
+------------------------------------------------------------------------
 
-```{r}
-#| message: false
-#| warning: false
-#| paged-print: true
-#| collapese: true
+# Part 3 · The Modern Way — Mixed Models
 
+Fixed effects go in as a plain variable name. Random effects can be coded a few different ways, depending on the design:
 
-# Fit the model with treatment as fixed effect and patch nested within treatment as random
+- **Random intercept, fixed slope:** `+ (1|random)` — e.g., `color ~ fixed + (1|group)`
+- **Random intercept, random slope:** `+ (fixed|random)` — e.g., `color ~ fixed + (fixed|group)`
+- **Nested design** (a sample can exist only within a larger grouping): `y ~ color + (1|greenbox/graybox)`, equivalent to `y ~ color + (1|greenbox) + (1|greenbox:graybox)` — this models random variation in the intercept for each patch, and also for each quadrat within each patch
+- **Fully crossed design** (not nested): `y ~ color + (1|green_box) + (1|gray_box)`
+
+**▶ Run this** — fit the mixed model:
+
+``` r
 mixed_model <- lmer(algae ~ treat + (1|patch), data = u_df,
-                    control = lmerControl(calc.derivs = FALSE) # can speed up and help convergence
-                    # control = lmerControl(optimizer = "bobyqa",
-                    #                      optCtrl = list(maxfun = 2e5))
-                    )
-# Model summary
+                    control = lmerControl(calc.derivs = FALSE))
 summary(mixed_model)
 ```
 
-# Mixed Model ANOVA with Random Effects
+**▶ Run this** — Method 1, the F-test with Satterthwaite degrees of freedom (more conservative, better for small samples):
 
-- **METHOD 1 - the F-distribution with estimated degrees of freedom**
-  - Accounts for the uncertainty in variance component estimation
-  - More conservative (higher p-values)
-  - Better for small samples
-- **METHOD 2 - the Chi Square**
-  - Assumes variance components are known (not estimated)
-  - More liberal (lower p-values)
-  - Assumes large samples
-- **Relationship between these tests is**
-  - Chi-square = F × numerator df
-- **Why Different Results?**
-  - F-test accounts for denominator df (12 in your case) - reflects sample size
-  - Chi-square assumes infinite denominator df - assumes large samples
-- **Rule of Thumb**
-  - under 100 observations or \< 20 random effect levels: Use F-test
-  - over 500 observations and \> 50 random effect levels: Chi-square is okay
-  - In between: F-test is safer
-
-```{r}
-#| message: false
-#| warning: false
-#| paged-print: true
-#| collapese: true
-
-
-# Type III ANOVA with F-statistics (not chi-square) using Satterthwaite's method
-# The issue was that you had "type = F" which should be "test.statistic = 'F'"
-satt_result <- Anova(mixed_model, type = 3, 
+``` r
+satt_result <- Anova(mixed_model, type = 3,
                       test.statistic = "F",
                       ddf = "Satterthwaite")
-print(satt_result)
-
-
-
-```
-
-# Alternative method to do the mixed model ANOVA
-
-```{r}
-# Alternative using car package
-# The parameter is "test.statistic", not "type"
-anova_car <- Anova(mixed_model, 
-                   type = 3, 
-                   test.statistic = "Chisq")
-print(anova_car)
-
-```
-
-# Lecture 13: ANOVA Results
-
-The nested ANOVA model is specified as:
-
-$algae_{ijk} = \mu + \alpha_i + \beta_{j(i)} + \epsilon_{ijk}$
-
-Where:
-
-- \- $\mu$ is the overall mean
-- \- $\alpha_i$ is the fixed effect of treatment $i$
-- \- $\beta_{j(i)}$ is the random effect of patch $j$ nested within treatment $i$
-- \- $\epsilon_{ijk}$ is the residual error for quadrat $k$ in patch $j$ within treatment $i$
-
-```{r anova-results}
-
 satt_result
 ```
 
-# Lecture 13 Assumption Tests
+**▶ Run this** — Method 2, the Chi-square test (more liberal, assumes large samples):
 
-Creates all 4 diagnostic plots automatically
+``` r
+anova_car <- Anova(mixed_model,
+                   type = 3,
+                   test.statistic = "Chisq")
+anova_car
+```
 
-```{r}
-#| message: false
-#| warning: false
-#| paged-print: false
- 
-# 2. Simulate residuals from the fitted mixed-effects model
-# We set a seed for reproducibility of the simulation
-set.seed(123) 
-simulation_output <- simulateResiduals(fittedModel = mixed_model, 
-                                         # Number of simulations, 500 is a good number
-                                       plot = FALSE) # We will plot this manually in the next step
+> 💡 Chi-square = F × numerator df. The two differ because the F-test accounts for the denominator df (reflecting sample size), while Chi-square assumes infinite denominator df. **Rule of thumb:** under 100 observations or < 20 random-effect levels, use the F-test; over 500 observations and > 50 random-effect levels, Chi-square is fine; in between, the F-test is safer.
 
-# 3. Create the diagnostic plots
-# Create only the Q-Q uniformity plot
+✏️ **Your turn:** Do the F-test and Chi-square p-values agree on significance here? Given the rule of thumb above, which one should you trust more for this dataset (16 patches)? `________________________`
+
+::: callout-tip
+**🚀 If you finish early:** Refit `mixed_model` using `(1|treat:patch)` instead of `(1|patch)`. Does the model summary change? (Hint: since patch numbers are already unique to a treatment in this dataset, the two notations should behave the same here — but they wouldn't if patch IDs were reused across treatments.)
+
+``` r
+# Write your code here:
+```
+:::
+
+------------------------------------------------------------------------
+
+# Part 4 · Model Diagnostics
+
+**▶ Run this** — DHARMa's simulation-based diagnostics, purpose-built for mixed models:
+
+``` r
+set.seed(123)
+simulation_output <- simulateResiduals(fittedModel = mixed_model,
+                                       plot = FALSE)
+
 plotQQunif(simulation_output)
-
-
-```
-
-```{r}
-# Create only the residuals vs. predicted values plot
 plotResiduals(simulation_output)
-```
 
-```{r}
-#| message: false
-#| warning: false
-#| paged-print: false
-#| 
-# 4. Optional: Perform formal tests for dispersion and outliers
-# These results are also shown on the plot, but you can run them separately
 testDispersion(simulation_output)
-
-```
-
-```{r}
-#| message: false
-#| warning: false
-#| paged-print: false
 testOutliers(simulation_output)
 ```
 
-```{r}
+**▶ Run this** — a couple of other useful diagnostic views:
+
+``` r
 plot(mixed_model, type = c("p", "smooth"))
-```
 
-# Cooks influence plot using car
-
-this will tell you if there are outliers greater than the standard 0.5 cooks distance
-
-```{r}
-#| paged-print: false
+# Cook's-distance-style influence plot (values > 0.5 are worth a look)
 car::influencePlot(mixed_model)
-```
 
-```{r}
-dotwhisker::dwplot(mixed_model, effects = "fixed") + geom_vline(xintercept = 0, color="darkblue", linewidth = 1)
-```
+# Coefficient plot for the fixed effects
+dotwhisker::dwplot(mixed_model, effects = "fixed") +
+  geom_vline(xintercept = 0, color = "darkblue", linewidth = 1)
 
-```{r}
+# Variance components
 VarCorr(mixed_model)
-
-# allFit(mixed_model)
 ```
 
-# Lecture 13: Post-hoc Comparisons
+✏️ **Your turn:** From `VarCorr(mixed_model)`, how does the variance attributed to `patch` compare to the residual variance? What does that tell you about spatial heterogeneity in this system? `________________________`
 
-Although the main effect of treatment was not significant in the nested ANOVA (p = r format(p_treat, digits=3)), we can still examine the mean differences between treatments to understand patterns in the data. However, we should interpret these with caution given the lack of statistical significance at the α = 0.05 level.
-
-```{r}
-#| message: false
-#| warning: false
-#| paged-print: false
-# Calculate estimated marginal means
-emm <- emmeans(nested_model, ~ treat)
-
-summary(emm)
+::: callout-tip
+**🚀 If you finish early:** DHARMa's `testDispersion()` checks for over/under-dispersion. Look up (`?testDispersion`) what a significant result would mean, and write a one-sentence summary.
 
 ```
-
-# Lecture 13: Tukey Pairwise Comparisons
-
-```{r}
-# Pairwise comparisons with Tukey adjustment
-pairs <- pairs(emm, adjust = "sidak")
-pairs
-
+________________________________________________________
 ```
-
-# Lecture 13: Letter Display
-
-```{r}
-# Extract compact letter display for plotting
-cld <- multcomp::cld(emm, alpha = 0.05, Letters = letters)
-
-cld
-
-```
-
-::: {.callout-important appearance="simple"}
-Interpretation of Treatment Comparisons The mean algae cover for the Control treatment (1.30%) appears considerably lower than for the reduced urchin density treatments (66% Density: 21.55%, 33% Density: 19.00%, Removed: 39.20%). While the visual pattern suggests an inverse relationship between urchin density and algae cover, with complete removal showing the highest algae cover, the nested ANOVA showed that these differences were not statistically significant at the α = 0.05 level (p = xxxx). The high variability among patches within treatments likely contributed to the lack of statistical significance for the treatment effect.
 :::
 
-# Lecture 13: Visualization
+------------------------------------------------------------------------
 
-```{r}
-# Create boxplot
-ggplot_boxplot <- ggplot(u_df, aes(x = treat, y = algae, fill = treat)) +
+# Part 5 · Post-Hoc Comparisons
+
+**▶ Run this:**
+
+``` r
+emm <- emmeans(nested_model, ~ treat)
+summary(emm)
+
+pairs_result <- pairs(emm, adjust = "sidak")
+pairs_result
+
+cld_result <- multcomp::cld(emm, alpha = 0.05, Letters = letters)
+cld_result
+```
+
+✏️ **Your turn:** Mean algae cover for Control (1.30%) looks much lower than the reduced-density treatments (66%: 21.55%, 33%: 19.00%, Removed: 39.20%). Based on your compact letter display, are any of those differences actually statistically significant at α = 0.05? `________________________`
+
+------------------------------------------------------------------------
+
+# Part 6 · Visualization and Reporting
+
+**▶ Run this** — a publication-style boxplot:
+
+``` r
+ggplot(u_df, aes(x = treat, y = algae, fill = treat)) +
   geom_boxplot(alpha = 0.7, outlier.shape = NA) +
   geom_jitter(width = 0.2, alpha = 0.4, size = 1) +
   scale_fill_viridis_d(option = "D", end = 0.85) +
@@ -389,59 +239,89 @@ ggplot_boxplot <- ggplot(u_df, aes(x = treat, y = algae, fill = treat)) +
     title = "Effect of Urchin Density on Filamentous Algae Cover",
     x = "Urchin Density Treatment",
     y = "Filamentous Algae Cover (%)",
-    caption = "Figure 1: Boxplots showing the distribution of algal cover across urchin density treatments.\nDespite visual differences, the treatment effect was not statistically significant (p = 0.091)."
+    caption = "Boxplots showing the distribution of algal cover across urchin density treatments."
   ) +
-  # theme_cowplot() +
   theme(
     legend.position = "none",
     plot.title = element_text(face = "bold", size = 14),
     axis.title = element_text(face = "bold", size = 12),
-    axis.text = element_text(size = 10),
     plot.caption = element_text(hjust = 0, face = "italic", size = 10)
   )
-
-print(ggplot_boxplot)
 ```
 
-# Lecture 13: Means Plot
+**▶ Run this** — a mean ± SE plot:
 
-- text
-
-```{r}
-# Create means plot
-means_plot <- ggplot(summary_stats, aes(x = treat, y = mean, group = 1)) +
-  # geom_line(size = 1) +
+``` r
+ggplot(summary_stats, aes(x = treat, y = mean, group = 1)) +
   geom_point(size = 3, shape = 21, fill = "white") +
   geom_errorbar(aes(ymin = mean - se, ymax = mean + se), width = 0.2) +
   labs(
     title = "Mean Algae Cover by Urchin Density Treatment",
     x = "Urchin Density Treatment",
     y = "Mean Filamentous Algae Cover (%)",
-    caption = "Figure 2: Mean (± SE) percentage cover of filamentous algae across urchin density treatments."
+    caption = "Mean (+/- SE) percentage cover of filamentous algae across urchin density treatments."
   ) +
-  # theme_cowplot() +
   theme(
     plot.title = element_text(face = "bold", size = 14),
     axis.title = element_text(face = "bold", size = 12),
-    axis.text = element_text(size = 10),
     plot.caption = element_text(hjust = 0, face = "italic", size = 10)
   )
-
-print(means_plot)
 ```
 
-# Lecture 13: Discussion
+::: callout-note
+**Scientific interpretation**
 
-::: {.callout-important appearance="simple"}
-Scientific Interpretation Our nested ANOVA analysis revealed substantial spatial heterogeneity in algae cover, with significant variation among patches within each treatment (p \< 0.001). Surprisingly, the effect of urchin density treatments on filamentous algae cover was not statistically significant at the α = 0.05 level (p = 0.091), despite apparent trends in the data. The descriptive statistics show a pattern where algae cover appears to increase as urchin density decreases, with the Control treatment (mean = 1.3%) showing minimal algae cover compared to reduced density treatments (66% Density: 21.55%, 33% Density: 19.00%, and Removed: 39.20%). This pattern suggests a potential density-dependent relationship between urchin grazing and algal abundance, but the high variability among patches masked the treatment effect. The substantial variance component associated with patches nested within treatments (294.31, approximately 39.5% of total variance) underscores the importance of spatial heterogeneity in structuring algal communities. This finding highlights the necessity of accounting for spatial variability when designing and analyzing ecological field experiments. From an ecological perspective, these results suggest that while sea urchins may influence algal communities through grazing, local environmental factors and patch-specific conditions play a dominant role in determining algae cover. This has important implications for ecosystem management, as it indicates that the effects of urchin density manipulations may be context-dependent and influenced by local environmental conditions.
+This nested ANOVA reveals substantial spatial heterogeneity in algae cover, with significant variation among patches within each treatment. Whether the urchin-density treatment effect itself reaches significance depends on which test (F vs. Chi-square) and which model specification you use — a good reminder that "significant" is sensitive to analytical choices in nested designs. The substantial variance component associated with patches nested within treatments underscores the importance of accounting for spatial heterogeneity when designing and analyzing ecological field experiments.
 :::
 
-# Comparison with Traditional Nested ANOVA
+✏️ **Your turn:** Write a 2–3 sentence results paragraph for this analysis, using your own F-statistic, df, p-value, and variance component numbers from Parts 3–4.
 
-The linear mixed model approach provides similar results to the traditional nested ANOVA approach. The main advantage of the mixed model is the more elegant handling of random effects and the extensive diagnostic tools available through packages like DHARMa.
+```
+________________________________________________________
+________________________________________________________
+```
 
-The mixed model approach confirms that:
+------------------------------------------------------------------------
 
-1.  Treatment effects are not significant (p = 0.091)
+# Part 7 · Comparing the Two Approaches
 
-In both methods, the key ecological finding is the strong spatial heterogeneity in algal cover that overrides the grazing effect of urchins at different densities.
+The linear mixed-model approach (`lmer`) gives similar results to the traditional nested ANOVA (`aov` with an `Error()` term). The main advantage of the mixed-model approach is its more elegant handling of random effects, easier extension to unbalanced or more complex designs, and the extensive diagnostic tools available through packages like `DHARMa`.
+
+✏️ **Your turn:** Compare the p-value for `treat` from `nested_model` (Part 2) to the p-value from `satt_result` (Part 3). Are they close? Which approach would you reach for first on a future nested design of your own, and why? `________________________`
+
+------------------------------------------------------------------------
+
+# Review and checkpoint
+
+At this point you can:
+
+- [ ] Explain why `patch` nested in `treat` cannot be analyzed as a simple factorial design
+- [ ] Fit a nested ANOVA with `aov(..., Error(...))` and with `afex::aov_car()`
+- [ ] Fit the same design as a mixed model with `lme4::lmer()`, using correct random-effects notation
+- [ ] Choose between the F-test and Chi-square test for a mixed model, using the rule of thumb from lecture
+- [ ] Run DHARMa diagnostics on a mixed model
+- [ ] Compute EMMs and post-hoc comparisons for a nested design
+
+::: callout-note
+**📤 What to turn in before next class**
+
+Upload both of these to the course management system:
+
+1. Your code — the `scripts/` folder (or just `14_nested_anova.R`)
+2. This worksheet, with your written answers
+:::
+
+------------------------------------------------------------------------
+
+# Getting unstuck
+
+When code breaks — and it will, that is normal:
+
+1. **Read the error message out loud.** R usually names the line and the problem.
+2. **Check the usual suspects:** did you run `library(lme4)`, `library(lmerTest)`, `library(car)`, `library(emmeans)`, `library(DHARMa)`, `library(afex)`, and `library(tidyverse)`? Spelling? A missing `)` or `%>%` at the *start* of a line?
+3. `?function_name` opens the built-in help page.
+4. **Bring the exact error** (copy-paste it) to class or office hours.
+
+> 💡 **Key idea:** Every working scientist googles error messages daily. Getting stuck is not failing — it is the job.
+
+------------------------------------------------------------------------

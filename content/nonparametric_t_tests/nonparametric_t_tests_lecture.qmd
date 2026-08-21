@@ -1,7 +1,7 @@
 ---
-title: "Non-Parametric T-Tests"
+title: "Lecture: Non-Parametric T-Tests"
 subtitle: "Rank-based tests"
-description: "Mann–Whitney and Wilcoxon tests when assumptions fail."
+description: "Assumptions of parametric tests, data transformations, Welch's t-test, rank-based tests (Mann-Whitney), and permutation tests when assumptions fail — on the lake trout dataset."
 categories: [Mean comparison, Nonparametric]
 order: 8
 week: 4
@@ -12,94 +12,103 @@ format:
     downloads: [docx, pptx]  # This creates download links for all three
   revealjs:
     output-ext: "slides.html"
-  docx: default
+  docx:
+    reference-doc: ../../ms_templates/custom-reference-compact.docx
+    fig-width: 3
+    fig-height: 3
+    fig-dpi: 300
   pptx: default
+execute:
+  echo: true
 ---
 
-# Lecture 6 - A Brief review
+## Where We Left Off
 
-::::: columns
-::: {.column width="60%"}
--   Hypotheses
--   1- and 2-sided T tests
--   Power - what is it and why talk about it.
--   **Assumptions of parametric tests**
--   What next — WHEN ASSUMPTIONS FAIL!
-    -   we will always cover parametric tests
+::::::: columns
+:::: {.column width="60%"}
+A brief review:
 
-    -   then we will cover non parametric approaches
+- Hypotheses
+- One- and two-sided t-tests
+- Power — what it is and why we talk about it
+- **Assumptions of parametric tests**
+- What next — when assumptions fail!
+  - we will always cover parametric tests first
+  - then non-parametric approaches
+  - later, other approaches use the appropriate underlying distribution when it isn't normal, but Poisson or other
 
-    -   later on we will explore other approaches to use the appropriate
-        underlying distribution that is not normal but Poisson or other
+::: callout-note
+**✅ Key idea from last lecture**
+
+A t-test's p-value is only trustworthy if its assumptions hold. Today is about what to do when they don't.
 :::
+::::
 
-::: {.column width="40%"}
+:::: {.column width="40%"}
 ![](images/pine_needles.jpg){width="300" height="200"}
-:::
-:::::
+::::
+:::::::
 
-# Lecture 7 overview
+## Today's Overview
 
-::::: columns
-::: {.column width="60%"}
+::::::: columns
+:::: {.column width="60%"}
 What we will cover today:
 
--   What are the assumptions again and how do you assess them
--   What to do when assumptions fail
-    -   Robust tests
-    -   Rank-based tests
-    -   Permutation tests
-:::
+- What are the assumptions again, and how do you assess them?
+- What to do when assumptions fail:
+  - Robust tests
+  - Rank-based tests
+  - Permutation tests
+::::
 
-::: {.column width="40%"}
-Lets work with the Lake Trout data as the weights are pretty cool and
-the assumptions may or may not hold
+:::: {.column width="40%"}
+Let's work with the lake trout data, as the weights are pretty cool and the assumptions may or may not hold. This easily translates to any of the other data frames you might want to use.
 
-This is easily translated into any of the other dataframes you might
-want to use
+![](images/lake_trout.jpg){width="300" height="132"}
+::::
+:::::::
 
-lake trout
+## Part 1 · Setting Up Our Analysis {.divider}
 
-![](images/lake_trout.jpg){width="381" height="167"}
-:::
-:::::
+## Setting Up Our Analysis
 
-# Setting Up Our Analysis
-
-```{r l07-01}
-# Install packages if needed (uncomment if necessary)
-# install.packages("readr")
-# install.packages("tidyverse")
-# install.packages("car")
-# install.packages("here")
-
+::::::: columns
+:::: {.column width="60%"}
+```{r}
 # Load libraries
 library(car)          # For diagnostic tests
 library(patchwork)
 library(tidyverse)    # For data manipulation and visualization
 ```
 
-# Loading Lake Trout Data
-
-```{r load_data}
+```{r}
 #| message: false
 #| warning: false
 #| fig-height: 3
 #| fig-width: 3
 #| paged-print: false
-# the stuff above controls the output and is also set at the top so dont need here
-# Load the pine needle data
-# Use here() function to specify the path
 lt_df <- read_csv("data/lake_trout.csv")
-
-# Examine the first few rows
 head(lt_df)
-
 ```
+::::
 
-```{r l07-02}
-# I had accdentally asked you to do mode in HW2 - wiht out telling you how... 
-# here is one approach
+:::: {.column width="40%"}
+::: callout-tip
+**🖐 Notice**
+
+Six lakes' worth of trout: `sampling_site`, `species`, `length_mm`, `mass_g`, `lake`.
+:::
+::::
+:::::::
+
+## Calculating the Mode
+
+::::::: columns
+:::: {.column width="60%"}
+```{r}
+# I had accidentally asked you to do mode in HW2 without
+# telling you how... here is one approach
 lt_df %>%
   filter(!is.na(mass_g)) %>%
   group_by(lake, mass_g) %>%
@@ -109,140 +118,132 @@ lt_df %>%
   select(-count) %>%
   rename(mode_mass = mass_g)
 ```
+::::
 
-# Parametric versus non-parametric tests
+:::: {.column width="40%"}
+::: callout-note
+**📖 New pattern**
 
-::::: columns
-::: {.column width="60%"}
-T-tests are **parametric** tests
-
--   Parametric tests:
-    -   specify/assume probability distribution from which parameters
-        came
-    -   Basic assumptions of parametric t-tests:
-        -   Random sampling
-
-        -   Normality
-
-        -   Equal variance (or Welches T Test)
-
-        -   No outliers
--   Non-parametric tests: no assumption about probability
-    distribution/normality
-    -   Mukasa et al 2021 DOI: 10.4236/ojbm.2021.93081
+R has no built-in `mode()` function for statistical mode — this `group_by()` + `count` + `slice(1)` pattern is the standard workaround.
 :::
+::::
+:::::::
 
-::: {.column width="40%"}
-![](images/clipboard-2948249782.png){width="466" height="395"}
+## Part 2 · Assumptions of Parametric Tests {.divider}
+
+## Parametric vs. Non-Parametric Tests
+
+::::::: columns
+:::: {.column width="60%"}
+T-tests are **parametric** tests.
+
+- **Parametric tests:**
+  - specify/assume the probability distribution the parameters came from
+  - basic assumptions of parametric t-tests: random sampling, normality, equal variance (or Welch's t-test), no outliers
+- **Non-parametric tests:** no assumption about the probability distribution/normality
+  - Mukasa et al. 2021, DOI: 10.4236/ojbm.2021.93081
+
+::: callout-note
+**📖 Reference**
+
+Whitlock & Schluter, *Analysis of Biological Data*, Ch. 13 — Handling Violations of Assumptions, is the core reference for this whole lecture.
 :::
-:::::
+::::
 
-# Assumptions of parametric tests - Overview
+:::: {.column width="40%"}
+![](images/clipboard-2948249782.png){width="300" height="255"}
+::::
+:::::::
 
-::::: columns
-::: {.column width="60%"}
--   If assumptions of parametric test violated, test becomes unreliable
--   This is because test statistic may no longer follow distribution
--   Most parametric tests robust to mild/moderate violations of
-    normality assumptions
-:::
+## Assumptions of Parametric Tests — Overview
 
-::: {.column width="40%"}
+::::::: columns
+:::: {.column width="60%"}
+- If a parametric test's assumptions are violated, the test becomes unreliable
+- This is because the test statistic may no longer follow the distribution it's supposed to
+- Most parametric tests are robust to mild/moderate violations of normality
+::::
+
+:::: {.column width="40%"}
 ![](images/clipboard-286482702.png){width="300" height="250"}
-:::
-:::::
+::::
+:::::::
 
-# Assumptions of parametric tests - Random Sampling
+## Assumptions — Random Sampling
 
-::::: columns
-::: {.column width="60%"}
--   Basic assumptions of parametric t-tests:
-    -   Random sampling
-    -   Normality
-    -   Equal variance
-    -   No outliers
--   Random sampling:
-    -   samples are randomly collected from populations; part of
-        experimental design
+::::::: columns
+:::: {.column width="60%"}
+Basic assumptions of parametric t-tests: random sampling, normality, equal variance, no outliers.
 
-    -   Necessary for sample -\> population inference
-:::
+**Random sampling:**
 
-::: {.column width="40%"}
+- samples are randomly collected from populations; part of experimental design
+- necessary for sample → population inference
+::::
+
+:::: {.column width="40%"}
 ![](images/clipboard-2526616735.png){width="242" height="291"}
-:::
-:::::
+::::
+:::::::
 
-# Assumptions of parametric tests - Normality Testing
+## Assumptions — Normality Testing
 
-::::: columns
-::: {.column width="60%"}
-Basic assumptions of parametric t-tests:
-
--   Normality
--   equal variance
--   random sampling
--   no outliers
--   Lets do the above for one lake - **`NE 12`** as if we were going to
-    do a one sample T Test
-    -   we need to make a new dataframe with NE 12 data only called
-        `ne12_data`
-    -   how do you do this?
--   Normality: Samples from normally distributed population
-    -   Graphical tests: histograms, dotplots, boxplots, **qq-plots**
-    -   "Formal" tests: **Shapiro-Wilk test** - sometimes not useful
+::: callout-note
+**🔮 Predict first:** We're about to look at histogram, dotplot, boxplot, and QQ-plot views of the *same* NE 12 mass data. Which of the four do you expect to be most convincing about normality?
 :::
 
-::: {.column width="40%"}
-```{r l07-03}
+::::::: columns
+:::: {.column width="60%"}
+Let's test normality for one lake — **`NE 12`** — as if we were going to run a one-sample t-test. We need a new data frame with only NE 12 data, called `ne12_data`.
+
+**Normality:** samples from a normally distributed population
+
+- Graphical tests: histograms, dotplots, boxplots, **QQ-plots**
+- "Formal" tests: **Shapiro-Wilk test** — sometimes not useful
+::::
+
+:::: {.column width="40%"}
+```{r}
 #| echo: false
 #| message: false
 #| warning: false
-#| fig-height: 5
-#| fig-width: 5
+#| fig-height: 3.6
+#| fig-width: 4
 #| paged-print: false
-# Filter for Lake NE 12
-ne12_data <- lt_df %>% 
+ne12_data <- lt_df %>%
   filter(lake == "NE 12") %>%
   filter(!is.na(mass_g))  # Remove any NA values
 
-# Create the four different plots
-# 1. Histogram
 ne12_histo_plot <- ggplot(ne12_data, aes(x = mass_g)) +
   geom_histogram(binwidth = 200, fill = "steelblue", color = "white") +
   labs(title = "Histogram", x = "Mass (g)", y = "Count") +
-  theme_minimal() +
+  theme_minimal(base_size = 7) +
   theme(plot.title = element_text(hjust = 0.5))
 
-# 2. Dotplot
 ne12_dot_plot <- ggplot(ne12_data, aes(x = mass_g, y = "")) +
   geom_dotplot(binwidth = 60, stackdir = "center", fill = "steelblue", dotsize = 0.5) +
   labs(title = "Dotplot", x = "Mass (g)", y = "") +
-  theme_minimal() +
-  theme(plot.title = element_text(hjust = 0.5), 
+  theme_minimal(base_size = 7) +
+  theme(plot.title = element_text(hjust = 0.5),
         axis.text.y = element_blank(),
         axis.ticks.y = element_blank())
 
-
-# 3. Boxplot
 ne12_box_plot <- ggplot(ne12_data, aes(y = mass_g)) +
   geom_boxplot(fill = "steelblue") +
   labs(title = "Boxplot", y = "Mass (g)", x = "") +
-  theme_minimal() +
+  theme_minimal(base_size = 7) +
   theme(plot.title = element_text(hjust = 0.5),
         axis.text.x = element_blank(),
         axis.ticks.x = element_blank()) +
   coord_flip()
 
-# 4. QQ Plot
 ne12_qq_plot <- ggplot(ne12_data, aes(sample = mass_g)) +
   stat_qq(color = "steelblue") +
   stat_qq_line() +
   labs(title = "QQ Plot", x = "Theoretical Quantiles", y = "Sample Quantiles") +
-  theme_minimal() +
+  theme_minimal(base_size = 7) +
   theme(plot.title = element_text(hjust = 0.5))
 
-# Combine all plots using patchwork
 combined_stats_plot <- (ne12_histo_plot + ne12_dot_plot) / (ne12_box_plot + ne12_qq_plot) +
   plot_annotation(
     title = "Lake NE 12 Trout Mass Distribution",
@@ -250,266 +251,220 @@ combined_stats_plot <- (ne12_histo_plot + ne12_dot_plot) / (ne12_box_plot + ne12
     theme = theme(plot.title = element_text(hjust = 0.5),
                   plot.subtitle = element_text(hjust = 0.5))
   )
-
-# Display the combined plot
 combined_stats_plot
 ```
-:::
-:::::
+::::
+:::::::
 
-# Shapiro-Wilk Test for Normality
+## Shapiro-Wilk Test for Normality
 
-::::: columns
-::: {.column width="60%"}
-Basic assumptions of parametric t-tests:
+::::::: columns
+:::: {.column width="60%"}
+"Null hypothesis is that data is normally distributed."
 
--   Normality
+- Normality: samples from a normally distributed population
+- Graphical tests: histograms, dotplots, boxplots, **QQ-plots**
+- "Formal" tests: **Shapiro-Wilk test** — sometimes not useful
+::::
 
--   equal variance
-
--   random sampling
-
--   no outliers
-
--   Lets do the above for one lake - `NE 12` as if we were going to do a
-    one sample T Test
-
-    -   we need to make a new dataframe with NE 12 data only called
-        `ne12_data`
-    -   how do you do this?
-
--   Normality: Samples from normally distributed population
-
-    -   Graphical tests: histograms, dotplots, boxplots, **qq-plots**
-    -   "Formal" tests: **Shapiro-Wilk test** - sometimes not useful
-
-"Null hypothesis is that data is normally distributed"
-:::
-
-::: {.column width="40%"}
-```{r l07-04}
+:::: {.column width="40%"}
+```{r}
 #| echo: false
 #| message: false
 #| warning: false
-#| fig-height: 5
-#| fig-width: 5
 #| paged-print: false
-
-# Shapiro-Wilk test
 shapiro_test <- shapiro.test(ne12_data$length_mm)
 shapiro_test
-
 ```
-:::
-:::::
+::::
+:::::::
 
-# Testing Equal Variance Assumption
+## Testing the Equal Variance Assumption
 
-::::: columns
-::: {.column width="60%"}
-Basic assumptions of parametric t-tests:
+::::::: columns
+:::: {.column width="60%"}
+**Equal variance:** samples are from populations with a similar degree of variability.
 
--   Normality
--   equal variance
--   random sampling
--   no outliers
+- Graphical tests: boxplots
+- "Formal" tests: F-ratio test
+- When sample sizes are equal, parametric tests are most robust to violations of normality — less so for equal variance
+::::
 
-Equal variance: samples are from populations with similar degree of
-variability
-
--   Graphical tests: boxplots
--   "Formal" tests: F-ratio test
--   When samples sizes equal
-    -   Parametric tests most robust to violations of normality
-    -   Less so for equal variation assumptions
-:::
-
-::: {.column width="40%"}
-```{r l07-05}
+:::: {.column width="40%"}
+```{r}
 #| echo: false
 #| message: false
 #| warning: false
-
-length_plot <- ne12_data %>% ggplot(aes(x=lake, y = length_mm)) +geom_boxplot() 
-
-mass_plot <- ne12_data %>% ggplot(aes(x=lake, y = mass_g)) +geom_boxplot()
-
-length_plot + mass_plot + plot_layout(ncol=1)
+#| fig-width: 3.2
+#| fig-height: 2.8
+length_plot <- ne12_data %>% ggplot(aes(x = lake, y = length_mm)) + geom_boxplot()
+mass_plot   <- ne12_data %>% ggplot(aes(x = lake, y = mass_g))   + geom_boxplot()
+length_plot + mass_plot + plot_layout(ncol = 1)
 ```
+::::
+:::::::
+
+## Testing for Outliers
+
+::::::: columns
+:::: {.column width="60%"}
+**No outliers:** no "extreme" values very different from the rest of the sample.
+
+- Graphical tests: boxplots, histograms
+- "Formal tests": Grubbs' test — no one really does this
+
+::: callout-warning
+**⚠️ Watch out!**
+
+Outliers are a problem for non-parametric tests as well — switching to a rank-based test doesn't make an outlier stop mattering.
 :::
-:::::
+::::
 
-# Testing for Outliers
-
-::::: columns
-::: {.column width="60%"}
--   Basic assumptions of parametric t-tests:
-    -   Normality
-    -   equal variance
-    -   random sampling
-    -   no outliers
--   No outliers: no "extreme" values that are very different from rest
-    of sample
-    -   Graphical tests: boxplots, histograms
-    -   "Formal tests": Grubb's test - no one really does this
-    -   **Note: outliers a problem for non-parametric tests as well**
-:::
-
-::: {.column width="40%"}
-```{r l07-06}
+:::: {.column width="40%"}
+```{r}
 #| echo: false
-#| fig-width: 5
-#| fig-height: 4
+#| fig-width: 3.2
+#| fig-height: 2.8
 ne12_histo_plot + ne12_box_plot + plot_layout(ncol = 1)
 ```
-:::
-:::::
+::::
+:::::::
 
-# Alternative Tests When Assumptions Fail
+## Part 3 · When Assumptions Fail {.divider}
 
-::::: columns
-::: {.column width="60%"}
--   What if T Test assumptions fail?
--   Alternative tests, with more relaxed assumptions, are available
--   In which case would you use the following tests?
-    -   Welch's t-test: *when distribution normal but variance unequal*
-    -   Mann-Whitney-Wilcoxon test: *when distribution not normal and/or
-        outliers are present (but both groups should still have similar
-        distributions and \~equal variance)*
-    -   Permutation test for two samples: *when distribution not normal
-        (but both groups should still have similar distributions and
-        \~equal variance)*
-:::
+## Alternative Tests When Assumptions Fail
 
-::: {.column width="40%"}
-```{r l07-07}
+::::::: columns
+:::: {.column width="60%"}
+What if t-test assumptions fail? Alternative tests, with more relaxed assumptions, are available. In which case would you use each?
+
+- **Welch's t-test:** *distribution normal but variance unequal*
+- **Mann-Whitney-Wilcoxon test:** *distribution not normal and/or outliers present (but both groups should still have similar distributions and ~equal variance)*
+- **Permutation test for two samples:** *distribution not normal (but both groups should still have similar distributions and ~equal variance)*
+::::
+
+:::: {.column width="40%"}
+```{r}
 #| echo: false
-
-
-
-ne12_histo_plot+ne12_box_plot + ne12_qq_plot + plot_layout(ncol=1)
+#| fig-width: 3.2
+#| fig-height: 4
+ne12_histo_plot + ne12_box_plot + ne12_qq_plot + plot_layout(ncol = 1)
 ```
-:::
-:::::
+::::
+:::::::
 
-# Understanding QQ-Plots
+## Understanding QQ-Plots
 
-::::: columns
-::: {.column width="60%"}
-### QQ-plots: tool for assessing normality
+::::::: columns
+:::: {.column width="60%"}
+**QQ-plots:** a tool for assessing normality.
 
--   On x- theoretical quantiles from SND
--   On y- ordered sample values
--   Deviation from normal can be detected as deviation from straight
-    line
-:::
+- On x: theoretical quantiles from a standard normal distribution
+- On y: ordered sample values
+- Deviation from normal can be detected as deviation from a straight line
+::::
 
-::: {.column width="40%"}
-```{r l07-08}
+:::: {.column width="40%"}
+```{r}
 #| message: false
 #| warning: false
 #| echo: false
-
-
-
+#| fig-width: 3.4
+#| fig-height: 2.8
 isl_ne12_df <- lt_df %>% filter(lake %in% c("NE 12", "Island Lake"))
 
-ne12_island_box_plot <- isl_ne12_df %>% 
-  ggplot(aes(x=lake, y = mass_g, color=lake)) +
-  geom_boxplot()+
-  theme_minimal()
+ne12_island_box_plot <- isl_ne12_df %>%
+  ggplot(aes(x = lake, y = mass_g, color = lake)) +
+  geom_boxplot() +
+  theme_minimal(base_size = 9)
 
-ne12_island_qq_plot <- isl_ne12_df %>% 
-  ggplot(aes(sample = mass_g , color=lake)) +
+ne12_island_qq_plot <- isl_ne12_df %>%
+  ggplot(aes(sample = mass_g, color = lake)) +
   stat_qq() +
   stat_qq_line() +
-  labs( x = "Theoretical Quantiles", y = "Sample Quantiles") +
-  theme_minimal() 
+  labs(x = "Theoretical Quantiles", y = "Sample Quantiles") +
+  theme_minimal(base_size = 9)
 
-ne12_island_box_plot +ne12_island_qq_plot+plot_layout(guides="collect")
+ne12_island_box_plot + ne12_island_qq_plot + plot_layout(guides = "collect")
 ```
-:::
-:::::
+::::
+:::::::
 
-# Data Transformations
+## Data Transformations
 
-::::: columns
-::: {.column width="60%"}
--   In some cases, data can be mathematically "transformed" to meet
-    assumptions of parametric tests
--   this can be done in r and usually involves
-    -   log10 transformations
-    -   square root transformations
-    -   and many others... I will have a description soon
-:::
+::::::: columns
+:::: {.column width="60%"}
+In some cases, data can be mathematically "transformed" to meet the assumptions of parametric tests. This can be done in R and usually involves:
 
-::: {.column width="40%"}
-![](images/transformations_2%20jpg.jpg){width="430" height="369"}
+- log₁₀ transformations
+- square root transformations
+- and many others
+::::
+
+:::: {.column width="40%"}
+![](images/transformations_2%20jpg.jpg){width="300" height="257"}
 
 [source](https://www.elsblog.org/the_empirical_legal_studi/2006/08/variable_transf.html)
-:::
-:::::
+::::
+:::::::
 
-# Robust tests - Welch's T-Test
+## Part 4 · Welch's T-Test {.divider}
 
-::::: columns
-::: {.column width="60%"}
--   **Welch's t-test**
-    -   common "robust" test for means of two populations
+## Robust Tests — Welch's T-Test
 
-    -   Robust to violation of equal variance assumption, deals better
-        with unequal sample size
+::::::: columns
+:::: {.column width="60%"}
+**Welch's t-test:**
 
-    -   Parametric test (assumes normal distribution)
+- a common "robust" test for the means of two populations
+- robust to violation of the equal-variance assumption; deals better with unequal sample sizes
+- still a **parametric** test (assumes normal distribution)
+- calculates a t statistic, but recalculates degrees of freedom based on sample sizes and s
+::::
 
-    -   Calculates a t statistic but recalculates df based on samples
-        sizes and s
-:::
-
-::: {.column width="40%"}
-```{r l07-09}
+:::: {.column width="40%"}
+```{r}
 #| echo: false
 #| message: false
 #| warning: false
-#| fig-width: 5
-#| fig-height: 4
-log_ne12_island_box_plot <- isl_ne12_df %>% 
-  ggplot(aes(x=lake, y = log10(mass_g), color=lake)) +
-  geom_boxplot()+
-  theme_minimal()
+#| fig-width: 3.4
+#| fig-height: 2.8
+log_ne12_island_box_plot <- isl_ne12_df %>%
+  ggplot(aes(x = lake, y = log10(mass_g), color = lake)) +
+  geom_boxplot() +
+  theme_minimal(base_size = 9)
 
-ne12_island_box_plot +log_ne12_island_box_plot +plot_layout(guides="collect")
+ne12_island_box_plot + log_ne12_island_box_plot + plot_layout(guides = "collect")
 ```
-:::
-:::::
+::::
+:::::::
 
-# Comparing Standard T-Test vs Welch's T-Test
+## Comparing Standard T-Test vs. Welch's T-Test
 
--   **Lets compare a parametric T-Test to a Welch's t-test**
+::::::: columns
+:::: {.column width="60%"}
+Let's compare a parametric t-test to a Welch's t-test:
 
-    -   T-Test is:
-        -   **t.test(y1, y2, var.equal = TRUE, paired = FALSE)**
-    -   Welch's T-Test is:
-        -   **t.test(y1, y2, var.equal = FALSE, paired = FALSE)**
+- Standard: **`t.test(y1, y2, var.equal = TRUE, paired = FALSE)`**
+- Welch's: **`t.test(y1, y2, var.equal = FALSE, paired = FALSE)`**
+::::
 
-```{r l07-10}
+:::: {.column width="40%"}
+```{r}
 #| echo: false
 #| message: false
 #| warning: false
 #| paged-print: false
-# T test for length
-# Perform standard t-test
 t_test_length_result <- t.test(
-  mass_g ~ lake, 
+  mass_g ~ lake,
   data = isl_ne12_df,
-  var.equal = TRUE  # Standard t-test with equal variance assumption
+  var.equal = TRUE
 )
 
-# Perform Welch's t-test (unequal variances)
 welch_test_length_result <- t.test(
-  mass_g ~ lake, 
+  mass_g ~ lake,
   data = isl_ne12_df,
-  var.equal = FALSE  # Welch's t-test
+  var.equal = FALSE
 )
 
 print("Standard t-test results for mass_g:")
@@ -518,204 +473,269 @@ print(t_test_length_result)
 print("Welch's t-test results for mass_g:")
 print(welch_test_length_result)
 ```
+::::
+:::::::
 
-# Rank-Based Tests
+## Part 5 · Rank-Based Tests {.divider}
 
-Rank-based tests: no assumptions about distribution (non-parametric)
+## Rank-Based Tests
 
--   Ranks of data: observations assigned ranks, sums (and signs for
-    paired tests) of ranks for groups compared
+::::::: columns
+:::: {.column width="60%"}
+Rank-based tests: no assumptions about distribution (non-parametric).
 
--   **Mann-Whitney U test** common alternative to independent samples
-    t-test
+- Ranks of data: observations are assigned ranks; sums (and signs, for paired tests) of ranks for groups are compared
+- **Mann-Whitney U test** — common alternative to the independent-samples t-test
+- **Wilcoxon signed-rank test** — alternative to the paired t-test
+- Assumptions: similar distributions for groups, equal variance
+- Less power than parametric tests
+- Best when normality can't be met by transformation (weird distribution) or there are large outliers
+::::
 
--   **Wilcoxon signed-rank** test is alternative to paired t-test
+:::: {.column width="40%"}
+::: callout-note
+**📖 Reference**
 
--   Assumptions: similar distributions for groups, equal variance
+Whitlock & Schluter, Ch. 13, covers the Mann-Whitney U test and Wilcoxon signed-rank test as the standard rank-based alternatives.
+:::
+::::
+:::::::
 
--   Less power than parametric tests
+## Mann-Whitney U Test Results
 
--   Best when normality assumption can not be met by transformation
-    (weird distribution) or large outliers
-
-# Mann-Whitney U Test Results
-
-```{r l07-11}
+::::::: columns
+:::: {.column width="60%"}
+```{r}
 #| echo: false
-
-# Perform Mann-Whitney U test (Wilcoxon rank-sum test)
-# Syntax for Mann-Whitney U test
 wilcox_test_result <- wilcox.test(
-  mass_g ~ lake, 
+  mass_g ~ lake,
   data = isl_ne12_df,
-   alternative = "two.sided",  # Can be "less", "greater", or "two.sided"
+  alternative = "two.sided",  # Can be "less", "greater", or "two.sided"
 )
 
 print("Mann-Whitney U test results mass_g:")
 wilcox_test_result
 ```
+::::
 
-# Permutation Tests - Concept
+:::: {.column width="40%"}
+::: callout-tip
+**🖐 Notice**
 
-::::: columns
-::: {.column width="60%"}
--   Permutation tests based on resampling: reshuffling of original data
--   Resampling allows parameter estimation when distribution unknown,
-    including SEs and CIs of statistics (means, medians)
--   Common approach is bootstrap: resample sample with replacement many
-    times, recalculate sample stats
--   Use the `perm` package
--   Ho: µ~A~ = µ~B~
--   Ha: µ~A~ ≠µ~B~
--   Calculates the difference ∆ in means between two groups
+The test statistic is `W`, not `t` — a signal you're reading rank-based test output, not a t-test.
 :::
+::::
+:::::::
 
-::: {.column width="40%"}
-```{r l07-12}
+## Part 6 · Permutation Tests {.divider}
+
+## Permutation Tests — Concept
+
+::::::: columns
+:::: {.column width="60%"}
+- Permutation tests are based on resampling: reshuffling the original data
+- Resampling allows parameter estimation when the distribution is unknown, including SEs and CIs of statistics (means, medians)
+- A common approach is the bootstrap: resample with replacement many times, recalculate sample stats
+- We use the `perm` package
+- H₀: µ_A = µ_B, Hₐ: µ_A ≠ µ_B
+- Calculates the difference Δ in means between two groups
+::::
+
+:::: {.column width="40%"}
+```{r}
 #| echo: false
 #| message: false
 #| warning: false
-#| fig-width: 5
-#| fig-height: 4
+#| fig-width: 3.2
+#| fig-height: 2.8
 ne12_island_box_plot
 ```
+::::
+:::::::
+
+## Permutation Tests — Method
+
+::::::: columns
+:::: {.column width="60%"}
+- Randomly reshuffle observations between groups (keeping n₍NE 12₎ = 323 and n₍Island₎ = 10), calculate Δ
+- Repeat > 1,000 times
+- Record the proportion of the differences in means as extreme as (or more extreme than) observed
+- This is equivalent to a p-value, and can be used in the "traditional" hypothesis-testing framework
+::::
+
+:::: {.column width="40%"}
+::: callout-tip
+**🖐 For a graphical explanation**
+
+[jwilber.me/permutationtest](https://www.jwilber.me/permutationtest/)
 :::
-:::::
+::::
+:::::::
 
-# Permutation Tests - Method
+## Permutation Test Implementation
 
-::::: columns
-::: {.column width="60%"}
--   Randomly reshuffle observations between groups (keeping n\~NE
-    12\~=323 and n~Island~=10), calculate ∆
--   Repeat \>1,000 times
--   Record proportion of the different means i
--   This is equivalent to p-value and can be used in "traditional" H
-    test framework
--   For a graphical explanation:
-    -   [Graphical Explanation](https://www.jwilber.me/permutationtest/)
-:::
+::::::: columns
+:::: {.column width="60%"}
+In R, using the `perm` package. Assumptions: both groups have a similar distribution; equal variance.
 
-::: {.column width="40%"}
-:::
-:::::
+```{r}
+library(perm)
 
-# Permutation Test Implementation
-
--   In R (using 'perm' package):
--   Assumptions: both groups have similar distribution; equal variance
-
-```{r l07-13}
-library(perm) 
-
-# Prepare data for permutation test
-ne12_perm_data <- isl_ne12_df %>% 
-  filter(lake == "NE 12") %>% 
+ne12_perm_data <- isl_ne12_df %>%
+  filter(lake == "NE 12") %>%
   pull(length_mm)
 
-# Randomly sample exactly 25 observations from NE 12 (set seed for reproducibility)
+# Randomly sample exactly 25 observations from NE 12
 set.seed(123)
 ne12_perm_data <- sample(ne12_perm_data, size = 25, replace = FALSE)
 
-island_perm_data <- isl_ne12_df %>% 
-  filter(lake == "Island Lake") %>% 
+island_perm_data <- isl_ne12_df %>%
+  filter(lake == "Island Lake") %>%
   pull(length_mm)
 
-# Calculate the observed difference in means
 observed_diff <- mean(ne12_perm_data, na.rm = TRUE) - mean(island_perm_data, na.rm = TRUE)
-
-# Perform permutation test for difference in means using perm package
-permTS(ne12_perm_data, island_perm_data, 
-       alternative = "two.sided", 
-       method = "exact.mc", 
-       control = permControl(nmc = 10000))
-
 ```
+::::
 
-# Summary - Testing Assumptions
+:::: {.column width="40%"}
+```{r}
+permTS(ne12_perm_data, island_perm_data,
+       alternative = "two.sided",
+       method = "exact.mc",
+       control = permControl(nmc = 10000))
+```
+::::
+:::::::
 
-## Testing Assumptions of Parametric Tests
+## Part 7 · Summary {.divider}
 
-### Key Assumptions
+## Summary — Testing Assumptions
 
--   **Random sampling**: Samples are randomly collected from populations
--   **Normality**: Data follows a normal distribution
--   **Equal variance**: Samples come from populations with similar
-    variability
--   **No outliers**: No extreme values that can skew results
+::::::: columns
+:::: {.column width="60%"}
+**Key assumptions:**
 
-### Assessing Assumptions
+- **Random sampling** — samples are randomly collected from populations
+- **Normality** — data follows a normal distribution
+- **Equal variance** — samples come from populations with similar variability
+- **No outliers** — no extreme values that can skew results
+::::
 
--   Key to do every time
--   Should acknowledge in manuscript
+:::: {.column width="40%"}
+::: callout-note
+**Assessing assumptions**
 
-# Summary - Data Transformations
+- Key to do *every time*
+- Should be acknowledged in the manuscript
+:::
+::::
+:::::::
 
-## Data Transformations
+## Summary — Data Transformations
 
+::::::: columns
+:::: {.column width="60%"}
 When assumptions aren't met, transformations may help normalize data:
 
--   **Log transformation**: `log10(x)` - Useful for right-skewed data,
-    multiplicative effects
--   **Square root**: `sqrt(x)` - Useful for count data, moderately
-    right-skewed distributions
--   **Box-Cox**: More flexible family of power transformations
--   **More specialized transformations** especially for percentages or
-    proportions
+- **Log transformation:** `log10(x)` — useful for right-skewed data, multiplicative effects
+- **Square root:** `sqrt(x)` — useful for count data, moderately right-skewed distributions
+- **Box-Cox:** a more flexible family of power transformations
+- More specialized transformations exist, especially for percentages or proportions
+::::
 
-# Summary - Parametric Test Options
+:::: {.column width="40%"}
+::: callout-tip
+**🖐 Recall**
 
-### 1. Standard T-Test
+We saw `log10()` shrink the gap between the NE 12 and Island Lake boxplots earlier — that's the transformation working.
+:::
+::::
+:::::::
 
--   **Strengths:**
+## Summary — Parametric Test Options
 
-    -   High statistical power when assumptions are met
-    -   \- Well understood and widely accepted
+:::::: columns
+::: {.column width="50%"}
+**1. Standard t-test**
 
--   **Weaknesses:**
+Strengths:
 
-    -   \- Sensitive to violations of normality, equal variance
-    -   \- Heavily influenced by outliers
+- High statistical power when assumptions are met
+- Well understood and widely accepted
 
-### 2. Welch's T-Test
+Weaknesses:
 
--   **Strengths:**
-    -   \- Robust to violations of equal variance assumption
-    -   \- Handles unequal sample sizes well
-    -   \- Still parametric (assumes normality)
--   **Weaknesses:**
-    -   \- Slightly less powerful than standard t-test when variances
-        are equal
-    -   \- Still assumes normal distribution
+- Sensitive to violations of normality, equal variance
+- Heavily influenced by outliers
+:::
 
-# Summary - Non-Parametric Options
+::: {.column width="50%"}
+**2. Welch's t-test**
 
-### 3. Mann-Whitney-Wilcoxon Test
+Strengths:
 
--   **Strengths:**
-    -   \- Non-parametric: doesn't assume normal distribution
-    -   \- Robust against outliers
-    -   \- Works with ordinal data
--   **Weaknesses:**
-    -   \- Less statistical power than parametric tests
-    -   \- Still assumes similar distributions and approximate equal
-        variance
-    -   \- Tests median differences rather than mean differences
+- Robust to violations of the equal-variance assumption
+- Handles unequal sample sizes well
+- Still parametric (assumes normality)
 
-### 4. Permutation Tests
+Weaknesses:
 
--   **Strengths:**
-    -   \- Distribution-free: doesn't assume a specific distribution
-    -   \- Can be applied to many types of test statistics
-    -   \- Handles small sample sizes well
-    -   \- Directly estimates p-values through resampling
--   **Weaknesses:**
-    -   \- Computationally intensive
-    -   \- Assumes exchangeability under the null hypothesis
-    -   \- Requires similar distributions and equal variance
+- Slightly less powerful than the standard t-test when variances are equal
+- Still assumes a normal distribution
+:::
+::::::
 
-# Key Takeaway
+## Summary — Non-Parametric Options
 
-Statistical tests have different strengths and assumptions. The choice
-should be guided by your data characteristics, not just convenience.
-Always visualize your data before deciding on the appropriate test.
+:::::: columns
+::: {.column width="50%"}
+**3. Mann-Whitney-Wilcoxon test**
+
+Strengths:
+
+- Non-parametric: doesn't assume normal distribution
+- Robust against outliers
+- Works with ordinal data
+
+Weaknesses:
+
+- Less statistical power than parametric tests
+- Still assumes similar distributions and approximately equal variance
+- Tests median differences rather than mean differences
+:::
+
+::: {.column width="50%"}
+**4. Permutation tests**
+
+Strengths:
+
+- Distribution-free: doesn't assume a specific distribution
+- Can be applied to many types of test statistics
+- Handles small sample sizes well
+- Directly estimates p-values through resampling
+
+Weaknesses:
+
+- Computationally intensive
+- Assumes exchangeability under the null hypothesis
+- Requires similar distributions and equal variance
+:::
+::::::
+
+## Key Takeaway
+
+::::::: columns
+:::: {.column width="60%"}
+Statistical tests have different strengths and assumptions. The choice should be guided by your data's characteristics, not just convenience.
+
+**Always visualize your data before deciding on the appropriate test.**
+::::
+
+:::: {.column width="40%"}
+::: callout-note
+**✅ Key idea**
+
+Standard t-test → Welch's → Mann-Whitney/Permutation isn't a strict ladder of "better" tests — each answers a slightly different question (means vs. medians) under different assumptions. Pick based on what your data actually looks like.
+:::
+::::
+:::::::

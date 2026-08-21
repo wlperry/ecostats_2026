@@ -1,192 +1,136 @@
 ---
 order: 12
 week: 6
-title: "ANOVA in Class"
+title: "Activity: Analysis of Variance (ANOVA)"
 subtitle: "One-way ANOVA"
-description: "Hands-on activity: one-way analysis of variance."
+description: "Hands-on activity: fitting a one-way ANOVA, assumption diagnostics, estimated marginal means and post-hoc comparisons, reporting, and non-parametric alternatives (Kruskal-Wallis, Dunn's test) on a circadian-rhythm light-treatment dataset."
 author: "Bill Perry"
+metadata-files:
+  - ../../_templates/activities.yml
+format:
+  html: default
+  docx: default
 ---
 
-```{r setup}
+# Worksheet: Analysis of Variance (ANOVA)
 
-#| message: false
-#| warning: false
+> ## How to use this worksheet
+>
+> Work through each part in order, at your own pace. Type every line of code yourself into a **plain R script** — do not copy-paste. Blocks marked **▶ Run this** are code you should type and execute. Blocks marked **✏️ Your turn** ask you to write, modify, or answer something. Boxes marked **🚀 If you finish early** are optional bonus material that goes a bit further than what we covered in lecture.
 
+------------------------------------------------------------------------
+
+# Part 1 · Setup and Data
+
+**▶ Run this in your Script:**
+
+``` r
 library(performance)
 library(FSA)
-library(ggfortify)
 library(car)         # functions for regression diagnostics, ANOVA, and VIF
 library(emmeans)     # calculates and compares adjusted means from statistical models
-library(patchwork)   # Combines multiple ggplot2 plots into a single composite figure
-library(broom)       # Converts statistical model outputs into tidy data frames
 library(tidyverse)   # includes ggplot2, dplyr, tidyr, etc.
-```
 
-```{r}
-
-#| message: false
-#| warning: false
-#| paged-print: false
 c_df <- tibble(
   treatment = rep(c("Control", "Knees", "Eyes"), times = c(8, 7, 7)),
   phase_shift = c(0.53, 0.36, 0.20, -0.37, -0.60, -0.64, -0.68, -1.27,  # Control
                  0.73, 0.31, 0.03, -0.29, -0.56, -0.96, -1.61,          # Knees
                  -0.78, -0.86, -1.35, -1.48, -1.52, -2.04, -2.83)       # Eyes
 )
-
 c_df
 ```
 
-```{r plot}
-# Plot the data
+**▶ Run this** — visualize the data:
+
+``` r
 c_plot <- ggplot(c_df, aes(x = treatment, y = phase_shift, color = treatment)) +
-  geom_point(position = position_jitter(width=0.1)) +
+  geom_point(position = position_jitter(width = 0.1)) +
   stat_summary(fun = mean, geom = "point", size = 5, shape = 18) +
-  stat_summary(fun.data = "mean_se", geom = "errorbar", width = 0.2) 
+  stat_summary(fun.data = "mean_se", geom = "errorbar", width = 0.2)
 c_plot
 ```
 
-```{r}
+**▶ Run this** — fit the ANOVA (as a linear model, exactly like a regression) and get the ANOVA table:
 
-#| paged-print: false
-
-# Fit ANOVA model_aov
+``` r
 model_aov <- lm(phase_shift ~ treatment, data = c_df)
-
 summary(model_aov)
-```
 
-```{r}
-# ANOVA table 
 Anova(model_aov)
 ```
 
-# ANOVA-Assumptions and Diagnostics
+✏️ **Your turn:** What is the F-statistic and p-value? At α = 0.05, do we reject H₀? `________________________`
 
-ANOVA has the same assumptions as the two-sample t-test, but applied to all k groups:
+::: callout-tip
+**🚀 If you finish early:** Compute group means, SDs, and n by hand with `group_by()` + `summarize()`, and confirm they match what you'd expect from `c_plot`.
 
-1.  **Random samples** from corresponding populations
-2.  **Normality**: residuals are normally distributed
-3.  **Homogeneity of variance**: variance is the same in all treatments
-4.  **Independence**: observations are independent
+``` r
+# Write your code here:
+```
+:::
 
-**Checking assumptions**:
+------------------------------------------------------------------------
 
-- Normality: Q-Q plots, histogram of residuals, Shapiro-Wilk test
-- Homogeneity: plot residuals vs. predicted values or x-values
-- Independence: examine experimental design
+# Part 2 · Assumptions and Diagnostics
 
-# **Lecture 12:** ANOVA diagnostics
+ANOVA has the same assumptions as the two-sample t-test, but applied to all k groups: random samples, normality of Y in each population, homogeneity of variance, and independence.
 
-This is the default output of base R assumption tests
+**▶ Run this** — the base R diagnostic plots:
 
-```{r base_diagplots}
-#| message: false
-#| warning: false
-#| fig-height: 6
-#| fig-width: 6
-#| paged-print: false
-
-# Create diagnostic plots
+``` r
 par(mfrow = c(2, 2))
 plot(model_aov)
 par(mfrow = c(1, 1))
 ```
 
-# Performance package for daignostics
+**▶ Run this** — the `performance` package's all-in-one diagnostics:
 
-```{r}
-#| message: false
-#| warning: false
-#| fig-height: 6
-#| fig-width: 6
-#| paged-print: false
-
+``` r
 check_model(model_aov)
 ```
 
-# ANOVA Diagnostics
+**▶ Run this** — Levene's test (H₀: variances are homogeneous — you *want* a non-significant result):
 
-Levene's test of homogeneity of variance
-
-- Null Hypothesis is that they are homogeneous
-- So you want a non significant result here
-
-```{r}
-
-#| message: false
-#| warning: false
-#| paged-print: false
-
-## Using the car package to check assumptions
-# Levene's test for homogeneity of variance
+``` r
 levene_test <- leveneTest(phase_shift ~ treatment, data = c_df)
-levene_test 
+levene_test
 ```
 
-# **Lecture 12:** ANOVA Diagnostics
+**▶ Run this** — Shapiro-Wilk on the residuals (H₀: normally distributed — you *want* a non-significant result):
 
-Shapiro-Wilk Normality Test
-
-- Null Hypothesis is that they are normally distributed
-- So you want a **non significant** result here
-
-```{r}
-
-#| message: false
-#| warning: false
-#| paged-print: false
-
-
-# Normality test of residuals
+``` r
 shapiro_test <- shapiro.test(residuals(model_aov))
-shapiro_test 
+shapiro_test
 ```
 
-# **Lecture 12:** ANOVA Post-Hoc Testing
+✏️ **Your turn:** Do these three groups pass both the normality and equal-variance checks? `________________________`
 
-When ANOVA rejects H₀, we need to determine which groups differ.
+::: callout-tip
+**🚀 If you finish early:** In the base R diagnostic plots, which panel would you check first for equal variance, and which for normality? Name the two panels.
 
-**Example**: Using Tukey's HSD to compare all pairs of treatments in the circadian rhythm data.
+```
+________________________________________________________
+```
+:::
 
-first we calculate the estimate marginal means
+------------------------------------------------------------------------
 
-```{r}
+# Part 3 · Estimated Marginal Means and Post-Hoc Testing
+
+When ANOVA rejects H₀, we need to determine *which* groups differ. First, we calculate estimated marginal means (EMMs).
+
+**▶ Run this:**
+
+``` r
 emmeans_df <- emmeans(model_aov, "treatment")
 emmeans_df
 ```
 
-# What Are Estimated Marginal Means?
+**Estimated Marginal Means (EMMs)**, also called least-squares means, are model-based predictions of group means from your fitted model rather than directly from raw data. In a one-way ANOVA with balanced data and no covariates, **EMMs = group means** exactly — but the `emmeans` package's approach generalizes cleanly to two-way ANOVA, ANCOVA, and more complex designs, and gives you built-in standard errors, confidence intervals, and comparisons for free.
 
-**Estimated Marginal Means (EMMs)**, also called **least-squares means**, are model-based predictions of group means that come from your fitted statistical model rather than directly from your raw data.
+**▶ Run this** — verify EMMs equal the simple group means:
 
-## Key Concepts
-
-In a **one-way ANOVA**, EMMs are straightforward:
-
-- **EMMs = Group means** (when you have balanced data and no covariates)
-- They represent the "expected" or "predicted" value for each group according to your model
-- They're called "marginal" because in more complex designs, they're averaged over (or "marginalized" over) other factors
-
-## Why Use EMMs Instead of Simple Means?
-
-For one-way ANOVA, you might wonder: "Why not just use `group_by() %>% summarize(mean())`?"
-
-Here's why EMMs are valuable:
-
-1.  **Consistency across models**: EMMs work the same way whether you have one-way ANOVA, two-way ANOVA, ANCOVA, or more complex designs
-2.  **Built-in inference**: The `emmeans` package provides standard errors, confidence intervals, and easy comparisons
-3.  **Adjusted means**: In more complex models (with covariates), EMMs give you adjusted means at meaningful reference points
-4.  **Professional reporting**: EMMs are the standard in academic publications
-
-# How Are EMMs Calculated?
-
-## In One-Way ANOVA: EMMs = Group Means
-
-Let's verify this by comparing EMMs to simple group means:
-
-```{r compare-emmeans-means}
-# Calculate simple group means
+``` r
 group_means <- c_df %>%
   group_by(treatment) %>%
   summarize(
@@ -195,408 +139,258 @@ group_means <- c_df %>%
     n = n()
   )
 
-# Get EMMs as a data frame
 emm_df <- as.data.frame(emmeans_df)
 
-# Combine for comparison
 comparison <- group_means %>%
-  left_join(emm_df %>% select(treatment, emmean, SE), 
+  left_join(emm_df %>% select(treatment, emmean, SE),
             by = "treatment") %>%
   mutate(
     difference = round(sample_mean - emmean, 10)  # Round to show they're identical
   )
-
 comparison
 ```
 
-**Key insight**: In a one-way ANOVA, the EMMs are **exactly equal** to the group means!
+✏️ **Your turn:** Is `difference` zero (or extremely close to it, within rounding error) for every row? `________________________`
 
-## The Mathematical Formula
+**▶ Run this** — pairwise comparisons with a Sidak adjustment:
 
-For one-way ANOVA, the EMM for group $j$ is calculated as:
-
-$$\text{EMM}_j = \hat{\beta}_0 + \hat{\beta}_j$$
-
-Where: - $\hat{\beta}_0$ is the intercept (mean of reference group) - $\hat{\beta}_j$ is the coefficient for group $j$ (or 0 for the reference group)
-
-### take home is in this case emmeans = the means
-
-```{r}
+``` r
 pairwise_comparisons <- pairs(emmeans_df, adjust = "sidak")
 pairwise_comparisons
 ```
 
-- What is the ESTIMATE?
+The **estimate** is the difference between two group means. The **SE** is the standard error of that difference — it depends on the within-group variability and the sample sizes being compared. The t-ratio = estimate / SE tells you how many standard errors away from zero the difference is.
 
-  - The estimate is the **difference between two group means**.
+**▶ Run this** — letters showing which groups are (not) significantly different:
 
-  - What is the SE (Standard Error)?
-
-    - The SE is the **standard error of the difference** between two means.
-
-    - It tells you how much uncertainty there is in your estimate of the difference. The SE depends on:
-
-      - The variability within each group (residual variance from your model)
-      - The sample sizes of the groups being compared
-
-  - How They Work Together
-
-    - The t-ratio = estimate / SE tells you how many standard errors away from zero your difference is:
-
-      - Control - Eyes: 1.243 / 0.364 = 3.41 → far from zero → significant!
-      - Control - Knees: 0.027 / 0.364 = 0.074 → very close to zero → not significant
-
-```{r}
-# Letters to indicate groups with similar means
+``` r
 letter_groups <- multcomp::cld(emmeans_df, Letters = letters, adjust = "sidak")
 letter_groups
 ```
 
-## Can do in one go as well
+**▶ Run this** — the same thing in one pipeline:
 
-```{r}
-
-#| message: false
-#| warning: false
-#| paged-print: false
-
-# Using emmeans package for post-hoc comparisons
-# Compact letter display (grouping)
-cld_result <- emmeans(model_aov, "treatment") %>% 
+``` r
+cld_result <- emmeans(model_aov, "treatment") %>%
   multcomp::cld(Letters = letters, adjust = "sidak")
 cld_result
-
 ```
 
-# Plotting the EMMEANS
+**▶ Run this** — visualize the EMMs:
 
-```{r}
+``` r
 plot(emmeans_df)
-```
 
-# **Lecture 12:** ANOVA Post-Hoc Testing
-
-```{r}
-
-#| message: false
-#| warning: false
-#| paged-print: false
-
-# Using emmeans package for post-hoc comparisons
-# Visualize the results
 emmip(model_aov, ~ treatment, CIs = TRUE) +
   theme_minimal() +
   labs(title = "Estimated Marginal Means with 95% CIs",
-       x = "Treatment",
-       y = "Estimated Phase Shift")
-
+       x = "Treatment", y = "Estimated Phase Shift")
 ```
 
-# Planned comparisons
+✏️ **Your turn:** Which two treatments share a compact-letter-display letter (meaning they're *not* significantly different)? `________________________`
 
-```{r}
+::: callout-tip
+**🚀 If you finish early:** Rerun `pairs(emmeans_df, adjust = ...)` with `"bonferroni"` and `"tukey"` instead of `"sidak"`. Do the p-values change much for this dataset?
+
+``` r
+# Write your code here:
+```
+:::
+
+------------------------------------------------------------------------
+
+# Part 4 · Planned Comparisons
+
+Instead of comparing every possible pair, sometimes you have specific, planned comparisons in mind.
+
+**▶ Run this:**
+
+``` r
 levels(c_df$treatment)  # See the order
 
-# Get estimated marginal means
 emm <- emmeans(model_aov, "treatment")
 
-# Define your specific planned comparison
 planned_contrasts <- contrast(emm,
                               method = list(
                                 "control vs eyes" = c(1, -1,  0),
-                                "control vs knees" = c(1, 0, -1))) 
-
-# View results
+                                "control vs knees" = c(1, 0, -1)))
 planned_contrasts
 ```
 
-# **Lecture 12:** ANOVA Post-Hoc Testing
+**▶ Run this** — the significance-groups plot:
 
-```{r, echo=FALSE}
-# Create a plot with letters indicating significant differences
+``` r
 ggplot(c_df, aes(x = treatment, y = phase_shift, color = treatment)) +
   geom_jitter(width = 0.2, alpha = 0.7) +
   stat_summary(fun = mean, geom = "point", size = 4, shape = 18) +
   stat_summary(fun.data = "mean_cl_normal", geom = "errorbar", width = 0.2) +
-  geom_text(data = as.data.frame(cld_result), 
+  geom_text(data = as.data.frame(cld_result),
             aes(x = treatment, y = -2.5, label = .group),
-            vjust = 0.5, size = 5) 
+            vjust = 0.5, size = 5)
 ```
 
-# **Lecture 12:** ANOVA Reporting results
+✏️ **Your turn:** The contrast vector `c(1, -1, 0)` picks out "Control minus Eyes." Write the contrast vector for "Knees minus Eyes" instead (hint: check the order from `levels(c_df$treatment)`).
+
+```
+________________________________________________________
+```
+
+------------------------------------------------------------------------
+
+# Part 5 · Reporting the Results
 
 **Formal scientific writing example:**
 
-"The effect of light treatment on circadian rhythm phase shift was analyzed using a one-way ANOVA. There was a significant effect of treatment on phase shift (F(2, 19) = 7.29, p = 0.004, η² = 0.43). Post-hoc comparisons using Tukey's HSD test indicated that the mean phase shift for the Eyes treatment (M = -1.55 h, SD = 0.71) was significantly different from both the Control treatment (M = -0.31 h, SD = 0.62) and the Knees treatment (M = -0.34 h, SD = 0.79). However, the Control and Knees treatments did not significantly differ from each other. These results suggest that light exposure to the eyes, but not to the knees, impacts circadian rhythm phase shifts."
+"The effect of light treatment on circadian rhythm phase shift was analyzed using a one-way ANOVA. There was a significant effect of treatment on phase shift (F(2, 19) = 7.29, p = 0.004, η² = 0.43). Post-hoc comparisons using Tukey's HSD test indicated that the mean phase shift for the Eyes treatment (M = -1.55 h, SD = 0.71) was significantly different from both the Control treatment (M = -0.31 h, SD = 0.62) and the Knees treatment (M = -0.34 h, SD = 0.79). However, the Control and Knees treatments did not significantly differ from each other."
 
-# NON PARAMETRIC ANOVA
+✏️ **Your turn:** Using your own output from Parts 1–3, write a results sentence for the Sidak-adjusted pairwise comparisons instead of Tukey's.
 
-```{r violated_data_creation}
+```
+________________________________________________________
+```
 
+------------------------------------------------------------------------
 
-# Create data with outliers and skewness
+# Part 6 · Non-Parametric ANOVA
+
+**▶ Run this** — build a version of the data that clearly violates ANOVA's assumptions:
+
+``` r
 set.seed(42)
 v_circ_df <- c_df %>%
   mutate(
     phase_shift_violated = case_when(
-      # Control: Very tight, almost no variance
+      # Control: very tight, almost no variance
       treatment == "Control" ~ phase_shift * 0.15,
-      
-      # Knees: Also tight variance  
+      # Knees: also tight variance
       treatment == "Knees" ~ phase_shift * 1.3,
-      
-      # Eyes: EXTREME spread - compress middle values, huge outliers
+      # Eyes: extreme spread - compress middle values, huge outliers
       treatment == "Eyes" ~ {
         n <- length(phase_shift)
         c(phase_shift[1:(n-3)] * 1.2,      # Very compressed normal values
           phase_shift[(n-2)] * 2,          # Moderate outlier
-          phase_shift[(n-1)] * 2.4,          # Extreme outlier 1
-          phase_shift[n] *4)              # EXTREME outlier 2
+          phase_shift[(n-1)] * 2.4,        # Extreme outlier 1
+          phase_shift[n] * 4)              # Extreme outlier 2
       }
     )
   )
 
-# Fit model with violated assumptions
-violated_model <- lm(phase_shift_violated ~ treatment, 
+violated_model <- lm(phase_shift_violated ~ treatment,
                      data = v_circ_df)
 ```
 
-```{r}
+**▶ Run this** — visualize and check assumptions on the violated data:
 
-ggplot(v_circ_df, 
-       aes(x = treatment, y = phase_shift_violated, 
+``` r
+ggplot(v_circ_df,
+       aes(x = treatment, y = phase_shift_violated,
            color = treatment)) +
   geom_jitter(width = 0.2, alpha = 0.7, size = 3) +
   geom_boxplot(alpha = 0.3, outlier.shape = NA) +
-geom_jitter(width = 0.2, alpha = 0.7, size = 3)
+  geom_jitter(width = 0.2, alpha = 0.7, size = 3) +
   theme_minimal() +
   labs(title = "Modified Data with Violations",
        subtitle = "Median with IQR",
-       x = "Light Treatment",
-       y = "Phase Shift (hours)") 
-```
+       x = "Light Treatment", y = "Phase Shift (hours)")
 
-```{r}
-
-
-# Shapiro-Wilk test on residuals
 shapiro.test(resid(violated_model))
-```
 
-```{r violated_normality_plot}
-
-
-
-# Q-Q plot
-qqnorm(resid(violated_model), 
-       main = "Q-Q Plot: Violated Data")
+qqnorm(resid(violated_model), main = "Q-Q Plot: Violated Data")
 qqline(resid(violated_model), col = "red", lwd = 2)
-```
 
-```{r violated_variance_test}
-
-
-# Levene's test
-leveneTest(phase_shift_violated ~ treatment, 
+leveneTest(phase_shift_violated ~ treatment,
            data = v_circ_df)
 ```
 
-# Performing the Kruskal-Wallis Test
+✏️ **Your turn:** Do the Shapiro-Wilk and Levene's tests confirm this data violates ANOVA's assumptions? `________________________`
 
-:::: columns
-::: {.column width="60%"}
-## Running Kruskal-Wallis on Original Data
+**▶ Run this** — the Kruskal-Wallis test, on both the original and violated data:
 
-**Even though assumptions are met, let's compare results:**
-
-```{r kruskal_original_test}
-
-
-# Kruskal-Wallis test on original data
+``` r
 kruskal_original_result <- kruskal.test(
-  phase_shift ~ treatment, 
+  phase_shift ~ treatment,
   data = c_df
 )
-
-# Display results
 kruskal_original_result
-```
-:::
-::::
 
-**Compare to parametric ANOVA:**
+anova(model_aov)  # for comparison
 
-```{r param_anova_comparison}
-
-
-anova(model_aov)
-```
-
-# Kruskal-Wallis on Violated Data
-
-## Non-Parametric Test Handles Violations
-
-**Running Kruskal-Wallis on data with assumption violations:**
-
-```{r kruskal_violated_test}
-
-
-# Kruskal-Wallis test on violated data
 kruskal_violated_result <- kruskal.test(
-  phase_shift_violated ~ treatment, 
+  phase_shift_violated ~ treatment,
   data = v_circ_df
 )
-
 kruskal_violated_result
+
+anova(violated_model)  # for comparison
 ```
 
-**Compare parametric ANOVA on same violated data:**
+✏️ **Your turn:** Does the parametric ANOVA's conclusion on the violated data agree with the Kruskal-Wallis conclusion? If they disagree, which would you trust more, and why? `________________________`
 
-```{r param_violated_anova}
+**▶ Run this** — post-hoc tests: pairwise Wilcoxon, and the more appropriate Dunn's test:
 
-
-anova(violated_model)
-```
-
-**Key observations:** - Both tests still detect differences - Kruskal-Wallis more robust to violations - Parametric test may give misleading results when assumptions violated - Non-parametric test maintains validity
-
-# Post-Hoc Tests for Kruskal-Wallis
-
-::::: columns
-::: {.column width="60%"}
-## Pairwise Comparisons After Significant Kruskal-Wallis
-
-**Just like ANOVA, we need post-hoc tests to identify which groups differ:**
-
-```{r kruskal_posthoc_original}
-
-
-# Pairwise Wilcoxon rank sum tests with 
-# Bonferroni correction
-pairwise_original_result <- pairwise.wilcox.test(
-  x = v_circ_df$phase_shift,
-  g = v_circ_df$treatment,
-  p.adjust.method = "bonferroni"
-)
-
-pairwise_original_result
-```
-
-**Interpretation of p-values:** - Control vs Eyes: p = 0.024 (significant) - Control vs Knees: p = 1.000 (not significant) - Eyes vs Knees: p = 0.078 (not significant)
-
-**Common adjustment methods:** - `"bonferroni"`: Most conservative - `"holm"`: Less conservative than Bonferroni - `"BH"`: Benjamini-Hochberg (controls false discovery rate) - `"none"`: No adjustment (not recommended)
-:::
-
-::: {.column width="40%"}
-## Post-Hoc for Violated Data
-
-```{r kruskal_posthoc_violated}
-
-
-# Post-hoc tests on violated data
-pairwise_violated_result <- pairwise.wilcox.test(
+``` r
+pairwise_result <- pairwise.wilcox.test(
   x = v_circ_df$phase_shift_violated,
   g = v_circ_df$treatment,
   p.adjust.method = "bonferroni"
 )
+pairwise_result
 
-pairwise_violated_result
-```
-:::
-:::::
-
-# Dunn's Test: Alternative Post-Hoc
-
-::::: columns
-::: {.column width="60%"}
-## Dunn's Test for Multiple Comparisons
-
-**Dunn's test is specifically designed for Kruskal-Wallis post-hoc comparisons:**
-
-```{r dunn_test_original}
-
-#| message: false
-#| warning: false
-
-library(FSA)
-
-# Dunn's test on original data
-dunn_original_result <- dunnTest(
-  phase_shift ~ treatment,
-  data = c_df,
-  method = "bonferroni"
-)
-
-dunn_original_result
-```
-
-**Advantages of Dunn's test:** - Designed specifically for Kruskal-Wallis - Provides Z-statistics in addition to p-values - Multiple adjustment methods available - More appropriate than multiple Wilcoxon tests
-
-Z-statistic is a standardized test statistic that tells you how many standard deviations an observation or difference is from the expected value (usually zero, meaning "no difference").
-:::
-
-::: {.column width="40%"}
-## Dunn's Test on Violated Data
-
-```{r dunn_test_violated}
-
-#| paged-print: false
-
-# Dunn's test on violated data
-dunn_violated_result <- dunnTest(
+dunn_result <- dunnTest(
   phase_shift_violated ~ treatment,
   data = v_circ_df,
   method = "bonferroni"
 )
-
-dunn_violated_result
+dunn_result
 ```
 
-**Interpreting Z-statistics:** - Large \|Z\| values indicate bigger differences - Z \> 1.96 approximately equivalent to p \< 0.05 - Sign indicates direction of difference
+::: callout-note
+**Which post-hoc test should you use after Kruskal-Wallis?**
+
+Use **Dunn's test** — it's the proper follow-up to Kruskal-Wallis, uses the *same* overall ranking from the omnibus test, and is standard in published research. Pairwise Wilcoxon re-ranks separately for each pair, throwing away that shared-ranking information.
 :::
-:::::
 
-# Which post F test to use?
+::: callout-tip
+**🚀 If you finish early:** Run Dunn's test with `method = "holm"` instead of `"bonferroni"`. Do any conclusions change? Which method is more conservative?
 
-- Wilcoxon Rank-Sum Test (Mann-Whitney U)
+``` r
+# Write your code here:
+```
+:::
 
-  - What it does: Pairwise comparisons between two groups at a time
+------------------------------------------------------------------------
 
-  - Ranking: Re-ranks data separately for each pair of groups being compared
+# Review and checkpoint
 
-  - Use case: When you want simple pairwise comparisons
+At this point you can:
 
-  - Correction: Typically uses Bonferroni or other p-value adjustments
+- [ ] Fit a one-way ANOVA with `lm()` and read its `Anova()` table
+- [ ] Check ANOVA's assumptions with diagnostic plots, Levene's test, and Shapiro-Wilk
+- [ ] Compute and interpret estimated marginal means with `emmeans()`
+- [ ] Run and interpret pairwise post-hoc comparisons and planned contrasts
+- [ ] Write a properly formatted ANOVA results sentence
+- [ ] Recognize when to use Kruskal-Wallis and Dunn's test instead, and run both
 
-  - Code: pairwise.wilcox.test()
+::: callout-note
+**📤 What to turn in before next class**
 
-    - `rpairwise.wilcox.test(v_circ_df$phase_shift_violated,                   v_circ_df$treatment,                  p.adjust.method = "bonferroni")`
+Upload both of these to the course management system:
 
-- Dunn's Test
+1. Your code — the `scripts/` folder (or just `12_analysis_of_variance.R`)
+2. This worksheet, with your written answers
+:::
 
-  - What it does: Pairwise comparisons specifically designed for Kruskal-Wallis
+------------------------------------------------------------------------
 
-  - Ranking: Uses the same overall ranking from the original Kruskal-Wallis test
+# Getting unstuck
 
-  - Use case: The "official" post-hoc for Kruskal-Wallis
+When code breaks — and it will, that is normal:
 
-  - Correction: Multiple options (Bonferroni, Holm, BH, etc.)
+1. **Read the error message out loud.** R usually names the line and the problem.
+2. **Check the usual suspects:** did you run `library(performance)`, `library(FSA)`, `library(car)`, `library(emmeans)`, and `library(tidyverse)`? Spelling? A missing `)` or `%>%` at the *start* of a line?
+3. `?function_name` opens the built-in help page.
+4. **Bring the exact error** (copy-paste it) to class or office hours.
 
-  - Code: Requires dunn.test or FSA package
+> 💡 **Key idea:** Every working scientist googles error messages daily. Getting stuck is not failing — it is the job.
 
-  - `rlibrary(FSA) dunnTest(phase_shift_violated ~ treatment,         data = v_circ_df,        method = "bonferroni")`
-
-- Which to use?
-
-  - Use Dunn's test because:
-
-    - ✅ It's the proper follow-up to Kruskal-Wallis
-    - ✅ Maintains consistency with the overall K-W test ranking
-    - ✅ More statistically appropriate for the omnibus test you ran
-    - ✅ Standard in published research
-
-  - Wilcoxon is fine for simple two-group comparisons, but when you've already done Kruskal-Wallis (a 3+ group test), - Dunn's is the standard choice.
-
-  - Think of it this way: Kruskal-Wallis ranks ALL your data once.
-
-  - Dunn's test uses those same ranks. Wilcoxon throws away that information and re-ranks for each pair.
+------------------------------------------------------------------------

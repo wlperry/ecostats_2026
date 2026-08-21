@@ -1,9 +1,9 @@
 ---
 order: 11
 week: 6
-title: "Multiple Regression"
+title: "Activity: Multiple Regression"
 subtitle: "Several predictors"
-description: "Hands-on activity: multiple linear regression."
+description: "Hands-on activity: multicollinearity, variable transformations, model diagnostics, model comparison, and predictor importance on the Michaletz et al. (2014) global forest NPP dataset."
 author: "Bill Perry"
 metadata-files:
   - ../../_templates/activities.yml
@@ -12,87 +12,53 @@ format:
   docx: default
 ---
 
-# Analysis of Net Primary Production in Forests: A Modern Tidyverse Approach
+# Worksheet: Multiple Regression — Forest Net Primary Production
 
-*Based on Michaletz et al. (2014) data*
+> ## How to use this worksheet
+>
+> Work through each part in order, at your own pace. Type every line of code yourself into a **plain R script** — do not copy-paste. Blocks marked **▶ Run this** are code you should type and execute. Blocks marked **✏️ Your turn** ask you to write, modify, or answer something. Boxes marked **🚀 If you finish early** are optional bonus material that goes a bit further than what we covered in lecture.
+>
+> This worksheet examines the relationship between Net Primary Production (npp) and various climate and forest characteristics across global forest sites, based on Michaletz et al. (2014). We'll explore multicollinearity, model selection, and variable transformations — the real-data, many-predictor counterpart to the lecture's two-predictor ant example.
 
-## Introduction
+------------------------------------------------------------------------
 
-This analysis examines the relationships between Net Primary Production
-(npp) and various climate and forest characteristics across global
-forest sites. We'll explore multicollinearity, model selection, and
-variable transformations.
+# Part 1 · Setup and Data
 
-**Key Learning Objectives:**
+**▶ Run this in your Script:**
 
--   Understand multicollinearity in multiple regression
--   Learn model diagnostics and assumption checking
--   Practice variable selection techniques
--   Apply data transformations appropriately
-
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, 
-                      fig.width = 10, fig.height = 6)
-```
-
-## Load Required Packages
-
-```{r packages}
-# Load required packages
+``` r
 library(tidyverse)    # For data manipulation and visualization
-library(car)          # For regression diagnostics (VIF, etc.)
-library(corrplot)     # For correlation plots
-library(GGally)       # For pairs plots
-library(broom)        # For tidy model outputs
-library(performance)  # For model performance metrics
-library(see)          # For better diagnostic plots
-```
+library(car)           # For regression diagnostics (VIF, etc.)
+library(corrplot)      # For correlation plots
+library(GGally)        # For pairs plots
+library(broom)         # For tidy model outputs
 
-## Load and Explore the Data
-
-```{r load-data}
-# Load the forest npp data
 forest_df <- read_csv("data/michaletz_etal_2014_clean.csv")
-
-# Display top lines
 head(forest_df)
-
 ```
 
-## Data Preparation
+✏️ **Your turn:** Run `glimpse(forest_df)`. Which columns look continuous, and which look categorical? `________________________`
 
-Following the original analysis, we'll focus on the key variables from a
-cleaned dataframe
+------------------------------------------------------------------------
 
-## 1. Initial Exploration: Variable Relationships and Multicollinearity
+# Part 2 · Exploring Multicollinearity
 
-### Correlation Matrix and Visualization
+**▶ Run this** — a correlation matrix, and a visual version of it:
 
-```{r correlation-analysis}
-# Create correlation matrix for numeric variables only
+``` r
 num_vars <- forest_df %>%
   select_if(is.numeric)
 
-# Calculate correlation matrix
 cor_matrix <- cor(num_vars, use = "complete.obs")
-
-# Display correlation matrix
 cor_matrix
 
-
-```
-
-```{r visual_corr}
-# Create a visual correlation plot
-corrplot(cor_matrix, method = "color", type = "upper", 
+corrplot(cor_matrix, method = "color", type = "upper",
          addCoef.col = "grey45", tl.cex = 0.8, number.cex = 0.7)
 ```
 
-### Pairs Plot for Visual Inspection
+**▶ Run this** — a pairs plot for a fuller picture:
 
-```{r pairs-plot, fig.height=10, fig.width=10}
-# Create pairs plot to visualize relationships
-# This replaces the original pairs() function with ggplot2
+``` r
 forest_df %>%
   select(-leaf) %>%  # Exclude categorical variable for pairs plot
   ggpairs(
@@ -102,257 +68,235 @@ forest_df %>%
   theme_minimal()
 ```
 
-## 2. Initial Multiple Regression Model
+✏️ **Your turn:** From the correlation matrix, which two predictors look most strongly correlated with each other? `________________________`
 
-Let's start with a full model including all predictors:
+**▶ Run this** — fit the full model with every predictor:
 
-```{r initial-model}
-# Fit initial model with all predictors (Model 1)
-model_init <- lm(npp ~ age + biomass + season + temp + 
+``` r
+model_init <- lm(npp ~ age + biomass + season + temp +
              precip + teb + leaf, data = forest_df)
-
-# Get model summary
 summary(model_init)
-
-
 ```
 
-### Check for Multicollinearity
+**▶ Run this** — check Variance Inflation Factors:
 
-```{r vif-analysis}
-# Calculate Variance Inflation Factors (VIF)
+``` r
 vif_values <- vif(model_init)
 vif_values
 
-
-```
-
-```{r}
-# Create a data frame for better visualization
 vif_df <- data.frame(
   Variable = names(vif_values),
   VIF = as.numeric(vif_values)
 ) %>%
   arrange(desc(VIF))
 
-# Visualize VIF values
 ggplot(vif_df, aes(x = reorder(Variable, VIF), y = VIF)) +
   geom_col(fill = "steelblue", alpha = 0.7) +
-  geom_hline(yintercept = 10, color = "red", linetype = "dashed", 
-             linewidth = 1) +
-  geom_hline(yintercept = 5, color = "orange", linetype = "dashed", 
-             linewidth = 1) +
+  geom_hline(yintercept = 10, color = "red", linetype = "dashed", linewidth = 1) +
+  geom_hline(yintercept = 5, color = "orange", linetype = "dashed", linewidth = 1) +
   coord_flip() +
   labs(
     title = "Variance Inflation Factors",
     subtitle = "Red line: VIF = 10 (serious concern), Orange line: VIF = 5 (moderate concern)",
-    x = "Variables",
-    y = "VIF"
+    x = "Variables", y = "VIF"
   ) +
   theme_minimal()
 ```
 
-### Address Multicollinearity by Removing Growing Season
+✏️ **Your turn:** Which predictor(s) have VIF > 10? Does that match what you flagged from the correlation matrix? `________________________`
 
-Based on the original analysis, season and Temperature are highly
-correlated. Let's remove season:
+::: callout-tip
+**🚀 If you finish early:** Recompute VIF using only 3 predictors of your choice (drop the rest from the model formula). Do the remaining VIFs change? Why would dropping a correlated predictor lower the VIFs of the ones that are left?
 
-```{r model2}
-# Model 2: Remove season due to multicollinearity
-model_2 <- lm(npp ~ age + biomass + temp + precip + teb + leaf, 
+``` r
+# Write your code here:
+```
+:::
+
+------------------------------------------------------------------------
+
+# Part 3 · Addressing Multicollinearity
+
+Season and temperature are highly correlated. Let's remove season.
+
+**▶ Run this:**
+
+``` r
+model_2 <- lm(npp ~ age + biomass + temp + precip + teb + leaf,
              data = forest_df)
-
-# Model summary
 summary(model_2)
 
-```
-
-```{r}
-# Check VIF again
 vif_values2 <- vif(model_2)
 vif_values2
-
 ```
 
-## 3. Exploring Variable Transformations
+✏️ **Your turn:** Did removing `season` fix the VIF problem? `________________________`
 
-### Check the Shape of Relationships with Partial Regression Plots
+------------------------------------------------------------------------
 
-```{r partial-plots}
-# Create partial regression plots (Added Variable Plots)
-# This helps us see the relationship between each predictor and response
-# after accounting for other variables
+# Part 4 · Checking the Shape of Relationships
 
+**▶ Run this** — Added Variable (partial regression) plots:
+
+``` r
 par(mfrow = c(2, 3))
 avPlots(model_2, main = "Partial Regression Plots")
 par(mfrow = c(1, 1))
 ```
 
-### Apply Log Transformation to age
+The original analysis found `age` showed a curvy relationship. Let's try a log transformation. (Really, you should try transforming the *response* variable first — we're doing `age` here to see the AV-plot difference clearly.)
 
-The original analysis found that age showed a curvy relationship. Let's
-try log transformation: REally what you should do is log transform of
-the response variable first..
+**▶ Run this:**
 
-```{r log-transformation}
-# Create dataset with log-transformed age
+``` r
 forest_df <- forest_df %>%
   mutate(log_age = log10(age))
 
-# Model 3: With log-transformed age
-model_3 <- lm(npp ~ log_age + biomass + temp + precip + teb + leaf, 
+model_3 <- lm(npp ~ log_age + biomass + temp + precip + teb + leaf,
              data = forest_df)
-
-
-# Model summary
 summary(model_3)
-```
 
-```{r}
-# Compare partial regression plots
 par(mfrow = c(2, 3))
 avPlots(model_3, main = "Partial Regression Plots (Log age)")
 par(mfrow = c(1, 1))
-
 ```
 
-## 4. Model Diagnostics and Assumption Checking
+✏️ **Your turn:** Compare the AV plot for `age` before and after the log transform. Does the relationship look straighter now? `________________________`
 
-```{r diagnostics}
-# Create diagnostic plots
+------------------------------------------------------------------------
+
+# Part 5 · Model Diagnostics
+
+**▶ Run this** — the four standard diagnostic plots:
+
+``` r
+par(mfrow = c(2, 2))
+plot(model_3)
 par(mfrow = c(1, 1))
-plot(model_3, main = "Model Diagnostics")
-par(mfrow = c(1, 1))
-
-
 ```
 
-## Residuals - its the upper left above
+**▶ Run this** — a closer look at residuals vs. fitted:
 
-```{r}
-# Check for normality of residuals
+``` r
 residuals_data <- data.frame(
   Fitted = fitted(model_3),
   Residuals = residuals(model_3),
   Standardized_Residuals = rstandard(model_3)
 )
 
-# Residuals vs Fitted plot using ggplot
 ggplot(residuals_data, aes(x = Fitted, y = Residuals)) +
   geom_point(alpha = 0.6) +
   geom_smooth(method = "lm", color = "red") +
   geom_hline(yintercept = 0, linetype = "dashed") +
-  labs(
-    title = "Residuals vs Fitted Values",
-    x = "Fitted Values",
-    y = "Residuals"
-  ) +
+  labs(title = "Residuals vs Fitted Values", x = "Fitted Values", y = "Residuals") +
   theme_minimal()
 ```
 
-### Try Response Variable Transformation
+Let's also try a cube-root transformation of the response, `npp`:
 
-Following the original analysis, let's try a cube root transformation of
-npp:
+**▶ Run this:**
 
-```{r response-transformation}
-# Model 4: Cube root transformation of npp
+``` r
 forest_df <- forest_df %>%
   mutate(npp_cuberoot = npp^(1/3))
 
-model_4 <- lm(npp_cuberoot ~ log_age + biomass + temp + precip + 
+model_4 <- lm(npp_cuberoot ~ log_age + biomass + temp + precip +
              teb + leaf, data = forest_df)
-
 summary(model_4)
+
+par(mfrow = c(2, 2))
+plot(model_4)
+par(mfrow = c(1, 1))
 ```
 
-```{r}
-# Check diagnostics
-par(mfrow = c(1, 1))
-plot(model_4, main = "Model Diagnostics (Cube Root npp)")
-par(mfrow = c(1, 1))
+✏️ **Your turn:** Do the residual plots for `model_4` look better than for `model_3`? What specifically improved (or didn't)? `________________________`
 
+::: callout-tip
+**🚀 If you finish early:** Try a square-root transform of `npp` instead of cube-root (`sqrt(npp)`). Refit the model and compare its residual plots to `model_4`'s.
+
+``` r
+# Write your code here:
 ```
+:::
 
-## 5. Model Simplification and Comparison
+------------------------------------------------------------------------
 
-### Remove Non-significant Variables
+# Part 6 · Model Simplification and Comparison
 
-```{r model-simplification}
-#| paged-print: false
-# Model 5: Remove non-significant Precipitation
-model_5 <- lm(npp_cuberoot ~ log_age + biomass + temp + teb + leaf, 
+**▶ Run this** — drop the non-significant `precip` term:
+
+``` r
+model_5 <- lm(npp_cuberoot ~ log_age + biomass + temp + teb + leaf,
              data = forest_df)
-
 summary(model_5)
-
 ```
 
-```{r}
-# Compare models using AIC
+**▶ Run this** — compare `model_4` and `model_5` by AIC:
+
+``` r
 model_comparison <- data.frame(
   Model = c("Model 4 (Full)", "Model 5 (No precip)"),
   AIC = c(AIC(model_4), AIC(model_5)),
   R_squared = c(summary(model_4)$r.squared, summary(model_5)$r.squared),
   Adj_R_squared = c(summary(model_4)$adj.r.squared, summary(model_5)$adj.r.squared)
 )
-
 model_comparison
 
-```
-
-### Model Performance and Interpretation
-
-```{r final-interpretation}
-
-# Get tidy summary of final model
 summary(model_5, conf.int = TRUE)
-
 ```
 
-## using the sensemaker package
+✏️ **Your turn:** Does `model_5` have a lower AIC than `model_4`? Given the "penalize complexity" logic from lecture, what does that tell you about dropping `precip`? `________________________`
 
-```{r sensemaker}
+------------------------------------------------------------------------
+
+# Part 7 · Predictor Importance
+
+**▶ Run this** — partial R² for every predictor at once, using `sensemakr`:
+
+``` r
 library(sensemakr)
-# Calculate partial R-squared for all variables at once
 partial_r2_sensemakr <- partial_r2(model_5)
 partial_r2_sensemakr
 ```
 
-```{r}
-#| paged-print: false
-# Calculate partial R-squared for each variable
-# Using the car package
-print("Using car package Anova() with Type III sums of squares:")
-anova_type2 <- Anova(model_5, type = "III")
-print(anova_type2)
+**▶ Run this** — the same idea, computed by hand from a Type III ANOVA table:
 
-# Convert F-statistics to partial R-squared
-# Partial R² = F * df_num / (F * df_num + df_den)
-f_stats <- anova_type2$`F value`[!is.na(anova_type2$`F value`)]
-df_num <- anova_type2$Df[!is.na(anova_type2$`F value`)]
-df_den <- anova_type2$Df[nrow(anova_type2)]  # Residual df
+``` r
+anova_type3 <- Anova(model_5, type = "III")
+anova_type3
+
+f_stats <- anova_type3$`F value`[!is.na(anova_type3$`F value`)]
+df_num <- anova_type3$Df[!is.na(anova_type3$`F value`)]
+df_den <- anova_type3$Df[nrow(anova_type3)]  # Residual df
 
 partial_r2_from_f <- f_stats * df_num / (f_stats * df_num + df_den)
 
 results_table <- data.frame(
-  Variable = rownames(anova_type2)[!is.na(anova_type2$`F value`)],
+  Variable = rownames(anova_type3)[!is.na(anova_type3$`F value`)],
   F_statistic = f_stats,
-  p_value = anova_type2$`Pr(>F)`[!is.na(anova_type2$`F value`)],
+  p_value = anova_type3$`Pr(>F)`[!is.na(anova_type3$`F value`)],
   Partial_R_squared = partial_r2_from_f
 )
-
-print("Complete results with partial R-squared:")
-print(results_table)
+results_table
 ```
 
-## 6. Alternative Approach: Standardized Variables
+✏️ **Your turn:** Do the `sensemakr` partial R² values roughly match your by-hand `Partial_R_squared` column? `________________________`
 
-Following the original analysis, let's also try the standardized
-approach:
+::: callout-tip
+**🚀 If you finish early:** Which single predictor has the highest partial R² in `model_5`? Does that match which predictor had the smallest p-value in `summary(model_5)`?
 
-```{r standardized-approach}
-# Create standardized variables
+``` r
+# Write your code here:
+```
+:::
+
+------------------------------------------------------------------------
+
+# Part 8 · An Alternative: Standardized Variables
+
+**▶ Run this** — refit with every numeric predictor standardized (mean 0, SD 1), including a temp × precip interaction:
+
+``` r
 forest_standardized <- forest_df %>%
   mutate(
     npp_sqrt_scaled = scale(sqrt(npp))[,1],
@@ -363,61 +307,60 @@ forest_standardized <- forest_df %>%
     teb_scaled = scale(teb)[,1]
   )
 
-# Standardized model
-model_std <- lm(npp_sqrt_scaled ~ log_age_scaled + biomass_scaled + 
-                temp_scaled * precip_scaled + teb_scaled, 
+model_std <- lm(npp_sqrt_scaled ~ log_age_scaled + biomass_scaled +
+                temp_scaled * precip_scaled + teb_scaled,
                 data = forest_standardized)
-
-# Summary
 summary(model_std)
-
 ```
 
-## 7. Key Findings and Conclusions
+✏️ **Your turn:** In `model_std`, which predictor has the largest absolute standardized coefficient? Is that the same predictor that had the highest partial R² in Part 7? `________________________`
 
-1.  MULTICOLLINEARITY:
+------------------------------------------------------------------------
 
-    -   Growing season length and temperature were highly correlated
-    -   Removed growing season to address multicollinearity
+# Key Findings
 
-2.  VARIABLE TRANSFORMATIONS:
+1. **Multicollinearity** — growing season length and temperature were highly correlated; removed season to address it.
+2. **Variable transformations** — log transformation of age improved model fit; cube-root transformation of npp addressed assumption violations.
+3. **Final model results** — significant predictors: age (negative), biomass (positive), temp (positive); teb had a negative effect; leaf type differences were significant.
+4. **Biological interpretation** — younger stands had higher npp (for a given biomass); higher biomass was associated with higher npp; temperature was positively related to npp; coniferous forests had lower npp than broadleaf forests.
 
-    -   Log transformation of age improved model fit
-    -   Cube root transformation of npp addressed assumption violations
+::: callout-note
+**Reference**
 
-3.  FINAL MODEL RESULTS:
+Michaletz, S.T., Cheng, D., Kerkhoff, A.J. & Enquist, B.J. (2014). Convergence of terrestrial plant production across global climate gradients. *Nature*, 512, 39–43.
+:::
 
-    -   Significant predictors: age (negative), biomass (positive), temp
-        (positive)
-    -   teb had negative effect, Leaf type differences were significant
+# Review and checkpoint
 
-4.  BIOLOGICAL INTERPRETATION:
+At this point you can:
 
-    -   Younger stands had higher npp (for given biomass)
-    -   Higher biomass associated with higher npp
-    -   temp positively related to npp
-    -   Coniferous forests had lower npp than broadleaf forests
+- [ ] Detect multicollinearity with a correlation matrix and VIFs, and address it by dropping a redundant predictor
+- [ ] Use Added Variable plots to check whether a predictor's relationship with Y is linear
+- [ ] Apply and evaluate predictor and response transformations
+- [ ] Read the standard four-panel regression diagnostic plots
+- [ ] Compare nested models with AIC and adjusted R²
+- [ ] Quantify predictor importance with partial R² and standardized coefficients
 
-## References and Additional Notes
+::: callout-note
+**📤 What to turn in before next class**
 
-This analysis is based on:
+Upload both of these to the course management system:
 
--   **Michaletz, S.T., Cheng, D., Kerkhoff, A.J. & Enquist, B.J.**
-    (2014). Convergence of terrestrial plant production across global
-    climate gradients. *Nature*, 512, 39-43.
+1. Your code — the `scripts/` folder (or just `11_multiple_regression.R`)
+2. This worksheet, with your written answers
+:::
 
-**Key Learning Points:**
+------------------------------------------------------------------------
 
-1.  **Multicollinearity Detection**: Use VIF values and correlation
-    matrices
-2.  **Variable Transformations**: Log and power transformations can
-    improve model fit
-3.  **Model Diagnostics**: Always check residual plots and assumption
-    violations
-4.  **Model Comparison**: Use AIC and other criteria for model selection
-5.  **Interpretation**: Focus on biologically meaningful relationships
+# Getting unstuck
 
-```{r session-info}
-# Session information for reproducibility
-sessionInfo()
-```
+When code breaks — and it will, that is normal:
+
+1. **Read the error message out loud.** R usually names the line and the problem.
+2. **Check the usual suspects:** did you run `library(tidyverse)`, `library(car)`, `library(corrplot)`, `library(GGally)`, and `library(sensemakr)`? Spelling? A missing `)` or `%>%` at the *start* of a line?
+3. `?function_name` opens the built-in help page.
+4. **Bring the exact error** (copy-paste it) to class or office hours.
+
+> 💡 **Key idea:** Every working scientist googles error messages daily. Getting stuck is not failing — it is the job.
+
+------------------------------------------------------------------------

@@ -1,7 +1,7 @@
 ---
-title: "Nested ANOVA"
+title: "Lecture: Nested ANOVA"
 subtitle: "Hierarchical designs"
-description: "Nested ANOVA and variance components."
+description: "Factorial vs. nested designs, the nested-ANOVA linear model and variance partitioning, a naive-vs-correct worked example (sea urchin grazing and algae cover), afex and mixed-model (lmer) approaches, diagnostics, post-hoc comparisons, and a by-hand F-ratio calculation."
 categories: [ANOVA]
 order: 14
 week: 7
@@ -16,23 +16,26 @@ format:
     downloads: [docx, pptx]  # This creates download links for all three
   revealjs:
     output-ext: "slides.html"
-  docx: default
+  docx:
+    reference-doc: ../../ms_templates/custom-reference-compact.docx
+    fig-width: 3
+    fig-height: 3
+    fig-dpi: 300
   pptx: default
+execute:
+  echo: true
 
-editor: 
-  markdown: 
+editor:
+  markdown:
     wrap: 72
 ---
 
-```{r setup}
+```{r}
 #| echo: false
 #| message: false
 #| warning: false
 #| paged-print: false
 #| collapse: true
-
-
-
 library(car)
 library(lme4)
 library(lmerTest)
@@ -46,488 +49,466 @@ library(broom)
 library(tidyverse)
 
 options(contrasts = c("contr.sum", "contr.poly"))
-
-
-# no sci notation
-options(scipen=999)
+options(scipen = 999)  # no sci notation
 ```
 
-# Lecture 12: Review
+## Where We Left Off
 
-::::: columns
-::: {.column width="60%"}
--   Two Factor ANOVA
-    -   Example
+::::::: columns
+:::: {.column width="60%"}
+Covered last time — two-factor ANOVA:
 
-    -   Linear model
+- Example, linear model, analysis of variance
+- Null hypotheses
+- Interactions and main effects
+- Unequal sample size
+- Assumptions
 
-    -   Analysis of variance
+::: callout-note
+**✅ Key idea from last lecture**
 
-    -   Null hypotheses
-
-    -   Interactions and main effects
-
-    -   Unequal sample size
-
-    -   Assumptions
+In a factorial design, every level of B appears under every level of A. Today: what happens when B is only ever nested *inside* one specific level of A?
 :::
+::::
 
-::: {.column width="40%"}
-![](images/clipboard-1642768928.png){width="75%"}
-:::
-:::::
+:::: {.column width="40%"}
+![](images/clipboard-1642768928.png){width="280"}
+::::
+:::::::
 
-# Lecture 12: 2 Factor or 2 Way ANOVA
+## Part 1 · Multifactor Designs {.divider}
 
-::::: columns
-::: {.column width="60%"}
--   Often consider more than 1 factor (independent categorical
-    variables):
-    -   reduce unexplained variance
-    -   look at interactions
--   2-factor designs (2-way ANOVA) very common in ecology
--   Can have more factors (e.g., 3-way ANOVA)
-    -   interpretation tricky…
--   Most tests are multifactor designs:
-    -   factorial
-    -   nested
-    -   mixed
-:::
+## Two-Factor (2-Way) ANOVA, Recap
 
-::: {.column width="40%"}
-![](images/clipboard-1173869376.png){width="75%"}
-:::
-:::::
+::::::: columns
+:::: {.column width="60%"}
+- We often consider more than 1 factor (independent categorical variables) to reduce unexplained variance and look at interactions
+- 2-factor designs (2-way ANOVA) are very common in ecology
+- Can have more factors (e.g., 3-way ANOVA) — interpretation gets tricky
+- Most multifactor designs are: factorial, nested, or mixed
+::::
 
-# Factorial Versus Nested Designs
+:::: {.column width="40%"}
+![](images/clipboard-1173869376.png){width="280"}
+::::
+:::::::
 
-::::: columns
-::: {.column width="60%"}
--   Consider two factors: A and B
-    -   Factorial/crossed: every level of B in every level of A
+## Factorial Versus Nested Designs
 
-    -   Nested/hierarchical: levels of B occur only in 1 level of A
+::::::: columns
+:::: {.column width="60%"}
+Consider two factors, A and B:
 
-        -   both can be fixed - rare
-        -   one fixed one random
-        -   both random - rare in ecology common in genetics
-:::
+- **Factorial/crossed:** every level of B in every level of A
+- **Nested/hierarchical:** levels of B occur only in 1 level of A
+  - both fixed — rare
+  - one fixed, one random
+  - both random — rare in ecology, common in genetics
+::::
 
-::: {.column width="40%"}
-![](images/clipboard-758019042.png){width="75%"}
-:::
-:::::
+:::: {.column width="40%"}
+![](images/clipboard-758019042.png){width="280"}
+::::
+:::::::
 
-# Factorial Designs Overview
+## Part 2 · Factorial Designs — Examples {.divider}
 
-::::: columns
-::: {.column width="40%"}
--   Factorial Designs:
-    -   Both factors typically fixed (but not always)
-:::
+## Factorial Designs Overview
 
-::: {.column width="60%"}
-![](images/clipboard-723648250.png){width="100%"}
-:::
-:::::
+::::::: columns
+:::: {.column width="40%"}
+Factorial designs: both factors are typically fixed (but not always).
+::::
 
-# Factorial Design Example: Seedling Growth
+:::: {.column width="60%"}
+![](images/clipboard-723648250.png){width="380"}
+::::
+:::::::
 
-::::: columns
-::: {.column width="40%"}
--   Effects of light level on growth of seedlings of different size:
-    -   3 light levels (factor A)
+## Factorial Design Example: Seedling Growth
 
-    -   3 size classes (factor B)
+::::::: columns
+:::: {.column width="40%"}
+Effects of light level on growth of seedlings of different size:
 
-    -   5 replicate seeding in each cell
-:::
+- 3 light levels (Factor A)
+- 3 size classes (Factor B)
+- 5 replicate seedlings in each cell
+::::
 
-::: {.column width="60%"}
-![](images/clipboard-1057376698.png){width="100%"}
-:::
-:::::
+:::: {.column width="60%"}
+![](images/clipboard-1057376698.png){width="380"}
+::::
+:::::::
 
-# Factorial Design Example: Salamander Growth
+## Factorial Design Example: Salamander Growth
 
-::::: columns
-::: {.column width="40%"}
--   Effects of food level and tadpole presence on larval salamander
-    growth
-    -   2 food levels (factor A)
+::::::: columns
+:::: {.column width="40%"}
+Effects of food level and tadpole presence on larval salamander growth:
 
-    -   presence/absence of tadpoles (factor B)
+- 2 food levels (Factor A)
+- Presence/absence of tadpoles (Factor B)
+- 8 replicates in each cell
+::::
 
-    -   8 replicates in each cell
-:::
+:::: {.column width="60%"}
+![](images/clipboard-3697840818.png){width="380"}
+::::
+:::::::
 
-::: {.column width="60%"}
-![](images/clipboard-3697840818.png){width="100%"}
-:::
-:::::
+## Factorial Design Example: Limpet Fecundity
 
-# Factorial Design Example: Limpet Fecundity
+::::::: columns
+:::: {.column width="40%"}
+Effect of season and density on limpet fecundity:
 
-::::: columns
-::: {.column width="40%"}
--   Effect of season and density on limpet fecundity.
-    -   2 seasons (factor A)
+- 2 seasons (Factor A)
+- 4 density treatments (Factor B)
+- 3 replicates in each cell
+::::
 
-    -   4 density treatments (factor B)
+:::: {.column width="60%"}
+![](images/clipboard-1223732443.png){width="380"}
+::::
+:::::::
 
-    -   3 replicates in each cell
-:::
+## Part 3 · Nested Designs — Examples {.divider}
 
-::: {.column width="60%"}
-![](images/clipboard-1223732443.png){width="100%"}
-:::
-:::::
+## Nested Designs Overview
 
-# Nested Designs Overview
+::::::: columns
+:::: {.column width="40%"}
+**Nested designs cover:** nested design examples, the linear model, analysis of variance, null hypotheses, unbalanced designs, assumptions, mixed-model ANOVA.
 
-::::: columns
-::: {.column width="40%"}
--   Nested design examples
-    -   Nested designs
-    -   Linear model
-    -   Analysis of variance
-    -   Null hypotheses
-    -   Unbalanced designs
-    -   Assumptions
-    -   mixed model ANOVA
--   Nested Designs:
-    -   Factor A usually fixed
-    -   Factor B usually random
-:::
+**Nested designs:** Factor A is usually fixed; Factor B is usually random.
+::::
 
-::: {.column width="60%"}
-![](images/clipboard-3125256618.png){width="100%"}
-:::
-:::::
+:::: {.column width="60%"}
+![](images/clipboard-3125256618.png){width="380"}
+::::
+:::::::
 
-# Nested Design Example: Limpet Growth
+## Nested Design Example: Limpet Growth
 
-::::: columns
-::: {.column width="40%"}
--   Study on effects of enclosure size on limpet growth:
-    -   2 enclosure sizes (factor A)
+::::::: columns
+:::: {.column width="40%"}
+Study on effects of enclosure size on limpet growth:
 
-    -   5 replicate enclosures (factor B)
+- 2 enclosure sizes (Factor A)
+- 5 replicate enclosures (Factor B)
+- 5 replicate limpets per enclosure
+::::
 
-    -   5 replicate limpets per enclosure
-:::
+:::: {.column width="60%"}
+![](images/clipboard-1867917958.png){width="380"}
+::::
+:::::::
 
-::: {.column width="60%"}
-![](images/clipboard-1867917958.png){width="100%"}
-:::
-:::::
+## Nested Design Example: Reef Fish
 
-# Nested Design Example: Reef Fish
+::::::: columns
+:::: {.column width="40%"}
+Study on reef fish recruitment:
 
-::::: columns
-::: {.column width="40%"}
--   Study on reef fish recruitment:
-    -   5 sites (factor A)
+- 5 sites (Factor A)
+- 6 transects at each site (Factor B)
+- Replicate observations along each transect
+::::
 
-    -   6 transects at each site (factor B)
+:::: {.column width="60%"}
+![](images/clipboard-1621781711.png){width="380"}
+::::
+:::::::
 
-    -   replicate observations along each transect
-:::
+## Nested Design Example: Sea Urchin Grazing
 
-::: {.column width="60%"}
-![](images/clipboard-1621781711.png){width="100%"}
-:::
-:::::
-
-# Nested Design Example: Sea Urchin Grazing
-
-::::: columns
-::: {.column width="40%"}
+::::::: columns
+:::: {.column width="40%"}
 Effects of sea urchin grazing on biomass of filamentous algae:
 
--   4 levels of urchin grazing: none, L, M, H
--   4 patches of rocky bottom (3-4 m2) nested in each level of grazing
--   5 replicate quadrats per patch
+- 4 levels of urchin grazing: none, low, medium, high
+- 4 patches of rocky bottom (3–4 m²) nested in each grazing level
+- 5 replicate quadrats per patch
+
+*This is our worked example for the rest of the lecture.*
+::::
+
+:::: {.column width="60%"}
+![](images/clipboard-3570106410.png){width="380"}
+::::
+:::::::
+
+## Part 4 · The Nested Design Model {.divider}
+
+## Nested Design: Linear Model Structure
+
+::::::: columns
+:::: {.column width="40%"}
+Consider a nested design with:
+
+- p levels of factor A (i = 1…p) — e.g., 4 grazing levels
+- q levels of factor B (j = 1…q), nested within each level of A — e.g., 4 different patches per grazing level
+- n replicates (k = 1…n) in each combination of A and B — e.g., 5 replicate quadrats in each patch in each grazing level
+::::
+
+:::: {.column width="60%"}
+![](images/clipboard-2460153431.png){width="380"}
+::::
+:::::::
+
+## Calculating Means in a Nested Design
+
+::::::: columns
+:::: {.column width="40%"}
+We can calculate several means:
+
+- Overall mean (across all levels of A and B) = $\bar{y}$
+- A mean for each level of A (across all levels of B in that A) = $\bar{y}_i$
+- A mean for each level of B within each A = $\bar{y}_{j(i)}$
+::::
+
+:::: {.column width="60%"}
+![](images/clipboard-2098022400.png){width="380"}
+::::
+:::::::
+
+## Nested Design Means, Visualized
+
+![](images/clipboard-1474611051.png){width="380"}
+
+## The Nested Design Linear Model
+
+::::::: columns
+:::: {.column width="60%"}
+$$y_{ijk} = \mu + \alpha_i + \beta_{j(i)} + \varepsilon_{ijk}$$
+
+- $y_{ijk}$ is the response variable — the value of the k-th replicate in the j-th level of B in the i-th level of A (e.g., algal biomass in the 3rd quadrat, in the 2nd patch, in the low-grazing treatment)
+- $\mu$ is the overall mean (overall average algal biomass)
+::::
+
+:::: {.column width="40%"}
+::: callout-tip
+**🖐 Notice**
+
+This looks almost identical to the two-way ANOVA model — the difference is entirely in the subscript: $\beta_{j(i)}$, not $\beta_j$. B only exists *inside* a specific A.
 :::
+::::
+:::::::
 
-::: {.column width="60%"}
-![](images/clipboard-3570106410.png){width="100%"}
+## Fixed and Random Effects in the Nested Model
+
+::::::: columns
+:::: {.column width="60%"}
+$$y_{ijk} = \mu + \alpha_i + \beta_{j(i)} + \varepsilon_{ijk}$$
+
+- $\alpha_i$ is the fixed effect of factor A — the difference between the average biomass in all low-grazing-level quadrats and the overall mean
+- $\beta_{j(i)}$ is the *random* effect of factor B nested within factor A — usually a random variable measuring variance among all possible levels of B within each level of A (variance among all possible patches that could have been used in the low-grazing treatment)
+::::
+
+:::: {.column width="40%"}
+::: callout-note
+**✅ Key idea**
+
+B being random is the whole point of nesting: you don't care about *these specific* patches — you care about patch-to-patch variability in general.
 :::
-:::::
+::::
+:::::::
 
-# Nested Design: Linear Model Structure
+## The Error Term in the Nested Model
 
-::::: columns
-::: {.column width="40%"}
--   Consider a nested design with:
-    -   p levels of factor A (i= 1…p) (e.g., 4 grazing levels)
+::::::: columns
+:::: {.column width="60%"}
+$$y_{ijk} = \mu + \alpha_i + \beta_{j(i)} + \varepsilon_{ijk}$$
 
-    -   q levels of factor B (j= 1…q), nested within each level of A
-        (e.g., 4 - diff. patches per grazing level)
+- $\varepsilon_{ijk}$ is the error term — the unexplained variance associated with the k-th replicate in the j-th level of B in the i-th level of A
+- $\alpha_i$ is the effect of the i-th level of A: $\mu_i - \mu$
+- $\varepsilon_{ijk}$: the difference between the observed algal biomass in the 3rd quadrat in the 2nd patch in the low-grazing treatment, and the *predicted* biomass (the average biomass in that 2nd patch in the low-grazing treatment)
+::::
 
-    -   n replicates (k= 1…n) in each combination of A and B (5
-        replicate - quadrats in each patch in each grazing level)
+:::: {.column width="40%"}
+::: callout-tip
+**🖐 Notice**
+
+The residual is measured against the *cell* mean (this specific patch), not the treatment mean — that's what makes it "nested," arithmetically.
 :::
+::::
+:::::::
 
-::: {.column width="60%"}
-![](images/clipboard-2460153431.png){height="100%%"}
+## Part 5 · Partitioning Variance {.divider}
+
+## Analysis of Variance: Residual and Total
+
+::::::: columns
+:::: {.column width="40%"}
+- $SS_{resid}$ is the difference between each observation and the mean for its level of factor B, summed over all observations
+- $SS_{total} = SS_A + SS_B + SS_{resid}$
+- SS can be turned into MS by dividing by the appropriate df
+::::
+
+:::: {.column width="60%"}
+![](images/clipboard-2357756170.png){width="380"}
+::::
+:::::::
+
+## Analysis of Variance: SSA
+
+::::::: columns
+:::: {.column width="40%"}
+As before, we partition the variance in the response variable using SS. $SS_A$ is the SS of differences between the mean in each level of A and the overall mean.
+::::
+
+:::: {.column width="60%"}
+![](images/clipboard-1219870939.png){width="380"}
+::::
+:::::::
+
+## Analysis of Variance: SSB
+
+::::::: columns
+:::: {.column width="40%"}
+$SS_B$ is the SS of the difference between the mean in each level of B and the mean of the corresponding level of A, summed across all levels of A.
+::::
+
+:::: {.column width="60%"}
+![](images/clipboard-2467119661.png){width="380"}
+::::
+:::::::
+
+## The Nested ANOVA Table
+
+![](images/clipboard-449121940.png){width="380"}
+
+## Part 6 · Hypotheses and Assumptions {.divider}
+
+## Null Hypotheses: Factor A
+
+::::::: columns
+:::: {.column width="40%"}
+Two hypotheses are tested on values of MS. **1. No effects of factor A** — assuming A is fixed:
+
+- $H_0(A)$: $\mu_1 = \mu_2 = ... = \mu_i = \mu$
+- Same as in 1-factor ANOVA, using means from B factors nested within each level of A
+- (no difference in algal biomass across all grazing levels: $\mu_{none} = \mu_{low} = \mu_{med} = \mu_{high}$)
+::::
+
+:::: {.column width="60%"}
+![](images/clipboard-1310685300.png){width="380"}
+::::
+:::::::
+
+## Null Hypotheses: Factor B
+
+::::::: columns
+:::: {.column width="40%"}
+**2. No effects of factor B nested in A** — assuming B is random:
+
+- $H_0(B)$: $\sigma^2_\beta = 0$ (no variance added due to differences between all possible levels of B)
+- (no variance added due to differences between patches)
+::::
+
+:::: {.column width="60%"}
+![](images/clipboard-1310685300.png){width="380"}
+::::
+:::::::
+
+## Conclusions from the Analysis
+
+::::::: columns
+:::: {.column width="40%"}
+**Conclusion:**
+
+"Significant variation between replicate patches within each treatment, but no significant difference in the amount of filamentous algae between treatments."
+::::
+
+:::: {.column width="60%"}
+![](images/clipboard-3596669693.png){width="380"}
+::::
+:::::::
+
+## Unbalanced Nested Designs
+
+::::::: columns
+:::: {.column width="40%"}
+Unequal sample sizes can arise from:
+
+- An uneven number of B levels within each A
+- An uneven number of replicates within each level of B
+
+Not a problem unless you have unequal variance or a large deviation from normality.
+::::
+
+:::: {.column width="60%"}
+![](images/clipboard-2098022400.png){width="380"}
+::::
+:::::::
+
+## Nested Design Assumptions
+
+::::::: columns
+:::: {.column width="60%"}
+As usual, we assume: equal variance, normality, no outliers, independence of observations.
+
+Equal variance + normality need to be assessed at **both levels**:
+
+- Since means for each level of B within each A are used for the H-test about A, need to assess whether *those means* meet normality and equal variance
+- Examine residuals for the H-test about B
+- Transformations can be used
+::::
+
+:::: {.column width="40%"}
+::: callout-warning
+**⚠️ Watch out!**
+
+This is the part people most often get wrong: checking assumptions on the *raw data* isn't enough for a nested design — you need to check them at the level each hypothesis test actually operates on.
 :::
-:::::
+::::
+:::::::
 
-# Calculating Means in Nested Design
+## Part 7 · The Sea Urchin Example — Data {.divider}
 
-::::: columns
-::: {.column width="40%"}
--   Can calculate several means:
-    -   overall mean (across all levels of A and B)= ȳ;
-    -   a mean for each level of A (across all levels of B in that A)=
-        ȳi;
-    -   a mean for each level of B within each A= ȳj(i)
+## The Nested Design, the Hard Way
+
+::::::: columns
+:::: {.column width="60%"}
+This analysis examines the effects of varying sea urchin densities on the percentage cover of filamentous algae. The experiment was designed with:
+
+- Four random patches
+- Four urchin density treatments (none = removed, low = control, medium = 33% of original density, high = 66% of original density)
+- Five replicate quadrats measured within each treatment-patch combination
+::::
+
+:::: {.column width="40%"}
+::: callout-note
+**📖 Reference**
+
+Quinn & Keough (2002), *Experimental Design and Data Analysis for Biologists* — this dataset and analysis follow their treatment of the sea urchin/algae example.
 :::
+::::
+:::::::
 
-::: {.column width="60%"}
-![](images/clipboard-2098022400.png){width="100%"}
-:::
-:::::
+## Data Overview
 
-# Nested Design Means Visualization
+::::::: columns
+:::: {.column width="50%"}
+The data frame contains: `patch` (random patches 1–16 where treatments were applied), `treat` (urchin density treatment), `quad` (replicate quadrats within each treatment-patch combination), `algae` (percentage cover of filamentous algae — the response variable).
 
-::: {.panel column="screen"}
-![](images/clipboard-1474611051.png){width="100%"}
-:::
-
-# Nested Design Linear Model
-
-The linear model for a nested design is:
-
-### $$y_{ijk} = \mu + \alpha_i + \beta_{j(i)} + \varepsilon_{ijk}$$
-
--   Where:
-    -   $y_{ijk}$ is the response variable
-        -   value of the k-th replicate in j-th level of B in the i-th
-            level of A
-        -   (algal biomass in 3rd quadrat, in 2nd patch in low grazing
-            treatment)
-    -   $\mu$ is the overall mean
-        -   (overall average algal biomass)
-
-# Fixed Effects in Nested Model
-
-The linear model for a nested design is:
-
-### $$y_{ijk} = \mu + \alpha_i + \beta_{j(i)} + \varepsilon_{ijk}$$
-
--   $\alpha_i$ is the fixed effect of factor $i$
--   (difference between average biomass in all low grazing level
-    quadrats and overall mean)
--   $\beta_{j(i)}$ is the random effect of factor $j$ nested within
-    factor $i$
--   usually random variable, measuring variance among all possible
-    levels of B within each level of A
--   (variance among all possible patches that may have been used in the
-    low grazing treatment)
-
-# Error Term in Nested Model
-
-### The linear model for a nested design is:
-
-### $y_{ijk} = \mu + \alpha_i + \beta_{j(i)} + \varepsilon_{ijk}$
-
--   where:
-    -   $\varepsilon_{ijk}$ is the error term
-    -   αi: is the effect of the ith level of A: µi- µ
-    -   unexplained variance associated with the kth replicate in jth
-        level of B in the ith level of A
-    -   (difference bw observed algal biomass in 3rd quadrat in 2nd
-        patch in low grazing treatment and predicted biomass - average
-        biomass in 2nd patch in low grazing treatment)
-
-# Analysis of Variance: Residual and Total
-
-::::: columns
-::: {.column width="40%"}
--   SSresid is difference bw each observation and mean for its level of
-    factor B, summed over all observations
--   SStotal = SSA + SSB + SSresid
--   SS can be turned into MS by dividing by appropriate df
-:::
-
-::: {.column width="60%"}
-![](images/clipboard-2357756170.png){width="100%"}
-:::
-:::::
-
-# Analysis of Variance: SSA
-
-::::: columns
-::: {.column width="40%"}
-As before, partition the variance in the response variable using SS SSA
-is SS of differences between means in each level of A and overall mean
-:::
-
-::: {.column width="60%"}
-![](images/clipboard-1219870939.png){width="100%"}
-:::
-:::::
-
-# Analysis of Variance: SSB
-
-::::: columns
-::: {.column width="40%"}
-SSB is SS of difference between means in each level of B and the mean of
-corresponding level of A summed across levels of A
-:::
-
-::: {.column width="60%"}
-![](images/clipboard-2467119661.png){width="100%"}
-:::
-:::::
-
-# Analysis of Variance Table
-
-::: {.panel column="screen"}
-![](images/clipboard-449121940.png){width="100%"}
-:::
-
-# Null Hypotheses: Factor A
-
-::::: columns
-::: {.column width="40%"}
-Two hypotheses tested on values of MS:
-
-1.  no effects of factor A
-
--   Assuming A is fixed:
--   Ho(A): µ1= µ2= µ3=…. µi= µ
--   Same as in 1-factor ANOVA, using means from B factors nested within
-    each - level of A
--   (no difference in algal biomass across all levels of grazing:
-    µnone= - µlow= µmed= µhigh)
-:::
-
-::: {.column width="60%"}
-![](images/clipboard-1310685300.png){width="100%"}
-:::
-:::::
-
-# Null Hypotheses: Factor B
-
-::::: columns
-::: {.column width="40%"}
-Two hypotheses tested on values of MS:
-
-2.  No effects of factor B nested in A
-
--   Assuming B is random:
--   Ho(B): σβ2= 0 (no variance added due to differences between all
-    possible - levels of B)
--   (no variance added due to differences between patches)
-:::
-
-::: {.column width="60%"}
-![](images/clipboard-1310685300.png){width="100%"}
-:::
-:::::
-
-# Conclusions from Analysis
-
-::::: columns
-::: {.column width="40%"}
-**Conclusions?**
-
-"significant variation between replicate patches within each treatment,
-but no significant difference in amount of filamentous algae between
-treatments"
-:::
-
-::: {.column width="60%"}
-![](images/clipboard-3596669693.png){width="100%"}
-:::
-:::::
-
-# Unbalanced Nested Designs
-
-::::: columns
-::: {.column width="40%"}
-Unequal sample sizes can be because of:
-
--   uneven number of B levels within each A
--   uneven number of replicates within each level of B
-
-Not a problem, unless have unequal variance or large deviation from -
-normality
-:::
-
-::: {.column width="60%"}
-![](images/clipboard-2098022400.png)
-:::
-:::::
-
-# Nested Design Assumptions
-
--   As usual, we assume
-    -   equal variance
-    -   normality
-    -   no outliers
-    -   independence of observations
--   Equal variance + normality need to be assessed at both levels:
-    -   Since means for each level of B within each A are used for the
-        H-test about A, need to assess whether those means meet
-        normality and equal variance
-    -   Examine residuals for H-test about B
-    -   Transformations can be used
-
-# Lecture 13: The nested design the hard way
-
-This analysis examines the effects of varying sea urchin densities on
-the percentage cover of filamentous algae. The experiment was designed
-with:
-
--   four random patches
--   four urchin density treatments (
-    -   none = removed
-    -   low = control
-    -   medium = 33% of original density
-    -   high = 66% of original density)
--   Five replicate quadrats were measured within each treatment-patch
-    combination.
-
-# Lecture 13: Data Overview
-
-::::: columns
-::: {.column width="50%"}
--   The dataframe contains the following variables:
-
-    -   patch: Random patches (1-16) where treatments were applied
-    -   treat: Urchin density treatment (None/Removed, Low/Control,
-        Medium/33% Density, High/66% Density)
-    -   quad: Replicate quadrats within each treatment-patch combination
-    -   algae: Percentage cover of filamentous algae (response variable)
-
--   Read data and make factors
-:::
-
-::: {.column width="50%"}
-```{r read_file}
+```{r}
 #| echo: false
 #| message: false
 #| warning: false
 #| paged-print: false
 #| collapse: true
-
-
-# Load and prepare data
 u_df <- read_csv("data/andrew.csv") %>% clean_names()
 
-# Convert treat to factor with meaningful labels and order them correctly
-u_df <- u_df %>% 
+u_df <- u_df %>%
   mutate(treat = case_when(
-         treat == "removal" ~ "none"   ,
-         treat == "control" ~ "high"    ,
-         treat == "dens_33" ~ "low" ,
-         treat == "dens_66" ~ "medium"  , 
-         TRUE ~ "other")) %>% 
-  mutate(treat = factor(treat, 
+         treat == "removal" ~ "none",
+         treat == "control" ~ "high",
+         treat == "dens_33" ~ "low",
+         treat == "dens_66" ~ "medium",
+         TRUE ~ "other")) %>%
+  mutate(treat = factor(treat,
                         levels = c("none", "low", "medium", "high"),
                         labels = c("none", "low", "medium", "high")),
          patch = as_factor(patch))
@@ -537,17 +518,15 @@ head(u_df)
 cat("\n\nTreatment levels:\n\n")
 levels(u_df$treat)
 ```
+::::
 
-## Summary statistics
-
-```{r summary_stats}
+:::: {.column width="50%"}
+```{r}
 #| echo: false
 #| message: false
 #| warning: false
 #| paged-print: false
 #| collapse: true
-#| 
-# Summary statistics
 u_summary <- u_df %>%
   group_by(treat) %>%
   summarise(
@@ -558,580 +537,448 @@ u_summary <- u_df %>%
     min = min(algae),
     max = max(algae)
   )
-
 cat("Summary statistics by treatment:\n\n")
 u_summary
 ```
-:::
-:::::
+::::
+:::::::
 
-# Plots
+## A First Look at the Data
 
-::: {.panel column="screen"}
-```{r l13-01}
+```{r}
+#| echo: false
+#| fig-width: 3.6
+#| fig-height: 3
 u_df %>% ggplot(aes(treat, algae)) +
-  stat_summary(aes(treat, algae),fun = "mean", geom="point", size = 3) +
-  geom_point(aes(color=as.factor(patch)), position = position_dodge2(width=0.3))
+  stat_summary(aes(treat, algae), fun = "mean", geom = "point", size = 3) +
+  geom_point(aes(color = as.factor(patch)), position = position_dodge2(width = 0.3)) +
+  theme_minimal(base_size = 9) +
+  labs(color = "Patch")
 ```
-:::
 
-# Manual nested ANOVA
+## Part 8 · The Wrong Way — Naive Factorial Model {.divider}
 
-::::: columns
-::: {.column width="60%"}
--   In this experimental design,
-    -   patch is nested within treat because each patch received only
-        one treatment level.
-    -   a hierarchical design where the effect of patches must be
-        considered within each treatment.
-    -   in Quinn & Keough (2002)
--   we'll use a traditional nested ANOVA
-    -   you could make this easy and take the averages of the response
-        variable algae
-    -   do a one way anova
-        -   your power is significantly reduced
-        -   you don't get estimates of variability of patches
--   This is really a regular factorial anova
-    -   really not appropriate as it is pseudoreplicated
-    -   also the F value for Treat is using the MSresid
-    -   should use MStreat:patch
-:::
+## Manual Nested ANOVA — Setting Up
 
-::: {.column width="40%"}
-```{r nested_fact_model}
-#| echo: TRUE
+::::::: columns
+:::: {.column width="60%"}
+In this experimental design, `patch` is nested within `treat` because each patch received only one treatment level — a hierarchical design where the effect of patches must be considered *within* each treatment (Quinn & Keough 2002).
+
+We'll use a traditional nested ANOVA. You *could* make this easy by averaging `algae` per patch and running a one-way ANOVA — but your power is significantly reduced, and you lose estimates of variability among patches.
+
+**This first attempt is really a regular factorial ANOVA** — not appropriate, since it's pseudoreplicated. Also, the F-value for Treat is using $MS_{resid}$ when it should use $MS_{treat:patch}$.
+::::
+
+:::: {.column width="40%"}
+```{r}
+#| echo: true
 #| message: false
 #| warning: false
 #| paged-print: false
 #| collapse: true
-
-# Full model for patch effect and residual - proper nesting notation
-# First, get the standard ANOVA table to extract MS values
 u_fact_model <- aov(algae ~ treat + treat:patch, data = u_df)
-
 cat("Factorial model summary:\n\n")
 summary(u_fact_model)
 ```
-:::
-:::::
+::::
+:::::::
 
-# The factorial anova is not correct
+## Why the Factorial ANOVA Is Not Correct
 
-::::: columns
-::: {.column width="40%"}
--   We can correct this by specifying the error term
--   The MS needed for the F value is really MS patch nested in
-    treatments as those are the replicates
--   we can specify that
-    -   problem is that we can't really handle unbalanced designs.
-:::
+::::::: columns
+:::: {.column width="40%"}
+- We can correct this by specifying the error term
+- The MS needed for the F-value is really MS(patch nested in treatment), because those are the true replicates
+- We can specify that — the problem is this approach can't really handle unbalanced designs
+::::
 
-::: {.column width="60%"}
-```{r nested_model}
-#| echo: TRUE
+:::: {.column width="60%"}
+```{r}
+#| echo: true
 #| message: false
 #| warning: false
 #| paged-print: false
 #| collapse: true
-# Explicitly specify the nesting
-# This will give you the correct F-test using patch within treat as error term
 u_nested_model <- aov(algae ~ treat + Error(treat:patch), data = u_df)
-
 cat("Correctly specified nested ANOVA:\n\n")
 summary(u_nested_model)
 ```
-:::
-:::::
+::::
+:::::::
 
-# What to do if it is unbalanced design
+## Part 9 · Modern Approaches — afex and Mixed Models {.divider}
 
-::::: columns
-::: {.column width="50%"}
-And you are from the 80's and had big hair
+## What to Do If It's an Unbalanced Design
 
-![](images/clipboard-3990741592.png){width="311"}
+::::::: columns
+:::: {.column width="50%"}
+The `afex` package is specifically designed for ANOVA with Type III SS, and handles nested designs well — even when unbalanced.
+::::
 
-**Bon Jovi**
-
-![](images/clipboard-1147189835.png){width="323"}
-
-David Bowie
-:::
-
-::: {.column width="50%"}
-```{r afex_model}
-#| echo: TRUE
+:::: {.column width="50%"}
+```{r}
+#| echo: true
 #| message: false
 #| warning: false
 #| paged-print: false
 #| collapse: true
-#| 
-# Using afex package (recommended for unbalanced designs)
-# The afex package is specifically designed for ANOVA with 
-# Type III SS and handles nested designs pretty well:
-
 options(contrasts = c("contr.sum", "contr.poly"))
 
-# This works and gives you the correct answer
-u_afex_model <- aov_car(algae ~ treat + Error(patch), 
+u_afex_model <- aov_car(algae ~ treat + Error(patch),
                      data = u_df,
                      fun_aggregate = mean)
-
 cat("AFEX nested ANOVA results:\n\n")
 summary(u_afex_model)
 ```
-:::
-:::::
+::::
+:::::::
 
-# The modern way - mixed model ANOVA
+## The Modern Way — Mixed-Model ANOVA
 
-::::: columns
-::: {.column width="50%"}
--   Fit the model with treatment as fixed effect and patch nested within
-    treatment as random lmer(algae \~ treat + (1\|treat:patch), data =
-    u_df, control = lmerControl(optimizer = "bobyqa", optCtrl =
-    list(maxfun = 2e5)))
+::::::: columns
+:::: {.column width="50%"}
+Fit the model with treatment as a fixed effect, and patch nested within treatment as a random effect: `lmer(algae ~ treat + (1|treat:patch), ...)`.
 
--   BOBYQA (Bound Optimization BY Quadratic Approximation)
+**BOBYQA** (Bound Optimization BY Quadratic Approximation) is an optimization algorithm used in mixed-effects modeling to find the parameter values that maximize the likelihood function — useful for fitting complex nested models.
 
-    -   optimization algorithm in mixed-effects modeling to find the
-        best parameter values maximizing the likelihood function
-    -   Useful when fitting complex models like the ones you're working
-        with in your nested ANOVA analysis
+**Notation we'll get into later:**
 
--   Notation we will get into later
+- Random intercept, fixed slope — `(1|patch)`
+- Random intercept, random slope — `(1|treat:patch)`
+::::
 
-    -   random intercept - fixed slope - (1\|patch)
-    -   random intercept - random slope - (1\|treat:patch)
-:::
-
-::: {.column width="50%"}
-```{r mixed_model}
-#| echo: TRUE
+:::: {.column width="50%"}
+```{r}
+#| echo: true
 #| message: false
 #| warning: false
 #| paged-print: false
 #| collapse: true
-# Fit the model with treatment as fixed effect and patch nested within treatment as random
 u_lmer_model <- lmer(algae ~ treat + (1|treat:patch), data = u_df,
                     control = lmerControl(optimizer = "bobyqa",
                                          optCtrl = list(maxfun = 2e5)))
-
-# BOBYQA (Bound Optimization BY Quadratic Approximation) is an optimization algorithm used in mixed-effects modeling to find the best parameter values that maximize the likelihood function. It's especially useful when fitting complex models like the ones you're working with in your nested ANOVA analysis.
-
 cat("Mixed model summary:\n\n")
 summary(u_lmer_model)
 ```
-:::
-:::::
+::::
+:::::::
 
-# The modern way - mixed model ANOVA
+## Mixed-Model ANOVA — Method 1: F-Distribution
 
-::::: columns
-::: {.column width="50%"}
--   METHOD 1 - the F-distribution with estimated degrees of freedom
-    -   Accounts for the uncertainty in variance component estimation
-    -   More conservative (higher p-values)
-    -   Better for small samples
-:::
+::::::: columns
+:::: {.column width="50%"}
+- Accounts for the uncertainty in variance-component estimation
+- More conservative (higher p-values)
+- Better for small samples
+::::
 
-::: {.column width="50%"}
-```{r mixed_anova_chi}
-#| echo: TRUE
+:::: {.column width="50%"}
+```{r}
+#| echo: true
 #| message: false
 #| warning: false
 #| paged-print: false
 #| collapse: true
-# Type III ANOVA with F-statistics (not chi-square) using Satterthwaite's method
 u_anova_result <- Anova(u_lmer_model, type = 3, ddf = "Satterthwaite",
                        test.statistic = "F")
-
 cat("Type III ANOVA with F test:\n\n")
 u_anova_result
 ```
-:::
-:::::
+::::
+:::::::
 
-# The modern way - mixed model ANOVA
+## Mixed-Model ANOVA — Method 2: Chi-Square
 
-::::: columns
-::: {.column width="50%"}
--   METHOD 2 - the Chi Square
-    -   Assumes variance components are known (not estimated)
-    -   More liberal (lower p-values)
-    -   Assumes large samples
--   Why Different Results?
-    -   relationship between these tests is:
-    -   Chi-square = F × numerator df
--   The p-values differ because:
-    -   F-test accounts for denominator df (12 in your case) - reflects
-        sample size
-    -   Chi-square assumes infinite denominator df - assumes large
-        samples
--   **Rule of Thumb**
--   under 100 observations or \< 20 random effect levels: Use F-test
--   over 500 observations and \> 50 random effect levels: Chi-square is
-    okay
--   In between: F-test is safer
-:::
+::::::: columns
+:::: {.column width="50%"}
+- Assumes variance components are known (not estimated)
+- More liberal (lower p-values)
+- Assumes large samples
 
-::: {.column width="50%"}
-```{r mixed_anova_f}
-#| echo: TRUE
+**Why different results?** Chi-square = F × numerator df. The F-test accounts for the denominator df (12, here — reflecting sample size); Chi-square assumes infinite denominator df (i.e., a large sample).
+
+**Rule of thumb:** under 100 observations or < 20 random-effect levels, use the F-test. Over 500 observations and > 50 random-effect levels, Chi-square is okay. In between, the F-test is safer.
+::::
+
+:::: {.column width="50%"}
+```{r}
+#| echo: true
 #| message: false
 #| warning: false
 #| paged-print: false
 #| collapse: true
-# Alternative using car package with F-statistic
 u_anova_f <- Anova(u_lmer_model, type = 3, test.statistic = "Chisq")
-
-cat("Type III ANOVA with F test:\n\n")
+cat("Type III ANOVA with Chi-square test:\n\n")
 u_anova_f
 ```
-:::
-:::::
+::::
+:::::::
 
-# The modern way - mixed model ANOVA
+## The Nested Model, Restated
 
-::::: columns
-::: {.column width="50%"}
-The nested ANOVA model is specified as:
+::::::: columns
+:::: {.column width="50%"}
+$$algae_{ijk} = \mu + \alpha_i + \beta_{j(i)} + \epsilon_{ijk}$$
 
-$algae_{ijk} = \mu + \alpha_i + \beta_{j(i)} + \epsilon_{ijk}$
+- $\mu$ is the overall mean
+- $\alpha_i$ is the fixed effect of treatment i
+- $\beta_{j(i)}$ is the random effect of patch j nested within treatment i
+- $\epsilon_{ijk}$ is the residual error for quadrat k in patch j within treatment i
+::::
 
-Where:
-
--   $\mu$ is the overall mean\
--   $\alpha_i$ is the fixed effect of treatment $i$\
--   $\beta_{j(i)}$ is the random effect of patch $j$ nested within
-    treatment $i$\
--   $\epsilon_{ijk}$ is the residual error for quadrat $k$ in patch $j$
-    within treatment $i$
-:::
-
-::: {.column width="50%"}
-```{r anova_results}
+:::: {.column width="50%"}
+```{r}
 #| echo: false
 #| message: false
 #| warning: false
 #| paged-print: false
 #| collapse: true
 cat("Final ANOVA results:\n\n")
-u_anova_result 
+u_anova_result
 ```
-:::
-:::::
+::::
+:::::::
 
-# Lecture 13: Variance Components
+## Part 10 · Post-Hoc and Interpretation {.divider}
 
-::: {.callout-important appearance="simple"}
-Interpretation of ANOVA Results The nested ANOVA reveals that there was
-no significant effect of urchin density treatment on algae cover (χ² =
-8.1513, df = 3, p = 0.04306). The variance component for patches nested
-within treatments (294.3) indicates substantial spatial heterogeneity in
-algae cover, highlighting the importance of accounting for this spatial
-variation in the analysis.
+## Interpreting the Variance Components
+
+::: callout-important
+The nested ANOVA reveals that there was no significant effect of urchin density treatment on algae cover (χ² = 8.1513, df = 3, p = 0.04306). The variance component for patches nested within treatments (294.3) indicates substantial spatial heterogeneity in algae cover, highlighting the importance of accounting for this spatial variation in the analysis.
 :::
 
-# Lecture 13: Post-hoc Comparisons
+## Post-Hoc Comparisons
 
-Although the main effect of treatment was marginally significant in the
-nested ANOVA (p = 0.04306), we can examine the mean differences between
-treatments to understand patterns in the data.
+::::::: columns
+:::: {.column width="60%"}
+Although the main effect of treatment was marginally significant (p = 0.04306), we can examine mean differences between treatments to understand patterns in the data.
 
-::: {.panel column="screen"}
-```{r emmeans}
+```{r}
 #| echo: true
 #| message: false
 #| warning: false
 #| paged-print: false
 #| collapse: true
-
-# Calculate estimated marginal means
 u_emm <- emmeans(u_lmer_model, ~ treat)
-
 cat("Estimated marginal means:\n\n")
 u_emm
 ```
-:::
+::::
 
-# Lecture 13: Tukey Pairwise Comparisons
-
-::: {.panel column="screen"}
-```{r pairwise}
-# Pairwise comparisons with Sidak adjustment
+:::: {.column width="40%"}
+```{r}
 u_pairs <- pairs(u_emm, adjust = "sidak")
-
 cat("Pairwise comparisons (Sidak adjusted):\n\n")
 u_pairs
 ```
-:::
+::::
+:::::::
 
-# Lecture 13: Letter Display
+## Compact Letter Display
 
-::: {.panel column="screen"}
-```{r cld}
-# Extract compact letter display for plotting
+::::::: columns
+:::: {.column width="60%"}
+```{r}
 u_cld <- multcomp::cld(u_emm, alpha = 0.05, Letters = letters)
-
 cat("Compact letter display:\n\n")
 u_cld
 ```
+::::
+
+:::: {.column width="40%"}
+::: callout-important
+**Interpreting treatment comparisons**
+
+Mean algae cover shows a pattern with increasing urchin density: None/Removed (39.20%) > Medium/33% Density (19.00%) > High/66% Density (21.55%) > Low/Control (1.30%). This suggests an inverse relationship between urchin density and algae cover. The high variability among patches within treatments contributed to the marginal statistical significance for the treatment effect.
 :::
+::::
+:::::::
 
-::: {.callout-important appearance="simple"}
-Interpretation of Treatment Comparisons The mean algae cover shows a
-clear pattern with increasing urchin density: None/Removed (39.20%) \>
-Medium/33% Density (19.00%) \> High/66% Density (21.55%) \> Low/Control
-(1.30%). The pattern suggests an inverse relationship between urchin
-density and algae cover, with complete removal showing the highest algae
-cover. The high variability among patches within treatments contributed
-to the marginal statistical significance for the treatment effect.
+## Part 11 · Assumptions and Visualization {.divider}
+
+## ANOVA Assumptions Testing — Base R
+
+::::::: columns
+:::: {.column width="60%"}
+For valid inference from ANOVA, several assumptions must be met. We test these below with a base R approach — note that it doesn't work all that well for a mixed model.
+::::
+
+:::: {.column width="40%"}
+::: callout-tip
+**🖐 Notice**
+
+`plot(mixed_model)` and friends were built for `lm()` objects — they mostly work for `lmer()`, but purpose-built tools like `DHARMa` (next module) do a better job.
 :::
+::::
+:::::::
 
-# Lecture 13: ANOVA Assumptions Testing
+## Diagnostic Plots
 
--   For valid inference from ANOVA, several assumptions must be met. We
-    test these assumptions below.
--   Base R approach
--   Note that it does not work that well
-
-::: {.panel column="screen"}
-```{r diagnostic_plots}
+```{r}
 #| echo: false
 #| message: false
 #| warning: false
 #| paged-print: false
-
-
-# Use the mixed model for both fitted values and residuals
+#| fig-width: 3.8
+#| fig-height: 2.6
 u_fitted <- fitted(u_lmer_model)
 u_residuals <- residuals(u_lmer_model)
 
-# QQ plot
 u_qq_plot <- ggplot(data.frame(residuals = u_residuals), aes(sample = residuals)) +
   stat_qq() +
   stat_qq_line() +
-  labs(title = "Normal Q-Q Plot of Residuals",
-       x = "Theoretical Quantiles",
-       y = "Sample Quantiles")
+  labs(title = "Normal Q-Q", x = "Theoretical Quantiles", y = "Sample Quantiles") +
+  theme_minimal(base_size = 7)
 
-# Histogram of Residuals
 u_hist_plot <- ggplot(data.frame(residuals = u_residuals), aes(x = residuals)) +
   geom_histogram(bins = 15, fill = "lightblue", color = "black") +
-  labs(title = "Histogram of Residuals",
-       x = "Residuals",
-       y = "Frequency")
+  labs(title = "Histogram", x = "Residuals", y = "Frequency") +
+  theme_minimal(base_size = 7)
 
-u_resid_plot <- ggplot(data.frame(fitted = u_fitted, residuals = u_residuals), 
+u_resid_plot <- ggplot(data.frame(fitted = u_fitted, residuals = u_residuals),
                     aes(x = fitted, y = residuals)) +
   geom_point() +
   geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
-  labs(title = "Residuals vs. Fitted Values",
-       x = "Fitted Values",
-       y = "Residuals")
+  labs(title = "Residuals vs. Fitted", x = "Fitted Values", y = "Residuals") +
+  theme_minimal(base_size = 7)
 
-# Combine plots
 u_qq_plot + u_hist_plot + u_resid_plot
 ```
-:::
 
-# Lecture 13: Levenes Test for Homogeneity of Variance
+## Levene's Test for Homogeneity of Variance
 
-::::: columns
-::: {.column width="50%"}
-Levenes test
-
-```{r levene}
-# Homogeneity of Variance
-# Levene's test for homogeneity of variance
+::::::: columns
+:::: {.column width="50%"}
+```{r}
 u_levene <- leveneTest(algae ~ treat, data = u_df)
-
 cat("Levene's test for homogeneity of variance:\n\n")
 u_levene
 ```
+::::
+
+:::: {.column width="50%"}
+::: callout-important
+**Interpreting the assumption tests**
+
+The Q-Q plot shows some deviation from normality, particularly in the tails, and Levene's test indicates significant heterogeneity of variances across treatments (p = 0.00008785). Quinn & Keough (2002) noted "large differences in within-cell variances" in this dataset, and transformations (including arcsin) did not improve variance homogeneity. However, ANOVA is generally robust to heteroscedasticity with balanced designs, which is why they analyzed untransformed data. The Residuals vs. fitted plot also shows a pattern of increasing variance with increasing fitted values, confirming the heteroscedasticity.
 :::
+::::
+:::::::
 
-::: {.column width="50%"}
-Interpretation of Assumption Tests The Q-Q plot shows some deviation
-from normality, particularly in the tails, and Levene's test indicates
-significant heterogeneity of variances across treatments (p =
-0.00008785). As noted by Quinn & Keough (2002), there were "large
-differences in within-cell variances" in this dataset, and
-transformations (including arcsin) did not improve variance homogeneity.
-However, ANOVA is generally robust to heteroscedasticity with balanced
-designs, which is why they chose to analyze untransformed data. The
-Residuals vs. fitted plot also shows a pattern of increasing variance
-with increasing fitted values, confirming the heteroscedasticity.
-:::
-:::::
+## Visualization — Boxplot
 
-# Lecture 13: Visualization
-
-::: {.panel column="screen"}
-```{r boxplot}
+```{r}
 #| echo: false
 #| message: false
 #| warning: false
 #| paged-print: false
-
-
-# Create boxplot
+#| fig-width: 3.6
+#| fig-height: 3
 u_boxplot <- ggplot(u_df, aes(x = treat, y = algae, fill = treat)) +
   geom_boxplot(alpha = 0.7, outlier.shape = NA) +
   geom_jitter(width = 0.2, alpha = 0.4, size = 1) +
   scale_fill_viridis_d(option = "D", end = 0.85) +
   labs(title = "Algae Cover by Urchin Density Treatment",
-       x = "Treatment",
-       y = "Algae Cover (%)")
-
+       x = "Treatment", y = "Algae Cover (%)") +
+  theme_minimal(base_size = 9) +
+  theme(legend.position = "none")
 u_boxplot
 ```
-:::
 
-# Lecture 13: Means Plot
+## Visualization — Means Plot
 
-::: {.panel column="screen"}
-```{r means_plot}
+```{r}
 #| echo: false
 #| message: false
 #| warning: false
 #| paged-print: false
-
-
-# Create means plot
+#| fig-width: 3.4
+#| fig-height: 2.8
 u_means_plot <- ggplot(u_summary, aes(x = treat, y = mean, group = 1)) +
   geom_point(size = 3, shape = 21, fill = "white") +
   geom_errorbar(aes(ymin = mean - se, ymax = mean + se), width = 0.2) +
   labs(title = "Mean Algae Cover by Treatment",
-       x = "Treatment", 
-       y = "Mean Algae Cover (%)") 
-
+       x = "Treatment", y = "Mean Algae Cover (%)") +
+  theme_minimal(base_size = 8)
 u_means_plot
 ```
+
+## Part 12 · Discussion and Manual Calculation {.divider}
+
+## Scientific Interpretation
+
+::: callout-important
+Our nested ANOVA analysis revealed substantial spatial heterogeneity in algae cover, with significant variation among patches within each treatment. The effect of urchin density treatments on filamentous algae cover was marginally significant at the α = 0.05 level (p = 0.043). Descriptive statistics show algae cover increasing as urchin density decreases, with None/Removed showing the highest cover (39.20%), followed by Medium/33% Density (19.00%), High/66% Density (21.55%), and Low/Control showing minimal algae cover (1.30%). The substantial variance component associated with patches nested within treatments (294.31, ~39.5% of total variance) underscores the importance of spatial heterogeneity in structuring algal communities — and the necessity of accounting for it when designing and analyzing ecological field experiments.
 :::
 
-# Lecture 13: Discussion
+## We Can Do This Manually — but Ugh
 
-::: {.callout-important appearance="simple"}
-Scientific Interpretation Our nested ANOVA analysis revealed substantial
-spatial heterogeneity in algae cover, with significant variation among
-patches within each treatment. The effect of urchin density treatments
-on filamentous algae cover was marginally significant at the α = 0.05
-level (p = 0.043). The descriptive statistics show a clear pattern where
-algae cover increases as urchin density decreases, with None/Removed
-showing the highest cover (39.20%), followed by Medium/33% Density
-(19.00%), High/66% Density (21.55%), and Low/Control showing minimal
-algae cover (1.30%). This pattern demonstrates a density-dependent
-relationship between urchin grazing and algal abundance. The substantial
-variance component associated with patches nested within treatments
-(294.31, approximately 39.5% of total variance) underscores the
-importance of spatial heterogeneity in structuring algal communities.
-This finding highlights the necessity of accounting for spatial
-variability when designing and analyzing ecological field experiments.
-From an ecological perspective, these results suggest that sea urchins
-significantly influence algal communities through grazing, though local
-environmental factors and patch-specific conditions also play an
-important role in determining algae cover. This has important
-implications for ecosystem management, as it indicates that the effects
-of urchin density manipulations are context-dependent and influenced by
-local environmental conditions.
-:::
+::::::: columns
+:::: {.column width="50%"}
+Nobody would ever do this by hand in practice — but seeing it once makes the "which MS goes on the bottom of the F-ratio" logic concrete.
 
-# We can do this manually
-
-::::: columns
-::: {.column width="50%"}
-But UGGGG who would EVER do this
-
-```{r manual_nested}
+```{r}
 #| echo: true
 #| message: false
 #| warning: false
 #| paged-print: false
-#| 
-
-# Method 1: Convert to dataframe with Source as a proper variable
 u_man_model <- aov(algae ~ treat + treat:patch, data = u_df)
 u_anova_summary <- summary(u_man_model)[[1]]
-
 cat("Standard ANOVA table:\n\n")
 u_anova_summary
 ```
 
-```{r extract_values}
+```{r}
 #| echo: true
 #| message: false
 #| warning: false
 #| paged-print: false
-#| 
-# Extract values by position (much simpler!)
-# Row 1 = treat, Row 2 = treat:patch, Row 3 = Residuals
-u_MS_treat <- u_anova_summary[1, "Mean Sq"]      # Row 1, Mean Sq column
-u_MS_patch <- u_anova_summary[2, "Mean Sq"]      # Row 2, Mean Sq column  
-u_MS_residual <- u_anova_summary[3, "Mean Sq"]   # Row 3, Mean Sq column
+u_MS_treat <- u_anova_summary[1, "Mean Sq"]
+u_MS_patch <- u_anova_summary[2, "Mean Sq"]
+u_MS_residual <- u_anova_summary[3, "Mean Sq"]
 
 u_df_treat <- u_anova_summary[1, "Df"]
-u_df_patch <- u_anova_summary[2, "Df"] 
+u_df_patch <- u_anova_summary[2, "Df"]
 u_df_residual <- u_anova_summary[3, "Df"]
 
-cat("Extracted mean squares:\n\n")
 cat("MS Treatment:", u_MS_treat, "\n")
 cat("MS Patch(Treatment):", u_MS_patch, "\n")
 cat("MS Residual:", u_MS_residual, "\n\n")
 ```
-:::
+::::
 
-::: {.column width="50%"}
-```{r calculate_f}
+:::: {.column width="50%"}
+```{r}
 #| echo: true
 #| message: false
 #| warning: false
 #| paged-print: false
-#| 
-# Calculate CORRECT F-ratios for nested design
 u_F_treat_correct <- u_MS_treat / u_MS_patch        # Treatment tested against patches
 u_F_patch <- u_MS_patch / u_MS_residual             # Patches tested against residual
 
-cat("Corrected F-ratios:\n\n")
 cat("F Treatment:", u_F_treat_correct, "\n")
 cat("F Patch(Treatment):", u_F_patch, "\n\n")
 ```
 
-```{r calculate_p}
+```{r}
 #| echo: true
 #| message: false
 #| warning: false
 #| paged-print: false
-#| 
-# Calculate correct p-values
 u_p_treat_correct <- pf(u_F_treat_correct, u_df_treat, u_df_patch, lower.tail = FALSE)
 u_p_patch <- pf(u_F_patch, u_df_patch, u_df_residual, lower.tail = FALSE)
 
-cat("Corrected p-values:\n\n")
-cat("p Treatment:", u_p_treat_correct, "\n")
-cat("p Patch(Treatment):", u_p_patch, "\n\n")
-```
-
-```{r manual_table}
-#| echo: true
-#| message: false
-#| warning: false
-#| paged-print: false
-#| 
-# Create simple corrected table
 u_corrected_table <- data.frame(
   Source = c("Treatment", "Patches(Treatment)", "Residual"),
   Df = c(u_df_treat, u_df_patch, u_df_residual),
   MS = round(c(u_MS_treat, u_MS_patch, u_MS_residual), 1),
   F = c(round(u_F_treat_correct, 2), round(u_F_patch, 2), NA),
   p = c(ifelse(u_p_treat_correct < 0.001, "<0.001", round(u_p_treat_correct, 3)),
-        ifelse(u_p_patch < 0.001, "<0.001", round(u_p_patch, 3)), 
+        ifelse(u_p_patch < 0.001, "<0.001", round(u_p_patch, 3)),
         NA)
 )
-
 cat("Corrected ANOVA table:\n\n")
 u_corrected_table
 ```
-:::
-:::::
+::::
+:::::::

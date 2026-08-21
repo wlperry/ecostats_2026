@@ -1,10 +1,10 @@
 ---
 order: 10
 week: 5
-title: "Correlation & Linear Regression"
-subtitle: "Correlation and regression"
-description: "Hands-on activity: correlation and simple linear regression."
-author: "bill perry"
+title: "Activity: Correlation vs Linear Models"
+subtitle: "Relationships"
+description: "Hands-on activity: correlation, simple linear regression, diagnostic plots, and ANOVA for regression on the Nazca booby, lion nose-pigmentation, and prairie-biodiversity datasets."
+author: "Bill Perry"
 metadata-files:
   - ../../_templates/activities.yml
 format:
@@ -12,56 +12,48 @@ format:
   docx: default
 ---
 
-# In class activity 9: Correlation and Linear Regression
+# Worksheet: Correlation and Linear Regression
 
-## Introduction
+> ## How to use this worksheet
+>
+> Work through each part in order, at your own pace. Type every line of code yourself into a **plain R script** — do not copy-paste. Blocks marked **▶ Run this** are code you should type and execute. Blocks marked **✏️ Your turn** ask you to write, modify, or answer something. Boxes marked **🚀 If you finish early** are optional bonus material that goes a bit further than what we covered in lecture.
+>
+> This worksheet demonstrates correlation and regression using three ecological examples from the textbook: Nazca booby aggression (correlation), lion nose pigmentation and age (regression), and prairie plant diversity and stability (a second regression to compare against).
 
-This document demonstrates key concepts in correlation and regression analysis using ecological examples, focusing on:
+------------------------------------------------------------------------
 
-1.  **Understanding correlation vs. regression**
-2.  **Calculating and interpreting correlation coefficients**
-3.  **Testing correlation assumptions**
-4.  **Performing simple linear regression**
-5.  **Checking regression assumptions**
-6.  **Interpreting regression output and ANOVA tables**
+# Part 1 · Setup and Data
 
-We'll work with real ecological datasets to practice these concepts.
+**▶ Run this in your Script:**
 
-# **Part 1:** Load Required Packages and Data
-
-```{r setup}
-#| message: false
-#| warning: false
-
-# Load required packages
+``` r
 library(tidyverse)  # For data manipulation and visualization
 library(patchwork)  # For combining plots
-library(car)        # For regression diagnostics
-library(broom)      # For tidy model output
+library(car)         # For regression diagnostics
+library(broom)       # For tidy model output
 
+set.seed(123)
 ```
 
-```{r load-data}
-# Set seed for reproducible results
-set.seed(123)
+**▶ Run this** — build the three example datasets:
 
-# Create the datasets from the lecture
+``` r
 # Lion data from Example 17.1
 l_df <- tibble(
-  prop_black = c(0.21, 0.14, 0.11, 0.13, 0.12, 0.13, 0.12, 0.18, 0.23, 0.22, 
-                0.20, 0.17, 0.15, 0.27, 0.26, 0.21, 0.30, 0.42, 0.43, 0.59, 
+  prop_black = c(0.21, 0.14, 0.11, 0.13, 0.12, 0.13, 0.12, 0.18, 0.23, 0.22,
+                0.20, 0.17, 0.15, 0.27, 0.26, 0.21, 0.30, 0.42, 0.43, 0.59,
                 0.60, 0.72, 0.29, 0.10, 0.48, 0.44, 0.34, 0.37, 0.34, 0.74, 0.79, 0.51),
-  age_yr = c(1.1, 1.5, 1.9, 2.2, 2.6, 3.2, 3.2, 2.9, 2.4, 2.1, 
-          1.9, 1.9, 1.9, 1.9, 2.8, 3.6, 4.3, 3.8, 4.2, 5.4, 
+  age_yr = c(1.1, 1.5, 1.9, 2.2, 2.6, 3.2, 3.2, 2.9, 2.4, 2.1,
+          1.9, 1.9, 1.9, 1.9, 2.8, 3.6, 4.3, 3.8, 4.2, 5.4,
           5.8, 6.0, 3.4, 4.0, 7.3, 7.3, 7.8, 7.1, 7.1, 13.1, 8.8, 5.4)
 )
 
 # Booby data from Example 16.1
 b_df <- tibble(
-  visits = c(1, 7, 15, 4, 11, 14, 23, 14, 9, 5, 4, 10, 
+  visits = c(1, 7, 15, 4, 11, 14, 23, 14, 9, 5, 4, 10,
             13, 13, 14, 12, 13, 9, 8, 18, 22, 22, 23, 31),
-  aggression = c(-0.80, -0.92, -0.80, -0.46, -0.47, -0.46, -0.23, -0.16, 
-                 -0.23, -0.23, -0.16, -0.10, -0.10, 0.04, 0.13, 0.19, 
+  aggression = c(-0.80, -0.92, -0.80, -0.46, -0.47, -0.46, -0.23, -0.16,
+                 -0.23, -0.23, -0.16, -0.10, -0.10, 0.04, 0.13, 0.19,
                  0.25, 0.23, 0.15, 0.23, 0.31, 0.18, 0.17, 0.39)
 )
 
@@ -73,96 +65,85 @@ p_df <- tibble(
 ```
 
 ::: callout-tip
-## Package Overview
+**Package overview**
 
-- **tidyverse**: Collection of packages for data science
-- **patchwork**: Combine multiple ggplot2 plots easily
-- **car**: Companion to Applied Regression (diagnostic tools)
-- **broom**: Convert statistical objects into tidy data frames
+- **tidyverse** — data science toolkit
+- **patchwork** — combine multiple ggplot2 plots easily
+- **car** — companion to Applied Regression (diagnostic tools)
+- **broom** — convert statistical objects into tidy data frames
 :::
 
-# **Part 2:** Correlation Analysis
+::: callout-tip
+**🚀 If you finish early:** Run `glimpse()` on all three data frames. Which columns are the predictor (X) and which are the response (Y) in each?
+
+``` r
+# Write your code here:
+```
+:::
+
+------------------------------------------------------------------------
+
+# Part 2 · Correlation Analysis
 
 ::: callout-note
-## Correlation Analysis: Data Types and Assumptions
+**Correlation analysis: data types and assumptions**
 
-**Data Types Required:**
+**Data types required:** both X and Y are continuous numerical, and both should be *measured* (not manipulated).
 
-- **X variable**: Continuous numerical
-- **Y variable**: Continuous numerical - Both variables should be measured (not manipulated)
-
-**Assumptions for Pearson Correlation:**
-
-- Random sampling from the population
-- Bivariate normality (both variables normally distributed)
-- Linear relationship between variables
-- No extreme outliers
+**Assumptions for Pearson correlation:** random sampling, bivariate normality, a linear relationship, and no extreme outliers.
 :::
 
-## Calculating Correlation Coefficients
+Let's start with the Nazca booby data.
 
-Let's start with the Nazca booby data to explore correlation:
+**▶ Run this:**
 
-```{r booby_correlation}
-# Calculate Pearson correlation coefficient
+``` r
 cor(b_df$visits, b_df$aggression)
 
-```
-
-```{r booby_correlation_2}
-# Perform correlation test
 cor.test(b_df$visits, b_df$aggression)
-
 ```
 
-```{r booby_correlation_3}
-# Calculate Pearson correlation coefficient
-cor(b_df$visits, b_df$aggression)
-# Calculate and SAVE the Pearson correlation coefficient
-booby_corr <- cor(b_df$visits, b_df$aggression)
+**▶ Run this** — save the coefficient and get the variance explained:
 
-# Print the result
+``` r
+booby_corr <- cor(b_df$visits, b_df$aggression)
 booby_corr
 
-# Calculate R-squared (variance explained)
-booby_corr^2
+booby_corr^2  # R-squared (variance explained)
 ```
 
-## Visualizing the Correlation
+**▶ Run this** — visualize it:
 
-```{r booby_plot}
-# Create scatterplot with correlation
-b_df %>% 
+``` r
+b_df %>%
   ggplot(aes(x = visits, y = aggression)) +
-  geom_point(size = 3, alpha = 0.7) 
-
+  geom_point(size = 3, alpha = 0.7)
 ```
 
 ::: callout-important
-## Activity 1: Interpret the Correlation
+**Activity: interpret the correlation**
 
-Based on the output above, answer these questions:
+Based on the output above, answer:
 
-1.  **Direction**: Is the correlation positive or negative? What does this mean biologically?
-    - Your answer: \_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
-2.  **Strength**: How would you classify this correlation (weak, moderate, strong)?
-    - Your answer: \_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
-3.  **Significance**: Is the correlation statistically significant? What is the p-value?
-    - Your answer: \_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
-4.  **Variance explained**: What percentage of variance in adult aggression is explained by nestling visits?
-    - Your answer: \_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
+1. **Direction**: Is the correlation positive or negative? What does this mean biologically?
+2. **Strength**: How would you classify this correlation (weak, moderate, strong)?
+3. **Significance**: Is the correlation statistically significant? What is the p-value?
+4. **Variance explained**: What percentage of variance in adult aggression is explained by nestling visits?
+
+```
+1. ________________________________________________________
+2. ________________________________________________________
+3. ________________________________________________________
+4. ________________________________________________________
+```
 :::
 
-## Testing Correlation Assumptions
+**▶ Run this** — test the assumptions:
 
-```{r test_correlation_assumptions_stats}
-# Test normality of each variable
+``` r
 shapiro.test(b_df$visits)
 shapiro.test(b_df$aggression)
-```
 
-```{r test_correlation_assumptions}
-# Create diagnostic plots
 p1 <- ggplot(b_df, aes(x = visits)) +
   geom_histogram(bins = 10, fill = "lightblue", color = "black") +
   labs(title = "Distribution of Visits", x = "Visits as Nestling", y = "Count") +
@@ -183,174 +164,155 @@ p4 <- ggplot(b_df, aes(sample = aggression)) +
   labs(title = "Q-Q Plot: Aggression", x = "Theoretical", y = "Sample") +
   theme_minimal()
 
-# Combine plots
 (p1 + p2) / (p3 + p4)
 ```
 
-::: callout-warning
-## When Assumptions Are Violated
+> ⚠️ If normality assumptions are violated (p < 0.05 in the Shapiro-Wilk test), consider Spearman's rank correlation (non-parametric), a data transformation, or removing outliers (if justified).
 
-If normality assumptions are violated (p \< 0.05 in Shapiro-Wilk test), consider:
+**▶ Run this** — Spearman's correlation:
 
-1.  **Spearman's rank correlation** (non-parametric alternative)
-2.  **Data transformation** (log, square root, etc.)
-3.  **Removing outliers** (if justified)
-
-Let's try Spearman's correlation:
-:::
-
-```{r spearman_correlation}
-# Calculate Spearman's rank correlation
-cor.test(b_df$visits, 
-         b_df$aggression, 
-         method = "spearman")
+``` r
+cor.test(b_df$visits, b_df$aggression, method = "spearman")
 ```
 
-# **Part 3:** Simple Linear Regression
+✏️ **Your turn:** Do the Pearson and Spearman results agree on the direction and significance of the relationship? `________________________`
+
+::: callout-tip
+**🚀 If you finish early:** Compute Kendall's tau instead (`method = "kendall"`). How does its magnitude compare to Pearson's r and Spearman's rho for the same data?
+
+``` r
+# Write your code here:
+```
+:::
+
+------------------------------------------------------------------------
+
+# Part 3 · Simple Linear Regression
 
 Now let's move from correlation to regression using the lion nose data.
 
 ::: callout-note
-## Linear Regression: Data Types and Assumptions
+**Linear regression: data types and assumptions**
 
-**Data Types Required:**
+**Data types required:** X (predictor) and Y (response) are both continuous numerical; X can be fixed/controlled, Y is the outcome of interest.
 
-- **X variable (predictor)**: Continuous numerical
-- **Y variable (response)**: Continuous numerical - X can be fixed/controlled, Y is the outcome of interest
-
-**Assumptions for Linear Regression:**
-
-- **Linearity**: Relationship between X and Y is linear
-
-- **Independence**: Observations are independent
-
-- **Homoscedasticity**: Constant variance of residuals
-
-- **Normality**: Residuals are normally distributed
-
-- **No influential outliers**
+**Assumptions:** linearity, independence, homoscedasticity, normality of residuals, and no influential outliers.
 :::
 
-## Fitting a Linear Regression Model
+**▶ Run this** — fit the model:
 
-```{r lion_regression}
-# Fit linear regression model
+``` r
 lion_model <- lm(age_yr ~ prop_black, data = l_df)
-
-# Get model summary
 summary(lion_model)
 ```
 
 ::: callout-important
-## Activity 2: Interpret the Regression Output
+**Activity: interpret the regression output**
 
-From the regression output above:
-
-1.  **Regression equation**: Write the equation in the form: age = \_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_ + \_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_ × prop_black
-    - Your answer: \_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
-2.  **Slope interpretation**: What does the slope value mean in biological terms?
-    - Your answer: \_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
-3.  **R-squared**: What percentage of variation in age is explained by nose blackness?
-    - Your answer: \_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
-4.  **Significance**: Is the relationship statistically significant? How do you know?
-    - Your answer: \_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
-:::
-
-## Visualizing the Regression
-
-```{r lion_regression_plot}
-# Create regression plot with confidence interval
-l_df %>% 
-  ggplot(aes(x = prop_black, y = age_yr)) +
-  geom_point(size = 3, alpha = 0.7) +
-  geom_smooth(method = "lm", se = TRUE, color = "red", fill = "pink", alpha = 0.3) 
+1. **Regression equation**: age = ______________ + ______________ × prop_black
+2. **Slope interpretation**: what does the slope value mean in biological terms?
+3. **R-squared**: what percentage of variation in age is explained by nose blackness?
+4. **Significance**: is the relationship statistically significant? How do you know?
 
 ```
-
-::: callout-tip
-## Confidence vs. Prediction Intervals
-
-- **Confidence Interval**: Range for the mean age of ALL lions with that nose blackness
-- **Prediction Interval**: Range for an INDIVIDUAL lion with that nose blackness
-- Prediction intervals are always wider than confidence intervals
+1. ________________________________________________________
+2. ________________________________________________________
+3. ________________________________________________________
+4. ________________________________________________________
+```
 :::
 
-# **Part 4:** Testing Regression Assumptions
+**▶ Run this** — visualize the fitted line with its confidence band:
 
-## Diagnostic Plots
+``` r
+l_df %>%
+  ggplot(aes(x = prop_black, y = age_yr)) +
+  geom_point(size = 3, alpha = 0.7) +
+  geom_smooth(method = "lm", se = TRUE, color = "red", fill = "pink", alpha = 0.3)
+```
 
-```{r regression_diagnostics}
-#| fig-height: 5
-#| fig-width: 5
-# Create diagnostic plots
+> 💡 **Confidence interval** = range for the *mean* age of all lions with that nose blackness. **Prediction interval** = range for an *individual* lion with that nose blackness. Prediction intervals are always wider.
+
+::: callout-tip
+**🚀 If you finish early:** Use `predict(lion_model, newdata = tibble(prop_black = 0.5), interval = "confidence")` and then `interval = "prediction"` for the same `prop_black = 0.5`. Confirm the prediction interval is wider.
+
+``` r
+# Write your code here:
+```
+:::
+
+------------------------------------------------------------------------
+
+# Part 4 · Testing Regression Assumptions
+
+**▶ Run this** — the four-panel diagnostic plot:
+
+``` r
 par(mfrow = c(2, 2))
 plot(lion_model)
 par(mfrow = c(1, 1))
 ```
 
-## Interpreting Diagnostic Plots
-
 ::: callout-note
-## Understanding Regression Diagnostic Plots
+**Understanding regression diagnostic plots**
 
-1.  **Residuals vs Fitted**:
-    - Look for: Random scatter around horizontal line at 0
-    - Problems: Patterns indicate non-linearity or heteroscedasticity
-2.  **Q-Q Plot**:
-    - Look for: Points following the diagonal line
-    - Problems: Deviations indicate non-normal residuals
-3.  **Scale-Location**:
-    - Look for: Random scatter with horizontal trend line
-    - Problems: Increasing spread indicates heteroscedasticity
-4.  **Residuals vs Leverage**:
-    - Look for: Points within Cook's distance lines
-    - Problems: Points outside indicate influential observations
+1. **Residuals vs Fitted** — look for random scatter around the horizontal line at 0; patterns indicate non-linearity or heteroscedasticity.
+2. **Q-Q Plot** — look for points following the diagonal line; deviations indicate non-normal residuals.
+3. **Scale-Location** — look for random scatter with a horizontal trend line; increasing spread indicates heteroscedasticity.
+4. **Residuals vs Leverage** — look for points within Cook's distance lines; points outside indicate influential observations.
 :::
 
-## Formal Tests of Assumptions
+**▶ Run this** — the formal tests:
 
-```{r formal_assumption_tests}
-# Test for normality of residuals
+``` r
 shapiro_residuals <- shapiro.test(residuals(lion_model))
 shapiro_residuals
 
-
-```
-
-```{r}
-# Test for homoscedasticity (Breusch-Pagan test)
 library(lmtest)
-bp_test <- bptest(lion_model)
+bp_test <- bptest(lion_model)  # Breusch-Pagan test for homoscedasticity
 bp_test
 ```
 
 ::: callout-important
-## Activity 3: Assess Assumption Violations
+**Activity: assess assumption violations**
 
 Based on the diagnostic plots and tests:
 
-1.  **Linearity**: Does the relationship appear linear? (Check Residuals vs Fitted plot)
-    - Your answer: \_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
-2.  **Normality**: Are the residuals normally distributed? (Check Q-Q plot and Shapiro test)
-    - Your answer: \_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
-3.  **Homoscedasticity**: Is the variance constant? (Check Scale-Location plot and BP test)
-    - Your answer: \_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
-4.  **Influential points**: Are there any concerning influential observations?
-    - Your answer: \_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
+1. **Linearity**: does the relationship appear linear? (Check Residuals vs Fitted)
+2. **Normality**: are the residuals normally distributed? (Check Q-Q plot and Shapiro test)
+3. **Homoscedasticity**: is the variance constant? (Check Scale-Location plot and BP test)
+4. **Influential points**: are there any concerning influential observations?
+
+```
+1. ________________________________________________________
+2. ________________________________________________________
+3. ________________________________________________________
+4. ________________________________________________________
+```
 :::
 
-# **Part 5:** ANOVA for Regression
+::: callout-tip
+**🚀 If you finish early:** `bptest()`'s null hypothesis is that variance is constant (homoscedastic). Write out, in your own words, what a *significant* Breusch-Pagan result would mean for this model — and whether that's what you found.
 
-## Understanding Variance Partitioning
+```
+________________________________________________________
+```
+:::
 
-```{r anova_regression}
-# Get ANOVA table for regression
+------------------------------------------------------------------------
+
+# Part 5 · ANOVA for Regression
+
+**▶ Run this:**
+
+``` r
 anova_table <- anova(lion_model)
 anova_table
 ```
 
-```{r}
-# Calculate sums of squares manually to understand partitioning
+**▶ Run this** — confirm the partition by hand:
+
+``` r
 ss_total <- sum((l_df$age_yr - mean(l_df$age_yr))^2)
 ss_residual <- sum(residuals(lion_model)^2)
 ss_regression <- ss_total - ss_residual
@@ -360,128 +322,158 @@ print(paste("SS Total:", round(ss_total, 2)))
 print(paste("SS Regression:", round(ss_regression, 2)))
 print(paste("SS Residual:", round(ss_residual, 2)))
 print(paste("SS Regression + SS Residual:", round(ss_regression + ss_residual, 2)))
-
-
 ```
 
-## Visualizing Variance Components
+✏️ **Your turn:** Does `ss_regression + ss_residual` match `ss_total`? Does `ss_regression` match the "prop_black" row's Sum Sq in `anova_table`? `________________________`
 
-```{r variance_visualization}
-#| message: false
-#| warning: false
-#| paged-print: false
-# Create a plot showing variance components
-# Get predicted values
+**▶ Run this** — visualize the variance components for one lion:
+
+``` r
 l_df$predicted <- predict(lion_model)
 mean_age <- mean(l_df$age_yr)
-
-# Select one point to illustrate
 example_point <- 10
 
-# Create the visualization
 variance_plot <- ggplot(l_df, aes(x = prop_black, y = age_yr)) +
   geom_point(size = 3, alpha = 0.5) +
-  geom_smooth(method = "lm", se = FALSE, color = "blue", size = 1) +
+  geom_smooth(method = "lm", se = FALSE, color = "blue", linewidth = 1) +
   geom_hline(yintercept = mean_age, linetype = "dashed", color = "darkgreen") +
-  # Add lines for one example point
-  geom_segment(aes(x = prop_black[example_point], 
+  geom_segment(aes(x = prop_black[example_point],
                    y = age_yr[example_point],
-                   xend = prop_black[example_point], 
+                   xend = prop_black[example_point],
                    yend = predicted[example_point]),
-               color = "red", size = 1) +
-  geom_segment(aes(x = prop_black[example_point], 
+               color = "red", linewidth = 1) +
+  geom_segment(aes(x = prop_black[example_point],
                    y = predicted[example_point],
-                   xend = prop_black[example_point], 
+                   xend = prop_black[example_point],
                    yend = mean_age),
-               color = "darkgreen", size = 1) +
-  # Add labels
-  annotate("text", x = 0.15, y = mean_age + 0.5, 
-           label = "Mean", color = "darkgreen") +
-  annotate("text", x = l_df$prop_black[example_point] + 0.05, 
+               color = "darkgreen", linewidth = 1) +
+  annotate("text", x = 0.15, y = mean_age + 0.5, label = "Mean", color = "darkgreen") +
+  annotate("text", x = l_df$prop_black[example_point] + 0.05,
            y = (l_df$age_yr[example_point] + l_df$predicted[example_point])/2,
            label = "Residual", color = "red") +
-  annotate("text", x = l_df$prop_black[example_point] + 0.05, 
+  annotate("text", x = l_df$prop_black[example_point] + 0.05,
            y = (l_df$predicted[example_point] + mean_age)/2,
            label = "Regression", color = "darkgreen") +
   labs(title = "Variance Components in Regression",
        subtitle = "Total variation = Regression + Residual",
        x = "Proportion Black", y = "Age (years)") +
   theme_minimal()
-
 variance_plot
 ```
 
-# **Part 6:** Comparing Multiple Datasets
+::: callout-tip
+**🚀 If you finish early:** Change `example_point` to a different row number (try the lion with the largest residual — hint: `which.max(abs(residuals(lion_model)))`). How does the plot change?
 
-Let's practice regression with the prairie biodiversity data:
+``` r
+# Write your code here:
+```
+:::
 
-```{r prairie_analysis}
-# Fit regression for prairie data
+------------------------------------------------------------------------
+
+# Part 6 · Comparing Multiple Datasets
+
+Let's practice regression with the prairie biodiversity data.
+
+**▶ Run this:**
+
+``` r
 prairie_model <- lm(log_stability ~ spp_n, data = p_df)
-
-# Get summary
 summary(prairie_model)
 
-
-```
-
-```{r}
-# Create plot
 prairie_plot <- ggplot(p_df, aes(x = spp_n, y = log_stability)) +
   geom_point(alpha = 0.5) +
   geom_smooth(method = "lm")
-
 prairie_plot
 ```
 
 ::: callout-important
-## Activity 4: Compare the Two Regressions
+**Activity: compare the two regressions**
 
 Compare the lion and prairie regression models:
 
-1.  **Which model explains more variance?** (Compare R² values)
-    - Your answer: \_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
-2.  **Which has a stronger relationship?** (Compare standardized slopes or correlation)
-    - Your answer: \_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
-3.  **Which has more precise estimates?** (Compare standard errors relative to estimates)
-    - Your answer: \_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
+1. **Which model explains more variance?** (Compare R² values)
+2. **Which has a stronger relationship?** (Compare standardized slopes or correlation)
+3. **Which has more precise estimates?** (Compare standard errors relative to estimates)
+
+```
+1. ________________________________________________________
+2. ________________________________________________________
+3. ________________________________________________________
+```
 :::
 
-# **Summary and Key Takeaways**
+::: callout-tip
+**🚀 If you finish early:** Run `plot(prairie_model)` (four diagnostic plots, like Part 4). With n = 161, does non-normality of residuals worry you as much as it did for the lion model (n = 32)? Why might sample size change how much assumption violations matter?
+
+``` r
+# Write your code here:
+```
+:::
+
+------------------------------------------------------------------------
+
+# Summary and Key Takeaways
 
 ::: callout-tip
-## What We Learned Today
+**What we learned today**
 
-1.  **Correlation vs. Regression:**
-    - Correlation: Measures association between two variables
-    - Regression: Predicts one variable from another
-2.  **Assumptions Matter:**
-    - Always check assumptions before interpreting results
-    - Use appropriate alternatives when assumptions are violated
-3.  **Interpretation:**
-    - R² tells us proportion of variance explained
-    - Slopes tell us rate of change
-    - P-values tell us if relationships are statistically significant
-4.  **Practical Considerations:**
-    - Correlation ≠ Causation
-    - Outliers can have major impacts
-    - Sample size affects power to detect relationships
+1. **Correlation vs. regression** — correlation measures association; regression predicts one variable from another.
+2. **Assumptions matter** — always check assumptions before interpreting results, and use appropriate alternatives when they're violated.
+3. **Interpretation** — R² tells us the proportion of variance explained; slopes tell us the rate of change; p-values tell us if relationships are statistically significant.
+4. **Practical considerations** — correlation ≠ causation, outliers can have major impacts, and sample size affects the power to detect relationships.
 :::
 
 ::: callout-warning
-## Common Mistakes to Avoid
+**Common mistakes to avoid**
 
-1.  **Using correlation when you mean regression** (or vice versa)
-2.  **Ignoring assumption violations**
-3.  **Extrapolating beyond the range of data**
-4.  **Confusing confidence and prediction intervals**
-5.  **Over-interpreting R² values**
-6.  **Forgetting about biological significance vs. statistical significance**
+1. Using correlation when you mean regression (or vice versa)
+2. Ignoring assumption violations
+3. Extrapolating beyond the range of the data
+4. Confusing confidence and prediction intervals
+5. Over-interpreting R² values
+6. Forgetting about biological significance vs. statistical significance
 :::
 
-## Additional Resources
+# Review and checkpoint
 
-- Whitlock & Schluter Chapter 16 (Correlation)
-- Whitlock & Schluter Chapter 17 (Regression)
-- R for Data Science: <https://r4ds.had.co.nz/>
-- Quick-R Regression: <https://www.statmethods.net/stats/regression.html>
+At this point you can:
+
+- [ ] Calculate and interpret a Pearson correlation coefficient and its significance test
+- [ ] Test correlation assumptions and switch to Spearman's when they fail
+- [ ] Fit a simple linear regression and interpret slope, intercept, and R²
+- [ ] Read the four standard regression diagnostic plots
+- [ ] Explain how ANOVA partitions variance into regression and residual components
+- [ ] Compare R² and precision across two different regression models
+
+::: callout-note
+**📤 What to turn in before next class**
+
+Upload both of these to the course management system:
+
+1. Your code — the `scripts/` folder (or just `10_correlation_linear_models.R`)
+2. This worksheet, with your written answers
+:::
+
+# Additional Resources
+
+- Whitlock & Schluter, Ch. 16 (Correlation)
+- Whitlock & Schluter, Ch. 17 (Regression)
+- Gotelli & Ellison, *A Primer of Ecological Statistics*, Ch. 9 (Regression)
+- [R for Data Science](https://r4ds.had.co.nz/)
+- [Quick-R: Regression](https://www.statmethods.net/stats/regression.html)
+
+------------------------------------------------------------------------
+
+# Getting unstuck
+
+When code breaks — and it will, that is normal:
+
+1. **Read the error message out loud.** R usually names the line and the problem.
+2. **Check the usual suspects:** did you run `library(tidyverse)`, `library(car)`, `library(broom)`, and `library(lmtest)`? Spelling? A missing `)` or `%>%` at the *start* of a line?
+3. `?function_name` opens the built-in help page.
+4. **Bring the exact error** (copy-paste it) to class or office hours.
+
+> 💡 **Key idea:** Every working scientist googles error messages daily. Getting stuck is not failing — it is the job.
+
+------------------------------------------------------------------------

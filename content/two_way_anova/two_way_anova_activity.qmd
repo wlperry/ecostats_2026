@@ -1,120 +1,111 @@
 ---
 order: 13
 week: 7
-title: "Factorial (Two-Way) ANOVA"
+title: "Activity: Two-Way ANOVA"
 subtitle: "Factorial designs"
-description: "Hands-on activity: factorial ANOVA (penguin mass)."
+description: "Hands-on activity: factorial ANOVA, estimated marginal means, and Type I/II/III sums of squares, run on both a balanced and a naturally unbalanced version of the palmerpenguins species-by-sex dataset."
 author: "Bill Perry"
+metadata-files:
+  - ../../_templates/activities.yml
 format:
   html: default
   docx: default
 ---
 
-# Lecture 12: Factorial ANOVA
+# Worksheet: Two-Way (Factorial) ANOVA
 
-The set up and data overview
+> ## How to use this worksheet
+>
+> Work through each part in order, at your own pace. Type every line of code yourself into a **plain R script** — do not copy-paste. Blocks marked **▶ Run this** are code you should type and execute. Blocks marked **✏️ Your turn** ask you to write, modify, or answer something. Boxes marked **🚀 If you finish early** are optional bonus material that goes a bit further than what we covered in lecture.
+>
+> This worksheet runs the same species × sex factorial ANOVA on penguin body mass **twice** — once on a balanced subsample, once on the full, naturally unbalanced dataset — so you can see directly how imbalance changes the analysis.
 
-```{r setup}
-#| message: false
-#| warning: false
-#| paged-print: false
+------------------------------------------------------------------------
 
+# Part 1 · Setup and Data
 
-# Load required packages
+**▶ Run this in your Script:**
+
+``` r
 library(palmerpenguins) # has the data for penguins and they are cute
-library(car)       # For Levene's test and Type III SS
-library(emmeans)   # For estimated marginal means
-library(broom)     # For tidying model outputs
-library(patchwork) # For combining plots
+library(car)             # For Levene's test and Type III SS
+library(emmeans)         # For estimated marginal means
+library(broom)           # For tidying model outputs
+library(patchwork)       # For combining plots
 library(tidyverse)
 
-# Set theme for plots
 theme_set(theme_light(base_size = 12))
-```
 
-```{r}
 p_df <- penguins %>%
-  select(spp = species, sex, body_mass_g) %>% 
+  select(spp = species, sex, body_mass_g) %>%
   rename(mass_g = body_mass_g)
 head(p_df)
 ```
 
-```{r missing_values}
-# Check for missing values
-p_df %>% 
-  summarise_all(~sum(is.na(.))) 
-```
+**▶ Run this** — check for and remove missing values:
 
-```{r read_data}
-#| message: false
-#| warning: false
-#| paged-print: false
+``` r
+p_df %>%
+  summarise_all(~sum(is.na(.)))
 
-# Load the penguin data
 p_df <- p_df %>%
-  filter(!is.na(mass_g), 
+  filter(!is.na(mass_g),
          !is.na(sex),
-         !is.na(spp)) 
-
-# View the first few rows
+         !is.na(spp))
 head(p_df)
 ```
 
-```{r stats}
-#| message: false
-#| warning: false
-#| paged-print: false
+**▶ Run this** — summary statistics by group:
 
-# Summary statistics
+``` r
 p_df %>%
   group_by(spp, sex) %>%
   summarise(
-    mean_mass = mean(mass_g, na.rm=TRUE),
-    sd_mass = sd(mass_g, na.rm=TRUE),
+    mean_mass = mean(mass_g, na.rm = TRUE),
+    sd_mass = sd(mass_g, na.rm = TRUE),
     n = sum(!is.na(mass_g)),
     se_mass = sd_mass/n^.5,
     .groups = 'drop'
   )
 ```
 
-# Make a balanced dataframe where samples are all the same
+::: callout-tip
+**🚀 If you finish early:** How many species and sexes are there? Compute `n_distinct()` for each column of `p_df` to confirm.
 
-```{r}
-# Check original sample sizes
+``` r
+# Write your code here:
+```
+:::
+
+------------------------------------------------------------------------
+
+# Part 2 · Building a Balanced Dataset
+
+``` r
 original_n <- p_df %>%
   count(spp, sex) %>%
   arrange(spp, sex)
 
 p_df %>%
   count(spp, sex) %>%
-  pivot_wider(names_from = sex, 
-              values_from = n,
-              values_fill = 0) 
+  pivot_wider(names_from = sex, values_from = n, values_fill = 0)
 
-# Find minimum sample size
 min_n <- min(original_n$n)
 min_n
 
-# Create balanced dataset
 set.seed(123) # for reproducibility
 pb_df <- p_df %>%
   group_by(spp, sex) %>%
   sample_n(min_n) %>%
   ungroup()
 
-# Verify balanced design
-balanced_n <- pb_df %>% 
+balanced_n <- pb_df %>%
   count(spp, sex) %>%
-  pivot_wider(names_from = sex, 
-              values_from = n,
-              values_fill = 0) 
+  pivot_wider(names_from = sex, values_from = n, values_fill = 0)
 balanced_n
 ```
 
-# balanced dataframe
-
-```{r balanced_stats}
-# Calculate group means and SDs
+``` r
 summary_df <- pb_df %>%
   group_by(spp, sex) %>%
   summarise(
@@ -125,900 +116,342 @@ summary_df <- pb_df %>%
     .groups = 'drop'
   ) %>%
   arrange(spp, sex)
-
 print(summary_df)
 ```
 
-# This is the balanced Factorial ANOVA
+✏️ **Your turn:** What was `min_n`? How many total observations were dropped to force balance? `________________________`
 
-## ANOVA Assumptions
+------------------------------------------------------------------------
 
-In the factorial ANOVA, we need to check several assumptions after fitting the model:
+# Part 3 · Fitting the Balanced Factorial ANOVA
 
-1.  Independence of observations
-2.  Normality of residuals
-3.  Homogeneity of variances
-4.  Homoscedascidity
+The factorial ANOVA needs the same assumptions checked after fitting the model: independence of observations, normality of residuals, homogeneity of variances.
 
-Fit the model
+**▶ Run this:**
 
-```{r fit_model}
-#| message: false
-#| warning: false
-#| paged-print: false
-#| 
-# Set contrasts for Type III SS
-options(contrasts = c("contr.sum", "contr.poly"))
+``` r
+options(contrasts = c("contr.sum", "contr.poly"))  # for Type III SS
 
-# Fit the factorial ANOVA using linear model (lm) instead of aov
 pb_model <- lm(mass_g ~ spp * sex, data = pb_df)
-
-# View the model summary to see coefficients, standard errors, etc.
 summary(pb_model)
-```
-
-```{r anova}
-#| message: false
-#| warning: false
-#| paged-print: false
 
 Anova(pb_model, type = 3)
 ```
 
-# Lecture 12: Factorial ANOVA
+✏️ **Your turn:** Is the species:sex interaction significant? `________________________`
 
-## ASSUMPTIONS
+------------------------------------------------------------------------
 
-```{r model_diagnostics}
-#| message: false
-#| warning: false
-#| fig-height: 6
-#| fig-width: 6
-#| paged-print: false
+# Part 4 · Assumptions and Diagnostics — Balanced Model
 
-# Create diagnostic plots
+**▶ Run this** — the base R diagnostic plots:
+
+``` r
 par(mfrow = c(2, 2))
 plot(pb_model)
 par(mfrow = c(1, 1))
 ```
 
-## Check for Normality of Residuals
+**▶ Run this** — build a residuals data frame and check normality:
 
-```{r normality_1}
-#| message: false
-#| warning: false
-#| paged-print: false
-
-# Extract residuals from the model
+``` r
 pb_resid_df <- augment(pb_model)
 
-# Create Q-Q plot of residuals
 ggplot(pb_resid_df, aes(sample = .resid)) +
   stat_qq() +
   stat_qq_line() +
-  labs(title = "Q-Q Plot of Residuals",
-       x = "Theoretical Quantiles",
-       y = "Sample Quantiles")
-```
+  labs(title = "Q-Q Plot of Residuals", x = "Theoretical Quantiles", y = "Sample Quantiles")
 
-# Lecture 12: Factorial ANOVA
-
-## Check for Normality of Residuals
-
-```{r normality_2}
-#| message: false
-#| warning: false
-#| paged-print: false
-
-# Histogram of residuals
 ggplot(pb_resid_df, aes(x = .resid)) +
   geom_histogram(bins = 15, fill = "snow", color = "black") +
-  labs(title = "Histogram of Residuals",
-       x = "Residuals",
-       y = "Count")
-```
+  labs(title = "Histogram of Residuals", x = "Residuals", y = "Count")
 
-# Lecture 12: Factorial ANOVA
-
-## Check for Normality of Residuals
-
-```{r normality_3}
-#| message: false
-#| warning: false
-#| paged-print: false
-
-# Shapiro-Wilk test for normality
-shapiro.test(pb_model$residuals)
-
-# or
 shapiro.test(residuals(pb_model))
 ```
 
-# Lecture 12: Factorial ANOVA
+**▶ Run this** — check homogeneity of variance:
 
-```{r homogeneity_1}
-#| message: false
-#| warning: false
-#| paged-print: false
-
-# Levene's test for homogeneity of variances
+``` r
 leveneTest(mass_g ~ spp * sex, data = pb_df)
-```
 
-# Lecture 12: Factorial ANOVA
-
-## Check for homogeneity of variances
-
-```{r homogeneity_2}
-#| message: false
-#| warning: false
-#| paged-print: false
-
-# Residuals vs. fitted values plot
 ggplot(pb_resid_df, aes(x = .fitted, y = .resid)) +
   geom_point() +
   geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
-  labs(title = "Residuals vs Fitted Values",
-       x = "Fitted Values",
-       y = "Residuals")
-```
+  labs(title = "Residuals vs Fitted Values", x = "Fitted Values", y = "Residuals")
 
-# Lecture 12: Factorial ANOVA
-
-## Check for homogeneity of variances
-
-```{r homogeneity_3}
-#| message: false
-#| warning: false
-#| paged-print: false
-
-# Add residuals to original data for plotting
 pb_resid_group_df <- pb_df %>%
   mutate(residuals = residuals(pb_model))
 
-# Residuals by group
 ggplot(pb_resid_group_df, aes(x = interaction(spp, sex), y = residuals)) +
   geom_boxplot() +
-  labs(title = "Residuals by Group",
-       x = "Species:Sex Combination",
-       y = "Residuals") +
+  labs(title = "Residuals by Group", x = "Species:Sex Combination", y = "Residuals") +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 ```
 
-# Lecture 12: Factorial ANOVA
+::: callout-tip
+**🚀 If you finish early:** Do any of the six species:sex groups have visibly larger residual spread than the others in the last boxplot? Which one(s)?
 
-## Estimated Marginal Means and Effects
+```
+________________________________________________________
+```
+:::
 
-```{r emmeans_1}
-#| message: false
-#| warning: false
-#| paged-print: false
-#| 
-# Get estimated marginal means from the linear model
-# Main effect of species
+------------------------------------------------------------------------
+
+# Part 5 · Estimated Marginal Means and Post-Hoc — Balanced Model
+
+**▶ Run this** — main effect of species:
+
+``` r
 sppb_emm <- emmeans(pb_model, ~ spp)
 sppb_emm
-
 pairs(sppb_emm)
-```
-
-## Estimated Marginal Means and Effects
-
-```{r emmeans_2}
-#| message: false
-#| warning: false
-#| paged-print: false
 plot(sppb_emm)
 ```
 
-# Lecture 12: Factorial ANOVA
+**▶ Run this** — main effect of sex:
 
-## Estimated Marginal Means and Effects
-
-```{r emmeans_3}
-#| message: false
-#| warning: false
-#| paged-print: false
-
-# Main effect of sex
+``` r
 sexb_emm <- emmeans(pb_model, ~ sex)
 sexb_emm
-
 pairs(sexb_emm)
-```
-
-# Lecture 12: Factorial ANOVA
-
-## Estimated Marginal Means and Effects
-
-```{r emmeans_4}
-#| message: false
-#| warning: false
-#| paged-print: false
-
-# Main effect of sex
 plot(sexb_emm)
 ```
 
-# Lecture 12: Factorial ANOVA
+**▶ Run this** — the interaction, compared to raw means:
 
-## Estimated Marginal Means and Effects
-
-```{r emmeans_5}
-#| message: false
-#| warning: false
-#| paged-print: false
-
-# Interaction effects
+``` r
 interactionb_emm <- emmeans(pb_model, ~ spp * sex)
 interactionb_emm
 
-
-```
-
-```{r compare_means}
-#| message: false
-#| warning: false
-#| paged-print: false
-
-# Compare to raw means
 pb_df %>%
   group_by(spp, sex) %>%
-  summarise(
-    raw_mean = mean(mass_g),
-    .groups = 'drop'
-  ) %>%
+  summarise(raw_mean = mean(mass_g), .groups = 'drop') %>%
   pivot_wider(names_from = sex, values_from = raw_mean)
-```
 
-```{r}
 pairs(interactionb_emm)
 ```
 
-```{r}
-# Get compact letter display (cld)
-cldb_interaction <- multcomp::cld(interactionb_emm, 
+**▶ Run this** — compact letter display and an interaction plot:
+
+``` r
+cldb_interaction <- multcomp::cld(interactionb_emm,
                        Letters = letters,
                        adjust = "sidak")
-
-# Display the results
-# print(cld_interaction)
-
 cldb_df <- as.data.frame(cldb_interaction) %>%
-  arrange(spp, sex)  # Sort by estimated marginal mean
-
-# View the results with means and grouping letters
+  arrange(spp, sex)
 print(cldb_df)
-```
 
-# Lecture 12: Factorial ANOVA
-
-## Estimated Marginal Means and Effects
-
-```{r emmeans_6}
-#| message: false
-#| warning: false
-#| paged-print: false
-
-# Interaction plot with confidence intervals
 emmip(pb_model, sex ~ spp, CIs = TRUE) +
-  labs(title = "Interaction Plot",
-       x = "Species",
-       y = "Body Mass (g)")
+  labs(title = "Interaction Plot", x = "Species", y = "Body Mass (g)")
 ```
 
-# Lecture 12: Factorial ANOVA
+**▶ Run this** — a publication-quality version of that plot:
 
-## Estimated Marginal Means and Effects
-
-```{r emmeans_7}
-#| message: false
-#| warning: false
-#| paged-print: false
-
-# Convert emmeans object to data frame
-interactionb_df <- as.data.frame(interactionb_emm)
-interactionb_df
-```
-
-# Lecture 12: Factorial ANOVA
-
-## This is a plot you might produce for publication
-
-```{r pub_plot}
-#| message: false
-#| warning: false
-#| paged-print: false
-
-# Publication-quality plot with model predictions
-# Convert emmeans object to data frame
+``` r
 pubb_interaction_df <- as.data.frame(interactionb_emm)
 
-# Create enhanced plot with model predictions
-pubb_plot <- ggplot(pubb_interaction_df, aes(x = spp, y = emmean, 
+pubb_plot <- ggplot(pubb_interaction_df, aes(x = spp, y = emmean,
                                        color = sex, group = sex)) +
-  # Add lines connecting the means
-  geom_line(linewidth = 1,
-            position = position_dodge(width = 0.2)) +
-  # Add points at each mean
-  geom_point(size = 3,
-            position = position_dodge(width = 0.2)) +
-  # Add error bars showing standard error
-  geom_errorbar(aes(ymin = emmean - SE, ymax = emmean + SE), 
-                width = 0.2,
-                position = position_dodge(width = 0.2)) +
-  # Simple labels
-  labs(
-    x = "Species",
-    y = "Body Mass (g)",
-    color = "Sex"
-  ) +
+  geom_line(linewidth = 1, position = position_dodge(width = 0.2)) +
+  geom_point(size = 3, position = position_dodge(width = 0.2)) +
+  geom_errorbar(aes(ymin = emmean - SE, ymax = emmean + SE),
+                width = 0.2, position = position_dodge(width = 0.2)) +
+  labs(x = "Species", y = "Body Mass (g)", color = "Sex") +
   theme_light()
-
 pubb_plot
 ```
 
-# Lecture 12: Results Interpretation for Linear Model Approach
+✏️ **Your turn:** Using the compact letter display (`cldb_df`), which species/sex combinations are *not* significantly different from each other? `________________________`
 
-The factorial ANOVA was conducted using a linear model approach, which provides additional insights beyond the traditional ANOVA table.
+::: callout-tip
+**🚀 If you finish early:** `emmip(pb_model, sex ~ spp, ...)` plots sex as separate lines across species. Swap the formula to `emmip(pb_model, spp ~ sex, CIs = TRUE)` instead. How does the plot's emphasis change?
 
-Key findings from the linear model analysis:
+``` r
+# Write your code here:
+```
+:::
 
-1.  **Interaction effect**: The interaction between species and sex was \[significant/not significant\] (F = \[value from output\], df = 2, \[residual df\], p = \[value from output\]), indicating that the difference between males and females \[varies/is consistent\] across species.
+------------------------------------------------------------------------
 
-2.  **Model fit**: The overall model explains approximately \[value\]% of the variance in body mass (R-squared = \[value\]), indicating a good fit to the data.
+# Part 6 · Understanding Sums-of-Squares Types — Balanced Model
 
-# Lecture 12: Understanding Sums of Squares Types
+**▶ Run this** — fit and compare all three types of SS:
 
-When we have balanced designs (equal sample sizes) or want to test different hypotheses, we can use different types of sums of squares. Let's compare Type I, Type II, and Type III.
-
-## Type I Sums of Squares (Sequential)
-
-```{r ss_type1}
-#| message: false
-#| warning: false
-#| paged-print: false
-
-# Type I SS - order matters!
-# This is the default in R's anova() function
-type1b_anova <- anova(pb_model)
+``` r
+type1b_anova <- anova(pb_model)          # Type I - order matters!
 type1b_anova
-```
 
-Type I SS tests effects in the order they appear in the model. Each term is adjusted for terms that appear before it in the model.
-
-## Type II Sums of Squares
-
-```{r ss_type2}
-#| message: false
-#| warning: false
-#| paged-print: false
-
-# Type II SS - each main effect adjusted for other main effects
-# but not for interactions
-type2b_anova <- Anova(pb_model, type = 2)
+type2b_anova <- Anova(pb_model, type = 2)  # Type II
 type2b_anova
-```
 
-Type II SS tests each main effect after adjusting for other main effects, but not for the interaction. This is appropriate when interactions are not significant.
-
-## Type III Sums of Squares
-
-```{r ss_type3}
-#| message: false
-#| warning: false
-#| paged-print: false
-
-# Type III SS - each effect adjusted for all other effects
-# This is what we used earlier
-type3b_anova <- Anova(pb_model, type = 3)
+type3b_anova <- Anova(pb_model, type = 3)  # Type III
 type3b_anova
 ```
 
-Type III SS tests each effect after adjusting for all other effects in the model. This is the most conservative approach and is commonly used in unbalanced designs.
-
-## Comparing the Three Types
-
-```{r compare_ss_types}
-#| message: false
-#| warning: false
-#| paged-print: false
-
-# Create a comparison table of F-values
+``` r
 ssb_comparison_df <- data.frame(
   Effect = c("Species", "Sex", "Species:Sex"),
-  Typeb_I_F = round(type1b_anova$`F value`[1:3], 2),
-  Typeb_II_F = round(type2b_anova$`F value`[2:4], 2),
-  Typeb_III_F = round(type3b_anova$`F value`[2:4], 2)
+  Type_I_F = round(type1b_anova$`F value`[1:3], 2),
+  Type_II_F = round(type2b_anova$`F value`[2:4], 2),
+  Type_III_F = round(type3b_anova$`F value`[2:4], 2)
 )
-
 ssb_comparison_df
-```
 
-```{r compare_ss_p_values}
-#| message: false
-#| warning: false
-#| paged-print: false
-
-# Create a comparison table of p-values
 pb_comparison_df <- data.frame(
   Effect = c("Species", "Sex", "Species:Sex"),
-  Typeb_I_p = round(type1b_anova$`Pr(>F)`[1:3], 4),
-  Typeb_II_p = round(type2b_anova$`Pr(>F)`[2:4], 4),
-  Typeb_III_p = round(type3b_anova$`Pr(>F)`[2:4], 4)
+  Type_I_p = round(type1b_anova$`Pr(>F)`[1:3], 4),
+  Type_II_p = round(type2b_anova$`Pr(>F)`[2:4], 4),
+  Type_III_p = round(type3b_anova$`Pr(>F)`[2:4], 4)
 )
-
 pb_comparison_df
 ```
 
-## When Does It Matter?
+✏️ **Your turn:** For this *balanced* dataset, do the three SS types give the same F-values for the main effects? Is that what you'd expect? `________________________`
 
-The choice of SS type matters most when:
+------------------------------------------------------------------------
 
-1.  **Unbalanced designs**: When sample sizes differ across groups
-2.  **Correlated predictors**: When predictors are not orthogonal
-3.  **Interactions present**: When there are significant interactions
+# Part 7 · The Same Analysis, Unbalanced
 
-For balanced designs (equal sample sizes in all cells), all three types give the same results for main effects.
+Now let's redo the whole analysis on the full, naturally unbalanced `p_df` (not the balanced `pb_df` subsample) — and see what changes.
 
-# This is the unbalanced Factorial ANOVA
+**▶ Run this** — fit the model and check the ANOVA table:
 
-We will work through the exact same data but when it was unbalanced to see the effect that balanced and unbalanced have
-
-# Lecture 12: Factorial ANOVA
-
-## ANOVA Assumptions
-
-In the factorial ANOVA, we need to check several assumptions after fitting the model:
-
-1.  Independence of observations
-2.  Normality of residuals
-3.  Homogeneity of variances
-
-Fit the model
-
-```{r fit_modelu}
-#| message: false
-#| warning: false
-#| paged-print: false
-
-# Fit the factorial ANOVA using linear model (lm) instead of aov
+``` r
 pu_model <- lm(mass_g ~ spp * sex, data = p_df)
-
-# View the model summary to see coefficients, standard errors, etc.
 summary(pu_model)
-```
-
-```{r anovau}
-#| message: false
-#| warning: false
-#| paged-print: false
 
 Anova(pu_model, type = 3)
 ```
 
-# Lecture 12: Factorial ANOVA
+**▶ Run this** — diagnostics:
 
-## ASSUMPTIONS
-
-```{r model_diagnosticsu}
-#| message: false
-#| warning: false
-#| paged-print: false
-#| fig-height: 6
-#| fig-width: 6
-# Create diagnostic plots
+``` r
 par(mfrow = c(2, 2))
 plot(pu_model)
 par(mfrow = c(1, 1))
-```
 
-## Check for Normality of Residuals
-
-```{r normality_1u}
-#| message: false
-#| warning: false
-#| paged-print: false
-
-# Extract residuals from the model
 pu_resid_df <- augment(pu_model)
 
-# Create Q-Q plot of residuals
 ggplot(pu_resid_df, aes(sample = .resid)) +
   stat_qq() +
   stat_qq_line() +
-  labs(title = "Q-Q Plot of Residuals",
-       x = "Theoretical Quantiles",
-       y = "Sample Quantiles")
-```
+  labs(title = "Q-Q Plot of Residuals", x = "Theoretical Quantiles", y = "Sample Quantiles")
 
-# Lecture 12: Factorial ANOVA
+shapiro.test(residuals(pu_model))
 
-## Check for Normality of Residuals
-
-```{r normality_2u}
-#| message: false
-#| warning: false
-#| paged-print: false
-
-# Histogram of residuals
-ggplot(pu_resid_df, aes(x = .resid)) +
-  geom_histogram(bins = 15, fill = "snow", color = "black") +
-  labs(title = "Histogram of Residuals",
-       x = "Residuals",
-       y = "Count")
-```
-
-# Lecture 12: Factorial ANOVA
-
-## Check for Normality of Residuals
-
-```{r normality_3u}
-#| message: false
-#| warning: false
-#| paged-print: false
-
-# Shapiro-Wilk test for normality
-shapiro.test(pu_model$residuals)
-
-```
-
-# Lecture 12: Factorial ANOVA
-
-```{r homogeneity_1u}
-#| message: false
-#| warning: false
-#| paged-print: false
-
-# Levene's test for homogeneity of variances
 leveneTest(mass_g ~ spp * sex, data = p_df)
 ```
 
-# Lecture 12: Factorial ANOVA
+**▶ Run this** — EMMs, pairwise comparisons, and the interaction plot:
 
-## Check for homogeneity of variances
-
-```{r homogeneity_2u}
-#| message: false
-#| warning: false
-#| paged-print: false
-
-# Residuals vs. fitted values plot
-ggplot(pu_resid_df, aes(x = .fitted, y = .resid)) +
-  geom_point() +
-  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
-  labs(title = "Residuals vs Fitted Values",
-       x = "Fitted Values",
-       y = "Residuals")
-```
-
-# Lecture 12: Factorial ANOVA
-
-## Check for homogeneity of variances
-
-```{r homogeneity_3u}
-#| message: false
-#| warning: false
-#| paged-print: false
-
-# Add residuals to original data for plotting
-pu_resid_group_df <- p_df %>%
-  mutate(residuals = residuals(pu_model))
-
-# Residuals by group
-ggplot(pu_resid_group_df, aes(x = interaction(spp, sex), y = residuals)) +
-  geom_boxplot() +
-  labs(title = "Residuals by Group",
-       x = "Species:Sex Combination",
-       y = "Residuals") +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
-```
-
-# Lecture 12: Factorial ANOVA
-
-## Estimated Marginal Means and Effects
-
-```{r emmeans_1u}
-#| message: false
-#| warning: false
-#| paged-print: false
-
-# Get estimated marginal means from the linear model
-# Main effect of species
+``` r
 sppu_emm <- emmeans(pu_model, ~ spp)
 sppu_emm
-
 pairs(sppu_emm)
-```
 
-## Estimated Marginal Means and Effects
-
-```{r emmeans_2u}
-#| message: false
-#| warning: false
-#| paged-print: false
-
-
-plot(sppu_emm)
-```
-
-# Lecture 12: Factorial ANOVA
-
-## Estimated Marginal Means and Effects
-
-```{r emmeans_3u}
-#| message: false
-#| warning: false
-#| paged-print: false
-
-# Main effect of sex
 sexu_emm <- emmeans(pu_model, ~ sex)
 sexu_emm
-
 pairs(sexu_emm)
-```
 
-# Lecture 12: Factorial ANOVA
-
-## Estimated Marginal Means and Effects
-
-```{r emmeans_4u}
-#| message: false
-#| warning: false
-#| paged-print: false
-
-# Main effect of sex
-plot(sexu_emm)
-```
-
-# Lecture 12: Factorial ANOVA
-
-## Estimated Marginal Means and Effects
-
-```{r emmeans_5u}
-#| message: false
-#| warning: false
-#| paged-print: false
-
-# Interaction effects
 interactionu_emm <- emmeans(pu_model, ~ spp * sex)
 interactionu_emm
-
-# ~ species | sex - Gets species means conditional on each sex level separately. 
-# This is useful for simple effects 
-# (e.g., "Is there a species effect within males? Within females?") 
-# but it's not the same as the interaction.
-```
-
-```{r compare_meansu}
-#| message: false
-#| warning: false
-#| paged-print: false
 
 # Compare to raw means
 p_df %>%
   group_by(spp, sex) %>%
-  summarise(
-    raw_mean = mean(mass_g),
-    .groups = 'drop'
-  ) %>%
+  summarise(raw_mean = mean(mass_g), .groups = 'drop') %>%
   pivot_wider(names_from = sex, values_from = raw_mean)
-```
 
-```{r}
-# Get compact letter display (cld)
-cldu_interaction <- multcomp::cld(interactionu_emm, 
+cldu_interaction <- multcomp::cld(interactionu_emm,
                        Letters = letters,
                        adjust = "sidak")
-
-# Display the results
-# print(cld_interaction)
-
 cldu_df <- as.data.frame(cldu_interaction) %>%
-  arrange(spp, sex)  # Sort by estimated marginal mean
-
-# View the results with means and grouping letters
+  arrange(spp, sex)
 print(cldu_df)
-```
 
-# Lecture 12: Factorial ANOVA
-
-## Estimated Marginal Means and Effects
-
-```{r emmeans_6u}
-#| message: false
-#| warning: false
-#| paged-print: false
-
-# Interaction plot with confidence intervals
 emmip(pu_model, sex ~ spp, CIs = TRUE) +
-  labs(title = "Interaction Plot",
-       x = "Species",
-       y = "Body Mass (g)")
+  labs(title = "Interaction Plot", x = "Species", y = "Body Mass (g)")
 ```
 
-# Lecture 12: Factorial ANOVA
+**▶ Run this** — compare all three SS types on the unbalanced data:
 
-## Estimated Marginal Means and Effects
-
-```{r emmeans_7u}
-#| message: false
-#| warning: false
-#| paged-print: false
-
-# Convert emmeans object to data frame
-interactionu_df <- as.data.frame(interactionu_emm)
-interactionu_df
-```
-
-# Lecture 12: Factorial ANOVA
-
-## This is a plot you might produce for publication
-
-```{r pub_plotu}
-#| message: false
-#| warning: false
-#| paged-print: false
-
-# Publication-quality plot with model predictions
-# Convert emmeans object to data frame
-pub_interaction_df <- as.data.frame(interactionu_emm)
-
-# Create enhanced plot with model predictions
-pub_plot <- ggplot(pub_interaction_df, aes(x = spp, y = emmean, 
-                                       color = sex, group = sex)) +
-  # Add lines connecting the means
-  geom_line(linewidth = 1,
-            position = position_dodge(width = 0.2)) +
-  # Add points at each mean
-  geom_point(size = 3,
-            position = position_dodge(width = 0.2)) +
-  # Add error bars showing standard error
-  geom_errorbar(aes(ymin = emmean - SE, ymax = emmean + SE), 
-                width = 0.2,
-                position = position_dodge(width = 0.2)) +
-  # Simple labels
-  labs(
-    x = "Species",
-    y = "Body Mass (g)",
-    color = "Sex"
-  ) +
-  theme_light()
-
-pub_plot
-```
-
-# Lecture 12: Results Interpretation for Linear Model Approach
-
-The factorial ANOVA was conducted using a linear model approach, which provides additional insights beyond the traditional ANOVA table.
-
-Key findings from the linear model analysis:
-
-1.  **Main effect of species**: There was a significant effect of species on body mass (F = \[value from output\], df = 2, \[residual df\], p \< 0.001). Post-hoc comparisons showed that all three species differed significantly from each other in body mass.
-
-2.  **Interaction effect**: The interaction between species and sex was \[significant/not significant\] (F = \[value from output\], df = 2, \[residual df\], p = \[value from output\]), indicating that the difference between males and females \[varies/is consistent\] across species.
-
-3.  **Effect sizes and coefficients**: The linear model shows that:
-
-    - The intercept (reference level: Adelie, Female) has an estimated body mass of approximately \[value\] grams
-
-    - Males weigh approximately \[value\] grams more than females
-
-    - Chinstrap penguins differ from Adelie by approximately \[value\] grams
-
-    - Gentoo penguins differ from Adelie by approximately \[value\] grams
-
-    - The interaction terms indicate how the sex difference varies across species
-
-4.  **Model fit**: The overall model explains approximately \[value\]% of the variance in body mass (R-squared = \[value\]), indicating a good fit to the data.
-
-# Lecture 12: Understanding Sums of Squares Types
-
-When we have unbalanced designs (unequal sample sizes) or want to test different hypotheses, we can use different types of sums of squares. Let's compare Type I, Type II, and Type III.
-
-## Type I Sums of Squares (Sequential)
-
-```{r ss_type1u}
-#| message: false
-#| warning: false
-#| paged-print: false
-
-# Type I SS - order matters!
-# This is the default in R's anova() function
+``` r
 type1_anova <- anova(pu_model)
 type1_anova
-```
 
-Type I SS tests effects in the order they appear in the model. Each term is adjusted for terms that appear before it in the model.
-
-## Type II Sums of Squares
-
-```{r ss_type2u}
-#| message: false
-#| warning: false
-#| paged-print: false
-
-# Type II SS - each main effect adjusted for other main effects
-# but not for interactions
 type2_anova <- Anova(pu_model, type = 2)
 type2_anova
-```
 
-Type II SS tests each main effect after adjusting for other main effects, but not for the interaction. This is appropriate when interactions are not significant.
-
-## Type III Sums of Squares
-
-```{r ss_type3u}
-#| message: false
-#| warning: false
-#| paged-print: false
-
-# Type III SS - each effect adjusted for all other effects
-# This is what we used earlier
 type3_anova <- Anova(pu_model, type = 3)
 type3_anova
-```
 
-Type III SS tests each effect after adjusting for all other effects in the model. This is the most conservative approach and is commonly used in unbalanced designs.
-
-## Comparing the Three Types
-
-```{r compare_ss_typesu}
-#| message: false
-#| warning: false
-#| paged-print: false
-
-# Create a comparison table of F-values
 ss_comparison_df <- data.frame(
   Effect = c("Species", "Sex", "Species:Sex"),
   Type_I_F = round(type1_anova$`F value`[1:3], 2),
   Type_II_F = round(type2_anova$`F value`[2:4], 2),
   Type_III_F = round(type3_anova$`F value`[2:4], 2)
 )
-
 ss_comparison_df
 ```
 
-```{r compare_ss_p_valuesu}
-#| message: false
-#| warning: false
-#| paged-print: false
+✏️ **Your turn:** Now compare `ss_comparison_df` from this *unbalanced* run to `ssb_comparison_df` from Part 6. Do the three SS types now disagree with each other? `________________________`
 
-# Create a comparison table of p-values
-p_comparison_df <- data.frame(
-  Effect = c("Species", "Sex", "Species:Sex"),
-  Type_I_p = round(type1_anova$`Pr(>F)`[1:3], 4),
-  Type_II_p = round(type2_anova$`Pr(>F)`[2:4], 4),
-  Type_III_p = round(type3_anova$`Pr(>F)`[2:4], 4)
-)
+::: callout-tip
+**🚀 If you finish early:** Compute the difference in AIC between `pb_model` (balanced) and `pu_model` (unbalanced) — they're not directly comparable since they're fit to different data, but compare their `summary()$r.squared` instead. Does using *more* (unbalanced) data change how much variance is explained?
 
-p_comparison_df
+``` r
+# Write your code here:
+```
+:::
+
+------------------------------------------------------------------------
+
+# Part 8 · Writing Up the Results
+
+A two-way factorial ANOVA revealed that body mass in penguins was significantly affected by both species and sex. Linear model coefficient estimates indicated that body mass in the reference condition (Adelie females) was some baseline value; males weighed a certain amount more than females on average; Chinstrap and Gentoo penguins each differed from Adelie by their own amount. Post-hoc pairwise comparisons using estimated marginal means with Tukey adjustment showed significant differences between species pairs. Type III sums of squares were used to account for the unbalanced design, with Type I and Type II SS showing similar results for the main effects when the interaction was not the primary focus.
+
+✏️ **Your turn:** Using your own `pu_model` output from Part 7, fill in the specific numbers for this results paragraph — the F-statistics, degrees of freedom, p-values, and coefficient estimates.
+
+```
+________________________________________________________
+________________________________________________________
+________________________________________________________
 ```
 
-## When Does It Matter?
+------------------------------------------------------------------------
 
-The choice of SS type matters most when:
+# Review and checkpoint
 
-1.  **Unbalanced designs**: When sample sizes differ across groups
-2.  **Correlated predictors**: When predictors are not orthogonal
-3.  **Interactions present**: When there are significant interactions
+At this point you can:
 
-For balanced designs (equal sample sizes in all cells), all three types give the same results for main effects.
+- [ ] Build a balanced subsample from an unbalanced dataset
+- [ ] Fit a two-way factorial ANOVA with `lm()` and interpret main effects and the interaction
+- [ ] Check ANOVA assumptions with diagnostic plots, Shapiro-Wilk, and Levene's test
+- [ ] Compute estimated marginal means and pairwise/interaction comparisons with `emmeans()`
+- [ ] Explain the difference between Type I, Type II, and Type III sums of squares, and when they agree vs. disagree
+- [ ] Explain why EMMs differ from simple group means in an unbalanced design
 
-# Lecture 12: Writing the Results for a Scientific Paper
+::: callout-note
+**📤 What to turn in before next class**
 
-Here's how you might write up these results using the linear model approach for a scientific paper:
+Upload both of these to the course management system:
 
-```         
-Results
+1. Your code — the `scripts/` folder (or just `13_two_way_anova.R`)
+2. This worksheet, with your written answers
+:::
 
-A two-way factorial ANOVA revealed that body mass in penguins was significantly affected by both species (F2,[df] = [F-value], P < 0.001) and sex (F1,[df] = [F-value], P < 0.001). The interaction between species and sex was [significant/not significant] (F2,[df] = [F-value], P = [p-value]). The model explained [value]% of the variance in body mass (adjusted R² = [value]).
+------------------------------------------------------------------------
 
-Linear model coefficient estimates indicated that body mass in the reference condition (Adelie females) was [value] ± [SE] (estimate ± SE) grams. Males weighed [value] ± [SE] grams more than females on average. Chinstrap penguins differed from Adelie penguins by [value] ± [SE] grams, while Gentoo penguins were [value] ± [SE] grams different from Adelie penguins.
+# Getting unstuck
 
-Post-hoc pairwise comparisons using estimated marginal means with Tukey adjustment showed significant differences between all three species pairs (all p < 0.001). The sex difference was consistent across all three species [or varied by species if interaction is significant].
+When code breaks — and it will, that is normal:
 
-Type III sums of squares were used to account for the unbalanced design, with Type I and Type II SS showing similar results for the main effects.
-```
+1. **Read the error message out loud.** R usually names the line and the problem.
+2. **Check the usual suspects:** did you run `library(palmerpenguins)`, `library(car)`, `library(emmeans)`, `library(broom)`, and `library(tidyverse)`? Spelling? A missing `)` or `%>%` at the *start* of a line?
+3. `?function_name` opens the built-in help page.
+4. **Bring the exact error** (copy-paste it) to class or office hours.
 
-Note: The actual values for the model coefficients and standard errors should be obtained from the model summary output above.
+> 💡 **Key idea:** Every working scientist googles error messages daily. Getting stuck is not failing — it is the job.
+
+------------------------------------------------------------------------
