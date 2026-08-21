@@ -1,0 +1,422 @@
+---
+title: "Common Code 03 — Basic ggplot2"
+subtitle: "Scatter plots, boxplots, labels, colour, shapes, axis limits, themes, and saving"
+author: "Bill Perry"
+date: today
+
+topic_number: "03"
+type: common_code
+description: >
+  The basics of using ggplot
+categories: [packages, setup]
+
+format:
+  html: default
+  docx: default
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+
+# Introduction to ggplot2
+
+ggplot2 is built on the **grammar of graphics** — the idea that every plot can be described with the same small set of ingredients: data, mappings, and geometric shapes. Once you know the grammar, you can build almost any plot by combining the same pieces in different ways.
+
+This vignette covers the essentials you need for basic exploratory and presentation-quality plots. More advanced topics — statistical summaries, custom themes stored in separate files, multi-panel layouts — are covered in later vignettes.
+
+> ⬇️ **Download the companion R script** — all examples ready to run: [`03_ggplot.R`](03_ggplot.R)
+
+> 💡 **Following along?** Examples use the `penguins` dataset from the `palmerpenguins` package — a clean, well-structured dataset that shows real ecological patterns. Swap in your own data frame wherever you see `penguins`.
+
+------------------------------------------------------------------------
+
+### Packages needed
+
+``` r
+library(tidyverse)          # includes ggplot2
+library(palmerpenguins)     # penguins dataset
+```
+
+------------------------------------------------------------------------
+
+# 1 · The grammar of graphics
+
+Every ggplot is built from the same three required pieces, joined with `+`:
+
+```         
+ggplot(data, aes(x = , y = )) +   # 1. data + mappings
+  geom_*() +                        # 2. geometric shape
+  labs()                            # 3. labels (optional but always do it)
+```
+
+The minimal working plot — data, axes, and points:
+
+``` r
+ggplot(penguins, aes(x = flipper_length_mm, y = body_mass_g)) +
+  geom_point()
+```
+
+> 💡 **Key idea:** Think of `ggplot()` as setting up the canvas and telling R which columns map to x and y. The `geom_*()` function then decides *how* to draw the data — as points, boxes, bars, lines, and so on. You can swap geoms without changing anything else.
+
+> ⚠️ **Watch out!** The `+` must sit at the **end** of a line, never the start of the next one. A `+` at the start of a line causes an error.
+
+------------------------------------------------------------------------
+
+### The concise style
+
+R4DS (Wickham & Grolemund) uses shorthand once you know the argument order — you do not need to write `data =` and `mapping =` explicitly:
+
+``` r
+# Verbose (explicit argument names — good for learning)
+ggplot(data = penguins, mapping = aes(x = flipper_length_mm, y = body_mass_g)) +
+  geom_point()
+
+# Concise (argument names dropped — tidyverse convention)
+ggplot(penguins, aes(x = flipper_length_mm, y = body_mass_g)) +
+  geom_point()
+
+# With the pipe (also fine)
+penguins |>
+  ggplot(aes(x = flipper_length_mm, y = body_mass_g)) +
+  geom_point()
+```
+
+All three produce identical output. We use the concise style throughout this vignette.
+
+------------------------------------------------------------------------
+
+# 2 · Scatter plots
+
+### Basic scatter plot
+
+``` r
+ggplot(penguins, aes(x = flipper_length_mm, y = body_mass_g)) +
+  geom_point()
+```
+
+### Map colour to a grouping variable
+
+Place the mapping **inside `aes()`** and ggplot2 automatically assigns colours and draws a legend:
+
+``` r
+ggplot(penguins, aes(x = flipper_length_mm, y = body_mass_g,
+                     color = species)) +
+  geom_point()
+```
+
+### Map colour AND shape together
+
+Encoding the same variable with two aesthetics makes the plot accessible to colour-blind readers — a good habit for any published figure:
+
+``` r
+ggplot(penguins, aes(x = flipper_length_mm, y = body_mass_g,
+                     color = species, shape = species)) +
+  geom_point()
+```
+
+> 💡 **Key idea:** When you map both `color` and `shape` to the same variable, ggplot2 merges them into a single legend automatically — no extra code needed.
+
+### Fixed vs. mapped aesthetics
+
+This is one of the most common points of confusion in ggplot2:
+
+- **Inside `aes()`** = the value comes from the data (varies by row → legend appears)
+- **Outside `aes()`** = fixed for all points (same for every row → no legend)
+
+``` r
+# color mapped to data — different colour per species
+ggplot(penguins, aes(x = flipper_length_mm, y = body_mass_g,
+                     color = species)) +
+  geom_point()
+
+# color fixed — all points the same tomato-red, no legend
+ggplot(penguins, aes(x = flipper_length_mm, y = body_mass_g)) +
+  geom_point(color = "tomato", size = 2, alpha = 0.7)
+```
+
+> ⚠️ **Watch out!** Putting a colour name inside `aes()` — `aes(color = "tomato")` — does not make all points red. It maps the literal string `"tomato"` as a data category, producing one colour and an unhelpful legend. Fixed values always go **outside** `aes()`.
+
+------------------------------------------------------------------------
+
+# 3 · Box plots
+
+Box plots are ideal when one variable is categorical (groups) and one is numeric (measurement).
+
+### Basic box plot
+
+``` r
+ggplot(penguins, aes(x = species, y = body_mass_g)) +
+  geom_boxplot()
+```
+
+### Fill colour mapped to the x variable
+
+``` r
+ggplot(penguins, aes(x = species, y = body_mass_g, fill = species)) +
+  geom_boxplot(alpha = 0.6)
+```
+
+### Overlay raw data points with jitter
+
+A boxplot alone hides sample size. Adding jittered points shows both the distribution shape and how many observations went into each box:
+
+``` r
+ggplot(penguins, aes(x = species, y = body_mass_g)) +
+  geom_boxplot() +
+  geom_jitter(width = 0.15, alpha = 0.4, color = "steelblue")
+```
+
+> 💡 **Key idea:** Layer order matters. `geom_boxplot()` first and `geom_jitter()` second draws the points **on top of** the boxes. Swap the order and the boxes cover the points.
+
+### Side-by-side box plots (two grouping variables)
+
+Map a second grouping variable to `fill` to split each x-group:
+
+``` r
+ggplot(penguins, aes(x = species, y = body_mass_g, fill = sex)) +
+  geom_boxplot(alpha = 0.6)
+```
+
+------------------------------------------------------------------------
+
+# 4 · Titles and axis labels with `labs()`
+
+`labs()` controls every piece of text on the plot. Always label your axes — unlabelled axes are a common reason reviewers send figures back.
+
+``` r
+ggplot(penguins, aes(x = flipper_length_mm, y = body_mass_g,
+                     color = species, shape = species)) +
+  geom_point(size = 2.5, alpha = 0.8) +
+  labs(
+    title    = "Body mass increases with flipper length",
+    subtitle = "Palmer Archipelago penguins, 2007–2009",
+    x        = "Flipper length (mm)",
+    y        = "Body mass (g)",
+    color    = "Species",     # rename the colour legend
+    shape    = "Species",     # rename the shape legend (must match color label)
+    caption  = "Data: Gorman et al. / palmerpenguins package"
+  )
+```
+
+> 💡 **Key idea:** The `color` and `shape` arguments inside `labs()` rename the legend titles. When both are set to the same string (e.g. `"Species"`), ggplot2 merges them into one legend. If they differ, you get two separate legends — usually not what you want.
+
+**`labs()` arguments at a glance:**
+
+| Argument           | Controls                                   |
+|--------------------|--------------------------------------------|
+| `title`            | Main title above the plot                  |
+| `subtitle`         | Smaller text below the title               |
+| `caption`          | Small text at bottom-right (source, notes) |
+| `x`                | x-axis label                               |
+| `y`                | y-axis label                               |
+| `color` / `colour` | Colour legend title                        |
+| `fill`             | Fill legend title                          |
+| `shape`            | Shape legend title                         |
+
+------------------------------------------------------------------------
+
+# 5 · Mapping colour and shape
+
+### Colour and shape from the data
+
+Map to categorical variables for automatic discrete palettes:
+
+``` r
+ggplot(penguins, aes(x = bill_length_mm, y = bill_depth_mm,
+                     color = species, shape = species)) +
+  geom_point(size = 2)
+```
+
+Map to a continuous variable for a gradient palette:
+
+``` r
+ggplot(penguins, aes(x = flipper_length_mm, y = body_mass_g,
+                     color = bill_length_mm)) +
+  geom_point(size = 2)
+```
+
+### Fixed point shapes
+
+Common shape codes for `shape =` outside `aes()`:
+
+| Code | Shape                                |
+|------|--------------------------------------|
+| `16` | Filled circle (default)              |
+| `17` | Filled triangle                      |
+| `15` | Filled square                        |
+| `21` | Circle with separate fill and colour |
+| `22` | Square with separate fill and colour |
+
+``` r
+ggplot(penguins, aes(x = bill_length_mm, y = bill_depth_mm)) +
+  geom_point(shape = 17, color = "steelblue", size = 2.5)
+```
+
+> 💡 **Shapes 21–25** have both a `fill` (inside) and `color` (border), which lets you map two aesthetics independently — useful when you want coloured outlines around differently filled points.
+
+------------------------------------------------------------------------
+
+# 6 · Adjusting axis limits
+
+Two approaches — they behave differently and that matters:
+
+### `coord_cartesian()` — zoom without removing data
+
+``` r
+ggplot(penguins, aes(x = flipper_length_mm, y = body_mass_g)) +
+  geom_point(alpha = 0.6) +
+  coord_cartesian(
+    xlim = c(170, 220),
+    ylim = c(2500, 6500)
+  )
+```
+
+### `xlim()` / `ylim()` — remove data outside the range
+
+``` r
+ggplot(penguins, aes(x = flipper_length_mm, y = body_mass_g)) +
+  geom_point(alpha = 0.6) +
+  xlim(170, 220) +
+  ylim(2500, 6500)
+```
+
+> ⚠️ **Watch out!** `xlim()` and `ylim()` **silently drop rows** that fall outside the range before any computations happen. This changes the output of computed geoms like `geom_boxplot()`, `geom_smooth()`, and `geom_histogram()` — the statistics are recalculated on the reduced data, which may mislead. **Prefer `coord_cartesian()` in almost every case.** Only use `xlim()`/ `ylim()` when you genuinely want to exclude those data points from the analysis, not just from the view.
+
+------------------------------------------------------------------------
+
+# 7 · Simple themes
+
+A theme controls everything that is not data — background, gridlines, text sizes, tick marks. ggplot2 ships with several complete themes. Try them with the same plot to see which suits your purpose:
+
+``` r
+p <- ggplot(penguins, aes(x = species, y = body_mass_g, fill = species)) +
+  geom_boxplot(alpha = 0.6) +
+  labs(x = "Species", y = "Body mass (g)", title = "Penguin body mass by species")
+
+p + theme_grey()     # default: grey background, white gridlines
+p + theme_bw()       # white background, grey gridlines, black border
+p + theme_minimal()  # no background or border, subtle gridlines
+p + theme_classic()  # white background, axis lines only, no gridlines
+p + theme_light()    # light grey lines and border
+```
+
+> 💡 **`theme_classic()`** is a safe default for ecological publications — it is clean, uncluttered, and close to what most journals expect.
+
+### Remove the legend when it is redundant
+
+When colour just repeats the x-axis information, drop the legend:
+
+``` r
+p + theme_classic() +
+  theme(legend.position = "none")
+```
+
+### Move the legend
+
+``` r
+p + theme_classic() +
+  theme(legend.position = "bottom")   # "top", "left", "right", "bottom", "none"
+```
+
+> 💡 **Key idea:** The built-in themes (`theme_classic()` etc.) set defaults. Adding a `theme()` call afterwards lets you override individual elements on top of that base. Complex customisation — font sizes, axis text angle, background colours — is covered in the advanced themes vignette, where you will also learn to store your theme in a separate file and `source()` it at the top of every script.
+
+------------------------------------------------------------------------
+
+# 8 · Storing a plot as an object
+
+Assign the plot to a named object with `<-`. This lets you print it, add more layers to it, or save it without retyping the whole block:
+
+``` r
+my_plot <- ggplot(penguins, aes(x = flipper_length_mm, y = body_mass_g,
+                                color = species, shape = species)) +
+  geom_point(size = 2.5, alpha = 0.8) +
+  labs(
+    title  = "Body mass and flipper length",
+    x      = "Flipper length (mm)",
+    y      = "Body mass (g)",
+    color  = "Species",
+    shape  = "Species"
+  ) +
+  theme_classic() +
+  theme(legend.position = "bottom")
+
+my_plot   # print it
+
+# Add an extra layer without retyping
+my_plot + geom_smooth(method = "lm", se = FALSE, color = "grey40")
+```
+
+------------------------------------------------------------------------
+
+# 9 · Saving plots with `ggsave()`
+
+Save to your `figures/` folder. Always save the plot object explicitly with `plot =` — do not rely on `ggsave()` grabbing the last printed plot, as that can cause hard-to-trace bugs in longer scripts.
+
+### PDF — vector format, scales to any size
+
+``` r
+ggsave("figures/penguin_flipper_mass.pdf",
+       plot   = my_plot,
+       width  = 6,
+       height = 5,
+       units  = "in")
+```
+
+### PNG — raster, good for Word documents, presentations, web
+
+``` r
+ggsave("figures/penguin_flipper_mass.png",
+       plot   = my_plot,
+       width  = 6,
+       height = 5,
+       units  = "in",
+       dpi    = 300)   # 300 dpi = publication quality; 96 dpi = screen only
+```
+
+### TIFF — required by some journals
+
+``` r
+ggsave("figures/penguin_flipper_mass.tiff",
+       plot   = my_plot,
+       width  = 6,
+       height = 5,
+       units  = "in",
+       dpi    = 300,
+       compression = "lzw")
+```
+
+> ⚠️ **Watch out!** `ggsave()` takes the **filename first**, then `plot =`. Swapping the order is the most common saving mistake — R will not warn you, it will just silently save the wrong plot or throw a confusing error.
+
+**Format comparison:**
+
+| Format  | Best for                 | Scales?         | File size |
+|---------|--------------------------|-----------------|-----------|
+| `.pdf`  | Print, journals          | ✅ infinite     | Small     |
+| `.png`  | Word docs, web, slides   | ❌ fixed pixels | Medium    |
+| `.tiff` | Journal submission       | ❌ fixed pixels | Large     |
+| `.svg`  | Web, Illustrator editing | ✅ infinite     | Small     |
+
+------------------------------------------------------------------------
+
+# Quick reference
+
+| Task | Code |
+|------------------------------------|------------------------------------|
+| Scatter plot | `geom_point()` |
+| Box plot | `geom_boxplot()` |
+| Jittered raw data | `geom_jitter(width = 0.15, alpha = 0.5)` |
+| Map colour (data) | `aes(color = variable)` |
+| Map shape (data) | `aes(shape = variable)` |
+| Fixed colour | `geom_point(color = "steelblue")` |
+| Fixed size | `geom_point(size = 2)` |
+| Transparency | `geom_point(alpha = 0.6)` |
+| All labels | `labs(title=, subtitle=, x=, y=, color=, caption=)` |
+| Zoom (safe) | `coord_cartesian(xlim = c(a,b), ylim = c(c,d))` |
+| Classic theme | `theme_classic()` |
+| Remove legend | `theme(legend.position = "none")` |
+| Save as PDF | `ggsave("figures/plot.pdf", plot = p, width=6, height=5, units="in")` |
+| Save as PNG | `ggsave("figures/plot.png", plot = p, width=6, height=5, dpi=300, units="in")` |
+
+*End of Common Code 03 — Basic ggplot2.* *Next: Common Code 04 — Filter and Select.*

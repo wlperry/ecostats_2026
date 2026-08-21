@@ -1,0 +1,221 @@
+---
+title: "Common Code 10 — Joining Data Frames"
+subtitle: "left_join, inner_join, full_join, anti_join — merging tables by a shared key"
+author: "Bill Perry"
+date: today
+
+topic_number: "10"
+type: common_code
+description: >
+ How to join dataframes into a new one
+categories: [packages, setup]
+
+format:
+  html: default
+  docx: default
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+# Joining data frames
+
+When your data lives in two spreadsheets — fish measurements in one file,
+site environmental data in another — you need to **join** them by a shared
+column (the key). The `dplyr` join functions do this cleanly and safely.
+
+> ⬇️ **Download the companion R script:** [`13_joins.R`](13_joins.R)
+
+```r
+library(tidyverse)
+library(nycflights13)   # flights, airlines, airports, weather, planes
+```
+
+---
+
+# 1 · The four join types
+
+::: {.callout-note}
+## Which join do I need?
+
+| Join | Keeps rows from | What happens to non-matches |
+|---|---|---|
+| `left_join(x, y)` | All of **x** | y columns filled with `NA` |
+| `inner_join(x, y)` | Only rows in **both** | Non-matches dropped silently |
+| `full_join(x, y)` | All of **both** | `NA` filled on both sides |
+| `anti_join(x, y)` | **x** rows with no match in y | Keeps the gaps, not the matches |
+
+**Default: use `left_join()`** — it keeps your primary data intact and tells
+you clearly where information is missing via `NA`.
+:::
+
+---
+
+# 2 · `left_join()` — the workhorse
+
+Add airline names to flight records. Every flight row is kept; the name
+comes from the `airlines` table where the carrier code matches.
+
+```r
+flights |>
+  left_join(airlines, by = "carrier") |>
+  select(flight, name, dep_delay, arr_delay) |>
+  head()
+```
+
+::: {.callout-tip}
+## Always name the `by` argument
+
+Writing `by = "carrier"` makes explicit which column is the key. Without it,
+dplyr joins on all shared column names — which can silently join on the wrong
+columns if your two tables share a name like `year` or `id`.
+:::
+
+---
+
+# 3 · `inner_join()` — matched rows only
+
+Join flights to plane specifications. Any flight whose `tailnum` is not in
+the `planes` table is **silently dropped**.
+
+```r
+flights |>
+  inner_join(planes, by = "tailnum") |>
+  select(flight, tailnum, manufacturer, model, dep_delay) |>
+  head()
+```
+
+::: {.callout-warning}
+## `inner_join` drops rows silently
+
+If 5 000 flights use tail numbers not in `planes`, `inner_join()` drops all
+5 000 without any warning. Always compare `nrow()` before and after an
+`inner_join()` to see how many rows were lost.
+:::
+
+---
+
+# 4 · `full_join()` — keep everything
+
+Useful when two datasets each have unique rows the other lacks:
+
+```r
+df_a <- tibble(site = c("A","B","C"), density = c(12,8,15))
+df_b <- tibble(site = c("B","C","D"), temp_c  = c(14,12,18))
+
+full_join(df_a, df_b, by = "site")
+```
+
+Site A has no temperature (NA in `temp_c`); site D has no density (NA in
+`density`). The full join makes all gaps visible.
+
+---
+
+# 5 · `anti_join()` — find the gaps
+
+Which flights have a tail number that is *not* in the planes registry?
+
+```r
+flights |>
+  anti_join(planes, by = "tailnum") |>
+  count(tailnum, sort = TRUE)
+```
+
+::: {.callout-tip}
+## `anti_join` is great for data quality checks
+
+"Which sites in my fish data have no matching entry in my site metadata?" is exactly an `anti_join()` question. Run it before any analysis to find missing rows early.
+:::
+
+---
+
+# 6 · Joining on differently named columns
+
+When the key column has different names in the two tables, use
+`by = c("left_name" = "right_name")`:
+
+```r
+# airports uses "faa"; flights uses "dest"
+flights |>
+  left_join(airports, by = c("dest" = "faa")) |>
+  select(flight, dest, name, lat, lon) |>
+  head()
+```
+
+---
+
+# 7 · Joining on multiple columns
+
+`weather` is identified by five columns: year, month, day, hour, and origin.
+List all of them in `by`:
+
+```r
+flights |>
+  left_join(weather,
+            by = c("year","month","day","hour","origin")) |>
+  select(flight, dep_delay, temp, wind_speed, precip) |>
+  head()
+```
+
+---
+
+# 8 · The duplicate key problem
+
+::: {.callout-warning}
+## Duplicate keys cause row explosions
+
+If the **right-hand** table has duplicate key values, every matching row in
+the left table gets multiplied — one output row per match.
+
+```r
+# Safe — check for duplicates before joining
+airlines |> count(carrier) |> filter(n > 1)   # should be 0
+
+# If duplicates exist, decide what to do:
+#   distinct()       — keep one row per key
+#   group_by() |> summarise()  — aggregate first, then join
+```
+
+**Always check for duplicates before joining.** A silent row explosion is one
+of the hardest bugs to catch after the fact.
+:::
+
+---
+
+# 9 · Ecological example — fish data + site metadata
+
+```r
+fish_counts <- tibble(
+  site_id = c("S01","S01","S02","S03","S03"),
+  species = c("brook_trout","sculpin","brook_trout","sculpin","brook_trout"),
+  count   = c(24, 8, 3, 15, 11)
+)
+
+site_meta <- tibble(
+  site_id   = c("S01","S02","S03"),
+  stream    = c("Knife River","Baptism River","Brule River"),
+  area_m2   = c(45, 30, 60)
+)
+
+# Merge and calculate density
+fish_counts |>
+  left_join(site_meta, by = "site_id") |>
+  mutate(density = count / area_m2)
+```
+
+---
+
+# Quick reference
+
+| Task | Code |
+|---|---|
+| Add columns from y, keep all x | `left_join(x, y, by = "key")` |
+| Keep only matched rows | `inner_join(x, y, by = "key")` |
+| Keep all rows from both | `full_join(x, y, by = "key")` |
+| Find rows in x with no match | `anti_join(x, y, by = "key")` |
+| Different key names | `by = c("left_col" = "right_col")` |
+| Join on multiple columns | `by = c("year","month","day")` |
+| Check for duplicate keys | `df |> count(key_col) |> filter(n > 1)` |
+
+*End of Common Code 10 — Joining Data Frames.* *Next: Common Code 11 — Dates with lubridate.*

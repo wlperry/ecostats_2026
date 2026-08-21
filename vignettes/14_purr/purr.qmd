@@ -1,0 +1,259 @@
+---
+title: "Common Code 14 — Iteration with purrr"
+subtitle: "map(), map_df(), nest_by(), and reading multiple files"
+author: "Bill Perry"
+date: today
+
+topic_number: "14"
+type: common_code
+description: >
+  How to redo things over and over
+categories: [packages, setup]
+
+format:
+  html: default
+  docx: default
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+# Iteration with purrr
+
+`purrr` replaces for-loops and copy-paste with clean, readable single lines. The core idea: **apply a function to every element of a list**.
+
+> ⬇️ **Download the companion R script:** [`17_purrr.R`](18_purrr.R)
+
+``` r
+library(tidyverse)
+library(palmerpenguins)
+library(broom)
+```
+
+------------------------------------------------------------------------
+
+# 1 · The map family
+
+::: callout-note
+## Choose your `map_*` by what you want back
+
+| Function        | Returns                                       |
+|-----------------|-----------------------------------------------|
+| `map(x, f)`     | A list (always safe)                          |
+| `map_dbl(x, f)` | A numeric vector                              |
+| `map_chr(x, f)` | A character vector                            |
+| `map_lgl(x, f)` | A logical vector                              |
+| `map_df(x, f)`  | A data frame (row-binds)                      |
+| `walk(x, f)`    | Nothing — for side effects (printing, saving) |
+| `map2(x, y, f)` | Iterate over two inputs simultaneously        |
+:::
+
+The `~` shorthand: `~ some_function(.x)` means "apply this function to each element, where `.x` is the current element."
+
+``` r
+numbers <- list(a = c(1,2,3,4), b = c(10,20,NA), c = c(5,6,7,8,9))
+
+map(numbers, mean)                          # list of three means
+map_dbl(numbers, mean)                      # named numeric vector
+map_dbl(numbers, ~ mean(.x, na.rm = TRUE))  # with na.rm
+```
+
+------------------------------------------------------------------------
+
+# 2 · Fit a model to each group
+
+The most common ecological use: separate regression (or ANOVA) per species, lake, or site — in one pipeline.
+
+``` r
+models <- penguins |>
+  drop_na() |>
+  nest_by(species) |>                     # one list-row per species
+  mutate(
+    fit       = list(lm(body_mass_g ~ flipper_length_mm, data = data)),
+    coef      = list(tidy(fit, conf.int = TRUE)),
+    fit_stats = list(glance(fit))
+  )
+
+models
+```
+
+### Extract all coefficients into one flat table
+
+``` r
+models |>
+  unnest(coef) |>
+  select(species, term, estimate, std.error, p.value) |>
+  filter(term != "(Intercept)")
+```
+
+### R² for each species
+
+``` r
+models |>
+  unnest(fit_stats) |>
+  select(species, r.squared, adj.r.squared, p.value)
+```
+
+::: callout-tip
+## `nest_by()` + `mutate(list(...))` pattern
+
+`nest_by(species)` creates a grouped data frame where the `data` column holds one mini-data-frame per species. `mutate(fit = list(lm(..., data = data)))` fits a model to each. `unnest(coef)` unpacks the results back into a flat tibble. This pattern scales from 3 species to 300 sites without changing a single line.
+:::
+
+------------------------------------------------------------------------
+
+# 3 · Map over a named list of data frames
+
+`split()` turns a data frame into a named list — one element per group:
+
+``` r
+species_list <- penguins |>
+  drop_na() |>
+  split(~ species)   # named list: $Adelie, $Chinstrap, $Gentoo
+
+# Apply a summary function to each species
+map_df(species_list, ~ tibble(
+  n         = nrow(.x),
+  mean_mass = mean(.x$body_mass_g),
+  se_mass   = sd(.x$body_mass_g) / sqrt(nrow(.x))
+), .id = "species")   # .id creates a column from the list names
+```
+
+------------------------------------------------------------------------
+
+# 4 · Reading multiple files
+
+::: callout-tip
+## The most practically useful purrr pattern
+
+When you have annual survey files `survey_2022.csv`, `survey_2023.csv`, ... you do not need to manually read each one. `list.files()` + `map()` + `list_rbind()` handles any number of files in three lines:
+
+``` r
+# List all matching files
+file_paths <- list.files("data_raw/", pattern = "survey_.*\\.csv",
+                          full.names = TRUE)
+
+# Read all, bind into one data frame
+all_surveys <- map(file_paths, read_csv) |>
+  list_rbind(names_to = "source_file")
+
+# One-liner version
+all_surveys <- list.files("data_raw/", "survey.*csv",
+                           full.names = TRUE) |>
+  map(read_csv) |>
+  list_rbind()
+```
+
+`list_rbind()` is the modern replacement for `bind_rows()` on a list. `names_to = "source_file"` adds a column recording which file each row came from — invaluable for debugging.
+:::
+
+------------------------------------------------------------------------
+
+# 5 · Generate and save multiple plots
+
+``` r
+# One plot per species
+plots <- penguins |>
+  drop_na() |>
+  split(~ species) |>
+  map(~ ggplot(.x, aes(x = flipper_length_mm, y = body_mass_g)) +
+        geom_point(color = "steelblue", alpha = 0.6) +
+        geom_smooth(method = "lm", color = "tomato", se = FALSE) +
+        labs(title = unique(.x$species),
+             x = "Flipper length (mm)", y = "Body mass (g)") +
+        theme_classic())
+
+# Print each
+walk(plots, print)
+
+# Save each — map2() iterates two lists at once
+filenames <- paste0("figures/regression_", names(plots), ".pdf")
+map2(filenames, plots,
+     ~ ggsave(.x, plot = .y, width = 5, height = 4, units = "in"))
+```
+
+::: callout-note
+## `walk()` for side effects
+
+`map()` returns a list of results. `walk()` runs the function purely for its side effect (printing, saving, writing) and returns nothing. Use `walk()` for `print()`, `ggsave()`, `write_csv()` — anywhere you do not need the output.
+:::
+
+------------------------------------------------------------------------
+
+# 6 · `map2()` — iterate over two inputs
+
+``` r
+sites   <- c("A","B","C")
+surveys <- c(2022, 2023, 2024)
+
+map2_chr(sites, surveys,
+         ~ paste0("Site ", .x, " surveyed in ", .y))
+# "Site A surveyed in 2022" "Site B surveyed in 2023" ...
+```
+
+------------------------------------------------------------------------
+
+# 7 · Safe mapping — handle errors gracefully
+
+`safely()` wraps any function so that errors return `NULL` instead of stopping the whole `map()`:
+
+``` r
+safe_log <- safely(log)
+
+results <- map(list(10, -1, 100, "a"), safe_log)
+# Each element: $result (the value) or $error (the error message)
+
+# Keep only successful results
+results |> map("result") |> compact()   # compact() drops NULLs
+```
+
+::: callout-tip
+## `safely()` is essential for batch processing
+
+When reading 50 field survey files, one corrupted file would crash the whole pipeline. Wrapping `read_csv` with `safely(read_csv)` lets you process all 50 files and then inspect which ones failed — without losing all the successful reads.
+:::
+
+------------------------------------------------------------------------
+
+# 8 · Ecological application — eBird pipeline sketch
+
+``` r
+# Read abundance rasters for multiple species → extract breeding centroid
+species_codes <- c("ovenbird", "blackthroated_warbler", "veery")
+
+# Each file is a raster CSV exported from the ebirdst pipeline
+abundance_data <- set_names(
+  paste0("data_raw/ebirdst/", species_codes, "_abundance.csv"),
+  species_codes
+) |>
+  map(read_csv) |>
+  map(~ filter(.x, !is.na(abd))) |>
+  map(~ mutate(.x, log_abd = log10(abd + 0.001)))
+
+# Summary across species
+map_df(abundance_data, ~ tibble(
+  max_abd  = max(.x$abd),
+  mean_lat = weighted.mean(.x$lat, .x$abd, na.rm = TRUE)
+), .id = "species")
+```
+
+------------------------------------------------------------------------
+
+# Quick reference
+
+| Task | Code |
+|------------------------------------|------------------------------------|
+| Apply function → list | `map(x, ~ f(.x))` |
+| Apply function → numbers | `map_dbl(x, ~ f(.x))` |
+| Apply function → data frame | `map_df(x, ~ f(.x), .id = "name")` |
+| Side effects only | `walk(x, ~ f(.x))` |
+| Two inputs | `map2(x, y, ~ f(.x, .y))` |
+| Split by group | `df |> split(~ group_var)` |
+| Fit model per group | `nest_by(group) |> mutate(fit = list(lm(..., data=data)))` |
+| Extract nested results | `unnest(coef)` after `mutate(coef = list(tidy(fit)))` |
+| Read multiple files | `list.files(path, pattern) |> map(read_csv) |> list_rbind()` |
+| Handle errors | `safely(f)` then `map("result") |> compact()` |
+| Save multiple plots | `map2(filenames, plots, ~ ggsave(.x, .y))` |
+
+*End of Common Code 14 — Iteration with purrr.* *Next: Common Code 15 — Quarto Document Basics.*

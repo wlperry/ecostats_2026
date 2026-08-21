@@ -1,0 +1,254 @@
+---
+title: "Common Code 11 — Dates with lubridate"
+subtitle: "Parsing, extracting, arithmetic, and plotting time series"
+author: "Bill Perry"
+date: today
+
+topic_number: "11"
+type: common_code
+description: >
+  How to work with dates
+categories: [packages, setup]
+
+format:
+  html: default
+  docx: default
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+# Working with dates
+
+Dates in R are their own data type — not text, not numbers. The `lubridate`
+package makes parsing, extracting, and doing arithmetic with dates simple and
+readable. This matters any time you work with field data, phenology, water
+quality records, or eBird data.
+
+> ⬇️ **Download the companion R script:** [`14_dates.R`](14_dates.R)
+
+```r
+library(tidyverse)
+library(lubridate)
+library(nycflights13)
+```
+
+---
+
+# 1 · Parsing dates — turning strings into dates
+
+The function name tells R the order of the components in your string:
+
+```r
+ymd("2026-06-25")        # ISO format — international standard
+mdy("06/25/2026")        # US format — common in Excel
+dmy("25-06-2026")        # European format
+ymd("20260625")          # no separator — also works
+```
+
+::: {.callout-warning}
+## The most common date mistake
+
+Dates imported from CSV or Excel often look like dates but are stored as **text**. `glimpse()` or `str()` will show them as `<chr>` not `<date>`. Always convert with `ymd()` / `mdy()` / `dmy()` after import — or use `col_types = cols(date = col_date())` inside `read_csv()`.
+:::
+
+```r
+# Fix a date column that imported as character
+my_data |>
+  mutate(date = ymd(date_string))    # or mdy(), dmy() depending on format
+```
+
+### Dates from Excel serial numbers
+
+Excel stores dates as integers counting from 1900. `as_date()` handles this:
+
+```r
+tibble(excel_date = c(45000, 45100, 45200)) |>
+  mutate(real_date = as_date(excel_date, origin = "1899-12-30"))
+```
+
+---
+
+# 2 · Extracting components
+
+Once you have a proper `<date>` column, pull out whatever piece you need:
+
+```r
+d <- ymd("2026-06-25")
+
+year(d)              # 2026
+month(d)             # 6
+day(d)               # 25
+yday(d)              # 176  — day of year (critical for phenology)
+week(d)              # ISO week number
+wday(d, label=TRUE)  # "Thu"
+quarter(d)           # 2
+```
+
+::: {.callout-tip}
+## Day of year (`yday`) is essential for ecology
+
+Convert calendar dates to day of year before plotting seasonal patterns —
+it aligns across years and handles the year boundary cleanly. Ice-off dates,
+bird arrival dates, and bloom dates are all typically analysed as day of year.
+:::
+
+### Applied to a data frame
+
+```r
+flights |>
+  mutate(
+    date       = make_date(year, month, day),
+    month_name = month(date, label = TRUE, abbr = FALSE),
+    day_of_yr  = yday(date),
+    weekday    = wday(date, label = TRUE)
+  ) |>
+  select(flight, date, month_name, day_of_yr, weekday) |>
+  head()
+```
+
+---
+
+# 3 · Building dates from components
+
+```r
+make_date(2026, 6, 25)                   # one date from three numbers
+make_datetime(2026, 6, 25, 14, 30, 0)   # with hour, minute, second
+
+# Build a date column from separate year/month/day columns
+flights |>
+  mutate(date = make_date(year, month, day)) |>
+  select(flight, year, month, day, date) |>
+  head()
+```
+
+---
+
+# 4 · Date arithmetic
+
+```r
+start <- ymd("2026-03-01")
+end   <- ymd("2026-06-25")
+
+end - start                    # 116 days (difftime)
+as.numeric(end - start)        # 116 (plain number)
+
+start + days(30)               # add 30 days
+start + months(3)              # add 3 months (respects calendar)
+start + years(1)               # add 1 year
+```
+
+### Days between field visits
+
+```r
+field_visits <- tibble(
+  visit = 1:4,
+  date  = ymd(c("2026-04-10","2026-05-08","2026-06-03","2026-07-01"))
+) |>
+  mutate(days_since_last = as.numeric(date - lag(date)))
+
+field_visits
+```
+
+::: {.callout-note}
+## `days()` vs `ddays()`
+
+`days(30)` adds 30 calendar days. `ddays(30)` adds 30 × 86 400 seconds (a fixed duration). They differ at daylight-saving transitions. For ecological field data, use `days()`.
+:::
+
+---
+
+# 5 · Filtering by date
+
+```r
+flights |>
+  mutate(date = make_date(year, month, day)) |>
+  filter(date >= ymd("2013-07-01"),
+         date <= ymd("2013-07-31"))   # July flights only
+
+# Filter by extracted component
+flights |>
+  mutate(date = make_date(year, month, day),
+         mon  = month(date)) |>
+  filter(mon %in% c(12, 1, 2))        # winter months
+```
+
+---
+
+# 6 · Plotting time series
+
+### Daily counts with x-axis formatted as dates
+
+```r
+flights |>
+  mutate(date = make_date(year, month, day)) |>
+  count(date) |>
+  ggplot(aes(x = date, y = n)) +
+  geom_line(color = "steelblue", alpha = 0.8) +
+  geom_smooth(method = "loess", span = 0.1,
+              color = "tomato", se = FALSE) +
+  scale_x_date(date_breaks = "1 month", date_labels = "%b") +
+  labs(x = NULL, y = "Flights per day",
+       title = "Daily flights from NYC — 2013") +
+  theme_minimal()
+```
+
+`scale_x_date()` formats the x-axis for date objects. Common `date_labels` format codes:
+
+| Code | Output |
+|---|---|
+| `%Y` | 2026 |
+| `%b` | Jun |
+| `%B` | June |
+| `%m` | 06 |
+| `%d` | 25 |
+| `%b %Y` | Jun 2026 |
+
+---
+
+# 7 · Ecological example — ice-off phenology
+
+Is the lake freezing later or thawing earlier over time? Day of year is the
+right response variable:
+
+```r
+ice_off <- tibble(
+  year     = 1981:1995,
+  date_str = c("1981-04-15","1982-04-08", ...)
+) |>
+  mutate(
+    date      = ymd(date_str),
+    day_of_yr = yday(date)
+  )
+
+ggplot(ice_off, aes(x = year, y = day_of_yr)) +
+  geom_point(size = 3, color = "steelblue") +
+  geom_smooth(method = "lm", se = TRUE,
+              color = "tomato", fill = "tomato", alpha = 0.15) +
+  labs(x = "Year", y = "Ice-off day of year",
+       title = "Lake ice-off phenology 1981–1995") +
+  theme_minimal()
+```
+
+---
+
+# Quick reference
+
+| Task | Code |
+|---|---|
+| Parse ISO date | `ymd("2026-06-25")` |
+| Parse US date | `mdy("06/25/2026")` |
+| Parse Euro date | `dmy("25-06-2026")` |
+| Parse Excel serial | `as_date(n, origin = "1899-12-30")` |
+| Build from parts | `make_date(year, month, day)` |
+| Year / month / day | `year(d)` / `month(d)` / `day(d)` |
+| Day of year | `yday(d)` |
+| Day name | `wday(d, label = TRUE)` |
+| Month name | `month(d, label = TRUE, abbr = FALSE)` |
+| Add days | `d + days(n)` |
+| Add months | `d + months(n)` |
+| Days between | `as.numeric(date2 - date1)` |
+| Format x-axis | `scale_x_date(date_breaks="1 month", date_labels="%b")` |
+
+*End of Common Code 11 — Dates with lubridate.* *Next: Common Code 12 — Strings and Factors.*

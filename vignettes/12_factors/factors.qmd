@@ -1,0 +1,283 @@
+---
+title: "Common Code 12 — Strings and Factors"
+subtitle: "stringr for text cleaning, forcats for plot order"
+author: "Bill Perry"
+date: today
+
+topic_number: "12"
+type: common_code
+description: >
+  How to arrange and work with factors
+categories: [packages, setup]
+
+format:
+  html: default
+  docx: default
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+# Strings and factors
+
+Two related but distinct problems: **strings** (`stringr`) deal with the content of text — trimming whitespace, detecting patterns, fixing capitalisation. **Factors** (`forcats`) deal with the *order* of categories — controlling which group appears first on a plot axis or in a table.
+
+> ⬇️ **Download the companion R script:** [`15_strings_factors.R`](15_strings_factors.R)
+
+```r
+library(tidyverse)
+library(palmerpenguins)
+library(nycflights13)
+```
+
+---
+
+# PART 1 · Strings with `stringr`
+
+# 1 · Case conversion
+
+The single most common data-cleaning fix: inconsistent capitalisation makes `"Sunny"`, `"SUNNY"`, and `"sunny"` three different groups.
+
+```r
+str_to_lower("SLIMY SCULPIN")      # "slimy sculpin"
+str_to_upper("cottus cognatus")    # "COTTUS COGNATUS"
+str_to_title("slimy sculpin")      # "Slimy Sculpin"
+
+# Fix all character columns after import
+penguins |>
+  mutate(across(where(is.character), str_to_lower))
+```
+
+---
+
+# 2 · Trimming whitespace
+
+`"sunny "` and `"sunny"` are different strings to R. This causes phantom extra
+factor levels and failed joins.
+
+```r
+str_trim("  sunny  ")         # "sunny"  — removes leading and trailing spaces
+str_squish("sunny   shady")   # "sunny shady" — also collapses internal spaces
+
+# Apply after every import
+penguins |>
+  mutate(across(where(is.character), str_trim))
+```
+
+::: {.callout-warning}
+## Whitespace is invisible and causes real bugs
+
+After importing from Excel, always run `tabyl(species)` or `count(species)` to check for phantom duplicate levels. `"sunny"` and `"sunny "` will each appear as a separate row — the giveaway.
+:::
+
+---
+
+# 3 · Detecting patterns
+
+```r
+str_detect("brook trout", "trout")   # TRUE
+str_detect("sculpin",     "trout")   # FALSE
+
+# Filter rows where species name contains "trout"
+tibble(species = c("brook trout","lake trout","sculpin","walleye")) |>
+  filter(str_detect(species, "trout"))
+
+# Case-insensitive search
+str_detect("Brook Trout", regex("trout", ignore_case = TRUE))  # TRUE
+```
+
+---
+
+# 4 · Replacing patterns
+
+```r
+str_replace("bill_length_mm",    "_mm", "")    # "bill_length" — first match
+str_replace_all("length_mm_mm",  "_mm", "")    # "length"      — all matches
+
+# Clean column names that have units embedded like "Length (mm)"
+tibble(`Length (mm)` = 1:3, `Mass (g)` = 4:6) |>
+  rename_with(~ str_replace_all(.x, "\\s*\\(.*\\)", "")) |>  # remove (units)
+  rename_with(str_to_lower) |>
+  rename_with(~ str_replace_all(.x, " ", "_"))
+```
+
+---
+
+# 5 · Extracting substrings
+
+```r
+# Extract a pattern from a field label like "trout_S01_2026"
+tibble(label = c("trout_S01_2026","sculpin_S02_2026","bass_S01_2025")) |>
+  mutate(
+    species = str_extract(label, "^[a-z]+"),     # first word
+    site    = str_extract(label, "S\\d+"),        # "S" + digits
+    year    = str_extract(label, "\\d{4}$")       # 4-digit year at end
+  )
+```
+
+---
+
+# 6 · Splitting and combining strings
+
+```r
+# Split "Lake_Superior_Site01" into components
+tibble(id = c("Lake_Superior_Site01","Lake_Michigan_Site02")) |>
+  separate_wider_delim(
+    cols  = id,
+    delim = "_",
+    names = c("water_body_1","water_body_2","site")
+  ) |>
+  unite("lake", water_body_1, water_body_2, sep = " ")
+
+# Pad site codes to consistent width
+str_pad(1:5, width = 2, pad = "0")    # "01" "02" "03" "04" "05"
+```
+
+::: {.callout-tip}
+## `separate_wider_delim()` vs `separate()`
+
+`separate_wider_delim()` is the modern tidyr function (tidyr ≥ 1.3). The older `separate()` still works but is superseded. Use `separate_wider_delim()` in new code.
+:::
+
+---
+
+---
+
+# PART 2 · Factors with `forcats`
+
+# 7 · Why factors control plot order
+
+By default, R puts categorical variables in alphabetical order on plot axes.
+That is almost never the order you want. Factors let you set the order explicitly.
+
+```r
+# Default: Adelie, Chinstrap, Gentoo (alphabetical — fine here by accident)
+penguins |> count(species) |>
+  ggplot(aes(x = species, y = n)) + geom_col()
+```
+
+---
+
+# 8 · `fct_relevel()` — set a custom order
+
+```r
+penguins |>
+  mutate(species = fct_relevel(species,
+                               "Gentoo","Chinstrap","Adelie")) |>
+  count(species) |>
+  ggplot(aes(x = species, y = n)) +
+  geom_col(fill = "steelblue", alpha = 0.7) +
+  labs(title = "Custom order: Gentoo, Chinstrap, Adelie") +
+  theme_minimal()
+```
+
+---
+
+# 9 · `fct_reorder()` — sort by a numeric value
+
+The most useful forcats function. Sorts bars by their actual value —
+almost always better than alphabetical.
+
+```r
+penguins |>
+  drop_na(body_mass_g) |>
+  group_by(species) |>
+  summarise(mean_mass = mean(body_mass_g), .groups = "drop") |>
+  mutate(species = fct_reorder(species, mean_mass)) |>   # sort ascending
+  ggplot(aes(x = species, y = mean_mass, fill = species)) +
+  geom_col(alpha = 0.7) +
+  labs(x = NULL, y = "Mean body mass (g)",
+       title = "Bars sorted by mean body mass") +
+  theme_minimal() +
+  theme(legend.position = "none")
+```
+
+::: {.callout-tip}
+## Sort descending with `desc()`
+
+```r
+mutate(species = fct_reorder(species, desc(mean_mass)))
+```
+
+Or for horizontal bar charts, `coord_flip()` combined with ascending sort
+puts the largest bar at the top — the most readable layout for many groups.
+:::
+
+---
+
+# 10 · `fct_infreq()` — sort by count
+
+```r
+flights |>
+  mutate(carrier = fct_infreq(carrier)) |>
+  count(carrier) |>
+  ggplot(aes(x = carrier, y = n)) +
+  geom_col(fill = "steelblue", alpha = 0.7) +
+  labs(title = "Airlines sorted by flight count (most to least)") +
+  theme_minimal()
+```
+
+---
+
+# 11 · `fct_lump_n()` — collapse rare categories
+
+When you have many levels but only want to highlight the top ones:
+
+```r
+flights |>
+  mutate(carrier = fct_lump_n(carrier, n = 5)) |>
+  count(carrier, sort = TRUE)
+# Top 5 carriers kept; all others collapsed to "Other"
+```
+
+---
+
+# 12 · Ecological example — species by body size
+
+The canonical use case: fish or species ordered from smallest to largest
+on a horizontal axis.
+
+```r
+fish_df |>
+  group_by(species) |>
+  mutate(species = fct_reorder(species, mass_g, .fun = mean)) |>
+  ggplot(aes(x = species, y = mass_g, fill = species)) +
+  geom_boxplot(alpha = 0.6) +
+  coord_flip() +
+  labs(x = NULL, y = "Mass (g)",
+       title = "Fish species ordered by mean body mass") +
+  theme_minimal() +
+  theme(legend.position = "none")
+```
+
+---
+
+# Quick reference
+
+**Strings**
+
+| Task | Code |
+|---|---|
+| Lowercase | `str_to_lower(x)` |
+| Title case | `str_to_title(x)` |
+| Trim spaces | `str_trim(x)` |
+| Collapse internal spaces | `str_squish(x)` |
+| Detect pattern | `str_detect(x, "pattern")` |
+| Replace first match | `str_replace(x, "old", "new")` |
+| Replace all matches | `str_replace_all(x, "old", "new")` |
+| Extract pattern | `str_extract(x, "regex")` |
+| Pad to width | `str_pad(x, width = 3, pad = "0")` |
+| Apply to all chr cols | `mutate(across(where(is.character), str_trim))` |
+
+**Factors**
+
+| Task | Code |
+|---|---|
+| Custom order | `fct_relevel(f, "B","A","C")` |
+| Sort by numeric variable | `fct_reorder(f, numeric_col)` |
+| Sort by frequency | `fct_infreq(f)` |
+| Collapse rare levels | `fct_lump_n(f, n = 5)` |
+| Rename levels | `fct_recode(f, "New" = "Old")` |
+
+*End of Common Code 12 — Strings and Factors.* *Next: Common Code 13 — Writing Functions.*

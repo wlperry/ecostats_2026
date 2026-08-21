@@ -1,0 +1,351 @@
+---
+title: "Common Code 08 — Custom ggplot2 Themes"
+subtitle: "Writing a theme function, sourcing from a subdirectory, and scaling for three output sizes"
+author: "Bill Perry"
+date: today
+
+topic_number: "08"
+type: common_code
+description: >
+  How to use and resuse themes for cleaning up graphs
+categories: [packages, setup]
+
+format:
+  html: default
+  docx: default
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+# Custom themes in ggplot2
+
+The built-in themes (`theme_classic()`, `theme_bw()`) get you most of the way to a clean publication figure. A **custom theme function** takes you the rest of the way — consistent fonts, line weights, margins, and text sizes across every figure in a project, with a single function call.
+
+This vignette shows you how to write one, turn it into a reusable function, store it in a `themes/` subdirectory, and call it from any script with `source()`. We also cover why you need three size variants and how all three are built from a single shared base.
+
+> ⬇️ **Download the theme file** — drop it into your `themes/` folder and source it in every script: [`r_themes_for_3_sizes.R`](r_themes_for_3_sizes.R)
+
+------------------------------------------------------------------------
+
+### Packages needed
+
+``` r
+library(tidyverse)
+library(palmerpenguins)   # dataset used in examples
+```
+
+------------------------------------------------------------------------
+
+# 1 · Why a custom theme?
+
+When you use `theme_classic()` and then add several `theme()` overrides, two problems build up over a semester:
+
+1.  **Repetition** — you copy the same block of `theme()` calls into every script. Change your mind about font size and you have 20 files to update.
+2.  **Inconsistency** — a figure in your thesis looks slightly different from one in your presentation because you forgot one override somewhere.
+
+A custom theme function solves both. You write the choices once, store the function in a single file, and call it everywhere. Change the file once, every figure updates.
+
+------------------------------------------------------------------------
+
+# 2 · Understanding `theme()` — what can you control?
+
+`theme()` controls every non-data element of a plot. The elements fall into five groups:
+
+| Group | Controls | Key elements |
+|------------------------|------------------------|------------------------|
+| Plot canvas | outer background, title, subtitle, caption, margins | `plot.background`, `plot.title`, `plot.margin` |
+| Panel | inner background, border, gridlines | `panel.background`, `panel.border`, `panel.grid.*` |
+| Axes | lines, ticks, tick length, title, tick labels | `axis.line`, `axis.ticks`, `axis.title`, `axis.text` |
+| Legend | background, keys, title, text, position | `legend.background`, `legend.key`, `legend.title` |
+| Facet strips | background, text, padding | `strip.background`, `strip.text` |
+
+Each element is set using one of three **element functions**:
+
+| Element function    | Use for                                      |
+|---------------------|----------------------------------------------|
+| `element_text(...)` | any text — size, face, colour, angle, margin |
+| `element_line(...)` | any line — colour, linewidth, linetype       |
+| `element_rect(...)` | any rectangle — fill, colour, linewidth      |
+| `element_blank()`   | turn an element completely off               |
+
+------------------------------------------------------------------------
+
+# 3 · Building a theme step by step
+
+Start from a built-in theme and override what you want to change. The `%+replace%` operator (from ggplot2) is the right tool when building a new theme that **completely replaces** elements rather than layering on top:
+
+### Step 1 — start from a clean base
+
+``` r
+my_theme <- function(base_size = 14, base_family = "sans") {
+  theme_classic(base_size = base_size, base_family = base_family)
+}
+```
+
+`theme_classic()` gives you white background, black axis lines on the bottom and left, no gridlines. It is the best starting point for ecological figures.
+
+### Step 2 — override individual elements with `%+replace%`
+
+``` r
+my_theme <- function(base_size = 14, base_family = "sans") {
+  theme_classic(base_size = base_size, base_family = base_family) %+replace%
+    theme(
+      plot.title  = element_text(face = "bold", size = rel(1.15), hjust = 0),
+      axis.title  = element_text(face = "bold"),
+      axis.text   = element_text(colour = "grey20"),
+      panel.border = element_rect(fill = NA, colour = "black", linewidth = 0.55)
+    )
+}
+```
+
+> 💡 **`%+replace%` vs `+`** — When you add `theme()` to a finished plot with `+`, you are *layering* overrides on top. When you use `%+replace%` inside a theme function definition, you are *completely replacing* each named element with your new specification. Use `%+replace%` inside your theme functions; use `+` when making one-off adjustments to a finished plot.
+
+### Step 3 — use `rel()` for proportional sizes
+
+Hard-coding `size = 14` inside a theme means the title is always 14 pt even if someone calls `my_theme(base_size = 9)`. Use `rel()` to keep sizes proportional to `base_size`:
+
+``` r
+plot.title = element_text(face = "bold", size = rel(1.15))
+# At base_size = 14:  title is 14 × 1.15 = 16.1 pt
+# At base_size = 9:   title is  9 × 1.15 = 10.4 pt  ← scales correctly
+```
+
+### Step 4 — use `unit()` for lengths that don't scale automatically
+
+Tick length and plot margins are in physical units, not multiples of `base_size`. Pass them as arguments so each theme variant can set its own:
+
+``` r
+axis.ticks.length = unit(5, "pt")   # 5-point ticks for regular output
+plot.margin       = margin(8, 8, 8, 8)  # 8 pt on all sides
+```
+
+------------------------------------------------------------------------
+
+# 4 · Why three sizes?
+
+A figure saved at 7 × 5 inches with `base_size = 14` looks perfect in a journal PDF. Saved at 3 × 3 inches, the same theme makes text enormous and lines too thick. Saved at 16 × 12 for a poster, text is tiny and lines disappear.
+
+The rule: **base_size and line widths must scale with the output dimensions.**
+
+| Theme | Output size | base_size | line_width | Use for |
+|---------------|---------------|---------------|---------------|---------------|
+| `theme_small()` | 3 × 3 in | 9 pt | 0.35 pt | Insets, patchwork grids |
+| `theme_regular()` | 6–7 × 5–6 in | 14 pt | 0.55 pt | Journal figures, HTML |
+| `theme_large()` | 12–16 × 10–14 in | 28 pt | 1.2 pt | Posters, conference slides |
+
+------------------------------------------------------------------------
+
+# 5 · The DRY principle — one base, three wrappers
+
+DRY = **D**on't **R**epeat **Y**ourself. Instead of copying the entire `theme()` block three times (which means three places to update when you change your mind about a font), write the shared logic once in a private helper function and have the three public functions call it with different size arguments:
+
+``` r
+# ── Private helper — not called directly ──────────────────────────────────────
+.theme_bp_base <- function(base_size, base_family,
+                            line_width, tick_length_pt,
+                            title_margin, axis_margin,
+                            strip_v_margin, legend_key_size) {
+
+  theme_classic(base_size = base_size, base_family = base_family) %+replace%
+    theme(
+      plot.title       = element_text(face = "bold", size = rel(1.15), hjust = 0),
+      panel.border     = element_rect(fill = NA, colour = "black",
+                                      linewidth = line_width),
+      axis.line        = element_blank(),   # panel.border handles all 4 sides
+      axis.ticks       = element_line(colour = "black", linewidth = line_width),
+      axis.ticks.length = unit(tick_length_pt, "pt"),
+      axis.title       = element_text(face = "bold"),
+      axis.title.x     = element_text(margin = margin(t = axis_margin)),
+      axis.title.y     = element_text(margin = margin(r = axis_margin), angle = 90),
+      axis.text        = element_text(colour = "grey20", size = rel(0.90)),
+      legend.key       = element_rect(fill = NA, colour = NA),
+      legend.title     = element_text(face = "bold",  size = rel(0.95)),
+      legend.text      = element_text(face = "plain", size = rel(0.85)),
+      legend.key.size  = unit(legend_key_size, "pt"),
+      strip.background = element_rect(fill = "grey92", colour = "black",
+                                      linewidth = line_width),
+      strip.text       = element_text(face = "bold", size = rel(0.95)),
+      strip.text.x     = element_text(margin = margin(t = strip_v_margin,
+                                                       b = strip_v_margin)),
+      plot.margin      = margin(title_margin, title_margin,
+                                title_margin, title_margin)
+    )
+}
+
+# ── Public theme functions ─────────────────────────────────────────────────────
+theme_small <- function(base_size = 9, base_family = "sans") {
+  .theme_bp_base(base_size, base_family,
+                 line_width = 0.35, tick_length_pt = 3,
+                 title_margin = 4,  axis_margin = 4,
+                 strip_v_margin = 2, legend_key_size = 8)
+}
+
+theme_regular <- function(base_size = 14, base_family = "sans") {
+  .theme_bp_base(base_size, base_family,
+                 line_width = 0.55, tick_length_pt = 5,
+                 title_margin = 8,  axis_margin = 8,
+                 strip_v_margin = 4, legend_key_size = 12)
+}
+
+theme_large <- function(base_size = 28, base_family = "sans") {
+  .theme_bp_base(base_size, base_family,
+                 line_width = 1.2,  tick_length_pt = 10,
+                 title_margin = 16, axis_margin = 16,
+                 strip_v_margin = 8, legend_key_size = 22)
+}
+```
+
+> 💡 **The leading dot in `.theme_bp_base`** is a convention for marking a function as private/internal — it will not appear in tab-completion lists in Positron or RStudio, and it signals to anyone reading the file that it is a helper, not meant to be called directly.
+
+------------------------------------------------------------------------
+
+# 6 · Storing the theme in a `themes/` subdirectory
+
+Put the theme file in a dedicated folder so it is easy to find and share across projects:
+
+```         
+my_project/
+├── data_raw/
+├── data_clean/
+├── scripts/
+│   └── 01_analysis.R
+├── themes/
+│   └── r_themes_for_3_sizes.R    <- theme file lives here
+└── figures/
+```
+
+### Call it with `source()` at the top of every script
+
+``` r
+# At the very top of 01_analysis.R, before any plotting code:
+source("themes/r_themes_for_3_sizes.R")
+
+library(tidyverse)
+library(palmerpenguins)
+```
+
+`source()` reads and runs the theme file, loading all three functions (`theme_small`, `theme_regular`, `theme_large`) into your current session. After that single line, the theme functions are available everywhere in the script — exactly as if you had pasted the whole file at the top.
+
+> 💡 **Key idea:** `source()` uses a path relative to your project root, just like `read_excel()`. As long as the `themes/` folder is in your project folder, `source("themes/r_themes_for_3_sizes.R")` works on any computer with the same folder structure.
+
+------------------------------------------------------------------------
+
+# 7 · Using the three themes
+
+``` r
+source("themes/r_themes_for_3_sizes.R")
+library(tidyverse)
+library(palmerpenguins)
+
+p <- ggplot(penguins, aes(x = flipper_length_mm, y = body_mass_g,
+                           color = species)) +
+  geom_point(alpha = 0.7) +
+  labs(
+    title = "Body mass vs. flipper length",
+    x     = "Flipper length (mm)",
+    y     = "Body mass (g)",
+    color = "Species"
+  )
+
+# Apply each theme and save at the matching size
+p + theme_small()
+p + theme_regular()
+p + theme_large()
+```
+
+### Save each at its correct dimensions
+
+``` r
+ggsave("figures/plot_small.pdf",
+       p + theme_small(),
+       width = 3, height = 3, units = "in")
+
+ggsave("figures/plot_regular.pdf",
+       p + theme_regular(),
+       width = 7, height = 5, units = "in")
+
+ggsave("figures/plot_large.pdf",
+       p + theme_large(),
+       width = 16, height = 12, units = "in")
+```
+
+> ⚠️ **Watch out!** The theme and the `ggsave()` dimensions must match. Saving a `theme_large()` plot at 3 × 3 inches defeats the purpose — the text will be enormous and the lines will be far too heavy.
+
+------------------------------------------------------------------------
+
+# 8 · One-off overrides on top of your theme
+
+After applying a theme function you can still add individual `theme()` tweaks for a specific plot. Your function sets the defaults; `+` overrides individual elements:
+
+``` r
+# Remove the legend for this one plot only
+p + theme_regular() +
+  theme(legend.position = "none")
+
+# Rotate x-axis labels 45 degrees for a plot with long group names
+p + theme_regular() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Move legend to the bottom
+p + theme_regular() +
+  theme(legend.position = "bottom")
+```
+
+> 💡 **Key idea:** The theme function sets your baseline. `+ theme(...)` lets you make plot-specific adjustments without touching the shared file. Changes to the function itself flow to every figure automatically.
+
+------------------------------------------------------------------------
+
+# 9 · Complete pipeline
+
+``` r
+# ── At the top of every analysis script ───────────────────────────────────────
+source("themes/r_themes_for_3_sizes.R")
+library(tidyverse)
+library(readxl)
+library(janitor)
+
+# ── Load and prepare data ──────────────────────────────────────────────────────
+tree_df <- read_excel("data_raw/2026_06_25_tree_experiment_raw_data.xlsx") |>
+  clean_names()
+
+# ── Build the plot ─────────────────────────────────────────────────────────────
+weight_plot <- ggplot(tree_df, aes(x = side, y = weight_g, fill = side)) +
+  geom_boxplot(alpha = 0.6) +
+  geom_jitter(width = 0.15, alpha = 0.4) +
+  labs(
+    title = "Leaf weight by tree side",
+    x     = "Side of tree",
+    y     = "Leaf weight (g)"
+  ) +
+  theme_regular() +
+  theme(legend.position = "none")
+
+weight_plot
+
+# ── Save ───────────────────────────────────────────────────────────────────────
+ggsave("figures/leaf_weight.pdf",
+       plot   = weight_plot,
+       width  = 6,
+       height = 5,
+       units  = "in")
+```
+
+------------------------------------------------------------------------
+
+# Quick reference
+
+| Task | Code |
+|------------------------------------|------------------------------------|
+| Source theme file | `source("themes/r_themes_for_3_sizes.R")` |
+| Apply small theme | `+ theme_small()` — save at 3 × 3 in |
+| Apply regular theme | `+ theme_regular()` — save at 6–7 × 5–6 in |
+| Apply large theme | `+ theme_large()` — save at 12–16 × 10–14 in |
+| Override one element | `+ theme_regular() + theme(legend.position = "none")` |
+| Replace vs. layer | `%+replace%` inside functions; `+` for one-off plot changes |
+| Proportional text size | `size = rel(1.15)` — scales with `base_size` |
+| Physical lengths | `unit(5, "pt")` — for ticks, margins |
+| Private helper naming | leading `.` convention — `.my_helper <- function(...) {}` |
+
+*End of Common Code 08 — Custom ggplot2 Themes.* *Next: Common Code 09 — Descriptive Statistics.*

@@ -1,0 +1,328 @@
+---
+title: "Common Code 05 — mutate()"
+subtitle: "Creating and transforming columns — ecological math, logarithms, and regression equations"
+author: "Bill Perry"
+date: today
+
+topic_number: "05"
+type: common_code
+description: >
+  how to do math and add columns based on calculations or mutations
+categories: [packages, setup]
+
+format:
+  html: default
+  docx: default
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+# Creating new columns with `mutate()`
+
+`mutate()` adds new columns to a data frame, or overwrites existing ones. Each
+new column is computed row by row from whatever expression you give it — simple
+arithmetic, logarithms, conditional logic, or a full regression equation applied
+to every observation at once.
+
+> ⬇️ **Download the companion R script** — all examples ready to run:
+> [`05_mutate.R`](05_mutate.R)
+
+> 💡 **Following along?** Examples use `penguins` from `palmerpenguins`.
+> The ecological math sections apply directly to any field data you collect.
+
+---
+
+### Packages needed
+
+```r
+library(tidyverse)
+library(palmerpenguins)
+```
+
+---
+
+# 1 · The basics
+
+`mutate()` always goes at the end of a pipe, after your `filter()` and
+`select()` steps. New columns can immediately reference other columns just
+created in the same `mutate()` call:
+
+```r
+penguins |>
+  mutate(
+    mass_kg       = body_mass_g / 1000,
+    flipper_m     = flipper_length_mm / 1000,
+    mass_per_flip = mass_kg / flipper_m    # uses both columns just made above
+  )
+```
+
+> 💡 **Key idea:** `mutate()` never changes existing rows or drops columns —
+> it only adds or replaces. The original data frame is untouched unless you
+> overwrite it with `<-`. Store results in a new object with a descriptive name.
+
+---
+
+# 2 · Simple arithmetic
+
+The operators are what you expect: `+`, `-`, `*`, `/`, `^` for power.
+Reference any column by name, mix columns with constants freely:
+
+```r
+penguins |>
+  mutate(
+    mass_kg       = body_mass_g / 1000,              # unit conversion g → kg
+    bill_ratio    = bill_length_mm / bill_depth_mm,  # length-to-depth ratio
+    bill_area_mm2 = bill_length_mm * bill_depth_mm,  # rough bill area proxy
+    mass_centered = body_mass_g - mean(body_mass_g, na.rm = TRUE)  # centre on mean
+  )
+```
+
+> 💡 **Bill ratios and shape indices** are a classic ecology move — dividing
+> two measurements to capture shape independent of size. The same idea appears
+> in body condition indices, cephalic indices, and leaf shape metrics.
+
+---
+
+# 3 · Logarithms — the most important transformation in ecology
+
+Log-transformation is everywhere in ecology: species–area relationships,
+metabolic scaling, abundance distributions, allometric growth. Understanding
+which log function to use matters.
+
+```r
+penguins |>
+  mutate(
+    log10_mass = log10(body_mass_g),   # base-10 — most interpretable
+    ln_mass    = log(body_mass_g),     # natural log (base e) — used in models
+    log2_mass  = log2(body_mass_g)     # base-2 — used in some genetics work
+  )
+```
+
+> ⚠️ **Watch out!** `log()` in R is the **natural log** (base *e* ≈ 2.718),
+> NOT base-10. This catches almost everyone the first time. Use `log10()` when
+> you want base-10. When in doubt, be explicit.
+
+**Which log to use:**
+
+| Log | R function | Use when |
+|---|---|---|
+| Base 10 | `log10()` | Plotting, interpreting orders of magnitude, species–area |
+| Natural (base *e*) | `log()` | Statistical models (GLMs, regression), likelihood |
+| Base 2 | `log2()` | Gene expression, information theory |
+
+### Back-transforming
+
+Always know how to undo a transformation — you will need it when reporting
+model predictions on the original scale:
+
+```r
+penguins |>
+  mutate(
+    log10_mass   = log10(body_mass_g),
+    mass_back    = 10 ^ log10_mass,     # undo log10:  10^x
+
+    ln_mass      = log(body_mass_g),
+    mass_back_ln = exp(ln_mass)         # undo natural log: e^x
+  )
+```
+
+---
+
+# 4 · Exponents and powers
+
+The `^` operator raises to any power. This is directly useful for allometric
+and metabolic scaling, which follow power laws:
+
+```r
+penguins |>
+  mutate(
+    mass_kg       = body_mass_g / 1000,
+    metabolic_est = mass_kg ^ 0.75,          # Kleiber's Law: metabolic rate ∝ mass^0.75
+    flipper_area  = flipper_length_mm ^ 2,   # area scales as length²
+    flipper_vol   = flipper_length_mm ^ 3    # volume scales as length³
+  )
+```
+
+> 💡 **Kleiber's Law** — basal metabolic rate scales to body mass to the
+> power of ¾ across animals spanning 20 orders of magnitude. A single `^ 0.75`
+> in `mutate()` lets you compute a metabolic estimate for every row in your
+> data frame instantly.
+
+```r
+# sqrt() is ^ 0.5 — sometimes used to stabilise variance in count data
+penguins |>
+  mutate(sqrt_mass = sqrt(body_mass_g))
+```
+
+---
+
+# 5 · Applying a regression equation
+
+After you fit a linear model, `mutate()` is the cleanest way to apply the
+equation back to your data frame — either to generate predicted values for
+plotting or to calculate residuals.
+
+### Simple linear regression: y = mx + b
+
+Say your regression of body mass on flipper length gave:
+
+**body_mass_g = 49.7 × flipper_length_mm − 5781**
+
+```r
+penguins |>
+  mutate(mass_predicted = 49.7 * flipper_length_mm - 5781)
+```
+
+Plot observed vs. predicted:
+
+```r
+penguins |>
+  mutate(mass_predicted = 49.7 * flipper_length_mm - 5781) |>
+  ggplot(aes(x = flipper_length_mm)) +
+  geom_point(aes(y = body_mass_g),    color = "steelblue", alpha = 0.6) +
+  geom_line(aes(y = mass_predicted),  color = "tomato", linewidth = 1) +
+  labs(
+    x     = "Flipper length (mm)",
+    y     = "Body mass (g)",
+    title = "Observed vs. predicted body mass"
+  ) +
+  theme_classic()
+```
+
+### Log-log (allometric) regression
+
+Log-log regression is the backbone of allometric studies:
+**log₁₀(mass) = −3.41 + 1.52 × log₁₀(flipper length)**
+
+Apply it and back-transform predictions to the original scale:
+
+```r
+penguins |>
+  mutate(
+    log10_flip     = log10(flipper_length_mm),
+    log10_mass_hat = -3.41 + 1.52 * log10_flip,
+    mass_predicted = 10 ^ log10_mass_hat          # back-transform to grams
+  )
+```
+
+> 💡 **Key idea:** Back-transforming a log-scale prediction with `10^x`
+> (or `exp(x)` for natural log) gives you the **geometric mean** prediction
+> on the original scale — which is what you want for a log-normal relationship.
+> Report these back-transformed values, not the log-scale ones.
+
+---
+
+# 6 · Conditional columns
+
+### Two categories — `if_else()`
+
+```r
+penguins |>
+  mutate(
+    size_class = if_else(body_mass_g >= 4000, "large", "small")
+  )
+```
+
+`if_else(test, value_if_TRUE, value_if_FALSE)` — all three arguments must
+return the same data type.
+
+### Three or more categories — `case_when()`
+
+```r
+penguins |>
+  mutate(
+    size_class = case_when(
+      body_mass_g >= 5000 ~ "large",
+      body_mass_g >= 3500 ~ "medium",
+      body_mass_g <  3500 ~ "small",
+      .default            = "unknown"   # catches NA and anything else
+    )
+  )
+```
+
+> 💡 **`case_when()` evaluates conditions top to bottom and stops at the first
+> match** — just like an if/else if chain. Put the most specific conditions
+> first. `.default` catches anything that matched nothing, including `NA`.
+
+---
+
+# 7 · Overwriting an existing column
+
+Use the same name on the left to replace a column in place. The most common
+use is fixing a type that imported incorrectly:
+
+```r
+# Year imported as numeric — treat it as a category for plotting
+penguins |>
+  mutate(year = as.factor(year))
+
+# A measurement column that imported as character
+my_data |>
+  mutate(length_mm = as.numeric(length_mm))
+```
+
+---
+
+# 8 · Complete ecological pipeline
+
+Putting it all together — bill shape index, log-transformation, size
+classification, factor ordering — all in one readable pipe:
+
+```r
+penguins_analysis <- penguins |>
+  drop_na() |>
+  mutate(
+    bill_ratio = bill_length_mm / bill_depth_mm,
+    log10_mass = log10(body_mass_g),
+    log10_flip = log10(flipper_length_mm),
+    size_class = case_when(
+      body_mass_g >= 5000 ~ "large",
+      body_mass_g >= 3500 ~ "medium",
+      TRUE                ~ "small"
+    ),
+    species = factor(species, levels = c("Adelie", "Chinstrap", "Gentoo"))
+  ) |>
+  select(species, sex, bill_ratio, log10_mass, log10_flip, size_class)
+
+glimpse(penguins_analysis)
+```
+
+Then the classic allometric log–log plot:
+
+```r
+ggplot(penguins_analysis,
+       aes(x = log10_flip, y = log10_mass, color = species)) +
+  geom_point(size = 2, alpha = 0.7) +
+  labs(
+    title = "Allometric scaling: body mass vs. flipper length",
+    x     = "log₁₀ Flipper length (mm)",
+    y     = "log₁₀ Body mass (g)",
+    color = "Species"
+  ) +
+  theme_classic()
+```
+
+---
+
+# Quick reference
+
+| Task | Code |
+|---|---|
+| Unit conversion | `mutate(mass_kg = body_mass_g / 1000)` |
+| Ratio | `mutate(bill_ratio = bill_length_mm / bill_depth_mm)` |
+| Base-10 log | `mutate(log10_mass = log10(body_mass_g))` |
+| Natural log | `mutate(ln_mass = log(body_mass_g))` |
+| Undo log10 | `mutate(mass = 10 ^ log10_mass)` |
+| Undo natural log | `mutate(mass = exp(ln_mass))` |
+| Power / exponent | `mutate(metabolic = mass_kg ^ 0.75)` |
+| Square root | `mutate(sqrt_mass = sqrt(body_mass_g))` |
+| Linear regression eq. | `mutate(predicted = 49.7 * flipper_length_mm - 5781)` |
+| Log-log prediction | `mutate(pred = 10 ^ (-3.41 + 1.52 * log10(flipper_length_mm)))` |
+| Binary category | `mutate(size = if_else(body_mass_g >= 4000, "large", "small"))` |
+| Multiple categories | `mutate(size = case_when(... ~ ..., .default = "unknown"))` |
+| Fix column type | `mutate(year = as.factor(year))` |
+| Centre on mean | `mutate(mass_c = body_mass_g - mean(body_mass_g, na.rm = TRUE))` |
+
+*End of Common Code 05 — mutate().* *Next: Common Code 06 — Pivoting Data.*

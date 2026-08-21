@@ -1,0 +1,562 @@
+---
+title: "Common Code 07 — Advanced Plotting"
+subtitle: "Faceting, stat_summary, distributions, annotation, patchwork, and log scales"
+author: "Bill Perry"
+date: today
+
+topic_number: "07"
+type: common_code
+description: >
+  More advanced plotting with ggplot
+categories: [packages, setup]
+
+format:
+  html: default
+  docx: default
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+# Advanced ggplot2
+
+Once you can make a basic scatter plot and boxplot (vignette 03), the real
+power of ggplot2 opens up through faceting, statistical summary layers,
+distribution plots, and multi-panel layouts. These tools are how Hadley
+Wickham and the tidyverse team build the figures in *R for Data Science* —
+layering simple pieces into plots that communicate complex structure cleanly.
+
+> ⬇️ **Download the companion R script** — all examples ready to run:
+> [`06_advanced_plotting.R`](07_advanced_plotting.R)
+
+---
+
+### Packages needed
+
+```r
+library(tidyverse)
+library(palmerpenguins)
+library(patchwork)     # combining multiple plots into one figure
+library(ggridges)      # ridge / joy plots
+
+source("themes/r_themes_for_3_sizes.R")
+```
+
+---
+
+# 1 · `facet_wrap()` — panels from one variable
+
+`facet_wrap()` splits a single plot into a grid of panels, one per level of a
+grouping variable. It is the single most useful tool for comparing patterns
+across groups without cluttering one panel.
+
+### Basic faceting
+
+```r
+ggplot(penguins, aes(x = flipper_length_mm, y = body_mass_g)) +
+  geom_point(alpha = 0.6, color = "steelblue") +
+  facet_wrap(~ species) +
+  labs(x = "Flipper length (mm)", y = "Body mass (g)") +
+  theme_regular()
+```
+
+The `~` in `facet_wrap(~ species)` reads as "by species." The tilde is always
+required — it separates the formula from the variable name.
+
+### Control the layout with `ncol`
+
+```r
+# Stack into a single column
+facet_wrap(~ species, ncol = 1)
+
+# Force two columns regardless of how many groups there are
+facet_wrap(~ species, ncol = 2)
+```
+
+### Free the axis scales with `scales =`
+
+By default all panels share the same axis range. Use `scales` to let each
+panel rescale to its own data:
+
+```r
+ggplot(penguins, aes(x = body_mass_g)) +
+  geom_histogram(binwidth = 200, fill = "steelblue", color = "white") +
+  facet_wrap(~ species, scales = "free_y") +
+  labs(x = "Body mass (g)", y = "Count") +
+  theme_regular()
+```
+
+| `scales =` | Effect |
+|---|---|
+| `"fixed"` | All panels share both axes (default) |
+| `"free_y"` | Each panel rescales the y-axis |
+| `"free_x"` | Each panel rescales the x-axis |
+| `"free"` | Both axes rescale independently |
+
+> ⚠️ **Watch out!** `scales = "free"` makes panels harder to compare visually
+> — a bar that looks twice as tall in one panel may represent half the count of
+> a shorter bar in another. Use free scales only when the absolute values are
+> not the point of the comparison.
+
+### Colour inside facets
+
+Mapping colour inside facets lets you show a third variable within each panel:
+
+```r
+ggplot(penguins, aes(x = flipper_length_mm, y = body_mass_g, color = sex)) +
+  geom_point(alpha = 0.7) +
+  facet_wrap(~ species) +
+  labs(x = "Flipper length (mm)", y = "Body mass (g)", color = "Sex") +
+  theme_regular()
+```
+
+---
+
+# 2 · `facet_grid()` — panels from two variables
+
+`facet_grid()` arranges panels in a strict rows × columns grid. Use it when
+you have two grouping variables and want every combination displayed.
+
+### Rows and columns from two variables
+
+```r
+# rows ~ columns
+ggplot(penguins, aes(x = flipper_length_mm, y = body_mass_g)) +
+  geom_point(alpha = 0.6, color = "steelblue") +
+  facet_grid(sex ~ species) +
+  labs(x = "Flipper length (mm)", y = "Body mass (g)") +
+  theme_regular()
+```
+
+### One dimension only — use a dot for "no grouping"
+
+```r
+# Stack panels by species in rows, single column
+facet_grid(species ~ .)
+
+# Arrange panels by species in columns, single row
+facet_grid(. ~ species)
+```
+
+> 💡 **`facet_wrap` vs `facet_grid`** — Use `facet_wrap()` for one grouping
+> variable; it fills panels left to right and wraps to a new row. Use
+> `facet_grid()` when you have two variables and want a strict rectangular
+> grid where rows and columns each mean something specific.
+
+---
+
+# 3 · `stat_summary()` — group means
+
+`stat_summary()` computes a summary statistic from the raw data and draws it
+as a geom. It is the cleanest way to show group means and uncertainty on the
+same plot as raw points — no need to pre-compute a summary table.
+
+### Means as large points
+
+```r
+ggplot(penguins, aes(x = species, y = body_mass_g)) +
+  geom_jitter(width = 0.2, alpha = 0.3, color = "grey60") +
+  stat_summary(fun = mean, geom = "point",
+               size = 4, color = "tomato") +
+  labs(x = "Species", y = "Body mass (g)",
+       title = "Raw data with group means") +
+  theme_regular()
+```
+
+The `fun =` argument takes any function that returns a single number: `mean`,
+`median`, `max`, `min`, or a custom function.
+
+### Mean as a crossbar (horizontal line)
+
+```r
+ggplot(penguins, aes(x = species, y = body_mass_g)) +
+  geom_jitter(width = 0.2, alpha = 0.3, color = "grey60") +
+  stat_summary(fun = mean, geom = "crossbar",
+               width = 0.4, color = "tomato", linewidth = 0.8) +
+  labs(x = "Species", y = "Body mass (g)") +
+  theme_regular()
+```
+
+> 💡 **Key idea:** Layer order matters. Put `geom_jitter()` before
+> `stat_summary()` so the summary sits on top of the raw points and is not
+> buried underneath them.
+
+---
+
+# 4 · `stat_summary()` — mean ± standard error
+
+Mean ± 1 SE is the standard for ecological figures showing group comparisons.
+Use `fun.data =` (not `fun =`) when the summary function returns three values
+(y, ymin, ymax):
+
+```r
+ggplot(penguins, aes(x = species, y = body_mass_g)) +
+  stat_summary(fun.data = mean_se,
+               geom     = "pointrange",
+               size     = 0.8,
+               color    = "steelblue") +
+  labs(x = "Species", y = "Body mass (g)",
+       title = "Mean ± 1 SE") +
+  theme_regular()
+```
+
+### The publication-standard figure: raw data + mean ± SE
+
+```r
+ggplot(penguins, aes(x = species, y = body_mass_g)) +
+  geom_jitter(width = 0.2, alpha = 0.25, color = "grey60", size = 1.5) +
+  stat_summary(fun.data = mean_se,
+               geom     = "pointrange",
+               size     = 0.9,
+               linewidth = 1,
+               color    = "tomato") +
+  labs(x = "Species", y = "Body mass (g)",
+       title = "Raw data + mean ± 1 SE") +
+  theme_regular()
+```
+
+> 💡 **Key idea:** Showing raw points alongside the summary is increasingly
+> expected in ecology journals. It reveals sample size and the actual spread
+> of the data — two things a mean ± SE alone hides completely.
+
+### Mean ± SE with two grouping variables (dodged)
+
+When you have a second grouping variable, use `position_dodge()` to separate
+the summaries and `position_jitterdodge()` to align the raw points with them:
+
+```r
+ggplot(penguins |> drop_na(sex),
+       aes(x = species, y = body_mass_g, color = sex)) +
+  geom_jitter(
+    position = position_jitterdodge(jitter.width = 0.15, dodge.width = 0.7),
+    alpha = 0.25, size = 1.5
+  ) +
+  stat_summary(
+    fun.data = mean_se,
+    geom     = "pointrange",
+    size     = 0.8,
+    linewidth = 1,
+    position = position_dodge(width = 0.7)
+  ) +
+  labs(x = "Species", y = "Body mass (g)", color = "Sex",
+       title = "Mean ± 1 SE by species and sex") +
+  theme_regular()
+```
+
+> ⚠️ **Watch out!** The `dodge.width` in `position_jitterdodge()` must match
+> the `width` in `position_dodge()` exactly — otherwise the raw points and the
+> summary symbols will not align.
+
+---
+
+# 5 · Other `stat_summary()` options
+
+**`fun.data =`** functions return a data frame with `y`, `ymin`, and `ymax`.
+The most useful ones are already built into ggplot2:
+
+| `fun.data =` | What it shows |
+|---|---|
+| `mean_se` | Mean ± 1 SE |
+| `mean_cl_normal` | Mean ± 95% CI (assumes normality) |
+| `mean_cl_boot` | Mean ± 95% CI (bootstrap — no normality assumption) |
+| `median_hilow` | Median + 2.5th and 97.5th percentiles |
+
+### Median + IQR — robust alternative to mean ± SE
+
+```r
+ggplot(penguins, aes(x = species, y = body_mass_g)) +
+  stat_summary(
+    fun      = median,
+    fun.min  = function(x) quantile(x, 0.25),
+    fun.max  = function(x) quantile(x, 0.75),
+    geom     = "pointrange",
+    color    = "steelblue", size = 0.8
+  ) +
+  labs(x = "Species", y = "Body mass (g)",
+       title = "Median + IQR (25th–75th percentile)") +
+  theme_regular()
+```
+
+### Bootstrap 95% CI — when you cannot assume normality
+
+```r
+ggplot(penguins, aes(x = species, y = body_mass_g)) +
+  stat_summary(fun.data = mean_cl_boot,
+               geom     = "pointrange",
+               color    = "steelblue", size = 0.8) +
+  labs(x = "Species", y = "Body mass (g)",
+       title = "Mean ± 95% CI (bootstrap)") +
+  theme_regular()
+```
+
+---
+
+# 6 · Smooth trend lines with `geom_smooth()`
+
+### Linear regression with confidence ribbon
+
+```r
+ggplot(penguins, aes(x = flipper_length_mm, y = body_mass_g)) +
+  geom_point(alpha = 0.4, color = "grey50") +
+  geom_smooth(method = "lm", color = "tomato",
+              fill = "tomato", alpha = 0.15) +
+  labs(x = "Flipper length (mm)", y = "Body mass (g)",
+       title = "Linear regression with 95% CI ribbon") +
+  theme_regular()
+```
+
+### One regression line per group
+
+```r
+ggplot(penguins, aes(x = flipper_length_mm, y = body_mass_g,
+                     color = species)) +
+  geom_point(alpha = 0.4) +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(x = "Flipper length (mm)", y = "Body mass (g)",
+       color = "Species") +
+  theme_regular()
+```
+
+### LOESS — non-parametric smooth for exploration
+
+```r
+ggplot(penguins, aes(x = flipper_length_mm, y = body_mass_g)) +
+  geom_point(alpha = 0.4, color = "grey50") +
+  geom_smooth(method = "loess", span = 0.75,
+              color = "steelblue", fill = "steelblue", alpha = 0.15) +
+  labs(x = "Flipper length (mm)", y = "Body mass (g)",
+       title = "LOESS smooth") +
+  theme_regular()
+```
+
+> 💡 **LOESS vs `lm`** — LOESS (`method = "loess"`) finds local patterns
+> without assuming a straight line. Use it for initial exploration to see
+> whether a relationship is truly linear before committing to a model.
+> `span` controls smoothness: smaller values follow the data more closely
+> (more wiggly), larger values produce a smoother curve.
+
+---
+
+# 7 · Distribution plots
+
+### Violin + raw data + mean — the full picture
+
+A violin plot shows the full distribution shape; jittered points show every
+observation; a white-filled mean point sits on top:
+
+```r
+ggplot(penguins, aes(x = species, y = body_mass_g, fill = species)) +
+  geom_violin(alpha = 0.5, trim = FALSE) +
+  geom_jitter(width = 0.1, alpha = 0.3, size = 1) +
+  stat_summary(fun = mean, geom = "point",
+               size = 3, color = "black", shape = 21, fill = "white") +
+  labs(x = "Species", y = "Body mass (g)",
+       title = "Violin + raw data + mean") +
+  theme_regular() +
+  theme(legend.position = "none")
+```
+
+### Ridge plots — overlapping distributions for many groups
+
+Ridge plots (from the `ggridges` package) are especially useful when you have
+many groups and want to compare distribution shapes without a forest of violin
+panels:
+
+```r
+ggplot(penguins, aes(x = body_mass_g, y = species, fill = species)) +
+  geom_density_ridges(alpha = 0.6, scale = 1.2) +
+  labs(x = "Body mass (g)", y = NULL,
+       title = "Body mass distributions") +
+  theme_regular() +
+  theme(legend.position = "none")
+```
+
+> 💡 **`scale`** in `geom_density_ridges()` controls how much ridges overlap.
+> Values above 1 let ridges overlap their neighbours; values below 1 leave
+> space between them.
+
+### Histogram with density overlay
+
+```r
+ggplot(penguins, aes(x = body_mass_g)) +
+  geom_histogram(aes(y = after_stat(density)),
+                 binwidth = 200, fill = "steelblue",
+                 color = "white", alpha = 0.7) +
+  geom_density(color = "tomato", linewidth = 1) +
+  facet_wrap(~ species) +
+  labs(x = "Body mass (g)", y = "Density") +
+  theme_regular()
+```
+
+`after_stat(density)` rescales the histogram y-axis from raw count to density
+so the scale matches the `geom_density()` curve.
+
+---
+
+# 8 · Annotation
+
+### Text on the plot
+
+```r
+ggplot(penguins, aes(x = flipper_length_mm, y = body_mass_g,
+                     color = species)) +
+  geom_point(alpha = 0.6) +
+  annotate("text", x = 220, y = 3000,
+           label = "Gentoo are the largest",
+           color = "grey30", size = 3.5, hjust = 1) +
+  labs(x = "Flipper length (mm)", y = "Body mass (g)",
+       color = "Species") +
+  theme_regular()
+```
+
+### Reference line with label
+
+```r
+grand_mean <- mean(penguins$body_mass_g, na.rm = TRUE)
+
+ggplot(penguins, aes(x = species, y = body_mass_g)) +
+  geom_jitter(width = 0.2, alpha = 0.4, color = "grey60") +
+  geom_hline(yintercept = grand_mean,
+             linetype = "dashed", color = "tomato", linewidth = 0.8) +
+  annotate("text", x = 0.55, y = grand_mean + 80,
+           label = "Grand mean", color = "tomato",
+           size = 3.5, hjust = 0) +
+  labs(x = "Species", y = "Body mass (g)") +
+  theme_regular()
+```
+
+### Shaded region
+
+```r
+ggplot(penguins, aes(x = flipper_length_mm, y = body_mass_g)) +
+  annotate("rect",
+           xmin = 185, xmax = 200,
+           ymin = -Inf, ymax = Inf,
+           fill = "steelblue", alpha = 0.1) +
+  geom_point(alpha = 0.6, color = "grey40") +
+  labs(x = "Flipper length (mm)", y = "Body mass (g)") +
+  theme_regular()
+```
+
+> 💡 **`annotate()` vs `geom_*()`** — `geom_*()` functions draw one element
+> per row of the data. `annotate()` draws a single fixed element at coordinates
+> you specify directly — useful for labels, reference lines, and highlighted
+> regions that are not in the data frame.
+
+---
+
+# 9 · Combining plots with patchwork
+
+The `patchwork` package lets you combine separate ggplot objects into one
+multi-panel figure using simple arithmetic operators:
+
+```r
+p1 <- ggplot(penguins, aes(x = species, y = body_mass_g, fill = species)) +
+  geom_boxplot(alpha = 0.6) +
+  labs(x = NULL, y = "Body mass (g)") +
+  theme_regular() + theme(legend.position = "none")
+
+p2 <- ggplot(penguins, aes(x = flipper_length_mm, y = body_mass_g,
+                             color = species)) +
+  geom_point(alpha = 0.5) +
+  labs(x = "Flipper length (mm)", y = "Body mass (g)", color = "Species") +
+  theme_regular()
+
+p3 <- ggplot(penguins, aes(x = body_mass_g, fill = species)) +
+  geom_density(alpha = 0.4) +
+  labs(x = "Body mass (g)", y = "Density", fill = "Species") +
+  theme_regular() + theme(legend.position = "none")
+```
+
+### Layout operators
+
+```r
+p1 | p2           # side by side
+p1 / p2           # stacked
+(p1 | p2) / p3   # complex: two on top, one full-width below
+```
+
+### Add a shared title and panel tags
+
+```r
+(p1 | p2) / p3 +
+  plot_annotation(
+    title      = "Palmer penguin body mass",
+    tag_levels = "a"    # labels panels a, b, c — or "A", "1"
+  )
+```
+
+### Collect legends from all panels
+
+```r
+(p1 | p2 | p3) +
+  plot_layout(guides = "collect")
+```
+
+> 💡 **Key idea:** patchwork is the cleanest solution in R for the
+> "how do I make a multi-panel figure for my paper?" problem. Each panel is
+> an ordinary ggplot object — you build them separately, style them separately,
+> then combine. No special syntax needed inside the individual plots.
+
+---
+
+# 10 · Log scale axes
+
+For ecological data that spans orders of magnitude — species abundances,
+body sizes, concentrations — log axes are often more appropriate than linear
+ones.
+
+### Log scale with `scale_x_log10()` / `scale_y_log10()`
+
+```r
+ggplot(penguins, aes(x = flipper_length_mm, y = body_mass_g,
+                     color = species)) +
+  geom_point(alpha = 0.6) +
+  scale_x_log10() +
+  scale_y_log10() +
+  labs(x = "Flipper length (mm, log scale)",
+       y  = "Body mass (g, log scale)",
+       color = "Species",
+       title = "Log–log allometric plot") +
+  theme_regular()
+```
+
+> 💡 **`scale_x_log10()` vs `mutate(log10_x = log10(x))`** — Both produce a
+> log–log plot visually, but they differ in an important way. `scale_x_log10()`
+> keeps the original data values and just transforms the axis — tick labels
+> show `100`, `1000`, `10000`, which are much more interpretable than
+> `2.0`, `3.0`, `4.0`. Use `scale_*_log10()` for plots; use `mutate()` for
+> creating columns you will fit models to.
+
+---
+
+# Quick reference
+
+| Task | Code |
+|---|---|
+| Facet by one variable | `facet_wrap(~ variable)` |
+| Facet by one, n columns | `facet_wrap(~ variable, ncol = 2)` |
+| Free y scales per panel | `facet_wrap(~ variable, scales = "free_y")` |
+| Facet by two variables | `facet_grid(rows ~ cols)` |
+| Mean points | `stat_summary(fun = mean, geom = "point")` |
+| Mean ± 1 SE | `stat_summary(fun.data = mean_se, geom = "pointrange")` |
+| Mean ± 95% CI | `stat_summary(fun.data = mean_cl_normal, geom = "pointrange")` |
+| Bootstrap CI | `stat_summary(fun.data = mean_cl_boot, geom = "pointrange")` |
+| Median + IQR | `stat_summary(fun = median, fun.min = ~quantile(.,0.25), fun.max = ~quantile(.,0.75), ...)` |
+| Dodge groups | `position_dodge(width = 0.7)` |
+| Dodge + jitter | `position_jitterdodge(jitter.width = 0.15, dodge.width = 0.7)` |
+| Linear smooth | `geom_smooth(method = "lm")` |
+| LOESS smooth | `geom_smooth(method = "loess", span = 0.75)` |
+| Violin plot | `geom_violin(alpha = 0.5, trim = FALSE)` |
+| Ridge plot | `geom_density_ridges(alpha = 0.6)` (requires ggridges) |
+| Text annotation | `annotate("text", x = , y = , label = )` |
+| Reference line | `geom_hline(yintercept = )` or `geom_vline(xintercept = )` |
+| Shaded region | `annotate("rect", xmin=, xmax=, ymin=-Inf, ymax=Inf, fill=, alpha=)` |
+| Side-by-side panels | `p1 \| p2` (patchwork) |
+| Stacked panels | `p1 / p2` (patchwork) |
+| Panel tags | `plot_annotation(tag_levels = "a")` |
+| Log axis | `scale_x_log10()` / `scale_y_log10()` |
+| Flip axes | `coord_flip()` |
+
+*End of Common Code 07 — Advanced Plotting.* *Next: Common Code 08 — Custom ggplot2 Themes.*
