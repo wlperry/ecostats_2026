@@ -115,7 +115,7 @@ flights |>
   mutate(date = make_date(year, month, day)) |>
   count(date) |>
   ggplot(aes(x = date, y = n)) +
-  geom_line(color = "steelblue", alpha = 0.8) +
+  geom_line(color = "darkblue", alpha = 0.8) +
   geom_smooth(method = "loess", span = 0.1,
               color = "tomato", se = FALSE) +
   scale_x_date(date_breaks = "1 month", date_labels = "%b") +
@@ -130,7 +130,7 @@ flights |>
   group_by(day_yr) |>
   summarise(mean_delay = mean(dep_delay, na.rm = TRUE), .groups = "drop") |>
   ggplot(aes(x = day_yr, y = mean_delay)) +
-  geom_line(color = "steelblue") +
+  geom_line(color = "darkblue") +
   geom_hline(yintercept = 0, linetype = "dashed", color = "grey50") +
   labs(x = "Day of year", y = "Mean departure delay (min)",
        title = "Seasonal pattern in delays") +
@@ -154,7 +154,7 @@ ice_off <- tibble(
 
 # Is ice-off getting earlier over time?
 ggplot(ice_off, aes(x = year, y = day_of_yr)) +
-  geom_point(size = 3, color = "steelblue") +
+  geom_point(size = 3, color = "darkblue") +
   geom_smooth(method = "lm", se = TRUE,
               color = "tomato", fill = "tomato", alpha = 0.15) +
   labs(x = "Year", y = "Ice-off day of year",

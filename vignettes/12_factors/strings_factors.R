@@ -106,7 +106,7 @@ str_pad(1:5, width = 2, pad = "0")   # "01" "02" "03" "04" "05"
 penguins |>
   count(species) |>
   ggplot(aes(x = species, y = n)) +
-  geom_col(fill = "steelblue", alpha = 0.7) +
+  geom_col(fill = "darkblue", alpha = 0.7) +
   labs(title = "Default alphabetical order") +
   theme_minimal()
 
@@ -117,7 +117,7 @@ penguins |>
                                "Gentoo", "Chinstrap", "Adelie")) |>
   count(species) |>
   ggplot(aes(x = species, y = n)) +
-  geom_col(fill = "steelblue", alpha = 0.7) +
+  geom_col(fill = "darkblue", alpha = 0.7) +
   labs(title = "Custom order: Gentoo, Chinstrap, Adelie") +
   theme_minimal()
 
@@ -144,7 +144,7 @@ flights |>
   mutate(carrier = fct_infreq(carrier)) |>
   count(carrier) |>
   ggplot(aes(x = carrier, y = n)) +
-  geom_col(fill = "steelblue", alpha = 0.7) +
+  geom_col(fill = "darkblue", alpha = 0.7) +
   labs(x = "Carrier", y = "Flights",
        title = "Airlines sorted by number of flights (most to least)") +
   theme_minimal()

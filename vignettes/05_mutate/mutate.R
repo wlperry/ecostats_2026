@@ -98,7 +98,7 @@ penguins |>
 penguins |>
   mutate(mass_predicted = 49.7 * flipper_length_mm - 5781) |>
   ggplot(aes(x = flipper_length_mm)) +
-  geom_point(aes(y = body_mass_g), color = "steelblue", alpha = 0.6) +
+  geom_point(aes(y = body_mass_g), color = "darkblue", alpha = 0.6) +
   geom_line(aes(y = mass_predicted), color = "tomato", linewidth = 1) +
   labs(
     x     = "Flipper length (mm)",

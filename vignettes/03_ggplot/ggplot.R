@@ -70,7 +70,7 @@ ggplot(penguins, aes(x = species, y = body_mass_g, fill = species)) +
 # Overlay the raw data points with jitter (shows sample size and spread)
 ggplot(penguins, aes(x = species, y = body_mass_g)) +
   geom_boxplot() +
-  geom_jitter(width = 0.15, alpha = 0.4, color = "steelblue")
+  geom_jitter(width = 0.15, alpha = 0.4, color = "darkblue")
 
 # Boxplot with colour mapped to a second grouping variable (side-by-side)
 ggplot(penguins, aes(x = species, y = body_mass_g, fill = sex)) +
@@ -122,7 +122,7 @@ ggplot(penguins, aes(x = bill_length_mm, y = bill_depth_mm)) +
 # coord_cartesian() ZOOMS without removing data points
 # (safe for boxplots and smoothed lines — doesn't drop data)
 ggplot(penguins, aes(x = flipper_length_mm, y = body_mass_g)) +
-  geom_point(color = "steelblue", alpha = 0.6) +
+  geom_point(color = "darkblue", alpha = 0.6) +
   coord_cartesian(
     xlim = c(170, 220), # zoom x to 170-220 mm
     ylim = c(2500, 6500) # zoom y to 2500-6500 g
@@ -131,7 +131,7 @@ ggplot(penguins, aes(x = flipper_length_mm, y = body_mass_g)) +
 # xlim() / ylim() shortcuts — these REMOVE points outside the range
 # (avoid for boxplots; fine for scatter)
 ggplot(penguins, aes(x = flipper_length_mm, y = body_mass_g)) +
-  geom_point(color = "steelblue", alpha = 0.6) +
+  geom_point(color = "darkblue", alpha = 0.6) +
   xlim(170, 220) +
   ylim(2500, 6500)
 

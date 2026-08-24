@@ -18,14 +18,14 @@ source("themes/r_themes_for_3_sizes.R") # adjust path as needed
 
 # Split one plot into panels by a single grouping variable
 ggplot(penguins, aes(x = flipper_length_mm, y = body_mass_g)) +
-  geom_point(alpha = 0.6, color = "steelblue") +
+  geom_point(alpha = 0.6, color = "darkblue") +
   facet_wrap(~species) +
   labs(x = "Flipper length (mm)", y = "Body mass (g)") +
   theme_regular()
 
 # Control the number of columns
 ggplot(penguins, aes(x = flipper_length_mm, y = body_mass_g)) +
-  geom_point(alpha = 0.6, color = "steelblue") +
+  geom_point(alpha = 0.6, color = "darkblue") +
   facet_wrap(~species, ncol = 1) + # stack panels in one column
   labs(x = "Flipper length (mm)", y = "Body mass (g)") +
   theme_regular()
@@ -33,7 +33,7 @@ ggplot(penguins, aes(x = flipper_length_mm, y = body_mass_g)) +
 # Free the axis scales — each panel rescales to its own data
 # "free_y" frees y only; "free_x" frees x only; "free" frees both
 ggplot(penguins, aes(x = body_mass_g)) +
-  geom_histogram(binwidth = 200, fill = "steelblue", color = "white") +
+  geom_histogram(binwidth = 200, fill = "darkblue", color = "white") +
   facet_wrap(~species, scales = "free_y") +
   labs(x = "Body mass (g)", y = "Count") +
   theme_regular()
@@ -50,20 +50,20 @@ ggplot(penguins, aes(x = flipper_length_mm, y = body_mass_g, color = sex)) +
 
 # rows ~ cols — rows vary by one variable, columns by another
 ggplot(penguins, aes(x = flipper_length_mm, y = body_mass_g)) +
-  geom_point(alpha = 0.6, color = "steelblue") +
+  geom_point(alpha = 0.6, color = "darkblue") +
   facet_grid(sex ~ species) +
   labs(x = "Flipper length (mm)", y = "Body mass (g)") +
   theme_regular()
 
 # One dimension only — dot on the other side means "no grouping"
 ggplot(penguins, aes(x = body_mass_g)) +
-  geom_histogram(binwidth = 200, fill = "steelblue", color = "white") +
+  geom_histogram(binwidth = 200, fill = "darkblue", color = "white") +
   facet_grid(species ~ .) + # rows by species, one column
   labs(x = "Body mass (g)", y = "Count") +
   theme_regular()
 
 ggplot(penguins, aes(x = body_mass_g)) +
-  geom_histogram(binwidth = 200, fill = "steelblue", color = "white") +
+  geom_histogram(binwidth = 200, fill = "darkblue", color = "white") +
   facet_grid(. ~ species) + # one row, columns by species
   labs(x = "Body mass (g)", y = "Count") +
   theme_regular()
@@ -104,7 +104,7 @@ ggplot(penguins, aes(x = species, y = body_mass_g)) +
     fun.data = mean_se,
     geom = "pointrange",
     size = 0.8,
-    color = "steelblue"
+    color = "darkblue"
   ) +
   labs(x = "Species", y = "Body mass (g)", title = "Mean ± 1 SE") +
   theme_regular()
@@ -157,7 +157,7 @@ ggplot(penguins, aes(x = species, y = body_mass_g)) +
     fun.min = function(x) quantile(x, 0.25),
     fun.max = function(x) quantile(x, 0.75),
     geom = "pointrange",
-    color = "steelblue",
+    color = "darkblue",
     size = 0.8
   ) +
   labs(
@@ -172,7 +172,7 @@ ggplot(penguins, aes(x = species, y = body_mass_g)) +
   stat_summary(
     fun.data = mean_cl_normal,
     geom = "pointrange",
-    color = "steelblue",
+    color = "darkblue",
     size = 0.8
   ) +
   labs(x = "Species", y = "Body mass (g)", title = "Mean ± 95% CI") +
@@ -183,7 +183,7 @@ ggplot(penguins, aes(x = species, y = body_mass_g)) +
   stat_summary(
     fun.data = mean_cl_boot,
     geom = "pointrange",
-    color = "steelblue",
+    color = "darkblue",
     size = 0.8
   ) +
   labs(
@@ -224,8 +224,8 @@ ggplot(penguins, aes(x = flipper_length_mm, y = body_mass_g)) +
   geom_point(alpha = 0.4, color = "grey50") +
   geom_smooth(
     method = "loess",
-    color = "steelblue",
-    fill = "steelblue",
+    color = "darkblue",
+    fill = "darkblue",
     alpha = 0.15,
     span = 0.75
   ) +
@@ -263,7 +263,7 @@ ggplot(penguins, aes(x = body_mass_g)) +
   geom_histogram(
     aes(y = after_stat(density)),
     binwidth = 200,
-    fill = "steelblue",
+    fill = "darkblue",
     color = "white",
     alpha = 0.7
   ) +
@@ -319,7 +319,7 @@ ggplot(penguins, aes(x = flipper_length_mm, y = body_mass_g)) +
     xmax = 200,
     ymin = -Inf,
     ymax = Inf,
-    fill = "steelblue",
+    fill = "darkblue",
     alpha = 0.1
   ) +
   geom_point(alpha = 0.6, color = "grey40") +
@@ -375,7 +375,7 @@ p1 / p2
 
 # Flip x and y — useful for long category names on y axis
 ggplot(penguins, aes(x = species, y = body_mass_g)) +
-  geom_boxplot(fill = "steelblue", alpha = 0.6) +
+  geom_boxplot(fill = "darkblue", alpha = 0.6) +
   coord_flip() +
   labs(x = NULL, y = "Body mass (g)") +
   theme_regular()

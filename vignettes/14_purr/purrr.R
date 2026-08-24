@@ -114,7 +114,7 @@ plots <- penguins |>
   drop_na() |>
   split(~species) |>
   map(~ ggplot(.x, aes(x = flipper_length_mm, y = body_mass_g)) +
-        geom_point(color = "steelblue", alpha = 0.6) +
+        geom_point(color = "darkblue", alpha = 0.6) +
         geom_smooth(method = "lm", color = "tomato", se = FALSE) +
         labs(title = unique(.x$species),
              x = "Flipper length (mm)", y = "Body mass (g)") +

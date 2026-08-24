@@ -32,7 +32,7 @@ peanut_df %>%
 # Create scatter plot with correlation ellipse
 correlation_plot <- peanut_df %>%
   ggplot(aes(x = diameter, y = mass)) +
-  geom_point(alpha = 0.6, size = 2, color = "steelblue") +
+  geom_point(alpha = 0.6, size = 2, color = "darkblue") +
   stat_ellipse(color = "red", linewidth = 1.2) +
   labs(
     title = "Relationship Between M&M Diameter and Mass",
@@ -75,7 +75,7 @@ shapiro.test(peanut_df$mass)
 # Test linearity assumption with smooth trend line
 linearity_plot <- peanut_df %>%
   ggplot(aes(x = diameter, y = mass)) +
-  geom_point(alpha = 0.6, size = 2, color = "steelblue") +
+  geom_point(alpha = 0.6, size = 2, color = "darkblue") +
   geom_smooth(method = "loess", se = FALSE, color = "red", linetype = "dashed") +
   labs(
     title = "Assessment of Linearity",
