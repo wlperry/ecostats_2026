@@ -49,16 +49,16 @@ We need to average the sunny and shady sides so the data is not pseudoreplicated
 ``` r
 p_df <- pine_df %>%
   group_by(group, tree_no, tree_char, side) %>%
-  summarise(length_mm = mean(length_mm, na.rm = TRUE))
+  summarise(length_mm = mean(length_mm, na.rm = TRUE), .groups = "drop")
 
 ps_df <- pine_switch_df %>%
   group_by(group, tree_no, tree_char, side) %>%
-  summarise(length_mm = mean(length_mm, na.rm = TRUE))
+  summarise(length_mm = mean(length_mm, na.rm = TRUE), .groups = "drop")
 
 ps_shady_df <- ps_df %>% filter(side == "shady")
 ps_sunny_df <- ps_df %>% filter(side == "sunny")
 
-head(ps_shady_df) %>% arrange(tree_no)
+ps_shady_df %>% arrange(tree_no) %>% head()
 ```
 
 > ⚠️ **Watch out!** `class_pine needle length switched.xlsx` has corrected `sunny`/`shady` labels compared to the original file. From here on we use **`ps_df`** — it's the version that matches the field notes.
@@ -113,14 +113,18 @@ Ha: mu ≠ _____ (the mean needle length on the shady side is not _____ mm)
 **▶ Run this:**
 
 ``` r
-qqPlot(ps_df$length_mm,
-       main = "QQ Plot for length of pine needles",
+# The test below is about the SHADY side, so check normality of that group
+# -- not the two sides pooled together.
+qqPlot(ps_shady_df$length_mm,
+       main = "QQ Plot — shady side needle length",
        ylab = "Sample Quantiles")
 
-shapiro.test(ps_df$length_mm)
+shapiro.test(ps_shady_df$length_mm)
 ```
 
 ✏️ **Your turn:** For the Shapiro-Wilk test, what is the null hypothesis? Do we want a significant or a non-significant result here? `________________________`
+
+✏️ **Your turn:** Why do we check the shady side on its own rather than `ps_df$length_mm` (both sides pooled)? What would pooling two groups with different means do to the shape of the distribution? `________________________`
 
 **Check assumptions — outliers:**
 
@@ -204,10 +208,11 @@ Ha = ________________________________________________________
 group_summary <- ps_df %>%
   group_by(side) %>%
   summarize(
-    mean_length = mean(length_mm),
-    sd_length   = sd(length_mm),
-    n           = n(),
-    se_length   = sd_length / sqrt(n)
+    mean_length = mean(length_mm, na.rm = TRUE),
+    sd_length   = sd(length_mm, na.rm = TRUE),
+    n           = sum(!is.na(length_mm)),
+    se_length   = sd_length / sqrt(n),
+    .groups = "drop"
   )
 group_summary
 
@@ -244,7 +249,7 @@ normality_results
 **▶ Run this:**
 
 ``` r
-levene_result <- leveneTest(length_mm ~ side, data = ps_df)
+levene_result <- leveneTest(length_mm ~ factor(side), data = ps_df)
 levene_result
 ```
 
@@ -280,7 +285,7 @@ ________________________________________________________
 $$t = \frac{\bar{x}_1 - \bar{x}_2}{S_p\sqrt{\frac{1}{n_1} + \frac{1}{n_2}}}$$
 
 ``` r
-n1 <- nrow(ps_shady_df); n2 <- nrow(ps_sunny_df)
+n1 <- sum(!is.na(ps_shady_df$length_mm)); n2 <- sum(!is.na(ps_sunny_df$length_mm))
 s1 <- sd(ps_shady_df$length_mm); s2 <- sd(ps_sunny_df$length_mm)
 
 sp <- sqrt(((n1 - 1) * s1^2 + (n2 - 1) * s2^2) / (n1 + n2 - 2))

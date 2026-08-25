@@ -17,6 +17,7 @@ format:
     fig-width: 3
     fig-height: 3
     fig-dpi: 300
+    dpi: 300            # tell Pandoc the real render dpi so it sizes figures correctly
   pptx: default
 execute:
   echo: true
@@ -41,17 +42,17 @@ A t-score is just a z-score computed with the *sample* standard deviation instea
 ::::
 
 :::: {.column width="40%"}
-![Diagram of a large circle labeled 'population' with dots representing individuals and Greek-letter parameters (mu, sigma, sigma-squared), with orange arrows showing a subset of dots being drawn down into a small circle labeled 'sample' with its statistics (y-bar, s, s-squared), illustrating that a sample is used to estimate unknown population parameters.](images/clipboard-536528302.png){width="241" height="330"}
+![Diagram of a large circle labeled 'population' with dots representing individuals and Greek-letter parameters (mu, sigma, sigma-squared), with orange arrows showing a subset of dots being drawn down into a small circle labeled 'sample' with its statistics (y-bar, s, s-squared), illustrating that a sample is used to estimate unknown population parameters.](images/clipboard-536528302.png){width="2.51in" height="3.44in"}
 
 ::: callout-note
 **Today's roadmap**
 
-1. Hypothesis testing framework
-2. The t-distribution
-3. One-sample t-test
-4. Two-sample t-test (Student's and Welch's)
-5. Paired t-test
-6. Checking assumptions throughout
+1.  Hypothesis testing framework
+2.  The t-distribution
+3.  One-sample t-test
+4.  Two-sample t-test (Student's and Welch's)
+5.  Paired t-test
+6.  Checking assumptions throughout
 :::
 ::::
 :::::::
@@ -77,7 +78,7 @@ glimpse(pine_df)
 ::: callout-note
 **✅ Key idea**
 
-For two sample T-tests, degrees of freedom = n₁ + n₂ − 2. With 8 needles per side, df = 8 + 8 − 2 = 14.
+For two sample T-tests, degrees of freedom = n₁ + n₂ − 2. Once we average the needles up to one value per tree side (next slide), we have 8 trees per side — so df = 8 + 8 − 2 = 14. Note that n is the number of *trees*, not needles.
 :::
 ::::
 
@@ -92,18 +93,18 @@ For two sample T-tests, degrees of freedom = n₁ + n₂ − 2. With 8 needles p
 
 ## Averaging Out Pseudoreplication
 
-::::::: columns
+:::::: columns
 :::: {.column width="60%"}
 ```{r}
 # Multiple needles per tree side are pseudoreplicates —
 # average them so each tree/side is ONE data point
 p_df <- pine_df %>%
   group_by(group, tree_no, tree_char, side) %>%
-  summarise(length_mm = mean(length_mm, na.rm = TRUE))
+  summarise(length_mm = mean(length_mm, na.rm = TRUE), .groups = "drop")
 
 ps_df <- pine_switch_df %>%
   group_by(group, tree_no, tree_char, side) %>%
-  summarise(length_mm = mean(length_mm, na.rm = TRUE))
+  summarise(length_mm = mean(length_mm, na.rm = TRUE), .groups = "drop")
 
 ps_shady_df <- ps_df %>% filter(side == "shady")
 ps_sunny_df <- ps_df %>% filter(side == "sunny")
@@ -114,7 +115,7 @@ ps_sunny_df <- ps_df %>% filter(side == "sunny")
 :::
 ::::
 
-:::: {.column width="40%"}
+::: {.column width="40%"}
 ```{r}
 #| fig-width: 3
 #| fig-height: 2.6
@@ -129,13 +130,13 @@ stats_df <- ps_df %>%
   )
 stats_df
 ```
-::::
-:::::::
+:::
+::::::
 
 ## The Data — Two Versions
 
-::::::: columns
-:::: {.column width="60%"}
+:::::: columns
+::: {.column width="60%"}
 ```{r}
 #| fig-width: 3.2
 #| fig-height: 2.6
@@ -152,7 +153,7 @@ p_plot <- p_df %>%
   theme(legend.position = "none")
 p_plot
 ```
-::::
+:::
 
 :::: {.column width="40%"}
 ::: callout-warning
@@ -161,12 +162,12 @@ p_plot
 `class_pine needle length switched.xlsx` has the `sunny`/`shady` labels swapped relative to the original file. From here on, **`ps_df`** (the switched version) is the dataset we'll actually test — it's the one that matches the field notes.
 :::
 ::::
-:::::::
+::::::
 
 ## The Data We'll Test — `ps_df`
 
-::::::: columns
-:::: {.column width="60%"}
+::::: columns
+::: {.column width="60%"}
 ```{r}
 #| fig-width: 3.2
 #| fig-height: 2.6
@@ -183,9 +184,9 @@ ps_plot <- ps_df %>%
   theme(legend.position = "none")
 ps_plot
 ```
-::::
+:::
 
-:::: {.column width="40%"}
+::: {.column width="40%"}
 **Goals for today, using `ps_df`:**
 
 - Statistical inference fundamentals
@@ -193,27 +194,27 @@ ps_plot
 - t-distributions
 - One-sample, two-sample, and paired t-tests
 - Assumption tests
-::::
-:::::::
+:::
+:::::
 
 ## Part 2 · Hypothesis Testing Framework {.divider}
 
 ## Hypothesis Testing — the Key Components
 
-::::::: columns
-:::: {.column width="60%"}
+:::::: columns
+::: {.column width="60%"}
 Hypothesis testing is a systematic way to evaluate research questions using data.
 
 **Key components:**
 
-1. **Null hypothesis (H₀)** — typically "no effect" or "no difference"
-2. **Alternative hypothesis (Hₐ)** — the claim we're trying to support
-3. **Statistical test** — method for evaluating evidence against H₀
-4. **P-value** — probability of observing our result (or more extreme) if H₀ is true
-5. **Significance level (α)** — threshold for rejecting H₀, typically 0.05
+1.  **Null hypothesis (H₀)** — typically "no effect" or "no difference"
+2.  **Alternative hypothesis (Hₐ)** — the claim we're trying to support
+3.  **Statistical test** — method for evaluating evidence against H₀
+4.  **P-value** — probability of observing our result (or more extreme) if H₀ is true
+5.  **Significance level (α)** — threshold for rejecting H₀, typically 0.05
 
-**Decision rule:** Reject H₀ if p-value < α.
-::::
+**Decision rule:** Reject H₀ if p-value \< α.
+:::
 
 :::: {.column width="40%"}
 ::: callout-note
@@ -222,69 +223,69 @@ Hypothesis testing is a systematic way to evaluate research questions using data
 Gotelli & Ellison, *A Primer of Ecological Statistics*, Ch. 4 — Framing and Testing Hypotheses (Statistical Significance and P-Values).
 :::
 ::::
-:::::::
+::::::
 
 ## The Logic of a Statistical Test
 
-::::::: columns
+:::::: columns
 :::: {.column width="60%"}
 A test assesses the likelihood of the null hypothesis being true.
 
 - If H₀ is likely false, Hₐ is assumed correct
 - More precisely: the long-run probability of obtaining our sample value (or a more extreme one) **if the null hypothesis is true**
-- Written p(data | H₀) — the probability of the data, *given* H₀
+- Written p(data \| H₀) — the probability of the data, *given* H₀
 
 ::: callout-note
 **✅ Key idea**
 
-p(data | H₀) is **not** the same as p(H₀ | data). A t-test never tells you the probability that H₀ is true — only how surprising your data would be if it were.
+p(data \| H₀) is **not** the same as p(H₀ \| data). A t-test never tells you the probability that H₀ is true — only how surprising your data would be if it were.
 :::
 ::::
 
-:::: {.column width="40%"}
-| p-value range | Interpretation |
-|---|---|
-| p > 0.10 | No evidence against H₀ |
-| 0.05 < p < 0.10 | Weak evidence against H₀ |
-| 0.01 < p < 0.05 | Moderate evidence against H₀ |
-| 0.001 < p < 0.01 | Strong evidence against H₀ |
-| p < 0.001 | Very strong evidence against H₀ |
-::::
-:::::::
+::: {.column width="40%"}
+| p-value range      | Interpretation                  |
+|--------------------|---------------------------------|
+| p \> 0.10          | No evidence against H₀          |
+| 0.05 \< p \< 0.10  | Weak evidence against H₀        |
+| 0.01 \< p \< 0.05  | Moderate evidence against H₀    |
+| 0.001 \< p \< 0.01 | Strong evidence against H₀      |
+| p \< 0.001         | Very strong evidence against H₀ |
+:::
+::::::
 
 ## Part 3 · The t-Distribution {.divider}
 
 ## One-Tailed Questions
 
-::::::: columns
-:::: {.column width="60%"}
+::::: columns
+::: {.column width="60%"}
 One-tailed questions ask about the area of the distribution to the left (or right) of a certain value, for a one-sample test.
 
 - n = 8 (df = 7) — 95% of the observations found to the left
 - t = 1.895 (5% are outside)
 
-![Bell-shaped t-distribution curve with the area to the left of t = 1.328 shaded, illustrating a one-tailed cutoff where the shaded region represents the proportion of the distribution below that t-value.](images/clipboard-1822465473.png){width="267" height="198"}
-::::
+![Bell-shaped t-distribution curve with the area to the left of the critical value shaded, illustrating a one-tailed cutoff where the shaded region represents the proportion of the distribution below that t-value (here t = 1.895 at df = 7).](images/clipboard-1822465473.png){width="2.78in" height="2.06in"}
+:::
 
-:::: {.column width="40%"}
-![Student's t critical-value table with the one-tail 0.05 column and df = 7 row highlighted, intersecting at the critical value 1.895, the value used for a one-tailed test at alpha = 0.05.](images/clipboard-4103165911.png){width="300"}
-::::
-:::::::
+::: {.column width="40%"}
+![Student's t critical-value table with the one-tail 0.05 column and df = 7 row highlighted, intersecting at the critical value 1.895, the value used for a one-tailed test at alpha = 0.05.](images/clipboard-4103165911.png){width="3.12in"}
+:::
+:::::
 
 ## Two-Tailed Questions
 
-::::::: columns
-:::: {.column width="60%"}
+:::::: columns
+::: {.column width="60%"}
 Two-tailed questions refer to the area *between* certain values.
 
 - n = 8 (df = 7), 95% of the observations are between t = −2.365 and t = 2.365 (2.5% outside on each side)
 - Compare to the one-tailed cutoff: t = 1.895 (5% outside)
 
-![Bell-shaped t-distribution curve with both tails shaded beyond t = -1.729 and t = 1.729, illustrating a two-tailed cutoff where the two shaded regions together represent the proportion of the distribution outside that range.](images/clipboard-2234740159.png){width="240"}
-::::
+![Bell-shaped t-distribution curve with both tails shaded beyond the critical values (here t = -2.365 and t = 2.365 at df = 7), illustrating a two-tailed cutoff where the two shaded regions together represent the proportion of the distribution outside that range.](images/clipboard-2234740159.png){width="2.50in"}
+:::
 
 :::: {.column width="40%"}
-![Student's t critical-value table with the two-tail 0.05 column and df = 7 row highlighted, intersecting at the critical value 2.365, the value used for a two-tailed test/95% confidence interval at alpha = 0.05.](images/clipboard-1746531278.png){width="300"}
+![Student's t critical-value table with the two-tail 0.05 column and df = 7 row highlighted, intersecting at the critical value 2.365, the value used for a two-tailed test/95% confidence interval at alpha = 0.05.](images/clipboard-1746531278.png){width="3.12in"}
 
 ::: callout-tip
 **🖐 Notice**
@@ -292,17 +293,17 @@ Two-tailed questions refer to the area *between* certain values.
 The two-tailed critical value is *farther* from zero than the one-tailed value — splitting 5% into two tails means each tail only gets 2.5%.
 :::
 ::::
-:::::::
+::::::
 
 ## Calculating a Confidence Interval
 
-::::::: columns
+:::::: columns
 :::: {.column width="60%"}
 Using a two-sided test:
 
 $$\text{CI} = \bar{y} \pm t \cdot \frac{s}{\sqrt{n}}$$
 
-- 95% CI, Sample A: 17.6 ± 2.365 × (2.51 / 8^0.5) = ± 2.10
+- 95% CI, Sample A: 17.6 ± 2.365 × (2.51 / 8\^0.5) = ± 2.10
 - The 95% CI is between 15.50 and 19.70
 - "The 95% CI for the population mean from sample A is 17.6 ± 2.1"
 
@@ -313,20 +314,20 @@ Whitlock & Schluter, *Analysis of Biological Data*, Ch. 11 — Inference for a N
 :::
 ::::
 
-:::: {.column width="40%"}
-![Student's t critical-value table with the two-tail 0.05 column and df = 7 row highlighted, intersecting at the critical value 2.365, the value used for a two-tailed test/95% confidence interval at alpha = 0.05.](images/clipboard-1746531278.png){width="300"}
-::::
-:::::::
+::: {.column width="40%"}
+![Student's t critical-value table with the two-tail 0.05 column and df = 7 row highlighted, intersecting at the critical value 2.365, the value used for a two-tailed test/95% confidence interval at alpha = 0.05.](images/clipboard-1746531278.png){width="3.12in"}
+:::
+::::::
 
 ## Applications of the t-Distribution
 
-::::::: columns
-:::: {.column width="60%"}
+:::::: columns
+::: {.column width="60%"}
 - Can assess confidence that the population mean is within a certain range
 - Can use the t-distribution to ask:
   - "What is the probability of getting a sample with mean = ȳ from a population with mean = µ?" *(1-sample t-test)*
   - "What is the probability that two samples came from the same population?" *(2-sample t-test)*
-::::
+:::
 
 :::: {.column width="40%"}
 ::: callout-tip
@@ -335,14 +336,14 @@ Whitlock & Schluter, *Analysis of Biological Data*, Ch. 11 — Inference for a N
 Before the next slide: which of these two questions do you think a one-sample t-test answers, and which needs a two-sample t-test?
 :::
 ::::
-:::::::
+::::::
 
 ## Part 4 · One-Sample T-Test {.divider}
 
 ## One-Sample T-Test — Hypotheses and Assumptions
 
-::::::: columns
-:::: {.column width="60%"}
+:::::: columns
+::: {.column width="60%"}
 We want to test if the mean needle length on the shady side differs from 15mm.
 
 **Activity: define hypotheses and identify assumptions**
@@ -352,10 +353,10 @@ We want to test if the mean needle length on the shady side differs from 15mm.
 
 **Assumptions for a t-test:**
 
-1. Data is normally distributed
-2. Observations are independent
-3. No significant outliers
-::::
+1.  Data is normally distributed
+2.  Observations are independent
+3.  No significant outliers
+:::
 
 :::: {.column width="40%"}
 ::: callout-note
@@ -364,24 +365,25 @@ We want to test if the mean needle length on the shady side differs from 15mm.
 Whitlock & Schluter, Ch. 11, covers the one-sample t-test as the simplest hypothesis test on a normally distributed variable.
 :::
 ::::
-:::::::
+::::::
 
 ## Checking Normality — QQ Plot
 
-::::::: columns
-:::: {.column width="60%"}
+:::::: columns
+::: {.column width="60%"}
 ```{r}
 #| fig-width: 3.2
 #| fig-height: 2.6
 #| message: false
 #| warning: false
 #| fig-alt: "QQ-plot of pine needle length with a confidence envelope, used to visually check whether needle length is approximately normally distributed."
-# YOUR TASK: Test normality of all pine needle lengths
-qqPlot(ps_df$length_mm,
-       main = "QQ Plot for length of pine needles",
+# The one-sample test below is on the SHADY side, so that is the group
+# whose normality we need to check -- not the two sides pooled together.
+qqPlot(ps_shady_df$length_mm,
+       main = "QQ Plot — shady side needle length",
        ylab = "Sample Quantiles")
 ```
-::::
+:::
 
 :::: {.column width="40%"}
 ::: callout-tip
@@ -390,28 +392,34 @@ qqPlot(ps_df$length_mm,
 Points that hug the blue line support normality; points that curve away — especially in the tails — are a warning sign.
 :::
 ::::
-:::::::
+::::::
 
 ## Checking Normality — Shapiro-Wilk Test
 
 ::::::: columns
-:::: {.column width="60%"}
+::: {.column width="60%"}
 ```{r}
-shapiro.test(ps_df$length_mm)
+shapiro.test(ps_shady_df$length_mm)
 ```
-::::
-
-:::: {.column width="40%"}
-::: callout-important
-**H₀ for Shapiro-Wilk is "the data ARE normal."** A *non-significant* result (p > 0.05) is what we're hoping for here — it means we fail to reject normality.
 :::
-::::
+
+::::: {.column width="40%"}
+::: callout-important
+**H₀ for Shapiro-Wilk is "the data ARE normal."** A *non-significant* result (p \> 0.05) is what we're hoping for here — it means we fail to reject normality.
+:::
+
+::: callout-tip
+**🖐 Why the shady side only?**
+
+We test the group the hypothesis is about. Pooling shady and sunny would mix two distributions with different means, which can look non-normal even when each group is perfectly normal.
+:::
+:::::
 :::::::
 
 ## Checking for Outliers
 
-::::::: columns
-:::: {.column width="60%"}
+:::::: columns
+::: {.column width="60%"}
 ```{r}
 #| fig-width: 3.2
 #| fig-height: 2.6
@@ -423,14 +431,14 @@ shady_sunny_plot <- ps_df %>%
   theme_minimal(base_size = 9)
 shady_sunny_plot
 ```
-::::
+:::
 
 :::: {.column width="40%"}
 ::: callout-tip
 Points beyond the whiskers are potential outliers — always look before you test.
 :::
 ::::
-:::::::
+::::::
 
 ## Practice Exercise 1: One-Sample t-Test
 
@@ -449,17 +457,17 @@ t_test_result
 
 Interpret this test result by answering these questions:
 
-1. What was the null hypothesis?
-2. What was the alternative hypothesis?
-3. What does the p-value tell us?
-4. Should we reject or fail to reject the null hypothesis at α = 0.05?
-5. What is the practical interpretation of this result for botanists?
+1.  What was the null hypothesis?
+2.  What was the alternative hypothesis?
+3.  What does the p-value tell us?
+4.  Should we reject or fail to reject the null hypothesis at α = 0.05?
+5.  What is the practical interpretation of this result for botanists?
 :::
 
 ## Visualizing the One-Sample Test — t Scale
 
-::::::: columns
-:::: {.column width="60%"}
+:::::: columns
+::: {.column width="60%"}
 ```{r}
 #| echo: false
 #| message: false
@@ -476,23 +484,32 @@ alpha <- 0.05              # Significance level
 
 df <- sample_size - 1
 t_stat <- (sample_mean - hypothesized_mean) / (sample_sd / sqrt(sample_size))
-t_crit <- qt(1 - alpha, df)
+# TWO-tailed test (Ha: mu != 15), so alpha is split between the two tails
+t_crit <- qt(1 - alpha/2, df)
 
 x <- seq(-4, 6, length.out = 1000)
 null_y <- dt(x, df)
 
-hyp_data <- data.frame(x = x, y = null_y, Hypothesis = "t-distribution (df = 29)")
+hyp_data <- data.frame(x = x, y = null_y)
 
 rejection_region <- data.frame(
   x = seq(t_crit, 6, length.out = 100),
   y = dt(seq(t_crit, 6, length.out = 100), df)
 )
 
+rejection_region_lower <- data.frame(
+  x = seq(-4, -t_crit, length.out = 100),
+  y = dt(seq(-4, -t_crit, length.out = 100), df)
+)
+
 hyp_plot <- ggplot(hyp_data, aes(x = x, y = y)) +
   geom_line(color = "blue") +
   geom_area(data = rejection_region, aes(x = x, y = y),
             fill = "red", alpha = 0.3, inherit.aes = FALSE) +
+  geom_area(data = rejection_region_lower, aes(x = x, y = y),
+            fill = "red", alpha = 0.3, inherit.aes = FALSE) +
   geom_vline(xintercept = t_crit, linetype = "dashed") +
+  geom_vline(xintercept = -t_crit, linetype = "dashed") +
   geom_vline(xintercept = t_stat, linetype = "solid", color = "green") +
   annotate("text", x = t_crit + 2, y = max(null_y)/6,
            label = "Rejection\nRegion", color = "red") +
@@ -504,7 +521,7 @@ hyp_plot <- ggplot(hyp_data, aes(x = x, y = y)) +
   theme_minimal(base_size = 9)
 hyp_plot
 ```
-::::
+:::
 
 :::: {.column width="40%"}
 ::: callout-note
@@ -513,12 +530,12 @@ hyp_plot
 The green line (our observed t) falls inside the red rejection region — that's what "significant" looks like on a t-distribution.
 :::
 ::::
-:::::::
+::::::
 
 ## Visualizing the One-Sample Test — Original Units
 
-::::::: columns
-:::: {.column width="60%"}
+:::::: columns
+::: {.column width="60%"}
 ```{r}
 #| echo: false
 #| message: false
@@ -534,14 +551,16 @@ measurement_data <- data.frame(x = measurement_x, y = measurement_null_y)
 critical_value_upper <- hypothesized_mean + t_crit * (sample_sd/sqrt(sample_size))
 critical_value_lower <- hypothesized_mean - t_crit * (sample_sd/sqrt(sample_size))
 
+# Rejection regions run OUTWARD from the critical values to the edges of the
+# plot -- not inward toward the hypothesized mean.
 rejection_upper <- data.frame(
-  x = seq(critical_value_upper, 15, length.out = 100),
-  y = dt((seq(critical_value_upper, 15, length.out = 100) - hypothesized_mean)/(sample_sd/sqrt(sample_size)), df) * (sample_sd/sqrt(sample_size))
+  x = seq(critical_value_upper, 20, length.out = 100),
+  y = dt((seq(critical_value_upper, 20, length.out = 100) - hypothesized_mean)/(sample_sd/sqrt(sample_size)), df) * (sample_sd/sqrt(sample_size))
 )
 
 rejection_lower <- data.frame(
-  x = seq(15, critical_value_lower, length.out = 100),
-  y = dt((seq(15, critical_value_lower, length.out = 100) - hypothesized_mean)/(sample_sd/sqrt(sample_size)), df) * (sample_sd/sqrt(sample_size))
+  x = seq(10, critical_value_lower, length.out = 100),
+  y = dt((seq(10, critical_value_lower, length.out = 100) - hypothesized_mean)/(sample_sd/sqrt(sample_size)), df) * (sample_sd/sqrt(sample_size))
 )
 
 measurement_plot <- ggplot(measurement_data, aes(x = x, y = y)) +
@@ -561,7 +580,7 @@ measurement_plot <- ggplot(measurement_data, aes(x = x, y = y)) +
   theme_minimal(base_size = 9)
 measurement_plot
 ```
-::::
+:::
 
 :::: {.column width="40%"}
 ::: callout-tip
@@ -570,53 +589,53 @@ measurement_plot
 Same test, same conclusion — just relabeled onto the millimeter scale instead of the t scale. The blue line (H₀ = 15) sits outside the sample's plausible range.
 :::
 ::::
-:::::::
+::::::
 
 ## Interpreting the One-Sample T-Test
 
-::::::: columns
-:::: {.column width="60%"}
+:::::: columns
+::: {.column width="60%"}
 **Activity: interpret the t-test results**
 
 - What does the p-value tell us?
 - Should we reject or fail to reject the null hypothesis?
-::::
+:::
 
 :::: {.column width="40%"}
 ::: callout-note
 **How to report this result in a scientific paper**
 
-"A one-sample t-test at α = 0.05 showed that the mean needle length (... mm, SD = ...) [was/was not] significantly different from the expected 15mm, t(...) = ..., p = ..."
+"A one-sample t-test at α = 0.05 showed that the mean needle length (... mm, SD = ...) \[was/was not\] significantly different from the expected 15mm, t(...) = ..., p = ..."
 :::
 ::::
-:::::::
+::::::
 
 ## Part 5 · Two-Sample T-Test {.divider}
 
 ## Two-Sample T-Tests — Introduction
 
-::::::: columns
-:::: {.column width="60%"}
+::::: columns
+::: {.column width="60%"}
 For example — what is the probability that population X is the same as population Y?
 
 How would you assess this question using what we learned?
 
 This is what we will do with the needle length again...
-::::
+:::
 
-:::: {.column width="40%"}
-![Photo of two separate green pine branches side by side, each with needle clusters, representing the two independent samples (populations X and Y) being compared in a two-sample t-test.](images/two_branches.jpg){width="204"}
-::::
-:::::::
+::: {.column width="40%"}
+![Photo of two separate green pine branches side by side, each with needle clusters, representing the two independent samples (populations X and Y) being compared in a two-sample t-test.](images/two_branches.jpg){width="2.12in"}
+:::
+:::::
 
 ## Comparing Two Samples
 
-::::::: columns
-:::: {.column width="60%"}
+:::::: columns
+::: {.column width="60%"}
 What is the probability that population X is the same as population Y?
 
 How would you assess this question using what we learned?
-::::
+:::
 
 :::: {.column width="40%"}
 ```{r}
@@ -632,7 +651,7 @@ shady_sunny_plot
 Based on the boxplot alone, what would you guess the two-sample t-test will conclude about needle length on the two sides?
 :::
 ::::
-:::::::
+::::::
 
 ## Practice Exercise 2: Formulating Hypotheses
 
@@ -643,7 +662,7 @@ For the following research question about needle lengths, write the null and alt
 
 Are needle lengths on shady and sunny sides different?
 
-```
+```         
 H0 =
 Ha =
 ```
@@ -651,8 +670,8 @@ Ha =
 
 ## Two-Sample T-Test Framework
 
-::::::: columns
-:::: {.column width="60%"}
+:::::: columns
+::: {.column width="60%"}
 Now let's compare needle lengths from the two sides.
 
 **Question:** Is there a significant difference in needle length between the sides?
@@ -660,15 +679,16 @@ Now let's compare needle lengths from the two sides.
 This requires a two-sample t-test, which compares means from two independent groups.
 
 $$t = \frac{\bar{x}_1 - \bar{x}_2}{S_p\sqrt{\frac{1}{n_1} + \frac{1}{n_2}}}$$
-::::
+:::
 
 :::: {.column width="40%"}
 **Where:**
 
 - x̄₁, x̄₂: sample means of the two groups
-- s²ₚ: pooled variance = [(n₁−1)s₁² + (n₂−1)s₂²] / (n₁+n₂−2)
+- s²ₚ: **pooled variance** = \[(n₁−1)s₁² + (n₂−1)s₂²\] / (n₁+n₂−2)
+- Sₚ = √s²ₚ: the **pooled standard deviation** (that's what appears in the formula)
 - n₁, n₂: sample sizes of the two groups
-- √(1/n₁ + 1/n₂): the pooled standard error
+- Sₚ√(1/n₁ + 1/n₂): the **standard error of the difference** — the whole denominator, not just the square-root term
 
 $$t = \frac{\text{SIGNAL}}{\text{NOISE}}$$
 
@@ -678,7 +698,7 @@ $$t = \frac{\text{SIGNAL}}{\text{NOISE}}$$
 Whitlock & Schluter, Ch. 12 — Comparing Two Means.
 :::
 ::::
-:::::::
+::::::
 
 ## Practice Exercise 3: Summary Statistics
 
@@ -691,10 +711,11 @@ Before conducting the test, we need to understand the data for each group.
 group_summary <- ps_df %>%
   group_by(side) %>%
   summarize(
-    mean_length = mean(length_mm),
-    sd_length   = sd(length_mm),
-    n           = n(),
-    se_length   = sd_length / sqrt(n)
+    mean_length = mean(length_mm, na.rm = TRUE),
+    sd_length   = sd(length_mm, na.rm = TRUE),
+    n           = sum(!is.na(length_mm)),
+    se_length   = sd_length / sqrt(n),
+    .groups = "drop"
   )
 group_summary
 ```
@@ -735,19 +756,19 @@ needle_mean_se_plot
 
 ## Testing Assumptions for a Two-Sample T-Test
 
-::::::: columns
-:::: {.column width="60%"}
+:::::: columns
+::: {.column width="60%"}
 For a two-sample t-test, we need to check:
 
-1. Normality within each group
-2. Equal variances between groups (for the standard t-test)
-3. Independent observations
+1.  Normality within each group
+2.  Equal variances between groups (for the standard t-test)
+3.  Independent observations
 
 If assumptions are violated:
 
 - Welch's t-test (unequal variances)
 - Non-parametric alternatives (Mann-Whitney U test)
-::::
+:::
 
 :::: {.column width="40%"}
 ::: callout-note
@@ -756,7 +777,7 @@ If assumptions are violated:
 Whitlock & Schluter, Ch. 13 — Handling Violations of Assumptions, covers non-parametric alternatives when normality or equal variance fails.
 :::
 ::::
-:::::::
+::::::
 
 ## Practice Exercise 6: Separate Group Data
 
@@ -803,7 +824,8 @@ Levene's test can be done on the original data frame.
 #| message: false
 #| warning: false
 #| paged-print: false
-levene_result <- leveneTest(length_mm ~ side, data = ps_df)
+# leveneTest needs the grouping variable as a factor
+levene_result <- leveneTest(length_mm ~ factor(side), data = ps_df)
 print("Levene's Test for Homogeneity of Variance:")
 print(levene_result)
 ```
@@ -811,8 +833,8 @@ print(levene_result)
 
 ## Conducting the Two-Sample T-Test — Standard
 
-::::::: columns
-:::: {.column width="60%"}
+::::: columns
+::: {.column width="60%"}
 Now we can compare the mean needle lengths between shady and sunny sides.
 
 - H₀: μ₁ = μ₂ (the needle lengths do not differ)
@@ -822,9 +844,9 @@ Deciding between:
 
 - **Standard t-test (equal variances)**
 - Welch's t-test (unequal variances)
-::::
+:::
 
-:::: {.column width="40%"}
+::: {.column width="40%"}
 ```{r}
 # Use var.equal = TRUE for standard t-test,
 # var.equal = FALSE for Welch's t-test
@@ -832,13 +854,13 @@ t_test_result <- t.test(length_mm ~ side, data = ps_df, var.equal = TRUE)
 print("Standard two-sample t-test:")
 print(t_test_result)
 ```
-::::
-:::::::
+:::
+:::::
 
 ## Conducting the Two-Sample T-Test — Welch's
 
-::::::: columns
-:::: {.column width="60%"}
+::::: columns
+::: {.column width="60%"}
 Now we can compare the mean needle lengths between shady and sunny sides.
 
 - H₀: μ₁ = μ₂ (the needle lengths do not differ)
@@ -848,20 +870,20 @@ Deciding between:
 
 - Standard t-test (equal variances)
 - **Welch's t-test (unequal variances)**
-::::
+:::
 
-:::: {.column width="40%"}
+::: {.column width="40%"}
 ```{r}
 t_test_result <- t.test(length_mm ~ side, data = ps_df, var.equal = FALSE)
 print("Welch's two-sample t-test:")
 print(t_test_result)
 ```
-::::
-:::::::
+:::
+:::::
 
 ## Standard vs. Welch's t-Test
 
-:::::: columns
+::::: columns
 ::: {.column width="50%"}
 **Standard t-test (Student's t-test)**
 
@@ -879,11 +901,11 @@ print(t_test_result)
 - More **robust** when group variances differ
 - Uses the **Welch-Satterthwaite equation** — df is typically non-integer and smaller than the standard t-test's
 :::
-::::::
+:::::
 
 ## Interpreting the Two-Sample T-Test
 
-::::::: columns
+:::::: columns
 :::: {.column width="60%"}
 **Interpret the results of the two-sample t-test**
 
@@ -892,22 +914,28 @@ What can we conclude about needle lengths on the sunny vs. shady sides?
 ::: callout-note
 **How to report this result in a scientific paper**
 
-"A two-tailed, two-sample t-test at α = 0.05 showed [a significant/no significant] difference in needle length between sunny (M = ..., SD = ...) and shady (M = ..., SD = ...) sides of pine trees, t(...) = ..., p = ..."
+"A two-tailed, two-sample t-test at α = 0.05 showed \[a significant/no significant\] difference in needle length between sunny (M = ..., SD = ...) and shady (M = ..., SD = ...) sides of pine trees, t(...) = ..., p = ..."
 :::
 ::::
 
-:::: {.column width="40%"}
+::: {.column width="40%"}
 ```{r}
 #| echo: false
 #| message: false
 #| warning: false
 #| fig-width: 3.4
 #| fig-height: 3.2
-#| fig-alt: "T-distribution curve with 14 degrees of freedom for the two-sample needle-length test, red rejection regions in both tails beyond the critical t-values, and a dashed blue line marking the extreme observed t-statistic (-13.797) far into the rejection region."
-t_dist_df <- data.frame(x = seq(-10, 10, by = 0.01)) %>%
-  mutate(density = dt(x, df = 14))
+#| fig-alt: "T-distribution curve with 14 degrees of freedom for the two-sample needle-length test, red rejection regions in both tails beyond the critical t-values of plus and minus 2.145, and a dashed blue line marking the observed t-statistic of 1.128, which falls inside the light blue non-rejection region."
+# Drive the figure from the ACTUAL test so the labels can never drift
+student_tt <- t.test(length_mm ~ side, data = ps_df, var.equal = TRUE)
+obs_t   <- unname(student_tt$statistic)
+obs_df  <- unname(student_tt$parameter)
+obs_p   <- student_tt$p.value
 
-critical_t <- qt(0.975, df = 14)
+t_dist_df <- data.frame(x = seq(-10, 10, by = 0.01)) %>%
+  mutate(density = dt(x, df = obs_df))
+
+critical_t <- qt(0.975, df = obs_df)
 
 t_plot <- ggplot(t_dist_df, aes(x = x, y = density)) +
   geom_line(linewidth = 1.2, color = "blue") +
@@ -917,25 +945,28 @@ t_plot <- ggplot(t_dist_df, aes(x = x, y = density)) +
             aes(x = x, y = density), fill = "lightblue", alpha = 0.3) +
   geom_vline(xintercept = critical_t, color = "red", linewidth = 1) +
   geom_vline(xintercept = -critical_t, color = "red", linewidth = 1) +
-  geom_vline(xintercept = 1.1279, color = "blue", linetype = "dashed", linewidth = 1) +
-  annotate("text", x = critical_t, y = 0.15, label = paste("Critical t =", round(critical_t, 3)), hjust = -0.1, color = "red") +
-  annotate("text", x = 1.1279, y = 0.25, label = "Observed t = -13.797", hjust = -0.1, color = "blue") +
-  annotate("text", x = 0, y = 0.2, label = "p < 2.2e-16", size = 4) +
+  geom_vline(xintercept = obs_t, color = "blue", linetype = "dashed", linewidth = 1) +
+  annotate("text", x = critical_t, y = 0.15,
+           label = paste("Critical t =", round(critical_t, 3)), hjust = -0.1, color = "red") +
+  annotate("text", x = obs_t, y = 0.25,
+           label = paste("Observed t =", round(obs_t, 3)), hjust = -0.1, color = "blue") +
+  annotate("text", x = 0, y = 0.2,
+           label = paste("p =", signif(obs_p, 3)), size = 4) +
   labs(title = "T-Distribution with Observed T-Value",
-       subtitle = "Two-Sample T-Test for Needle Length (df = 14)",
+       subtitle = paste0("Two-Sample T-Test for Needle Length (df = ", obs_df, ")"),
        x = "t-value", y = "Density") +
   theme_minimal(base_size = 9) +
   coord_cartesian(xlim = c(-5, 5), ylim = c(0, 0.4))
 print(t_plot)
 ```
-::::
-:::::::
+:::
+::::::
 
 ## Part 6 · Paired T-Test {.divider}
 
 ## What Does a Paired T-Test Tell Us?
 
-::::::: columns
+:::::: columns
 :::: {.column width="60%"}
 **Paired t-test:**
 
@@ -952,7 +983,7 @@ Whitlock & Schluter, Ch. 12, section on the paired design.
 :::
 ::::
 
-:::: {.column width="40%"}
+::: {.column width="40%"}
 ```{r}
 ps_wide_df <- ps_df %>%
   pivot_wider(
@@ -964,63 +995,103 @@ paired_t_test_result <- t.test(ps_wide_df$sunny, ps_wide_df$shady, paired = TRUE
 print("Paired t-test:")
 print(paired_t_test_result)
 ```
+:::
+::::::
+
+## Same Data, Two Different Answers
+
+:::::: columns
+:::: {.column width="60%"}
+Look carefully at what just happened — **both tests used exactly the same 16 numbers**:
+
+| Test       | t      | df  | p     | Conclusion          |
+|------------|--------|-----|-------|---------------------|
+| Two-sample | 1.128  | 14  | 0.278 | **Not** significant |
+| Paired     | −2.782 | 7   | 0.027 | **Significant**     |
+
+Why the difference?
+
+- The **two-sample** test throws the pairing away. Tree-to-tree variation (some teams' trees just have longer needles) lands in the *noise*, swamping the signal.
+- The **paired** test looks only at the shady−sunny difference *within each tree*, so tree-to-tree variation cancels out entirely.
+
+::: callout-important
+**These data are paired by design** — each team measured both sides of the *same* tree. The paired test is the correct one here; the two-sample test is the wrong tool, and it would have made us miss a real effect.
+:::
 ::::
-:::::::
+
+::: {.column width="40%"}
+```{r}
+#| echo: false
+#| fig-width: 3
+#| fig-height: 2.6
+#| fig-alt: "Slope plot showing each team's tree as a line connecting its shady value to its sunny value; nearly every line slopes downward from shady to sunny, showing a consistent within-tree effect even though the two groups overlap heavily overall."
+ps_df %>%
+  ggplot(aes(side, length_mm, group = group)) +
+  geom_line(color = "grey50") +
+  geom_point(aes(color = side), size = 2) +
+  labs(x = "Side of tree", y = "Length (mm)",
+       title = "Each line = one tree",
+       caption = "Consistent within-tree drop") +
+  theme_minimal(base_size = 9) +
+  theme(legend.position = "none")
+```
+:::
+::::::
 
 ## What Is Going On?
 
-::::::: columns
-:::: {.column width="60%"}
+::::: columns
+::: {.column width="60%"}
 Note that there is a lot of variation *within* trees, but the trend is the same across trees.
-::::
+:::
 
-:::: {.column width="40%"}
+::: {.column width="40%"}
 ```{r}
 #| fig-width: 3
 #| fig-height: 2.6
 #| fig-alt: "The needle length by side-of-tree boxplot with team lines, repeated to show within-tree variation alongside the consistent shady-vs-sunny trend across trees, motivating the paired t-test."
 ps_plot
 ```
-::::
-:::::::
+:::
+:::::
 
 ## Part 7 · Assumptions and Wrap-Up {.divider}
 
 ## Assumptions of Parametric Tests
 
-::::::: columns
-:::: {.column width="60%"}
+::::: columns
+::: {.column width="60%"}
 **Common assumptions for t-tests:**
 
-1. Normality — data comes from normally distributed populations
-2. Equal variances (for two-sample tests)
-3. Independence — observations are independent
-4. No outliers — extreme values can influence results
+1.  Normality — data comes from normally distributed populations
+2.  Equal variances (for two-sample tests)
+3.  Independence — observations are independent
+4.  No outliers — extreme values can influence results
 
 What can we do if our data violates these assumptions?
-::::
+:::
 
-:::: {.column width="40%"}
+::: {.column width="40%"}
 **Alternatives when assumptions are violated:**
 
 - Data transformation (log, square root, etc.)
 - Non-parametric tests
 - Robust statistical methods
-::::
-:::::::
+:::
+:::::
 
 ## Summary and Conclusions
 
-::::::: columns
-:::: {.column width="60%"}
+:::::: columns
+::: {.column width="60%"}
 In this lecture, we've:
 
-1. Formulated hypotheses about pine needle length
-2. Tested assumptions for parametric tests
-3. Conducted one-sample, two-sample, and paired t-tests
-4. Visualized data using appropriate methods
-5. Learned how to interpret and report t-test results
-::::
+1.  Formulated hypotheses about pine needle length
+2.  Tested assumptions for parametric tests
+3.  Conducted one-sample, two-sample, and paired t-tests
+4.  Visualized data using appropriate methods
+5.  Learned how to interpret and report t-test results
+:::
 
 :::: {.column width="40%"}
 ::: callout-note
@@ -1032,4 +1103,4 @@ In this lecture, we've:
 - Consider alternatives when assumptions are violated — non-parametric tests, coming up soon
 :::
 ::::
-:::::::
+::::::
