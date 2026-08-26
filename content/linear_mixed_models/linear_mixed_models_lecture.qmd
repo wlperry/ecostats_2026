@@ -1,0 +1,573 @@
+---
+title: "Lecture: Linear Mixed Models"
+subtitle: "Random effects for nested and hierarchical data"
+description: "The modern mixed-model (lmer) alternative to a traditional nested ANOVA: afex for unbalanced designs, random-effects notation, F vs. Chi-square tests, diagnostics, post-hoc comparisons, and a by-hand F-ratio calculation for comparison — on the sea urchin grazing / algae cover dataset."
+categories: [ANOVA, Mixed Models]
+order: 15
+week: 10
+author: "Bill Perry"
+
+knitr:
+  opts_chunk:
+    paged.print: false
+    collapse: true
+format:
+  html:
+    downloads: [docx, pptx]  # This creates download links for all three
+  revealjs:
+    output-ext: "slides.html"
+  docx:
+    reference-doc: ../../ms_templates/custom-reference-compact.docx
+    fig-width: 3
+    fig-height: 3
+    fig-dpi: 300
+    dpi: 300            # tell Pandoc the real render dpi so it sizes figures correctly
+  pptx: default
+execute:
+  echo: true
+
+editor:
+  markdown:
+    wrap: 72
+---
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+#| paged-print: false
+#| collapse: true
+library(car)
+library(lme4)
+library(lmerTest)
+library(emmeans)
+library(afex)
+library(patchwork)
+library(janitor)
+library(tidyverse)
+
+options(contrasts = c("contr.sum", "contr.poly"))
+options(scipen = 999)  # no sci notation
+```
+
+## Where We Left Off
+
+:::::: columns
+:::: {.column width="60%"}
+Covered last time — nested ANOVA, the traditional way:
+
+- Factorial vs. nested designs
+- The nested-design linear model and variance partitioning
+- Fixed vs. random effects — B nested in A
+- The naive (wrong) factorial model vs. `aov(..., Error(...))`
+
+::: callout-note
+**✅ Key idea from last lecture**
+
+`patch` nested in `treat` needs the right error term — `MS_{patch(treat)}`,
+not `MS_{resid}` — or the F-test for treatment is wrong. Today: the modern
+alternative to specifying that error term by hand.
+:::
+::::
+
+::: {.column width="40%"}
+::: callout-tip
+**🖐 Notice**
+
+Same sea urchin grazing / algae cover dataset as last time — same
+question, same data, a different (and more flexible) way to fit the
+model.
+:::
+:::
+::::::
+
+## Part 1 · Setup — The Sea Urchin Data, Again {.divider}
+
+## Data Overview
+
+::::: columns
+::: {.column width="50%"}
+Same dataset as the nested ANOVA lecture: `patch` (random patches 1–16
+where treatments were applied), `treat` (urchin density treatment),
+`quad` (replicate quadrats within each treatment-patch combination),
+`algae` (percentage cover of filamentous algae — the response
+variable).
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+#| paged-print: false
+#| collapse: true
+u_df <- read_csv("data/andrew.csv") %>% clean_names()
+
+u_df <- u_df %>%
+  mutate(treat = case_when(
+         treat == "removal" ~ "none",
+         treat == "control" ~ "high",
+         treat == "dens_33" ~ "low",
+         treat == "dens_66" ~ "medium",
+         TRUE ~ "other")) %>%
+  mutate(treat = factor(treat,
+                        levels = c("none", "low", "medium", "high"),
+                        labels = c("none", "low", "medium", "high")),
+         patch = as_factor(patch))
+
+cat("Data\n\n")
+head(u_df)
+cat("\n\nTreatment levels:\n\n")
+levels(u_df$treat)
+```
+:::
+
+::: {.column width="50%"}
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+#| paged-print: false
+#| collapse: true
+u_summary <- u_df %>%
+  group_by(treat) %>%
+  summarise(
+    n = n(),
+    mean = mean(algae),
+    sd = sd(algae),
+    se = sd / sqrt(n),
+    min = min(algae),
+    max = max(algae)
+  )
+cat("Summary statistics by treatment:\n\n")
+u_summary
+```
+:::
+:::::
+
+## Part 2 · Modern Approaches — afex and Mixed Models {.divider}
+
+## What to Do If It's an Unbalanced Design
+
+::::: columns
+::: {.column width="50%"}
+The `afex` package is specifically designed for ANOVA with Type III SS,
+and handles nested designs well — even when unbalanced.
+:::
+
+::: {.column width="50%"}
+```{r}
+#| echo: true
+#| message: false
+#| warning: false
+#| paged-print: false
+#| collapse: true
+options(contrasts = c("contr.sum", "contr.poly"))
+
+u_afex_model <- aov_car(algae ~ treat + Error(patch),
+                     data = u_df,
+                     fun_aggregate = mean)
+cat("AFEX nested ANOVA results:\n\n")
+summary(u_afex_model)
+```
+:::
+:::::
+
+## The Modern Way — Mixed-Model ANOVA
+
+::::: columns
+::: {.column width="50%"}
+Fit the model with treatment as a fixed effect, and patch nested within
+treatment as a random effect:
+`lmer(algae ~ treat + (1|treat:patch), ...)`.
+
+**BOBYQA** (Bound Optimization BY Quadratic Approximation) is an
+optimization algorithm used in mixed-effects modeling to find the
+parameter values that maximize the likelihood function — useful for
+fitting complex nested models.
+
+**Notation we'll get into later:**
+
+- Random intercept, fixed slope — `(1|patch)`
+- Random intercept, random slope — `(1|treat:patch)`
+:::
+
+::: {.column width="50%"}
+```{r}
+#| echo: true
+#| message: false
+#| warning: false
+#| paged-print: false
+#| collapse: true
+u_lmer_model <- lmer(algae ~ treat + (1|treat:patch), data = u_df,
+                    control = lmerControl(optimizer = "bobyqa",
+                                         optCtrl = list(maxfun = 2e5)))
+cat("Mixed model summary:\n\n")
+summary(u_lmer_model)
+```
+:::
+:::::
+
+## Mixed-Model ANOVA — Method 1: F-Distribution
+
+::::: columns
+::: {.column width="50%"}
+- Accounts for the uncertainty in variance-component estimation
+- More conservative (higher p-values)
+- Better for small samples
+:::
+
+::: {.column width="50%"}
+```{r}
+#| echo: true
+#| message: false
+#| warning: false
+#| paged-print: false
+#| collapse: true
+u_anova_result <- Anova(u_lmer_model, type = 3, ddf = "Satterthwaite",
+                       test.statistic = "F")
+cat("Type III ANOVA with F test:\n\n")
+u_anova_result
+```
+:::
+:::::
+
+## Mixed-Model ANOVA — Method 2: Chi-Square
+
+::::: columns
+::: {.column width="50%"}
+- Assumes variance components are known (not estimated)
+- More liberal (lower p-values)
+- Assumes large samples
+
+**Why different results?** Chi-square = F × numerator df. The F-test
+accounts for the denominator df (12, here — reflecting sample size);
+Chi-square assumes infinite denominator df (i.e., a large sample).
+
+**Rule of thumb:** under 100 observations or \< 20 random-effect levels,
+use the F-test. Over 500 observations and \> 50 random-effect levels,
+Chi-square is okay. In between, the F-test is safer.
+:::
+
+::: {.column width="50%"}
+```{r}
+#| echo: true
+#| message: false
+#| warning: false
+#| paged-print: false
+#| collapse: true
+u_anova_f <- Anova(u_lmer_model, type = 3, test.statistic = "Chisq")
+cat("Type III ANOVA with Chi-square test:\n\n")
+u_anova_f
+```
+:::
+:::::
+
+## The Nested Model, Restated
+
+::::: columns
+::: {.column width="50%"}
+$$algae_{ijk} = \mu + \alpha_i + \beta_{j(i)} + \epsilon_{ijk}$$
+
+- $\mu$ is the overall mean
+- $\alpha_i$ is the fixed effect of treatment i
+- $\beta_{j(i)}$ is the random effect of patch j nested within treatment
+  i
+- $\epsilon_{ijk}$ is the residual error for quadrat k in patch j within
+  treatment i
+:::
+
+::: {.column width="50%"}
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+#| paged-print: false
+#| collapse: true
+cat("Final ANOVA results:\n\n")
+u_anova_result
+```
+:::
+:::::
+
+## Part 3 · Post-Hoc and Interpretation {.divider}
+
+## Interpreting the Variance Components
+
+::: callout-important
+The nested ANOVA reveals that there was no significant effect of urchin
+density treatment on algae cover (χ² = 8.1513, df = 3, p = 0.04306). The
+variance component for patches nested within treatments (294.3)
+indicates substantial spatial heterogeneity in algae cover, highlighting
+the importance of accounting for this spatial variation in the analysis.
+:::
+
+## Post-Hoc Comparisons
+
+::::: columns
+::: {.column width="60%"}
+Although the main effect of treatment was marginally significant (p =
+0.04306), we can examine mean differences between treatments to
+understand patterns in the data.
+
+```{r}
+#| echo: true
+#| message: false
+#| warning: false
+#| paged-print: false
+#| collapse: true
+u_emm <- emmeans(u_lmer_model, ~ treat)
+cat("Estimated marginal means:\n\n")
+u_emm
+```
+:::
+
+::: {.column width="40%"}
+```{r}
+u_pairs <- pairs(u_emm, adjust = "sidak")
+cat("Pairwise comparisons (Sidak adjusted):\n\n")
+u_pairs
+```
+:::
+:::::
+
+## Compact Letter Display
+
+:::::: columns
+::: {.column width="60%"}
+```{r}
+u_cld <- multcomp::cld(u_emm, alpha = 0.05, Letters = letters)
+cat("Compact letter display:\n\n")
+u_cld
+```
+:::
+
+:::: {.column width="40%"}
+::: callout-important
+**Interpreting treatment comparisons**
+
+Mean algae cover shows a pattern with increasing urchin density:
+None/Removed (39.20%) \> Medium/33% Density (19.00%) \> High/66% Density
+(21.55%) \> Low/Control (1.30%). This suggests an inverse relationship
+between urchin density and algae cover. The high variability among
+patches within treatments contributed to the marginal statistical
+significance for the treatment effect.
+:::
+::::
+::::::
+
+## Part 4 · Assumptions and Visualization {.divider}
+
+## ANOVA Assumptions Testing — Base R
+
+:::::: columns
+::: {.column width="60%"}
+For valid inference from ANOVA, several assumptions must be met. We test
+these below with a base R approach — note that it doesn't work all that
+well for a mixed model.
+:::
+
+:::: {.column width="40%"}
+::: callout-tip
+**🖐 Notice**
+
+`plot(mixed_model)` and friends were built for `lm()` objects — they
+mostly work for `lmer()`, but purpose-built tools like `DHARMa` do a
+better job (see the Nested ANOVA activity).
+:::
+::::
+::::::
+
+## Diagnostic Plots
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+#| paged-print: false
+#| fig-width: 3.8
+#| fig-height: 2.6
+#| fig-alt: "Three diagnostic plots of the mixed-model residuals side by side: a normal Q-Q plot, a histogram of residuals, and a residuals-versus-fitted-values plot with a dashed reference line at zero."
+u_fitted <- fitted(u_lmer_model)
+u_residuals <- residuals(u_lmer_model)
+
+u_qq_plot <- ggplot(data.frame(residuals = u_residuals), aes(sample = residuals)) +
+  stat_qq() +
+  stat_qq_line() +
+  labs(title = "Normal Q-Q", x = "Theoretical Quantiles", y = "Sample Quantiles") +
+  theme_minimal(base_size = 7)
+
+u_hist_plot <- ggplot(data.frame(residuals = u_residuals), aes(x = residuals)) +
+  geom_histogram(bins = 15, fill = "lightblue", color = "black") +
+  labs(title = "Histogram", x = "Residuals", y = "Frequency") +
+  theme_minimal(base_size = 7)
+
+u_resid_plot <- ggplot(data.frame(fitted = u_fitted, residuals = u_residuals),
+                    aes(x = fitted, y = residuals)) +
+  geom_point() +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  labs(title = "Residuals vs. Fitted", x = "Fitted Values", y = "Residuals") +
+  theme_minimal(base_size = 7)
+
+u_qq_plot + u_hist_plot + u_resid_plot
+```
+
+## Levene's Test for Homogeneity of Variance
+
+:::::: columns
+::: {.column width="50%"}
+```{r}
+u_levene <- leveneTest(algae ~ treat, data = u_df)
+cat("Levene's test for homogeneity of variance:\n\n")
+u_levene
+```
+:::
+
+:::: {.column width="50%"}
+::: callout-important
+**Interpreting the assumption tests**
+
+The Q-Q plot shows some deviation from normality, particularly in the
+tails, and Levene's test indicates significant heterogeneity of
+variances across treatments (p = 0.00008785). Quinn & Keough (2002)
+noted "large differences in within-cell variances" in this dataset, and
+transformations (including arcsin) did not improve variance homogeneity.
+However, ANOVA is generally robust to heteroscedasticity with balanced
+designs, which is why they analyzed untransformed data. The Residuals
+vs. fitted plot also shows a pattern of increasing variance with
+increasing fitted values, confirming the heteroscedasticity.
+:::
+::::
+::::::
+
+## Visualization — Boxplot
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+#| paged-print: false
+#| fig-width: 3.6
+#| fig-height: 3
+#| fig-alt: "Boxplot of algae cover percentage by urchin density treatment, with jittered individual quadrat points overlaid, showing algae cover highest at 'none' treatment and lowest at 'low' treatment."
+u_boxplot <- ggplot(u_df, aes(x = treat, y = algae, fill = treat)) +
+  geom_boxplot(alpha = 0.7, outlier.shape = NA) +
+  geom_jitter(width = 0.2, alpha = 0.4, size = 1) +
+  scale_fill_viridis_d(option = "D", end = 0.85) +
+  labs(title = "Algae Cover by Urchin Density Treatment",
+       x = "Treatment", y = "Algae Cover (%)") +
+  theme_minimal(base_size = 9) +
+  theme(legend.position = "none")
+u_boxplot
+```
+
+## Visualization — Means Plot
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+#| paged-print: false
+#| fig-width: 3.4
+#| fig-height: 2.8
+#| fig-alt: "Mean algae cover by treatment plotted as points with standard error error bars, connected to show the pattern across urchin density treatments."
+u_means_plot <- ggplot(u_summary, aes(x = treat, y = mean, group = 1)) +
+  geom_point(size = 3, shape = 21, fill = "white") +
+  geom_errorbar(aes(ymin = mean - se, ymax = mean + se), width = 0.2) +
+  labs(title = "Mean Algae Cover by Treatment",
+       x = "Treatment", y = "Mean Algae Cover (%)") +
+  theme_minimal(base_size = 8)
+u_means_plot
+```
+
+## Part 5 · Discussion and Manual Calculation {.divider}
+
+## Scientific Interpretation
+
+::: callout-important
+Our mixed-model analysis revealed substantial spatial heterogeneity in
+algae cover, with significant variation among patches within each
+treatment. The effect of urchin density treatments on filamentous algae
+cover was marginally significant at the α = 0.05 level (p = 0.043).
+Descriptive statistics show algae cover increasing as urchin density
+decreases, with None/Removed showing the highest cover (39.20%),
+followed by Medium/33% Density (19.00%), High/66% Density (21.55%), and
+Low/Control showing minimal algae cover (1.30%). The variance component
+for patches nested within treatments (294.31, \~39.5% of total variance)
+shows that spatial heterogeneity is a major structuring force in these
+algal communities, and needs to be accounted for when designing and
+analyzing ecological field experiments.
+:::
+
+## We Can Do This Manually — but Ugh
+
+::::: columns
+::: {.column width="50%"}
+Nobody would ever do this by hand in practice — but seeing it once makes
+the "which MS goes on the bottom of the F-ratio" logic concrete, and
+shows how the traditional nested-ANOVA F-ratio (last lecture) connects
+to the mixed-model result above.
+
+```{r}
+#| echo: true
+#| message: false
+#| warning: false
+#| paged-print: false
+u_man_model <- aov(algae ~ treat + treat:patch, data = u_df)
+u_anova_summary <- summary(u_man_model)[[1]]
+cat("Standard ANOVA table:\n\n")
+u_anova_summary
+```
+
+```{r}
+#| echo: true
+#| message: false
+#| warning: false
+#| paged-print: false
+u_MS_treat <- u_anova_summary[1, "Mean Sq"]
+u_MS_patch <- u_anova_summary[2, "Mean Sq"]
+u_MS_residual <- u_anova_summary[3, "Mean Sq"]
+
+u_df_treat <- u_anova_summary[1, "Df"]
+u_df_patch <- u_anova_summary[2, "Df"]
+u_df_residual <- u_anova_summary[3, "Df"]
+
+cat("MS Treatment:", u_MS_treat, "\n")
+cat("MS Patch(Treatment):", u_MS_patch, "\n")
+cat("MS Residual:", u_MS_residual, "\n\n")
+```
+:::
+
+::: {.column width="50%"}
+```{r}
+#| echo: true
+#| message: false
+#| warning: false
+#| paged-print: false
+u_F_treat_correct <- u_MS_treat / u_MS_patch        # Treatment tested against patches
+u_F_patch <- u_MS_patch / u_MS_residual             # Patches tested against residual
+
+cat("F Treatment:", u_F_treat_correct, "\n")
+cat("F Patch(Treatment):", u_F_patch, "\n\n")
+```
+
+```{r}
+#| echo: true
+#| message: false
+#| warning: false
+#| paged-print: false
+u_p_treat_correct <- pf(u_F_treat_correct, u_df_treat, u_df_patch, lower.tail = FALSE)
+u_p_patch <- pf(u_F_patch, u_df_patch, u_df_residual, lower.tail = FALSE)
+
+u_corrected_table <- data.frame(
+  Source = c("Treatment", "Patches(Treatment)", "Residual"),
+  Df = c(u_df_treat, u_df_patch, u_df_residual),
+  MS = round(c(u_MS_treat, u_MS_patch, u_MS_residual), 1),
+  F = c(round(u_F_treat_correct, 2), round(u_F_patch, 2), NA),
+  p = c(ifelse(u_p_treat_correct < 0.001, "<0.001", round(u_p_treat_correct, 3)),
+        ifelse(u_p_patch < 0.001, "<0.001", round(u_p_patch, 3)),
+        NA)
+)
+cat("Corrected ANOVA table:\n\n")
+u_corrected_table
+```
+:::
+:::::

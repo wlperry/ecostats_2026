@@ -1,9 +1,9 @@
 ---
 order: 14
-week: 7
+week: 9
 title: "Activity: Nested ANOVA"
 subtitle: "Nested designs"
-description: "Hands-on activity: nested ANOVA the traditional way (aov with an Error term, afex), the modern way (lmer mixed models), DHARMa diagnostics, and post-hoc comparisons on the sea urchin grazing / algae cover dataset."
+description: "Hands-on activity: nested ANOVA the traditional way (aov with an Error term, afex) and post-hoc comparisons on the sea urchin grazing / algae cover dataset."
 author: "Bill Perry"
 metadata-files:
   - ../../_templates/activities.yml
@@ -18,7 +18,7 @@ format:
 >
 > Work through each part in order, at your own pace. Type every line of code yourself into a **plain R script** — do not copy-paste. Blocks marked **▶ Run this** are code you should type and execute. Blocks marked **✏️ Your turn** ask you to write, modify, or answer something. Boxes marked **🚀 If you finish early** are optional bonus material that goes a bit further than what we covered in lecture.
 >
-> This worksheet uses the sea urchin grazing / algae cover dataset from lecture, where `patch` is nested within `treat` (each patch received only one urchin-density treatment).
+> This worksheet uses the sea urchin grazing / algae cover dataset from lecture, where `patch` is nested within `treat` (each patch received only one urchin-density treatment). Next class, the Linear Mixed Models activity revisits this exact same dataset with a different (and more flexible) modeling approach — this worksheet stays entirely with the traditional method.
 
 ------------------------------------------------------------------------
 
@@ -27,16 +27,9 @@ format:
 **▶ Run this in your Script:**
 
 ``` r
-library(dotwhisker)
 library(janitor)
-library(car)          # For Levene's test and Type III SS
-library(lme4)          # For mixed-effects models
-library(lmerTest)      # For p-values in mixed models
-library(emmeans)       # For estimated marginal means
-library(performance)   # For model diagnostics
-library(DHARMa)        # For residual diagnostics
-library(patchwork)
 library(afex)
+library(emmeans)       # For estimated marginal means
 library(tidyverse)
 
 options(scipen = 999)
@@ -114,100 +107,7 @@ summary(model_afx)
 
 ------------------------------------------------------------------------
 
-# Part 3 · The Modern Way — Mixed Models
-
-Fixed effects go in as a plain variable name. Random effects can be coded a few different ways, depending on the design:
-
-- **Random intercept, fixed slope:** `+ (1|random)` — e.g., `color ~ fixed + (1|group)`
-- **Random intercept, random slope:** `+ (fixed|random)` — e.g., `color ~ fixed + (fixed|group)`
-- **Nested design** (a sample can exist only within a larger grouping): `y ~ color + (1|greenbox/graybox)`, equivalent to `y ~ color + (1|greenbox) + (1|greenbox:graybox)` — this models random variation in the intercept for each patch, and also for each quadrat within each patch
-- **Fully crossed design** (not nested): `y ~ color + (1|green_box) + (1|gray_box)`
-
-**▶ Run this** — fit the mixed model:
-
-``` r
-mixed_model <- lmer(algae ~ treat + (1|patch), data = u_df,
-                    control = lmerControl(calc.derivs = FALSE))
-summary(mixed_model)
-```
-
-**▶ Run this** — Method 1, the F-test with Satterthwaite degrees of freedom (more conservative, better for small samples):
-
-``` r
-satt_result <- Anova(mixed_model, type = 3,
-                      test.statistic = "F",
-                      ddf = "Satterthwaite")
-satt_result
-```
-
-**▶ Run this** — Method 2, the Chi-square test (more liberal, assumes large samples):
-
-``` r
-anova_car <- Anova(mixed_model,
-                   type = 3,
-                   test.statistic = "Chisq")
-anova_car
-```
-
-> 💡 Chi-square = F × numerator df. The two differ because the F-test accounts for the denominator df (reflecting sample size), while Chi-square assumes infinite denominator df. **Rule of thumb:** under 100 observations or < 20 random-effect levels, use the F-test; over 500 observations and > 50 random-effect levels, Chi-square is fine; in between, the F-test is safer.
-
-✏️ **Your turn:** Do the F-test and Chi-square p-values agree on significance here? Given the rule of thumb above, which one should you trust more for this dataset (16 patches)? `________________________`
-
-::: callout-tip
-**🚀 If you finish early:** Refit `mixed_model` using `(1|treat:patch)` instead of `(1|patch)`. Does the model summary change? (Hint: since patch numbers are already unique to a treatment in this dataset, the two notations should behave the same here — but they wouldn't if patch IDs were reused across treatments.)
-
-``` r
-# Write your code here:
-```
-:::
-
-------------------------------------------------------------------------
-
-# Part 4 · Model Diagnostics
-
-**▶ Run this** — DHARMa's simulation-based diagnostics, purpose-built for mixed models:
-
-``` r
-set.seed(123)
-simulation_output <- simulateResiduals(fittedModel = mixed_model,
-                                       plot = FALSE)
-
-plotQQunif(simulation_output)
-plotResiduals(simulation_output)
-
-testDispersion(simulation_output)
-testOutliers(simulation_output)
-```
-
-**▶ Run this** — a couple of other useful diagnostic views:
-
-``` r
-plot(mixed_model, type = c("p", "smooth"))
-
-# Cook's-distance-style influence plot (values > 0.5 are worth a look)
-car::influencePlot(mixed_model)
-
-# Coefficient plot for the fixed effects
-dotwhisker::dwplot(mixed_model, effects = "fixed") +
-  geom_vline(xintercept = 0, color = "darkblue", linewidth = 1)
-
-# Variance components
-VarCorr(mixed_model)
-```
-
-✏️ **Your turn:** From `VarCorr(mixed_model)`, how does the variance attributed to `patch` compare to the residual variance? What does that tell you about spatial heterogeneity in this system? `________________________`
-
-::: callout-tip
-**🚀 If you finish early:** DHARMa's `testDispersion()` checks for over/under-dispersion. Look up (`?testDispersion`) what a significant result would mean, and write a one-sentence summary.
-
-```
-________________________________________________________
-```
-:::
-
-------------------------------------------------------------------------
-
-# Part 5 · Post-Hoc Comparisons
+# Part 3 · Post-Hoc Comparisons
 
 **▶ Run this:**
 
@@ -226,7 +126,7 @@ cld_result
 
 ------------------------------------------------------------------------
 
-# Part 6 · Visualization and Reporting
+# Part 4 · Visualization and Reporting
 
 **▶ Run this** — a publication-style boxplot:
 
@@ -271,23 +171,15 @@ ggplot(summary_stats, aes(x = treat, y = mean, group = 1)) +
 ::: callout-note
 **Scientific interpretation**
 
-This nested ANOVA reveals substantial spatial heterogeneity in algae cover, with significant variation among patches within each treatment. Whether the urchin-density treatment effect itself reaches significance depends on which test (F vs. Chi-square) and which model specification you use — a good reminder that "significant" is sensitive to analytical choices in nested designs. The substantial variance component associated with patches nested within treatments shows why spatial heterogeneity needs to be accounted for when designing and analyzing ecological field experiments.
+This nested ANOVA reveals substantial spatial heterogeneity in algae cover, with significant variation among patches within each treatment. The substantial patch-to-patch variability shown in Part 2's ANOVA table is exactly why `patch` needed to be modeled explicitly, rather than being pooled into the residual — a good reminder that pseudoreplication doesn't just bias your F-test, it hides real biological variation.
 :::
 
-✏️ **Your turn:** Write a 2–3 sentence results paragraph for this analysis, using your own F-statistic, df, p-value, and variance component numbers from Parts 3–4.
+✏️ **Your turn:** Write a 2–3 sentence results paragraph for this analysis, using your own F-statistic, df, and p-value from Part 2.
 
 ```
 ________________________________________________________
 ________________________________________________________
 ```
-
-------------------------------------------------------------------------
-
-# Part 7 · Comparing the Two Approaches
-
-The linear mixed-model approach (`lmer`) gives similar results to the traditional nested ANOVA (`aov` with an `Error()` term). The main advantage of the mixed-model approach is its more elegant handling of random effects, easier extension to unbalanced or more complex designs, and the extensive diagnostic tools available through packages like `DHARMa`.
-
-✏️ **Your turn:** Compare the p-value for `treat` from `nested_model` (Part 2) to the p-value from `satt_result` (Part 3). Are they close? Which approach would you reach for first on a future nested design of your own, and why? `________________________`
 
 ------------------------------------------------------------------------
 
@@ -297,10 +189,8 @@ At this point you can:
 
 - [ ] Explain why `patch` nested in `treat` cannot be analyzed as a simple factorial design
 - [ ] Fit a nested ANOVA with `aov(..., Error(...))` and with `afex::aov_car()`
-- [ ] Fit the same design as a mixed model with `lme4::lmer()`, using correct random-effects notation
-- [ ] Choose between the F-test and Chi-square test for a mixed model, using the rule of thumb from lecture
-- [ ] Run DHARMa diagnostics on a mixed model
 - [ ] Compute EMMs and post-hoc comparisons for a nested design
+- [ ] Write a properly formatted nested-ANOVA results sentence
 
 ::: callout-note
 **📤 What to turn in before next class**
@@ -318,7 +208,7 @@ Upload both of these to the course management system:
 When code breaks — and it will, that is normal:
 
 1. **Read the error message out loud.** R usually names the line and the problem.
-2. **Check the usual suspects:** did you run `library(lme4)`, `library(lmerTest)`, `library(car)`, `library(emmeans)`, `library(DHARMa)`, `library(afex)`, and `library(tidyverse)`? Spelling? A missing `)` or `%>%` at the *start* of a line?
+2. **Check the usual suspects:** did you run `library(janitor)`, `library(afex)`, `library(emmeans)`, and `library(tidyverse)`? Spelling? A missing `)` or `%>%` at the *start* of a line?
 3. `?function_name` opens the built-in help page.
 4. **Bring the exact error** (copy-paste it) to class or office hours.
 

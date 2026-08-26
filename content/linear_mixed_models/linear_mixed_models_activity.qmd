@@ -1,0 +1,290 @@
+---
+order: 15
+week: 10
+title: "Activity: Linear Mixed Models"
+subtitle: "Random effects for nested data"
+description: "Hands-on activity: fitting a linear mixed model with lme4::lmer(), F-test vs. Chi-square tests, DHARMa diagnostics, and comparing results back to a traditional nested ANOVA, on the sea urchin grazing / algae cover dataset."
+author: "Bill Perry"
+metadata-files:
+  - ../../_templates/activities.yml
+format:
+  html: default
+  docx: default
+---
+
+# Worksheet: Linear Mixed Models
+
+> ## How to use this worksheet
+>
+> Work through each part in order, at your own pace. Type every line of code yourself into a **plain R script** — do not copy-paste. Blocks marked **▶ Run this** are code you should type and execute. Blocks marked **✏️ Your turn** ask you to write, modify, or answer something. Boxes marked **🚀 If you finish early** are optional bonus material that goes a bit further than what we covered in lecture.
+>
+> This worksheet picks up the exact same sea urchin grazing / algae cover dataset from the Nested ANOVA activity — `patch` nested within `treat` — and fits it as a mixed model instead of a traditional `aov()` with an `Error()` term.
+
+------------------------------------------------------------------------
+
+# Part 1 · Setup — The Sea Urchin Data, Again
+
+**▶ Run this in your Script:**
+
+``` r
+library(dotwhisker)
+library(janitor)
+library(car)          # For Levene's test and Type III SS
+library(lme4)          # For mixed-effects models
+library(lmerTest)      # For p-values in mixed models
+library(emmeans)       # For estimated marginal means
+library(performance)   # For model diagnostics
+library(DHARMa)        # For residual diagnostics
+library(tidyverse)
+
+options(scipen = 999)
+options(contrasts = c("contr.treatment", "contr.poly"))
+
+u_df <- read_csv("data/andrew.csv") %>% clean_names()
+
+u_df <- u_df %>%
+  mutate(treat = case_when(
+         treat == "removal" ~ "none",
+         treat == "control" ~ "high",
+         treat == "dens_33" ~ "low",
+         treat == "dens_66" ~ "medium",
+         TRUE ~ "other")) %>%
+  mutate(treat = factor(treat,
+                        levels = c("none", "low", "medium", "high"),
+                        labels = c("none", "low", "medium", "high")),
+         patch = as_factor(patch))
+
+head(u_df)
+levels(u_df$treat)
+```
+
+`u_df` contains: `patch` (random patches 1–16 where treatments were applied), `treat` (urchin density treatment — none, low, medium, high), `quad` (replicate quadrats within each patch:treatment combination), `algae` (percentage cover of filamentous algae — the response variable).
+
+::: callout-tip
+**🖐 Notice**
+
+If you still have `nested_model` from the Nested ANOVA activity in your environment, keep it around — Part 4 asks you to compare its p-value to what you get here.
+:::
+
+------------------------------------------------------------------------
+
+# Part 2 · The Modern Way — Mixed Models
+
+Fixed effects go in as a plain variable name. Random effects can be coded a few different ways, depending on the design:
+
+- **Random intercept, fixed slope:** `+ (1|random)` — e.g., `color ~ fixed + (1|group)`
+- **Random intercept, random slope:** `+ (fixed|random)` — e.g., `color ~ fixed + (fixed|group)`
+- **Nested design** (a sample can exist only within a larger grouping): `y ~ color + (1|greenbox/graybox)`, equivalent to `y ~ color + (1|greenbox) + (1|greenbox:graybox)` — this models random variation in the intercept for each patch, and also for each quadrat within each patch
+- **Fully crossed design** (not nested): `y ~ color + (1|green_box) + (1|gray_box)`
+
+**▶ Run this** — fit the mixed model:
+
+``` r
+mixed_model <- lmer(algae ~ treat + (1|patch), data = u_df,
+                    control = lmerControl(calc.derivs = FALSE))
+summary(mixed_model)
+```
+
+**▶ Run this** — Method 1, the F-test with Satterthwaite degrees of freedom (more conservative, better for small samples):
+
+``` r
+satt_result <- Anova(mixed_model, type = 3,
+                      test.statistic = "F",
+                      ddf = "Satterthwaite")
+satt_result
+```
+
+**▶ Run this** — Method 2, the Chi-square test (more liberal, assumes large samples):
+
+``` r
+anova_car <- Anova(mixed_model,
+                   type = 3,
+                   test.statistic = "Chisq")
+anova_car
+```
+
+> 💡 Chi-square = F × numerator df. The two differ because the F-test accounts for the denominator df (reflecting sample size), while Chi-square assumes infinite denominator df. **Rule of thumb:** under 100 observations or < 20 random-effect levels, use the F-test; over 500 observations and > 50 random-effect levels, Chi-square is fine; in between, the F-test is safer.
+
+✏️ **Your turn:** Do the F-test and Chi-square p-values agree on significance here? Given the rule of thumb above, which one should you trust more for this dataset (16 patches)? `________________________`
+
+::: callout-tip
+**🚀 If you finish early:** Refit `mixed_model` using `(1|treat:patch)` instead of `(1|patch)`. Does the model summary change? (Hint: since patch numbers are already unique to a treatment in this dataset, the two notations should behave the same here — but they wouldn't if patch IDs were reused across treatments.)
+
+``` r
+# Write your code here:
+```
+:::
+
+------------------------------------------------------------------------
+
+# Part 3 · Model Diagnostics
+
+**▶ Run this** — DHARMa's simulation-based diagnostics, purpose-built for mixed models:
+
+``` r
+set.seed(123)
+simulation_output <- simulateResiduals(fittedModel = mixed_model,
+                                       plot = FALSE)
+
+plotQQunif(simulation_output)
+plotResiduals(simulation_output)
+
+testDispersion(simulation_output)
+testOutliers(simulation_output)
+```
+
+**▶ Run this** — a couple of other useful diagnostic views:
+
+``` r
+plot(mixed_model, type = c("p", "smooth"))
+
+# Cook's-distance-style influence plot (values > 0.5 are worth a look)
+car::influencePlot(mixed_model)
+
+# Coefficient plot for the fixed effects
+dotwhisker::dwplot(mixed_model, effects = "fixed") +
+  geom_vline(xintercept = 0, color = "darkblue", linewidth = 1)
+
+# Variance components
+VarCorr(mixed_model)
+```
+
+✏️ **Your turn:** From `VarCorr(mixed_model)`, how does the variance attributed to `patch` compare to the residual variance? What does that tell you about spatial heterogeneity in this system? `________________________`
+
+::: callout-tip
+**🚀 If you finish early:** DHARMa's `testDispersion()` checks for over/under-dispersion. Look up (`?testDispersion`) what a significant result would mean, and write a one-sentence summary.
+
+```
+________________________________________________________
+```
+:::
+
+::: callout-note
+**Scientific interpretation**
+
+This mixed-model analysis reveals substantial spatial heterogeneity in algae cover, with significant variation among patches within each treatment. Whether the urchin-density treatment effect itself reaches significance depends on which test (F vs. Chi-square) you use — a good reminder that "significant" is sensitive to analytical choices in nested designs. The substantial variance component associated with patches nested within treatments shows why spatial heterogeneity needs to be accounted for when designing and analyzing ecological field experiments.
+:::
+
+✏️ **Your turn:** Write a 2–3 sentence results paragraph for this analysis, using your own F-statistic, df, p-value, and variance component numbers from Parts 2–3.
+
+```
+________________________________________________________
+________________________________________________________
+```
+
+------------------------------------------------------------------------
+
+# Part 4 · Comparing the Two Approaches
+
+The linear mixed-model approach (`lmer`) gives similar results to the traditional nested ANOVA (`aov` with an `Error()` term) from last class. The main advantage of the mixed-model approach is its more elegant handling of random effects, easier extension to unbalanced or more complex designs, and the extensive diagnostic tools available through packages like `DHARMa`.
+
+✏️ **Your turn:** Compare the p-value for `treat` you got from `nested_model` in the Nested ANOVA activity to the p-value from `satt_result` here. Are they close? Which approach would you reach for first on a future nested design of your own, and why? `________________________`
+
+------------------------------------------------------------------------
+
+# Review and checkpoint
+
+At this point you can:
+
+- [ ] Fit a nested design as a mixed model with `lme4::lmer()`, using correct random-effects notation
+- [ ] Choose between the F-test and Chi-square test for a mixed model, using the rule of thumb from lecture
+- [ ] Run DHARMa diagnostics on a mixed model
+- [ ] Read variance components from `VarCorr()` and explain what they mean biologically
+- [ ] Compare a mixed-model result to the equivalent traditional nested ANOVA result
+
+::: callout-note
+**📤 What to turn in before next class**
+
+Upload both of these to the course management system:
+
+1. Your code — the `scripts/` folder (or just `15_linear_mixed_models.R`)
+2. This worksheet, with your written answers
+:::
+
+------------------------------------------------------------------------
+
+# Part 5 · Take-Home Extension — A Linear Mixed Model for Crayfish Growth
+
+*Due Wednesday, November 4 — before the next class.*
+
+::: callout-note
+This is your first time building a mixed model entirely from scratch, using the same `lmer()` syntax from Part 2, on a new dataset with a different kind of random effect (lake, rather than nested patches).
+:::
+
+## Background
+
+Sargent & Lodge (2014) reared young-of-year rusty crayfish (*Orconectes rusticus*) from native (Ohio) and invasive (Wisconsin) populations in enclosures across three northern Wisconsin lakes. Individual crayfish within the same lake share that lake's conditions, so they're not independent of each other — lake should be treated as a random effect.
+
+**▶ Run this:**
+
+``` r
+cray_df <- read_csv("data/sargent_lodge_crayfish.csv")
+head(cray_df)
+```
+
+## Your Task
+
+**Question:** Does crayfish growth rate differ between native and invasive populations, once you account for the fact that crayfish were grown in different lakes?
+
+✏️ **Your turn:** State your hypotheses for the fixed effect of range. Decide how you want to specify the random effect of lake (a random intercept is enough here — this is not a nested design like Part 2's patches-within-treatments). Justify your model, fit it, run diagnostics, interpret the fixed effect and the variance components, and report the result properly.
+
+```
+H0 =
+________________________________________________________
+Ha =
+________________________________________________________
+Model I will use and why:
+________________________________________________________
+```
+
+``` r
+# Write your code here:
+```
+
+```
+Interpretation:
+________________________________________________________
+________________________________________________________
+```
+
+## Final Figure
+
+Produce one publication-quality figure comparing growth rate between ranges — proper axis labels, no default `ggplot` grey background — and export it with `ggsave()`.
+
+``` r
+# Write your code here:
+```
+
+::: callout-note
+**📤 What to turn in — due Nov 4**
+
+Your write-up should include:
+
+- [ ] The question
+- [ ] Your hypotheses
+- [ ] Which model you used, and your justification for it
+- [ ] The code and its output
+- [ ] Your interpretation of the result (including the random effect)
+- [ ] A final figure showing the result
+:::
+
+::: callout-note
+**Reference**
+
+Sargent, L.W. & Lodge, D.M. (2014). Evolution of invasive traits in nonindigenous species: increased survival and faster growth in invasive populations of rusty crayfish (*Orconectes rusticus*). *Evolutionary Applications*, 7, 949–961.
+:::
+
+------------------------------------------------------------------------
+
+# Getting unstuck
+
+When code breaks — and it will, that is normal:
+
+1. **Read the error message out loud.** R usually names the line and the problem.
+2. **Check the usual suspects:** did you run `library(lme4)`, `library(lmerTest)`, `library(car)`, `library(emmeans)`, `library(DHARMa)`, and `library(tidyverse)`? Spelling? A missing `)` or `%>%` at the *start* of a line?
+3. `?function_name` opens the built-in help page.
+4. **Bring the exact error** (copy-paste it) to class or office hours.
+
+> 💡 **Key idea:** Every working scientist googles error messages daily. Getting stuck is not failing — it is the job.
+
+------------------------------------------------------------------------
