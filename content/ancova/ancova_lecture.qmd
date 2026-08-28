@@ -42,7 +42,6 @@ library(tidyverse)
 
 # for type 3 anova
 options(contrasts = c("contr.sum", "contr.poly")) # for true type 3 anovas
-
 ```
 
 ## Part 1 · From GLMs to ANCOVA {.divider}
@@ -53,12 +52,12 @@ options(contrasts = c("contr.sum", "contr.poly")) # for true type 3 anovas
 ::: {.column width="60%"}
 **Review**
 
--   General Linear Models (GLM)
--   Gaussian GLMs (normal distribution)
--   Poisson GLMs (count data)
--   Logistic GLMs (binary outcomes)
--   Model assumptions and diagnostics
--   Connection to ANOVA and linear models
+- General Linear Models (GLM)
+- Gaussian GLMs (normal distribution)
+- Poisson GLMs (count data)
+- Logistic GLMs (binary outcomes)
+- Model assumptions and diagnostics
+- Connection to ANOVA and linear models
 :::
 
 ::: {.column width="40%"}
@@ -72,22 +71,22 @@ options(contrasts = c("contr.sum", "contr.poly")) # for true type 3 anovas
 
 **Overview**
 
--   Analysis of covariance (ANCOVA):
-    -   Introduction to ANCOVA
+- Analysis of covariance (ANCOVA):
+  - Introduction to ANCOVA
 
-    -   The ANCOVA workflow in R
+  - The ANCOVA workflow in R
 
-    -   When to use ANCOVA
+  - When to use ANCOVA
 
-    -   Building the ANCOVA model in R
+  - Building the ANCOVA model in R
 
-    -   Assumptions of ANCOVA
+  - Assumptions of ANCOVA
 
-        -   Homogeneity of slopes (The critical test!)
+    - Homogeneity of slopes (The critical test!)
 
-    -   Interpreting results & "Adjusted Means"
+  - Interpreting results & "Adjusted Means"
 
-    -   Handling violations (heterogeneous slopes)
+  - Handling violations (heterogeneous slopes)
 
 ## Introduction to ANCOVA
 
@@ -95,20 +94,18 @@ options(contrasts = c("contr.sum", "contr.poly")) # for true type 3 anovas
 :::: {.column width="60%"}
 **What is ANCOVA?**
 
--   ANCOVA = Analysis of COVAriance
-    -   It's a combination of regression and ANOVA
-    -   It's used when you have:
-        -   A continuous response variable (Y)
+- ANCOVA = Analysis of COVAriance
+  - It's a combination of regression and ANOVA
+  - It's used when you have:
+    - A continuous response variable (Y)
 
-        -   A categorical predictor (Factor A)
+    - A categorical predictor (Factor A)
 
-        -   A continuous predictor (Covariate X)
-    -   **Common use:**
-        -   Compare means of factor levels (groups), after statistically
-            adjusting for the effect of the continuous covariate.
-    -   **Another use:**
-        -   Determine whether two or more regression lines differ in
-            slopes and/or intercepts.
+    - A continuous predictor (Covariate X)
+  - **Common use:**
+    - Compare means of factor levels (groups), after statistically adjusting for the effect of the continuous covariate.
+  - **Another use:**
+    - Determine whether two or more regression lines differ in slopes and/or intercepts.
 
 ::: callout-note
 Gotelli & Ellison, *A Primer of Ecological Statistics*, Ch. 9 (Regression) and Ch. 10 (The Analysis of Variance) — ANCOVA combines the two frameworks.
@@ -126,9 +123,12 @@ Gotelli & Ellison, *A Primer of Ecological Statistics*, Ch. 9 (Regression) and C
 # Create a simple dataset to illustrate ANCOVA
 set.seed(123)
 n <- 60
-group <- rep(c("A", "B", "C"), each = n/3)
+group <- rep(c("A", "B", "C"), each = n / 3)
 x <- rnorm(n, mean = 5, sd = 1.5)
-y <- 2 + 0.8 * x + ifelse(group == "A", 2, ifelse(group == "B", 1, 0)) + rnorm(n, sd = 1)
+y <- 2 +
+  0.8 * x +
+  ifelse(group == "A", 2, ifelse(group == "B", 1, 0)) +
+  rnorm(n, sd = 1)
 data <- data.frame(group = group, x = x, y = y)
 
 # Plot with regression lines by group
@@ -136,10 +136,12 @@ ggplot(data, aes(x = x, y = y, color = group)) +
   geom_point(alpha = 0.7) +
   geom_smooth(method = "lm", se = FALSE) +
   theme_minimal(base_size = 9) +
-  labs(title = "ANCOVA: Regression Lines by Group",
-       x = "Covariate (X)",
-       y = "Response Variable (Y)",
-       color = "Group") +
+  labs(
+    title = "ANCOVA: Regression Lines by Group",
+    x = "Covariate (X)",
+    y = "Response Variable (Y)",
+    color = "Group"
+  ) +
   theme(legend.position = "bottom")
 ```
 :::
@@ -147,27 +149,19 @@ ggplot(data, aes(x = x, y = y, color = group)) +
 
 ## When to Use ANCOVA
 
--   **Common Applications of ANCOVA**
-    -   **Increasing statistical power**
-        -   The covariate (e.g., body size, initial temperature)
-            explains some of the "noise" (residual error) in the
-            response variable.
+- **Common Applications of ANCOVA**
+  - **Increasing statistical power**
+    - The covariate (e.g., body size, initial temperature) explains some of the "noise" (residual error) in the response variable.
 
-        -   By "removing" this variation, we reduce the residual error,
-            making it easier to detect the true effect of our
-            categorical factor.
+    - By "removing" this variation, we reduce the residual error, making it easier to detect the true effect of our categorical factor.
 
-        -   This results in a more powerful test of treatment effects.
-    -   **Adjusting for confounding variables**
-        -   Imagine your treatment groups happen to differ in their
-            average covariate value (e.g., Group A was tested in a
-            warmer room than Group B).
+    - This results in a more powerful test of treatment effects.
+  - **Adjusting for confounding variables**
+    - Imagine your treatment groups happen to differ in their average covariate value (e.g., Group A was tested in a warmer room than Group B).
 
-        -   ANCOVA allows you to separate the treatment effect from the
-            covariate effect.
-    -   **Testing equality of regression lines**
-        -   Do treatments have the same relationship (slope) with a
-            continuous variable?
+    - ANCOVA allows you to separate the treatment effect from the covariate effect.
+  - **Testing equality of regression lines**
+    - Do treatments have the same relationship (slope) with a continuous variable?
 
 ## ANCOVA Example: Cricket Chirping
 
@@ -175,18 +169,15 @@ ggplot(data, aes(x = x, y = y, color = group)) +
 ::: {.column width="60%"}
 **Cricket Chirping Example**
 
--   Want to compare chirping rate of two cricket species:
-    -   *Oecanthus exclamationis*
-    -   *Oecanthus niveus*
--   **But...**
-    -   Measured rates at different temperatures.
-    -   Range of temperatures differed between species.
-    -   There is an apparent relationship between pulse rate and
-        temperature.
--   **Problem:** Are the species different, or are they just at
-    different temperatures?
--   **Solution:** ANCOVA lets us adjust for the temperature effect to
-    get a clearer, more powerful test of the species effect. .\
+- Want to compare chirping rate of two cricket species:
+  - *Oecanthus exclamationis*
+  - *Oecanthus niveus*
+- **But...**
+  - Measured rates at different temperatures.
+  - Range of temperatures differed between species.
+  - There is an apparent relationship between pulse rate and temperature.
+- **Problem:** Are the species different, or are they just at different temperatures?
+- **Solution:** ANCOVA lets us adjust for the temperature effect to get a clearer, more powerful test of the species effect. .\
 :::
 
 ::: {.column width="40%"}
@@ -200,20 +191,29 @@ ggplot(data, aes(x = x, y = y, color = group)) +
 # Create simulated cricket data
 set.seed(456)
 n <- 40
-species <- rep(c("O. exclamationis", "O. niveus"), each = n/2)
-temp <- c(rnorm(n/2, mean = 22, sd = 2), rnorm(n/2, mean = 24, sd = 2))
-chirp_rate <- 40 + 2.5 * (temp - 23) + ifelse(species == "O. exclamationis", 10, 0) + rnorm(n, sd = 3)
-cricket_data <- data.frame(species = species, temp = temp, chirp_rate = chirp_rate)
+species <- rep(c("O. exclamationis", "O. niveus"), each = n / 2)
+temp <- c(rnorm(n / 2, mean = 22, sd = 2), rnorm(n / 2, mean = 24, sd = 2))
+chirp_rate <- 40 +
+  2.5 * (temp - 23) +
+  ifelse(species == "O. exclamationis", 10, 0) +
+  rnorm(n, sd = 3)
+cricket_data <- data.frame(
+  species = species,
+  temp = temp,
+  chirp_rate = chirp_rate
+)
 
 # Plot with regression lines by species
 ggplot(cricket_data, aes(x = temp, y = chirp_rate, color = species)) +
   geom_point(alpha = 0.7) +
   geom_smooth(method = "lm", se = FALSE) +
   theme_minimal(base_size = 9) +
-  labs(title = "Cricket Chirping Example",
-       x = "Temperature (°C)",
-       y = "Chirping Rate",
-       color = "Species") +
+  labs(
+    title = "Cricket Chirping Example",
+    x = "Temperature (°C)",
+    y = "Chirping Rate",
+    color = "Species"
+  ) +
   theme(legend.position = "bottom")
 ```
 :::
@@ -223,20 +223,14 @@ ggplot(cricket_data, aes(x = temp, y = chirp_rate, color = species)) +
 
 ## ANCOVA Linear Model: Conceptual Framework
 
--   **The ANCOVA Model**
-    -   Key concept: Dfference between "unadjusted" group means and
-        "adjusted" means
--   **In this visualization:**
-    -   **Group Means (asterisks):** The raw average X and Y for each
-        group.
-    -   Group A and Group B have different mean X values. Comparing
-        directly misleading
-    -   **Adjusted Means (triangles):** ANCOVA statistically "moves"
-        each group mean along regression line to single, common X value
-        (the overall mean X).
-    -   ANCOVA compares heights (the Y values) of adjusted means.
-    -   Adjustment "levels the playing field," estimating each group's
-        mean if all groups had same average covariate value
+- **The ANCOVA Model**
+  - Key concept: Dfference between "unadjusted" group means and "adjusted" means
+- **In this visualization:**
+  - **Group Means (asterisks):** The raw average X and Y for each group.
+  - Group A and Group B have different mean X values. Comparing directly misleading
+  - **Adjusted Means (triangles):** ANCOVA statistically "moves" each group mean along regression line to single, common X value (the overall mean X).
+  - ANCOVA compares heights (the Y values) of adjusted means.
+  - Adjustment "levels the playing field," estimating each group's mean if all groups had same average covariate value
 
 ## ANCOVA Model Visualization
 
@@ -292,79 +286,130 @@ adjusted_y_b <- mean_y_b - 0.7 * (mean_x_b - overall_mean_x)
 # Create the plot
 ggplot() +
   # Add regression lines
-  geom_line(data = model_data, aes(x = x, y = y, color = group), linewidth  = 1) +
-  
+  geom_line(
+    data = model_data,
+    aes(x = x, y = y, color = group),
+    linewidth = 1
+  ) +
+
   # Add points
-  geom_point(data = points, aes(x = x, y = y, color = group), size = 3, alpha = 0.7) +
-  
+  geom_point(
+    data = points,
+    aes(x = x, y = y, color = group),
+    size = 3,
+    alpha = 0.7
+  ) +
+
   # Add mean x and y for each group
-  geom_point(aes(x = mean_x_a, y = mean_y_a), color = "darkred", size = 5, shape = 8) +
-  geom_point(aes(x = mean_x_b, y = mean_y_b), color = "darkblue", size = 5, shape = 8) +
-  
+  geom_point(
+    aes(x = mean_x_a, y = mean_y_a),
+    color = "darkred",
+    size = 5,
+    shape = 8
+  ) +
+  geom_point(
+    aes(x = mean_x_b, y = mean_y_b),
+    color = "darkblue",
+    size = 5,
+    shape = 8
+  ) +
+
   # Add adjusted means at overall mean x triangle
-  geom_point(aes(x = overall_mean_x, y = adjusted_y_a), color = "#F8766D", size = 5, shape = 18) +
-  geom_point(aes(x = overall_mean_x, y = adjusted_y_b), color = "#00BFC4", size = 5, shape = 18) +
-  
+  geom_point(
+    aes(x = overall_mean_x, y = adjusted_y_a),
+    color = "#F8766D",
+    size = 5,
+    shape = 18
+  ) +
+  geom_point(
+    aes(x = overall_mean_x, y = adjusted_y_b),
+    color = "#00BFC4",
+    size = 5,
+    shape = 18
+  ) +
+
   # Add vertical lines to show adjustment
-  geom_segment(aes(x = mean_x_a, y = mean_y_a, xend = overall_mean_x, yend = adjusted_y_a), 
-               color = "#F8766D", linetype = "dashed") +
-  geom_segment(aes(x = mean_x_b, y = mean_y_b, xend = overall_mean_x, yend = adjusted_y_b), 
-               color = "#00BFC4", linetype = "dashed") +
-  
+  geom_segment(
+    aes(x = mean_x_a, y = mean_y_a, xend = overall_mean_x, yend = adjusted_y_a),
+    color = "#F8766D",
+    linetype = "dashed"
+  ) +
+  geom_segment(
+    aes(x = mean_x_b, y = mean_y_b, xend = overall_mean_x, yend = adjusted_y_b),
+    color = "#00BFC4",
+    linetype = "dashed"
+  ) +
+
   # Add vertical line at overall mean x
   geom_vline(xintercept = overall_mean_x, linetype = "dotted") +
-  
+
   # Labels
-  annotate("text", x = mean_x_a - 0.2, y = mean_y_a + 1, label = "Group A\nMean", color = "darkred") +
-  annotate("text", x = mean_x_b + 0.1, y = mean_y_b + 1, label = "Group B\nMean", color = "darkblue") +
-  annotate("text", x = overall_mean_x + .4, y = adjusted_y_a - 0.5, 
-           label = "Adjusted\nMean A", color = "#F8766D") +
-  annotate("text", x = overall_mean_x + .2, y = adjusted_y_b - 0.8, 
-           label = "Adjusted\nMean B", color = "#00BFC4") +
-  
+  annotate(
+    "text",
+    x = mean_x_a - 0.2,
+    y = mean_y_a + 1,
+    label = "Group A\nMean",
+    color = "darkred"
+  ) +
+  annotate(
+    "text",
+    x = mean_x_b + 0.1,
+    y = mean_y_b + 1,
+    label = "Group B\nMean",
+    color = "darkblue"
+  ) +
+  annotate(
+    "text",
+    x = overall_mean_x + .4,
+    y = adjusted_y_a - 0.5,
+    label = "Adjusted\nMean A",
+    color = "#F8766D"
+  ) +
+  annotate(
+    "text",
+    x = overall_mean_x + .2,
+    y = adjusted_y_b - 0.8,
+    label = "Adjusted\nMean B",
+    color = "#00BFC4"
+  ) +
+
   # Theme
   theme_minimal(base_size = 9) +
-  labs(title = "ANCOVA: Adjusting Means Based on Covariate",
-       x = "Covariate (X)",
-       y = "Response Variable (Y)",
-       color = "Group") +
+  labs(
+    title = "ANCOVA: Adjusting Means Based on Covariate",
+    x = "Covariate (X)",
+    y = "Response Variable (Y)",
+    color = "Group"
+  ) +
   theme(legend.position = "bottom")
 ```
 :::
 
 ## Mathematical Model for ANCOVA
 
--   Single-factor ANCOVA with
-    -   factor A (p levels, i = 1 to p), a continuous covariate (x), and
-        response variable (y):
-        $Y_{ij} = \mu + \alpha_i + \beta(X_{ij} - \bar{X}) + \varepsilon_{ij}$
--   Where:
-    -   $Y_{ij}$ = response value for observation j in level i of factor
-        A
-    -   $\mu$ = overall mean
-    -   $\alpha_i$ = effect of level i of factor A (what we test in
-        ANOVA)
-    -   $\beta$ = common regression slope relating Y to X (what we test
-        in Regression)
-    -   $X_{ij}$ = covariate value for observation j in level i of
-        factor A
-    -   $\bar{X}$ = mean value of covariate
-    -   $\varepsilon_{ij}$ = error term
+- Single-factor ANCOVA with
+  - factor A (p levels, i = 1 to p), a continuous covariate (x), and response variable (y): $Y_{ij} = \mu + \alpha_i + \beta(X_{ij} - \bar{X}) + \varepsilon_{ij}$
+- Where:
+  - $Y_{ij}$ = response value for observation j in level i of factor A
+  - $\mu$ = overall mean
+  - $\alpha_i$ = effect of level i of factor A (what we test in ANOVA)
+  - $\beta$ = common regression slope relating Y to X (what we test in Regression)
+  - $X_{ij}$ = covariate value for observation j in level i of factor A
+  - $\bar{X}$ = mean value of covariate
+  - $\varepsilon_{ij}$ = error term
 
 ## ANCOVA Parameters Interpretation
 
 ::::: columns
 ::: {.column width="60%"}
--   **Interpretation of Parameters**
-    -   $\mu$ = overall mean response
-    -   $\alpha_i$ = effect of level i (difference between group's
-        adjusted mean and overall mean)
-    -   $\beta$ = pooled within-group regression coefficient (the slope)
-    -   $X_{ij}$ = covariate value for observation j in group i
-    -   $\bar{X}$ = overall mean of covariate
-    -   $\varepsilon_{ij}$ = unexplained error
--   **Model assumes homogeneous slopes** (i.e., $\beta$ same for all
-    groups) .
+- **Interpretation of Parameters**
+  - $\mu$ = overall mean response
+  - $\alpha_i$ = effect of level i (difference between group's adjusted mean and overall mean)
+  - $\beta$ = pooled within-group regression coefficient (the slope)
+  - $X_{ij}$ = covariate value for observation j in group i
+  - $\bar{X}$ = overall mean of covariate
+  - $\varepsilon_{ij}$ = unexplained error
+- **Model assumes homogeneous slopes** (i.e., $\beta$ same for all groups) .
 :::
 
 ::: {.column width="40%"}
@@ -377,9 +422,12 @@ ggplot() +
 # Create simple dataset to illustrate parameters
 set.seed(321)
 n <- 20
-group <- rep(c("Group 1", "Group 2"), each = n/2)
+group <- rep(c("Group 1", "Group 2"), each = n / 2)
 x <- rnorm(n, mean = 5, sd = 1.2)
-y <- 10 + ifelse(group == "Group 1", 2, -2) + 0.8 * (x - mean(x)) + rnorm(n, sd = 0.8)
+y <- 10 +
+  ifelse(group == "Group 1", 2, -2) +
+  0.8 * (x - mean(x)) +
+  rnorm(n, sd = 0.8)
 param_data <- data.frame(group = group, x = x, y = y)
 
 # Calculate overall mean
@@ -400,13 +448,34 @@ ggplot(param_data, aes(x = x, y = y, color = group)) +
   geom_point() +
   geom_smooth(method = "lm", se = FALSE) +
   geom_hline(yintercept = mu, linetype = "dashed", color = "black") +
-  annotate("text", x = max(x), y = mu + 0.2, label = "μ (overall mean)", hjust = 1) +
-  annotate("text", x = min(x) + 0.4, y = mu + alpha_1, 
-           label = paste("α1 =", round(alpha_1, 2)), color = "#F8766D") +
-  annotate("text", x = min(x) + 0.4, y = mu + alpha_2, 
-           label = paste("α2 =", round(alpha_2, 2)), color = "#00BFC4") +
-  annotate("text", x = mean(x)+1, y = min(y), 
-           label = paste("β =", round(beta, 2)), color = "black") +
+  annotate(
+    "text",
+    x = max(x),
+    y = mu + 0.2,
+    label = "μ (overall mean)",
+    hjust = 1
+  ) +
+  annotate(
+    "text",
+    x = min(x) + 0.4,
+    y = mu + alpha_1,
+    label = paste("α1 =", round(alpha_1, 2)),
+    color = "#F8766D"
+  ) +
+  annotate(
+    "text",
+    x = min(x) + 0.4,
+    y = mu + alpha_2,
+    label = paste("α2 =", round(alpha_2, 2)),
+    color = "#00BFC4"
+  ) +
+  annotate(
+    "text",
+    x = mean(x) + 1,
+    y = min(y),
+    label = paste("β =", round(beta, 2)),
+    color = "black"
+  ) +
   theme_minimal(base_size = 9) +
   labs(x = "Covariate (X)", y = "Response (Y)") +
   theme(legend.position = "bottom")
@@ -416,75 +485,68 @@ ggplot(param_data, aes(x = x, y = y, color = group)) +
 
 ## Building the ANCOVA Model in R
 
--   Remember `lm(y ~ predictor)`.
-    -   ANCOVA combines the predictors from ANOVA and regression.
--   **Simple Linear Regression:**
-    -   Predict y using a continuous variable x.
-        -   `model_reg <- lm(y ~ x, data = mydata)`
--   **One-Way ANOVA:**
-    -   We want to compare y among groups in a categorical factor A.
-        -   `model_aov <- lm(y ~ A, data = mydata)`
--   **ANCOVA (Additive Model):**
-    -   Compare y among groups in A, after accounting for effect of x.
-    -   Add terms together
-        -   `model_ancova <- lm(y ~ A + x, data = mydata)`
-    -   Model assumes slope of y \~ x relationship is same for all
-        groups in A.
+- Remember `lm(y ~ predictor)`.
+  - ANCOVA combines the predictors from ANOVA and regression.
+- **Simple Linear Regression:**
+  - Predict y using a continuous variable x.
+    - `model_reg <- lm(y ~ x, data = mydata)`
+- **One-Way ANOVA:**
+  - We want to compare y among groups in a categorical factor A.
+    - `model_aov <- lm(y ~ A, data = mydata)`
+- **ANCOVA (Additive Model):**
+  - Compare y among groups in A, after accounting for effect of x.
+  - Add terms together
+    - `model_ancova <- lm(y ~ A + x, data = mydata)`
+  - Model assumes slope of y \~ x relationship is same for all groups in A.
 
 ## Building the ANCOVA Model in R
 
--   **ANCOVA (Interaction Model):**
-    -   What if the slopes are different for each group?
-    -   Test for interaction between factor and covariate.
-        -   `model_int <- lm(y ~ A * x, data = mydata)`
-    -   Shorthand for: `lm(y ~ A + x + A:x, data = mydata)`
-    -   The `A:x` term tests if the slopes are different.
+- **ANCOVA (Interaction Model):**
+  - What if the slopes are different for each group?
+  - Test for interaction between factor and covariate.
+    - `model_int <- lm(y ~ A * x, data = mydata)`
+  - Shorthand for: `lm(y ~ A + x + A:x, data = mydata)`
+  - The `A:x` term tests if the slopes are different.
 
 ## ANCOVA in R: The 3-Step Workflow
 
--   **Step 1: Test for Homogeneity of Slopes - Always Start Here**
+- **Step 1: Test for Homogeneity of Slopes - Always Start Here**
 
-    -   Fit interaction model first - tests key assumption that all
-        groups share same slope.
+  - Fit interaction model first - tests key assumption that all groups share same slope.
 
-    ``` r
-    # The asterisk * tests for both main effects AND the interaction
-    model_int <- lm(y ~ A * x, data = mydata)
-    ```
+  ``` r
+  # The asterisk * tests for both main effects AND the interaction
+  model_int <- lm(y ~ A * x, data = mydata)
+  ```
 
--   **Step 2: Examine the Interaction Term**
+- **Step 2: Examine the Interaction Term**
 
-    -   ANOVA table for `model_int` and find the p-value for interaction
-        term (`A:x`).
+  - ANOVA table for `model_int` and find the p-value for interaction term (`A:x`).
 
-    ``` r
-        Anova(model_int, type = "III")
-    ```
+  ``` r
+      Anova(model_int, type = "III")
+  ```
 
-    -   **If p \> 0.05** (e.g., p = 0.4) - interaction **IS NOT**
-        significant - slopes are homogeneous (parallel).
-    -   **If p \< 0.05** (e.g., p = 0.02): - interaction **IS**
-        significant - slopes heterogeneous (NOT parallel).
-    -   \*\* standard ANCOVA model (`y ~ A + x`) inappropriate\*\*
-    -   Analysis stops here and interpret interaction (often most
-        interesting result!)
+  - **If p \> 0.05** (e.g., p = 0.4) - interaction **IS NOT** significant - slopes are homogeneous (parallel).
+  - **If p \< 0.05** (e.g., p = 0.02): - interaction **IS** significant - slopes heterogeneous (NOT parallel).
+  - \*\* standard ANCOVA model (`y ~ A + x`) inappropriate\*\*
+  - Analysis stops here and interpret interaction (often most interesting result!)
 
 ## ANCOVA in R: The 3-Step Workflow
 
--   Step 3: Run the ANCOVA (Additive Model)
+- Step 3: Run the ANCOVA (Additive Model)
 
-    -   If interaction not significant, run the simpler additive model
-        the final ANCOVA model.
+  - If interaction not significant, run the simpler additive model the final ANCOVA model.
 
-    ``` r
-    # We use the + sign, which means "additive"
-    model_ancova <- lm(y ~ A + x, data = mydata)
-    # Get the final ANCOVA table
-    Anova(model_ancova, type = "III")
-    # Get the adjusted means
-    library(emmeans)
-    emmeans(model_ancova, "A")
-    ```
+  ``` r
+  # We use the + sign, which means "additive"
+  model_ancova <- lm(y ~ A + x, data = mydata)
+  # Get the final ANCOVA table
+  Anova(model_ancova, type = "III")
+  # Get the adjusted means
+  library(emmeans)
+  emmeans(model_ancova, "A")
+  ```
 
 ## Part 3 · Partitioning Variance & the ANOVA Table {.divider}
 
@@ -502,10 +564,13 @@ ggplot(param_data, aes(x = x, y = y, color = group)) +
 # Create a visualization of partitioning variance in ANCOVA
 set.seed(123)
 n <- 60
-group <- rep(c("A", "B", "C"), each = n/3)
+group <- rep(c("A", "B", "C"), each = n / 3)
 x <- rnorm(n, mean = 5, sd = 1.5)
 # Create response with clear group differences and correlation with x
-y <- 2 + 0.8 * x + ifelse(group == "A", 2, ifelse(group == "B", 1, 0)) + rnorm(n, sd = 1)
+y <- 2 +
+  0.8 * x +
+  ifelse(group == "A", 2, ifelse(group == "B", 1, 0)) +
+  rnorm(n, sd = 1)
 data <- data.frame(group = group, x = x, y = y)
 # Fit models
 model_null <- lm(y ~ 1, data = data)
@@ -535,44 +600,75 @@ ss_labels <- c(
 ss_data <- data.frame(
   component = c("SS_Covariate", "SS_Group(adj)", "SS_Residual"),
   value = c(ss_cov, ss_group_adj, ss_residual),
-  percentage = c(ss_cov/ss_total, ss_group_adj/ss_total, ss_residual/ss_total) * 100
+  percentage = c(
+    ss_cov / ss_total,
+    ss_group_adj / ss_total,
+    ss_residual / ss_total
+  ) *
+    100
 )
 # Plot 1: Partitioning of SS
-partitioning_plot1 <- ggplot(ss_data, aes(x = "", y = value, fill = component)) +
+partitioning_plot1 <- ggplot(
+  ss_data,
+  aes(x = "", y = value, fill = component)
+) +
   geom_bar(stat = "identity", width = 0.5) +
-  geom_text(aes(label = paste0(round(percentage, 1), "%")), 
-            position = position_stack(vjust = 0.5)) +
+  geom_text(
+    aes(label = paste0(round(percentage, 1), "%")),
+    position = position_stack(vjust = 0.5)
+  ) +
   coord_flip() +
-  labs(title = "Partitioning of Variance in ANCOVA",
-       x = "",
-       y = "Sum of Squares",
-       fill = "Component") +
+  labs(
+    title = "Partitioning of Variance in ANCOVA",
+    x = "",
+    y = "Sum of Squares",
+    fill = "Component"
+  ) +
   theme_minimal(base_size = 7) +
   theme(legend.position = "bottom")
 
 # Plot 2: Visualization of model fit
 plot_data <- data %>%
-  pivot_longer(cols = c(y, pred_null, pred_cov, pred_full),
-               names_to = "type", values_to = "value") %>%
-  mutate(type = factor(type, levels = c("y", "pred_null", "pred_cov", "pred_full"),
-                      labels = c("Data", "Null Model", "Covariate Model", "Full Model")))
+  pivot_longer(
+    cols = c(y, pred_null, pred_cov, pred_full),
+    names_to = "type",
+    values_to = "value"
+  ) %>%
+  mutate(
+    type = factor(
+      type,
+      levels = c("y", "pred_null", "pred_cov", "pred_full"),
+      labels = c("Data", "Null Model", "Covariate Model", "Full Model")
+    )
+  )
 # Sample 20 points for clarity
 set.seed(42)
 sample_indices <- sample(1:n, 20)
-plot_data_sample <- plot_data %>% 
+plot_data_sample <- plot_data %>%
   filter(row_number() %in% rep(sample_indices, 4))
-partitioning_plot2 <- ggplot(plot_data_sample, aes(x = x, y = value, color = type)) +
+partitioning_plot2 <- ggplot(
+  plot_data_sample,
+  aes(x = x, y = value, color = type)
+) +
   geom_point(data = filter(plot_data_sample, type == "Data"), size = 3) +
-  geom_line(data = filter(plot_data_sample, type != "Data"), aes(group = interaction(type, group)), linewidth = 1) +
+  geom_line(
+    data = filter(plot_data_sample, type != "Data"),
+    aes(group = interaction(type, group)),
+    linewidth = 1
+  ) +
   facet_wrap(~group) +
-  labs(title = "Model Fits in ANCOVA",
-       x = "Covariate (X)",
-       y = "Response (Y)",
-       color = "Model") +
+  labs(
+    title = "Model Fits in ANCOVA",
+    x = "Covariate (X)",
+    y = "Response (Y)",
+    color = "Model"
+  ) +
   theme_minimal(base_size = 7) +
   theme(legend.position = "bottom")
 # Combine plots
-partitioning_plot1 + partitioning_plot2 + plot_layout(ncol = 1, heights = c(1, 2))
+partitioning_plot1 +
+  partitioning_plot2 +
+  plot_layout(ncol = 1, heights = c(1, 2))
 ```
 :::
 
@@ -587,15 +683,18 @@ anova_table <- tibble(
   Source = c("Factor A (adjusted)", "Covariate", "Residual", "Total"),
   df = c("(p-1)", "1", "n-p-1", "n-1"),
   `Sum of Squares` = c("SS_A(adj)", "SS_Covariate", "SS_Residual", "SS_Total"),
-  `Mean Square` = c("MS_A(adj) = SS_A(adj)/(p-1)", "MS_Covariate = SS_Covariate/1", 
-                   "MS_Residual = SS_Residual/(n-p-1)", ""),
+  `Mean Square` = c(
+    "MS_A(adj) = SS_A(adj)/(p-1)",
+    "MS_Covariate = SS_Covariate/1",
+    "MS_Residual = SS_Residual/(n-p-1)",
+    ""
+  ),
   `F-ratio` = c("MS_A(adj)/MS_Residual", "MS_Covariate/MS_Residual", "", ""),
   `Expected MS` = c("σ² + n∑α²/(p-1)", "σ² + β²∑(X-X̄)²", "σ²", "")
 )
 
 # Create
 anova_table
-
 ```
 :::
 
@@ -623,8 +722,7 @@ $$H_0: \beta = 0$$
 
 Is there a relationship between the covariate and the response?
 
-Test with F = MS_Covariate/MS_Residual (the 'x' term in
-`lm(y ~ A + x)`).
+Test with F = MS_Covariate/MS_Residual (the 'x' term in `lm(y ~ A + x)`).
 
 ## Visualization of Homogeneity of Slopes
 
@@ -643,15 +741,25 @@ n <- 40
 
 # 1. Parallel slopes (homogeneous)
 x1 <- rnorm(n, mean = 5, sd = 1.5)
-group1 <- rep(c("A", "B"), each = n/2)
+group1 <- rep(c("A", "B"), each = n / 2)
 y1 <- 2 + 0.7 * x1 + ifelse(group1 == "A", 2, 0) + rnorm(n, sd = 0.8)
-data1 <- data.frame(x = x1, y = y1, group = group1, type = "Homogeneous Slopes (p > 0.05)")
+data1 <- data.frame(
+  x = x1,
+  y = y1,
+  group = group1,
+  type = "Homogeneous Slopes (p > 0.05)"
+)
 
 # 2. Non-parallel slopes (heterogeneous)
 x2 <- rnorm(n, mean = 5, sd = 1.5)
-group2 <- rep(c("A", "B"), each = n/2)
+group2 <- rep(c("A", "B"), each = n / 2)
 y2 <- 2 + ifelse(group2 == "A", 1.2 * x2, 0.4 * x2) + rnorm(n, sd = 0.8)
-data2 <- data.frame(x = x2, y = y2, group = group2, type = "Heterogeneous Slopes (p < 0.05)")
+data2 <- data.frame(
+  x = x2,
+  y = y2,
+  group = group2,
+  type = "Heterogeneous Slopes (p < 0.05)"
+)
 
 # Combine datasets
 all_data <- rbind(data1, data2)
@@ -671,10 +779,12 @@ p2 <- anova(model2_int)[3, "Pr(>F)"] # p = 0.002
 # This links each label to the correct 'type' for faceting
 annotations <- data.frame(
   type = c("Homogeneous Slopes (p > 0.05)", "Heterogeneous Slopes (p < 0.05)"),
-  label = c(paste("Interaction p =", round(p1, 3)), # p = 0.274
-            paste("Interaction p =", round(p2, 3))), # p = 0.002
-  x_pos = 3,    # X-coordinate for text
-  y_pos = 11.5  # Y-coordinate for text
+  label = c(
+    paste("Interaction p =", round(p1, 3)), # p = 0.274
+    paste("Interaction p =", round(p2, 3))
+  ), # p = 0.002
+  x_pos = 3, # X-coordinate for text
+  y_pos = 11.5 # Y-coordinate for text
 )
 
 # 2. Plot with geom_text() and corrected subtitle
@@ -721,22 +831,28 @@ ggplot(all_data, aes(x = x, y = y, color = group)) +
 partridge <- read.csv("data/partridge.csv")
 
 # Create better names for treatments
-partridge$treatment <- factor(partridge$TREATMEN,
-                            levels = 1:5,
-                            labels = c("No females", 
-                                       "One virgin female daily",
-                                       "Eight virgin females daily",
-                                       "One inseminated female daily",
-                                       "Eight inseminated females daily"))
+partridge$treatment <- factor(
+  partridge$TREATMEN,
+  levels = 1:5,
+  labels = c(
+    "No females",
+    "One virgin female daily",
+    "Eight virgin females daily",
+    "One inseminated female daily",
+    "Eight inseminated females daily"
+  )
+)
 
 # 2. Create a plot of the data showing relationship
-ggplot(partridge, aes(x = THORAX, y = LONGEV, color = treatment)) + 
+ggplot(partridge, aes(x = THORAX, y = LONGEV, color = treatment)) +
   geom_point() +
   geom_smooth(method = "lm", se = FALSE) + # se=FALSE to see lines clearly
-  labs(title = "Relationship between Thorax Length and Longevity",
-       x = "Thorax Length (mm)",
-       y = "Longevity (days)",
-       color = "Treatment") +
+  labs(
+    title = "Relationship between Thorax Length and Longevity",
+    x = "Thorax Length (mm)",
+    y = "Longevity (days)",
+    color = "Treatment"
+  ) +
   theme_minimal(base_size = 9) +
   theme(legend.position = "bottom")
 ```
@@ -744,12 +860,11 @@ ggplot(partridge, aes(x = THORAX, y = LONGEV, color = treatment)) +
 
 ## Partridge Example: Step 1 - Test Homogeneity
 
--   **Testing Homogeneity of Slopes**
-    -   First, fit interaction model.
-    -   The p-value for the interaction term (THORAX:treatment) is xl.
-    -   Since this value is \> 0.05, we conclude the slopes are
-        homogeneous.
-    -   We can proceed to Step 3 and fit the simpler additive model.
+- **Testing Homogeneity of Slopes**
+  - First, fit interaction model.
+  - The p-value for the interaction term (THORAX:treatment) is xl.
+  - Since this value is \> 0.05, we conclude the slopes are homogeneous.
+  - We can proceed to Step 3 and fit the simpler additive model.
 
 ::: {.panel column="screen"}
 ```{r l15-10}
@@ -758,20 +873,20 @@ homo_slopes_model <- lm(LONGEV ~ THORAX * treatment, data = partridge)
 # Step 2: Test significance of interaction using Type III SS
 Anova(homo_slopes_model, type = "III")
 # Extract the p-value for interaction
-p_interaction <- Anova(homo_slopes_model, type = "III")["THORAX:treatment", "Pr(>F)"]
+p_interaction <- Anova(homo_slopes_model, type = "III")[
+  "THORAX:treatment",
+  "Pr(>F)"
+]
 ```
 :::
 
 ## Partridge Example: Step 3 ANCOVA Analysis
 
--   Since the interaction was not significant, we re-run the model
-    without it.
-    -   **Interpretation:**
-        -   **THORAX:** covariate highly significant
-        -   thorax length explains significant amount of variance in
-            longevity
-        -   **treatment:** treatment effect, after adjusting for thorax
-            length, is highly significant
+- Since the interaction was not significant, we re-run the model without it.
+  - **Interpretation:**
+    - **THORAX:** covariate highly significant
+    - thorax length explains significant amount of variance in longevity
+    - **treatment:** treatment effect, after adjusting for thorax length, is highly significant
 
 ::: {.panel column="screen"}
 ```{r l15-11}
@@ -785,17 +900,14 @@ Anova(ancova_model, type = "III")
 
 ## Partridge Example: Getting Adjusted Means
 
--   **The ANOVA table tells us the treatments are different, but not
-    which ones.**
-    -   Use `emmeans` package to get the adjusted means / perform
-        pairwise comparisons
+- **The ANOVA table tells us the treatments are different, but not which ones.**
+  - Use `emmeans` package to get the adjusted means / perform pairwise comparisons
 
-    -   The "estimated marginal mean" (or adjusted mean)
+  - The "estimated marginal mean" (or adjusted mean)
 
-    -   predicted longevity for each group, assuming an average thorax
-        length
+  - predicted longevity for each group, assuming an average thorax length
 
-    -   This is the "level playing field" comparison.
+  - This is the "level playing field" comparison.
 
 ::: {.panel column="screen"}
 ```{r l15-12}
@@ -808,18 +920,14 @@ adjusted_means
 
 ## Partridge Example: Pairwise Comparisons
 
--   **Pairwise Comparisons of Adjusted Means to see which groups
-    differ**
-    -   **Interpretation:**
+- **Pairwise Comparisons of Adjusted Means to see which groups differ**
+  - **Interpretation:**
 
-        -   The `pairs()` output gives p-values for all combinations.
+    - The `pairs()` output gives p-values for all combinations.
 
-        -   The plot shows these comparisons visually. Red arrows
-            connect any groups that are NOT significantly different.
+    - The plot shows these comparisons visually. Red arrows connect any groups that are NOT significantly different.
 
-        -   Here, "One virgin female" and "One inseminated female" are
-            not different from each other, but all other comparisons are
-            significant.
+    - Here, "One virgin female" and "One inseminated female" are not different from each other, but all other comparisons are significant.
 
 ::: {.panel column="screen"}
 ```{r l15-13}
@@ -833,27 +941,25 @@ pairs(adjusted_means, adjust = "tukey")
 
 ## Partridge Example: Pairwise Comparisons
 
--   **Pairwise Comparisons of Adjusted Means to see which groups
-    differ**
-    -   **Interpretation:**
+- **Pairwise Comparisons of Adjusted Means to see which groups differ**
+  - **Interpretation:**
 
-        -   The `pairs()` output gives p-values for all combinations.
+    - The `pairs()` output gives p-values for all combinations.
 
-        -   The plot shows these comparisons visually. Red arrows
-            connect any groups that are NOT significantly different.
+    - The plot shows these comparisons visually. Red arrows connect any groups that are NOT significantly different.
 
-        -   Here, "One virgin female" and "One inseminated female" are
-            not different from each other, but all other comparisons are
-            significant.
+    - Here, "One virgin female" and "One inseminated female" are not different from each other, but all other comparisons are significant.
 
 ::: {.panel column="screen"}
 ```{r l15-14}
 #| fig-alt: "Plot of adjusted mean longevity with confidence intervals for each mating treatment, with red comparison arrows connecting treatment pairs that are not significantly different from each other."
 # Plot adjusted means with confidence intervals
 plot(adjusted_means, comparisons = TRUE) +
-  labs(title = "Adjusted Means by Treatment",
-       x = "Adjusted Longevity (days)",
-       y = "Treatment") +
+  labs(
+    title = "Adjusted Means by Treatment",
+    x = "Adjusted Longevity (days)",
+    y = "Treatment"
+  ) +
   theme_minimal(base_size = 9)
 ```
 :::
@@ -873,59 +979,100 @@ mean_thorax <- mean(partridge$THORAX)
 adj_means_data <- as.data.frame(adjusted_means)
 
 # 1. Raw data with regression lines
-ancova_vis_plot1 <- ggplot(partridge, aes(x = THORAX, y = LONGEV, color = treatment)) + 
+ancova_vis_plot1 <- ggplot(
+  partridge,
+  aes(x = THORAX, y = LONGEV, color = treatment)
+) +
   geom_point() +
   geom_smooth(method = "lm", se = FALSE) +
-  labs(title = "1. Raw Data w Regressions",
-       x = "Thorax Length (mm)",
-       y = "Longevity (days)") +
+  labs(
+    title = "1. Raw Data w Regressions",
+    x = "Thorax Length (mm)",
+    y = "Longevity (days)"
+  ) +
   theme_minimal(base_size = 7) +
   theme(legend.position = "none")
 
 # 2. Add adjusted means reference line
-ancova_vis_plot2 <- ggplot(partridge, aes(x = THORAX, y = LONGEV, color = treatment)) + 
+ancova_vis_plot2 <- ggplot(
+  partridge,
+  aes(x = THORAX, y = LONGEV, color = treatment)
+) +
   geom_point() +
   geom_smooth(method = "lm", se = FALSE) +
   geom_vline(xintercept = mean_thorax, linetype = "dashed") +
-  annotate("text", x = mean_thorax + 0.02, y = min(partridge$LONGEV) + 5, 
-           label = "Mean X", angle = 90, hjust = 0) +
-  labs(title = "2. Reference Line @ Mean Cov.",
-       x = "Thorax Length (mm)",
-       y = "Longevity (days)") +
+  annotate(
+    "text",
+    x = mean_thorax + 0.02,
+    y = min(partridge$LONGEV) + 5,
+    label = "Mean X",
+    angle = 90,
+    hjust = 0
+  ) +
+  labs(
+    title = "2. Reference Line @ Mean Cov.",
+    x = "Thorax Length (mm)",
+    y = "Longevity (days)"
+  ) +
   theme_minimal(base_size = 7) +
   theme(legend.position = "none")
 
 # 3. Adjusted means as points on the vertical line
-ancova_vis_plot3 <- ggplot(partridge, aes(x = THORAX, y = LONGEV, color = treatment)) + 
+ancova_vis_plot3 <- ggplot(
+  partridge,
+  aes(x = THORAX, y = LONGEV, color = treatment)
+) +
   geom_point(alpha = 0.5) +
   geom_smooth(method = "lm", se = FALSE) +
   geom_vline(xintercept = mean_thorax, linetype = "dashed") +
-  geom_point(data = adj_means_data, aes(x = mean_thorax, y = emmean, color = treatment), 
-             size = 4, shape = 18) +
-  labs(title = "3. Adjusted Means @ Mean Covar.",
-       x = "Thorax Length (mm)",
-       y = "Longevity (days)") +
+  geom_point(
+    data = adj_means_data,
+    aes(x = mean_thorax, y = emmean, color = treatment),
+    size = 4,
+    shape = 18
+  ) +
+  labs(
+    title = "3. Adjusted Means @ Mean Covar.",
+    x = "Thorax Length (mm)",
+    y = "Longevity (days)"
+  ) +
   theme_minimal(base_size = 7) +
   theme(legend.position = "none")
 
 # 4. Bar chart of adjusted means with error bars
-ancova_vis_plot4 <- ggplot(adj_means_data, aes(x = treatment, y = emmean, fill = treatment)) +
+ancova_vis_plot4 <- ggplot(
+  adj_means_data,
+  aes(x = treatment, y = emmean, fill = treatment)
+) +
   geom_bar(stat = "identity", width = 0.7) +
   geom_errorbar(aes(ymin = lower.CL, ymax = upper.CL), width = 0.2) +
-  labs(title = "4. Adjusted Means",
-       x = "Treatment",
-       y = "Adjusted Longevity (days)") +
+  labs(
+    title = "4. Adjusted Means",
+    x = "Treatment",
+    y = "Adjusted Longevity (days)"
+  ) +
   theme_minimal(base_size = 7) +
-  theme(legend.position = "none",
-        axis.text.x = element_text(angle = 15, hjust = 1))
+  theme(
+    legend.position = "none",
+    axis.text.x = element_text(angle = 15, hjust = 1)
+  )
 
 # Combine plots
-ancova_vis_combined <- (ancova_vis_plot1 + ancova_vis_plot2) / (ancova_vis_plot3 + ancova_vis_plot4) +
+ancova_vis_combined <- (ancova_vis_plot1 + ancova_vis_plot2) /
+  (ancova_vis_plot3 + ancova_vis_plot4) +
   plot_layout(guides = "collect") +
-  plot_annotation(title = "Visualization Options for ANCOVA Results",
-                 theme = theme(plot.title = element_text(size = 16, hjust = 0.5)))
+  plot_annotation(
+    title = "Visualization Options for ANCOVA Results",
+    theme = theme(plot.title = element_text(size = 16, hjust = 0.5))
+  )
 
-ggsave("images/ancova_vis_combined.png", ancova_vis_combined, width = 7, height = 6, dpi = 300)
+ggsave(
+  "images/ancova_vis_combined.png",
+  ancova_vis_combined,
+  width = 7,
+  height = 6,
+  dpi = 300
+)
 ```
 
 ![A 2x2 panel comparing four ways to visualize ANCOVA results for the fruitfly data: raw data with regression lines by treatment, the same plot with a reference line at the mean covariate, adjusted means plotted as diamonds at the mean covariate, and a bar chart of adjusted means with confidence-interval error bars.](images/ancova_vis_combined.png){width="4in"}
@@ -937,21 +1084,20 @@ ggsave("images/ancova_vis_combined.png", ancova_vis_combined, width = 7, height 
 
 ::::: columns
 ::: {.column width="60%"}
--   **Example: Sea Urchin Shrinking w/ Heterogeneous Slopes**
--   Constable (1993) studied sea urchin test shrinking:
-    -   Compared suture widths between treatments
+- **Example: Sea Urchin Shrinking w/ Heterogeneous Slopes**
+- Constable (1993) studied sea urchin test shrinking:
+  - Compared suture widths between treatments
 
-    -   Three groups: high food, low food, initial sample
+  - Three groups: high food, low food, initial sample
 
-    -   Covariate: body volume (cube root transformed)
--   The analysis showed:
-    -   Significant interaction between treatment and covariate
+  - Covariate: body volume (cube root transformed)
+- The analysis showed:
+  - Significant interaction between treatment and covariate
 
-    -   Heterogeneous slopes across treatments
--   Relationship between body volume and suture width depends on
-    treatment group
--   **Standard ANCOVA is invalid.**\
-    .\
+  - Heterogeneous slopes across treatments
+- Relationship between body volume and suture width depends on treatment group
+- **Standard ANCOVA is invalid.**\
+  .\
 :::
 
 ::: {.column width="40%"}
@@ -963,36 +1109,45 @@ ggsave("images/ancova_vis_combined.png", ancova_vis_combined, width = 7, height 
 #| fig-alt: "Scatterplot of sea urchin suture width against cube-root body volume, colored by treatment (Initial, Low Food, High Food), with a separate fitted regression line for each treatment showing clearly different slopes, illustrating a heterogeneous-slopes example where standard ANCOVA is invalid."
 # Create simulated sea urchin data based on description
 set.seed(345)
-n <- 72  # 24 urchins per group
+n <- 72 # 24 urchins per group
 
 # Create data frame
-treatments <- rep(c("Initial", "Low Food", "High Food"), each = n/3)
+treatments <- rep(c("Initial", "Low Food", "High Food"), each = n / 3)
 volume <- c(
-  runif(n/3, 10, 40),  # Initial
-  runif(n/3, 10, 40),  # Low Food
-  runif(n/3, 10, 40)   # High Food
+  runif(n / 3, 10, 40), # Initial
+  runif(n / 3, 10, 40), # Low Food
+  runif(n / 3, 10, 40) # High Food
 )
 
 # Create suture width with different slopes for each treatment
 suture_width <- ifelse(
-  treatments == "Initial", 0.05 + 0.002 * volume,
+  treatments == "Initial",
+  0.05 + 0.002 * volume,
   ifelse(
-    treatments == "Low Food", 0.04 + 0.0005 * volume,
-    0.02 + 0.003 * volume  # High Food
+    treatments == "Low Food",
+    0.04 + 0.0005 * volume,
+    0.02 + 0.003 * volume # High Food
   )
-) + rnorm(n, 0, 0.01)
+) +
+  rnorm(n, 0, 0.01)
 
-urchin_data <- data.frame(treatment = treatments, volume = volume, suture_width = suture_width)
+urchin_data <- data.frame(
+  treatment = treatments,
+  volume = volume,
+  suture_width = suture_width
+)
 
 # Plot the data with regression lines
 ggplot(urchin_data, aes(x = volume, y = suture_width, color = treatment)) +
   geom_point() +
   geom_smooth(method = "lm", se = FALSE) +
-  labs(title = "Sea Urchin Suture Width vs. Volume",
-       subtitle = "Example with Heterogeneous Slopes",
-       x = "Cube Root Body Volume",
-       y = "Suture Width (mm)",
-       color = "Treatment") +
+  labs(
+    title = "Sea Urchin Suture Width vs. Volume",
+    subtitle = "Example with Heterogeneous Slopes",
+    x = "Cube Root Body Volume",
+    y = "Suture Width (mm)",
+    color = "Treatment"
+  ) +
   theme_minimal(base_size = 9) +
   theme(legend.position = "bottom")
 ```
@@ -1003,8 +1158,7 @@ ggplot(urchin_data, aes(x = volume, y = suture_width, color = treatment)) +
 
 If the interaction term is significant (p \< 0.05):
 
-1.  **Report interaction!** often more interesting biological result
-    than simple mean differences
+1.  **Report interaction!** often more interesting biological result than simple mean differences
 
 2.  **Analyze slopes:** Use emmeans to get slopes for each group.
 
@@ -1012,57 +1166,47 @@ If the interaction term is significant (p \< 0.05):
     emtrends(model_int, "treatment", var = "x")
     ```
 
-3.  **Johnson-Neyman procedure:** advanced method to identify regions of
-    covariate (X-axis) where groups are (and are not) significantly
-    different.
+3.  **Johnson-Neyman procedure:** advanced method to identify regions of covariate (X-axis) where groups are (and are not) significantly different.
 
-4.  **Separate regressions:** Analyze each group separately (less
-    powerful).
+4.  **Separate regressions:** Analyze each group separately (less powerful).
 
 ::: {.panel column="screen"}
 ```{r urchin-slopes-test}
-    #| echo: false
-    # Fit model with interaction
-    urchin_model <- lm(suture_width ~ volume * treatment, data = urchin_data)
-    Anova(urchin_model, type = 3)
-
-
+#| echo: false
+# Fit model with interaction
+urchin_model <- lm(suture_width ~ volume * treatment, data = urchin_data)
+Anova(urchin_model, type = 3)
 ```
 :::
 
 ## Interpretation of Heterogeneous Slopes
 
--   With heterogeneous slopes, interpretation shifts from "adjusted
-    means" to "regions of significance":
-    -   **Initial \> Low Food** when cube root body volume \> 2.95\
-        For large urchins, initial sample has wider sutures than low
-        food urchins
-    -   **High Food \> Initial** when cube root body volume \> 1.81\
-        For most urchins, high food treatment results in wider sutures
-        than initial samples.
-    -   **High Food \> Low Food** when cube root body volume \> 2.07\
-        For most medium to large urchins, high food results in wider
-        sutures than low food.
--   Biological interpretation is food regime affects suture width
-    differently depending on urchin size
+- With heterogeneous slopes, interpretation shifts from "adjusted means" to "regions of significance":
+  - **Initial \> Low Food** when cube root body volume \> 2.95\
+    For large urchins, initial sample has wider sutures than low food urchins
+  - **High Food \> Initial** when cube root body volume \> 1.81\
+    For most urchins, high food treatment results in wider sutures than initial samples.
+  - **High Food \> Low Food** when cube root body volume \> 2.07\
+    For most medium to large urchins, high food results in wider sutures than low food.
+- Biological interpretation is food regime affects suture width differently depending on urchin size
 
 ## Assumptions of ANCOVA
 
--   **Key Assumptions**
+- **Key Assumptions**
 
-    1.  **Independence of observations**\
-        Samples are random and independent.
-    2.  **Normal distribution of residuals**\
-        Check with QQ plots.
-    3.  **Homogeneity of variances (Homoscedasticity)**\
-        Equal variances across groups.\
-        Check with residual vs. fitted plots.
-    4.  **Linearity**\
-        A linear relationship exists between Y and X within each group.\
-        Check with scatterplots (we did this!).
-    5.  **Homogeneity of regression slopes (The critical one!)**\
-        Regression slopes are equal across all groups.\
-        We tested this first! (the A:x interaction).
+  1.  **Independence of observations**\
+      Samples are random and independent.
+  2.  **Normal distribution of residuals**\
+      Check with QQ plots.
+  3.  **Homogeneity of variances (Homoscedasticity)**\
+      Equal variances across groups.\
+      Check with residual vs. fitted plots.
+  4.  **Linearity**\
+      A linear relationship exists between Y and X within each group.\
+      Check with scatterplots (we did this!).
+  5.  **Homogeneity of regression slopes (The critical one!)**\
+      Regression slopes are equal across all groups.\
+      We tested this first! (the A:x interaction).
 
 ::: callout-note
 Whitlock & Schluter, *Analysis of Biological Data*, Ch. 17 — Regression, on regression diagnostics and residual assumptions that carry over to ANCOVA.
@@ -1070,18 +1214,13 @@ Whitlock & Schluter, *Analysis of Biological Data*, Ch. 17 — Regression, on re
 
 ## Checking Assumptions in R
 
--   For assumptions 2 and 3, we check the final model (the additive one,
-    if appropriate).
--   **Interpretation:**
-    -   **Residuals vs. Fitted:** The red line should be roughly flat
-        at 0. Looks good.
-    -   **Normal Q-Q:** Points should fall along the dashed line. Looks
-        good.
-    -   **Scale-Location:** Red line should be flat (tests homogeneity
-        of variance). Looks good.
-    -   **Residuals vs. Leverage:** No points should be in the
-        top/bottom right (high leverage/influence). Looks good.
--   **Conclusion:** The assumptions are met.
+- For assumptions 2 and 3, we check the final model (the additive one, if appropriate).
+- **Interpretation:**
+  - **Residuals vs. Fitted:** The red line should be roughly flat at 0. Looks good.
+  - **Normal Q-Q:** Points should fall along the dashed line. Looks good.
+  - **Scale-Location:** Red line should be flat (tests homogeneity of variance). Looks good.
+  - **Residuals vs. Leverage:** No points should be in the top/bottom right (high leverage/influence). Looks good.
+- **Conclusion:** The assumptions are met.
 
 ::: {.panel column="screen"}
 ```{r l15-17}
@@ -1102,21 +1241,18 @@ plot(ancova_model)
 
 ::::: columns
 ::: {.column width="60%"}
--   **Non-Parametric Alternatives**
--   When ANCOVA assumptions are badly violated (especially normality or
-    homogeneity of variance), consider:
--   **Rank Transformation (Simplest)**
-    -   Rank transform both Y and X variables.
-    -   Run standard ANCOVA on the ranked data.
-    -   `lm(rank(y) ~ rank(x) + A)`
--   **Bootstrapping**
-    -   Use bootstrapping to estimate parameters without assuming
-        normality.
--   **Quantile Regression**
-    -   Models relationships at different quantiles (e.g., the median)
-        instead of the mean.
--   **Permutation Tests**
-    -   Randomization tests of treatment effects. .
+- **Non-Parametric Alternatives**
+- When ANCOVA assumptions are badly violated (especially normality or homogeneity of variance), consider:
+- **Rank Transformation (Simplest)**
+  - Rank transform both Y and X variables.
+  - Run standard ANCOVA on the ranked data.
+  - `lm(rank(y) ~ rank(x) + A)`
+- **Bootstrapping**
+  - Use bootstrapping to estimate parameters without assuming normality.
+- **Quantile Regression**
+  - Models relationships at different quantiles (e.g., the median) instead of the mean.
+- **Permutation Tests**
+  - Randomization tests of treatment effects. .
 :::
 
 ::: {.column width="40%"}
@@ -1126,21 +1262,27 @@ partridge$rank_LONGEV <- rank(partridge$LONGEV)
 partridge$rank_THORAX <- rank(partridge$THORAX)
 
 # Fit ANCOVA on ranked data
-rank_ancova <- lm(rank_LONGEV ~ 
-                  rank_THORAX + treatment, 
-                data = partridge)
+rank_ancova <- lm(
+  rank_LONGEV ~
+    rank_THORAX + treatment,
+  data = partridge
+)
 
 Anova(rank_ancova, type = "III")
 
 # Compare p-values for treatment effect
-cat("P-value (parametric):", 
-   Anova(ancova_model, type="III")["treatment", "Pr(>F)"],  "\n")
-cat("P-value (rank-based):", 
-    Anova(rank_ancova, type="III")["treatment", "Pr(>F)"])
+cat(
+  "P-value (parametric):",
+  Anova(ancova_model, type = "III")["treatment", "Pr(>F)"],
+  "\n"
+)
+cat(
+  "P-value (rank-based):",
+  Anova(rank_ancova, type = "III")["treatment", "Pr(>F)"]
+)
 ```
 
-**Note:** The results are very similar, which gives us more confidence
-in our original parametric test.
+**Note:** The results are very similar, which gives us more confidence in our original parametric test.
 :::
 :::::
 
@@ -1152,23 +1294,11 @@ in our original parametric test.
 
 Here's how you might write up ANCOVA results for publication:
 
-> "We analyzed the effects of mating strategy on male fruitfly longevity
-> using analysis of covariance (ANCOVA), with thorax length as a
-> covariate. Before conducting the main analysis, we tested the
-> homogeneity of slopes assumption and found no significant interaction
-> between treatment and thorax length (F₄,₁₁₅ = xxx , indicating that
-> the effect of body size on longevity was consistent across treatments.
+> "We analyzed the effects of mating strategy on male fruitfly longevity using analysis of covariance (ANCOVA), with thorax length as a covariate. Before conducting the main analysis, we tested the homogeneity of slopes assumption and found no significant interaction between treatment and thorax length (F₄,₁₁₅ = xxx , indicating that the effect of body size on longevity was consistent across treatments.
 >
-> The ANCOVA revealed significant effects of both treatment (F₄,₁₁₉ =
-> xxxx and thorax length (F₁,₁₁₉ = xxxx, P \< 0.001) on longevity.
-> Thorax length was positively associated with longevity...
+> The ANCOVA revealed significant effects of both treatment (F₄,₁₁₉ = xxxx and thorax length (F₁,₁₁₉ = xxxx, P \< 0.001) on longevity. Thorax length was positively associated with longevity...
 >
-> After adjusting for body size, males with no female partners lived
-> significantly longer (adjusted mean ± SE: xxxx\` days) than males in
-> any other treatment group. Pairwise comparisons using Tukey's HSD test
-> indicated significant differences between most treatment groups (P \<
-> 0.05) except between the 'One virgin female' and 'One inseminated
-> female' groups (P = x)."
+> After adjusting for body size, males with no female partners lived significantly longer (adjusted mean ± SE: xxxx\` days) than males in any other treatment group. Pairwise comparisons using Tukey's HSD test indicated significant differences between most treatment groups (P \< 0.05) except between the 'One virgin female' and 'One inseminated female' groups (P = x)."
 
 ## Publication Quality Figure
 
@@ -1184,60 +1314,104 @@ adj_means_data <- as.data.frame(adjusted_means)
 mean_thorax <- mean(partridge$THORAX)
 
 # Get prediction data for each treatment across range of thorax lengths
-thorax_range <- seq(min(partridge$THORAX), max(partridge$THORAX), length.out = 100)
-pred_data <- expand.grid(thorax = thorax_range, treatment = levels(partridge$treatment))
-pred_data$LONGEV <- predict(ancova_model, newdata = data.frame(THORAX = pred_data$thorax, 
-                                                         treatment = pred_data$treatment))
+thorax_range <- seq(
+  min(partridge$THORAX),
+  max(partridge$THORAX),
+  length.out = 100
+)
+pred_data <- expand.grid(
+  thorax = thorax_range,
+  treatment = levels(partridge$treatment)
+)
+pred_data$LONGEV <- predict(
+  ancova_model,
+  newdata = data.frame(
+    THORAX = pred_data$thorax,
+    treatment = pred_data$treatment
+  )
+)
 
 # Plot
 pub_plot1 <- ggplot() +
   # Raw data with transparency
-  geom_point(data = partridge, aes(x = THORAX, y = LONGEV, color = treatment), 
-             alpha = 0.6, size = 2) +
+  geom_point(
+    data = partridge,
+    aes(x = THORAX, y = LONGEV, color = treatment),
+    alpha = 0.6,
+    size = 2
+  ) +
   # Regression lines
-  geom_line(data = pred_data, aes(x = thorax, y = LONGEV, color = treatment), 
-            size = 1) +
+  geom_line(
+    data = pred_data,
+    aes(x = thorax, y = LONGEV, color = treatment),
+    size = 1
+  ) +
   # Reference line at mean thorax
-  geom_vline(xintercept = mean(partridge$THORAX), linetype = "dashed", color = "gray50") +
+  geom_vline(
+    xintercept = mean(partridge$THORAX),
+    linetype = "dashed",
+    color = "gray50"
+  ) +
   # Adjusted means at mean thorax length
-  geom_point(data = adj_means_data, 
-             aes(x = mean(partridge$THORAX), y = emmean, color = treatment), 
-             size = 4, shape = 18) +
+  geom_point(
+    data = adj_means_data,
+    aes(x = mean(partridge$THORAX), y = emmean, color = treatment),
+    size = 4,
+    shape = 18
+  ) +
   # Error bars for adjusted means
-  geom_errorbar(data = adj_means_data,
-                aes(x = mean(partridge$THORAX), y = emmean, 
-                    ymin = lower.CL, ymax = upper.CL, color = treatment),
-                width = 0.02) +
+  geom_errorbar(
+    data = adj_means_data,
+    aes(
+      x = mean(partridge$THORAX),
+      y = emmean,
+      ymin = lower.CL,
+      ymax = upper.CL,
+      color = treatment
+    ),
+    width = 0.02
+  ) +
   # Labels
-  labs(title = "Mating effect-Male Fruitfly Longevity",
-       x = "Thorax Length (mm)",
-       y = "Longevity (days)",
-       color = "Treatment") +
+  labs(
+    title = "Mating effect-Male Fruitfly Longevity",
+    x = "Thorax Length (mm)",
+    y = "Longevity (days)",
+    color = "Treatment"
+  ) +
   # Theme
   theme_minimal(base_size = 9) +
-  theme(legend.position = "bottom",
-        panel.grid.minor = element_blank(),
-        panel.border = element_rect(fill = NA, color = "gray80"),
-        plot.title = element_text(size = 14, face = "bold"),
-        axis.title = element_text(size = 12),
-        legend.title = element_text(size = 11, face = "bold"))
+  theme(
+    legend.position = "bottom",
+    panel.grid.minor = element_blank(),
+    panel.border = element_rect(fill = NA, color = "gray80"),
+    plot.title = element_text(size = 14, face = "bold"),
+    axis.title = element_text(size = 12),
+    legend.title = element_text(size = 11, face = "bold")
+  )
 
 # Adjusted means bar chart
-pub_plot2 <- ggplot(adj_means_data, aes(x = treatment, y = emmean, fill = treatment)) +
+pub_plot2 <- ggplot(
+  adj_means_data,
+  aes(x = treatment, y = emmean, fill = treatment)
+) +
   geom_bar(stat = "identity", width = 0.7, color = "black") +
   geom_errorbar(aes(ymin = lower.CL, ymax = upper.CL), width = 0.2) +
-  labs(title = "Adjusted Mean Longevity by Treatment",
-       subtitle = "Means adjusted for thorax length",
-       x = "Treatment",
-       y = "Adjusted Longevity (days)",
-       fill = "Treatment") +
+  labs(
+    title = "Adjusted Mean Longevity by Treatment",
+    subtitle = "Means adjusted for thorax length",
+    x = "Treatment",
+    y = "Adjusted Longevity (days)",
+    fill = "Treatment"
+  ) +
   theme_minimal(base_size = 9) +
-  theme(legend.position = "none",
-        panel.grid.minor = element_blank(),
-        panel.border = element_rect(fill = NA, color = "gray80"),
-        plot.title = element_text(size = 14, face = "bold"),
-        axis.title = element_text(size = 12),
-        axis.text.x = element_text(angle = 25, hjust = 1))
+  theme(
+    legend.position = "none",
+    panel.grid.minor = element_blank(),
+    panel.border = element_rect(fill = NA, color = "gray80"),
+    plot.title = element_text(size = 14, face = "bold"),
+    axis.title = element_text(size = 12),
+    axis.text.x = element_text(angle = 25, hjust = 1)
+  )
 
 # Combine plots
 pub_plot1 + pub_plot2 + plot_layout(widths = c(2, 1))
@@ -1246,27 +1420,24 @@ pub_plot1 + pub_plot2 + plot_layout(widths = c(2, 1))
 
 ## Summary
 
--   **Purpose:**
-    -   ANCOVA combines regression and ANOVA.
-    -   It increases power by accounting for a continuous covariate.
-    -   It adjusts for confounds by comparing "adjusted means."
--   **The Analysis Workflow**
-    1.  **Step 1:** Always test for homogeneity of slopes first
-        (`lm(y ~ A * x)`).
-    2.  **Step 2:** If slopes are homogeneous (p \> 0.05), proceed to
-        the additive model (`lm(y ~ A + x)`).
-    3.  **Step 3:** If slopes are heterogeneous (p \< 0.05), STOP and
-        interpret the interaction.
--   **Interpretation**
-    -   Use `car::Anova(model, type = "III")` to get the ANOVA table.
-    -   Use `emmeans()` to get adjusted means and pairwise comparisons.
--   **Assumptions**
-    -   Independence of observations
+- **Purpose:**
+  - ANCOVA combines regression and ANOVA.
+  - It increases power by accounting for a continuous covariate.
+  - It adjusts for confounds by comparing "adjusted means."
+- **The Analysis Workflow**
+  1.  **Step 1:** Always test for homogeneity of slopes first (`lm(y ~ A * x)`).
+  2.  **Step 2:** If slopes are homogeneous (p \> 0.05), proceed to the additive model (`lm(y ~ A + x)`).
+  3.  **Step 3:** If slopes are heterogeneous (p \< 0.05), STOP and interpret the interaction.
+- **Interpretation**
+  - Use `car::Anova(model, type = "III")` to get the ANOVA table.
+  - Use `emmeans()` to get adjusted means and pairwise comparisons.
+- **Assumptions**
+  - Independence of observations
 
-    -   Normal distribution of residuals
+  - Normal distribution of residuals
 
-    -   Homogeneity of variances
+  - Homogeneity of variances
 
-    -   Linearity of relationships within groups
+  - Linearity of relationships within groups
 
-    -   Homogeneity of regression slopes (The most important one!)
+  - Homogeneity of regression slopes (The most important one!)

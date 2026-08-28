@@ -197,7 +197,7 @@
     }
   </style>
 <meta property="og:title" content="Activity: Nested ANOVA – UMD Biostatistics">
-<meta property="og:description" content="Hands-on activity: nested ANOVA the traditional way (aov with an Error term, afex), the modern way (lmer mixed models), DHARMa diagnostics, and post-hoc comparisons on the sea urchin grazing / algae cover dataset.">
+<meta property="og:description" content="Hands-on activity: nested ANOVA the traditional way (aov with an Error term, afex) and post-hoc comparisons on the sea urchin grazing / algae cover dataset.">
 <meta property="og:site_name" content="UMD Biostatistics">
 </head>
 <body class="quarto-light">
@@ -223,7 +223,7 @@ Bill Perry
 <blockquote>
 <h2 id="how-to-use-this-worksheet">How to use this worksheet</h2>
 <p>Work through each part in order, at your own pace. Type every line of code yourself into a <strong>plain R script</strong> — do not copy-paste. Blocks marked <strong>▶ Run this</strong> are code you should type and execute. Blocks marked <strong>✏️ Your turn</strong> ask you to write, modify, or answer something. Boxes marked <strong>🚀 If you finish early</strong> are optional bonus material that goes a bit further than what we covered in lecture.</p>
-<p>This worksheet uses the sea urchin grazing / algae cover dataset from lecture, where <code>patch</code> is nested within <code>treat</code> (each patch received only one urchin-density treatment).</p>
+<p>This worksheet uses the sea urchin grazing / algae cover dataset from lecture, where <code>patch</code> is nested within <code>treat</code> (each patch received only one urchin-density treatment). Next class, the Linear Mixed Models activity revisits this exact same dataset with a different (and more flexible) modeling approach — this worksheet stays entirely with the traditional method.</p>
 </blockquote>
 </section>
 <section class="slide level2">
@@ -233,37 +233,30 @@ Bill Perry
 <section id="part-1-setup-and-data" class="title-slide slide level1 center">
 <h1>Part 1 · Setup and Data</h1>
 <p><strong>▶ Run this in your Script:</strong></p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a aria-label="1"></a><span class="fu">library</span>(dotwhisker)</span>
-<span id="cb1-2"><a aria-label="2"></a><span class="fu">library</span>(janitor)</span>
-<span id="cb1-3"><a aria-label="3"></a><span class="fu">library</span>(car)          <span class="co"># For Levene's test and Type III SS</span></span>
-<span id="cb1-4"><a aria-label="4"></a><span class="fu">library</span>(lme4)          <span class="co"># For mixed-effects models</span></span>
-<span id="cb1-5"><a aria-label="5"></a><span class="fu">library</span>(lmerTest)      <span class="co"># For p-values in mixed models</span></span>
-<span id="cb1-6"><a aria-label="6"></a><span class="fu">library</span>(emmeans)       <span class="co"># For estimated marginal means</span></span>
-<span id="cb1-7"><a aria-label="7"></a><span class="fu">library</span>(performance)   <span class="co"># For model diagnostics</span></span>
-<span id="cb1-8"><a aria-label="8"></a><span class="fu">library</span>(DHARMa)        <span class="co"># For residual diagnostics</span></span>
-<span id="cb1-9"><a aria-label="9"></a><span class="fu">library</span>(patchwork)</span>
-<span id="cb1-10"><a aria-label="10"></a><span class="fu">library</span>(afex)</span>
-<span id="cb1-11"><a aria-label="11"></a><span class="fu">library</span>(tidyverse)</span>
-<span id="cb1-12"><a aria-label="12"></a></span>
-<span id="cb1-13"><a aria-label="13"></a><span class="fu">options</span>(<span class="at">scipen =</span> <span class="dv">999</span>)</span>
-<span id="cb1-14"><a aria-label="14"></a><span class="fu">options</span>(<span class="at">contrasts =</span> <span class="fu">c</span>(<span class="st">"contr.treatment"</span>, <span class="st">"contr.poly"</span>))</span>
-<span id="cb1-15"><a aria-label="15"></a></span>
-<span id="cb1-16"><a aria-label="16"></a>u_df <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="st">"data/andrew.csv"</span>) <span class="sc">%&gt;%</span> <span class="fu">clean_names</span>()</span>
-<span id="cb1-17"><a aria-label="17"></a></span>
-<span id="cb1-18"><a aria-label="18"></a>u_df <span class="ot">&lt;-</span> u_df <span class="sc">%&gt;%</span></span>
-<span id="cb1-19"><a aria-label="19"></a>  <span class="fu">mutate</span>(<span class="at">treat =</span> <span class="fu">case_when</span>(</span>
-<span id="cb1-20"><a aria-label="20"></a>         treat <span class="sc">==</span> <span class="st">"removal"</span> <span class="sc">~</span> <span class="st">"none"</span>,</span>
-<span id="cb1-21"><a aria-label="21"></a>         treat <span class="sc">==</span> <span class="st">"control"</span> <span class="sc">~</span> <span class="st">"high"</span>,</span>
-<span id="cb1-22"><a aria-label="22"></a>         treat <span class="sc">==</span> <span class="st">"dens_33"</span> <span class="sc">~</span> <span class="st">"low"</span>,</span>
-<span id="cb1-23"><a aria-label="23"></a>         treat <span class="sc">==</span> <span class="st">"dens_66"</span> <span class="sc">~</span> <span class="st">"medium"</span>,</span>
-<span id="cb1-24"><a aria-label="24"></a>         <span class="cn">TRUE</span> <span class="sc">~</span> <span class="st">"other"</span>)) <span class="sc">%&gt;%</span></span>
-<span id="cb1-25"><a aria-label="25"></a>  <span class="fu">mutate</span>(<span class="at">treat =</span> <span class="fu">factor</span>(treat,</span>
-<span id="cb1-26"><a aria-label="26"></a>                        <span class="at">levels =</span> <span class="fu">c</span>(<span class="st">"none"</span>, <span class="st">"low"</span>, <span class="st">"medium"</span>, <span class="st">"high"</span>),</span>
-<span id="cb1-27"><a aria-label="27"></a>                        <span class="at">labels =</span> <span class="fu">c</span>(<span class="st">"none"</span>, <span class="st">"low"</span>, <span class="st">"medium"</span>, <span class="st">"high"</span>)),</span>
-<span id="cb1-28"><a aria-label="28"></a>         <span class="at">patch =</span> <span class="fu">as_factor</span>(patch))</span>
-<span id="cb1-29"><a aria-label="29"></a></span>
-<span id="cb1-30"><a aria-label="30"></a><span class="fu">head</span>(u_df)</span>
-<span id="cb1-31"><a aria-label="31"></a><span class="fu">levels</span>(u_df<span class="sc">$</span>treat)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a aria-label="1"></a><span class="fu">library</span>(janitor)</span>
+<span id="cb1-2"><a aria-label="2"></a><span class="fu">library</span>(afex)</span>
+<span id="cb1-3"><a aria-label="3"></a><span class="fu">library</span>(emmeans)       <span class="co"># For estimated marginal means</span></span>
+<span id="cb1-4"><a aria-label="4"></a><span class="fu">library</span>(tidyverse)</span>
+<span id="cb1-5"><a aria-label="5"></a></span>
+<span id="cb1-6"><a aria-label="6"></a><span class="fu">options</span>(<span class="at">scipen =</span> <span class="dv">999</span>)</span>
+<span id="cb1-7"><a aria-label="7"></a><span class="fu">options</span>(<span class="at">contrasts =</span> <span class="fu">c</span>(<span class="st">"contr.treatment"</span>, <span class="st">"contr.poly"</span>))</span>
+<span id="cb1-8"><a aria-label="8"></a></span>
+<span id="cb1-9"><a aria-label="9"></a>u_df <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="st">"data/andrew.csv"</span>) <span class="sc">%&gt;%</span> <span class="fu">clean_names</span>()</span>
+<span id="cb1-10"><a aria-label="10"></a></span>
+<span id="cb1-11"><a aria-label="11"></a>u_df <span class="ot">&lt;-</span> u_df <span class="sc">%&gt;%</span></span>
+<span id="cb1-12"><a aria-label="12"></a>  <span class="fu">mutate</span>(<span class="at">treat =</span> <span class="fu">case_when</span>(</span>
+<span id="cb1-13"><a aria-label="13"></a>         treat <span class="sc">==</span> <span class="st">"removal"</span> <span class="sc">~</span> <span class="st">"none"</span>,</span>
+<span id="cb1-14"><a aria-label="14"></a>         treat <span class="sc">==</span> <span class="st">"control"</span> <span class="sc">~</span> <span class="st">"high"</span>,</span>
+<span id="cb1-15"><a aria-label="15"></a>         treat <span class="sc">==</span> <span class="st">"dens_33"</span> <span class="sc">~</span> <span class="st">"low"</span>,</span>
+<span id="cb1-16"><a aria-label="16"></a>         treat <span class="sc">==</span> <span class="st">"dens_66"</span> <span class="sc">~</span> <span class="st">"medium"</span>,</span>
+<span id="cb1-17"><a aria-label="17"></a>         <span class="cn">TRUE</span> <span class="sc">~</span> <span class="st">"other"</span>)) <span class="sc">%&gt;%</span></span>
+<span id="cb1-18"><a aria-label="18"></a>  <span class="fu">mutate</span>(<span class="at">treat =</span> <span class="fu">factor</span>(treat,</span>
+<span id="cb1-19"><a aria-label="19"></a>                        <span class="at">levels =</span> <span class="fu">c</span>(<span class="st">"none"</span>, <span class="st">"low"</span>, <span class="st">"medium"</span>, <span class="st">"high"</span>),</span>
+<span id="cb1-20"><a aria-label="20"></a>                        <span class="at">labels =</span> <span class="fu">c</span>(<span class="st">"none"</span>, <span class="st">"low"</span>, <span class="st">"medium"</span>, <span class="st">"high"</span>)),</span>
+<span id="cb1-21"><a aria-label="21"></a>         <span class="at">patch =</span> <span class="fu">as_factor</span>(patch))</span>
+<span id="cb1-22"><a aria-label="22"></a></span>
+<span id="cb1-23"><a aria-label="23"></a><span class="fu">head</span>(u_df)</span>
+<span id="cb1-24"><a aria-label="24"></a><span class="fu">levels</span>(u_df<span class="sc">$</span>treat)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p><code>u_df</code> contains: <code>patch</code> (random patches 1–16 where treatments were applied), <code>treat</code> (urchin density treatment — none, low, medium, high), <code>quad</code> (replicate quadrats within each patch:treatment combination), <code>algae</code> (percentage cover of filamentous algae — the response variable).</p>
 <p><strong>▶ Run this</strong> — summary statistics and a first plot:</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a aria-label="1"></a>summary_stats <span class="ot">&lt;-</span> u_df <span class="sc">%&gt;%</span></span>
@@ -308,147 +301,57 @@ Bill Perry
 
 </section></section>
 <section>
-<section id="part-3-the-modern-way-mixed-models" class="title-slide slide level1 center">
-<h1>Part 3 · The Modern Way — Mixed Models</h1>
-<p>Fixed effects go in as a plain variable name. Random effects can be coded a few different ways, depending on the design:</p>
-<ul>
-<li><strong>Random intercept, fixed slope:</strong> <code>+ (1|random)</code> — e.g., <code>color ~ fixed + (1|group)</code></li>
-<li><strong>Random intercept, random slope:</strong> <code>+ (fixed|random)</code> — e.g., <code>color ~ fixed + (fixed|group)</code></li>
-<li><strong>Nested design</strong> (a sample can exist only within a larger grouping): <code>y ~ color + (1|greenbox/graybox)</code>, equivalent to <code>y ~ color + (1|greenbox) + (1|greenbox:graybox)</code> — this models random variation in the intercept for each patch, and also for each quadrat within each patch</li>
-<li><strong>Fully crossed design</strong> (not nested): <code>y ~ color + (1|green_box) + (1|gray_box)</code></li>
-</ul>
-<p><strong>▶ Run this</strong> — fit the mixed model:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a aria-label="1"></a>mixed_model <span class="ot">&lt;-</span> <span class="fu">lmer</span>(algae <span class="sc">~</span> treat <span class="sc">+</span> (<span class="dv">1</span><span class="sc">|</span>patch), <span class="at">data =</span> u_df,</span>
-<span id="cb5-2"><a aria-label="2"></a>                    <span class="at">control =</span> <span class="fu">lmerControl</span>(<span class="at">calc.derivs =</span> <span class="cn">FALSE</span>))</span>
-<span id="cb5-3"><a aria-label="3"></a><span class="fu">summary</span>(mixed_model)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>▶ Run this</strong> — Method 1, the F-test with Satterthwaite degrees of freedom (more conservative, better for small samples):</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a aria-label="1"></a>satt_result <span class="ot">&lt;-</span> <span class="fu">Anova</span>(mixed_model, <span class="at">type =</span> <span class="dv">3</span>,</span>
-<span id="cb6-2"><a aria-label="2"></a>                      <span class="at">test.statistic =</span> <span class="st">"F"</span>,</span>
-<span id="cb6-3"><a aria-label="3"></a>                      <span class="at">ddf =</span> <span class="st">"Satterthwaite"</span>)</span>
-<span id="cb6-4"><a aria-label="4"></a>satt_result</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>▶ Run this</strong> — Method 2, the Chi-square test (more liberal, assumes large samples):</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a aria-label="1"></a>anova_car <span class="ot">&lt;-</span> <span class="fu">Anova</span>(mixed_model,</span>
-<span id="cb7-2"><a aria-label="2"></a>                   <span class="at">type =</span> <span class="dv">3</span>,</span>
-<span id="cb7-3"><a aria-label="3"></a>                   <span class="at">test.statistic =</span> <span class="st">"Chisq"</span>)</span>
-<span id="cb7-4"><a aria-label="4"></a>anova_car</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<blockquote>
-<p>💡 Chi-square = F × numerator df. The two differ because the F-test accounts for the denominator df (reflecting sample size), while Chi-square assumes infinite denominator df. <strong>Rule of thumb:</strong> under 100 observations or &lt; 20 random-effect levels, use the F-test; over 500 observations and &gt; 50 random-effect levels, Chi-square is fine; in between, the F-test is safer.</p>
-</blockquote>
-<p>✏️ <strong>Your turn:</strong> Do the F-test and Chi-square p-values agree on significance here? Given the rule of thumb above, which one should you trust more for this dataset (16 patches)? <code>________________________</code></p>
-<div class="callout callout-tip callout-titled callout-style-default">
-<div class="callout-body">
-<div class="callout-title">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<p><strong>Tip</strong></p>
-</div>
-<div class="callout-content">
-<p><strong>🚀 If you finish early:</strong> Refit <code>mixed_model</code> using <code>(1|treat:patch)</code> instead of <code>(1|patch)</code>. Does the model summary change? (Hint: since patch numbers are already unique to a treatment in this dataset, the two notations should behave the same here — but they wouldn’t if patch IDs were reused across treatments.)</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb8"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a aria-label="1"></a><span class="co"># Write your code here:</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-</div>
-</div>
-</div>
-</section>
-<section class="slide level2">
-
-</section></section>
-<section>
-<section id="part-4-model-diagnostics" class="title-slide slide level1 center">
-<h1>Part 4 · Model Diagnostics</h1>
-<p><strong>▶ Run this</strong> — DHARMa’s simulation-based diagnostics, purpose-built for mixed models:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb9"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a aria-label="1"></a><span class="fu">set.seed</span>(<span class="dv">123</span>)</span>
-<span id="cb9-2"><a aria-label="2"></a>simulation_output <span class="ot">&lt;-</span> <span class="fu">simulateResiduals</span>(<span class="at">fittedModel =</span> mixed_model,</span>
-<span id="cb9-3"><a aria-label="3"></a>                                       <span class="at">plot =</span> <span class="cn">FALSE</span>)</span>
-<span id="cb9-4"><a aria-label="4"></a></span>
-<span id="cb9-5"><a aria-label="5"></a><span class="fu">plotQQunif</span>(simulation_output)</span>
-<span id="cb9-6"><a aria-label="6"></a><span class="fu">plotResiduals</span>(simulation_output)</span>
-<span id="cb9-7"><a aria-label="7"></a></span>
-<span id="cb9-8"><a aria-label="8"></a><span class="fu">testDispersion</span>(simulation_output)</span>
-<span id="cb9-9"><a aria-label="9"></a><span class="fu">testOutliers</span>(simulation_output)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>▶ Run this</strong> — a couple of other useful diagnostic views:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb10"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a aria-label="1"></a><span class="fu">plot</span>(mixed_model, <span class="at">type =</span> <span class="fu">c</span>(<span class="st">"p"</span>, <span class="st">"smooth"</span>))</span>
-<span id="cb10-2"><a aria-label="2"></a></span>
-<span id="cb10-3"><a aria-label="3"></a><span class="co"># Cook's-distance-style influence plot (values &gt; 0.5 are worth a look)</span></span>
-<span id="cb10-4"><a aria-label="4"></a>car<span class="sc">::</span><span class="fu">influencePlot</span>(mixed_model)</span>
-<span id="cb10-5"><a aria-label="5"></a></span>
-<span id="cb10-6"><a aria-label="6"></a><span class="co"># Coefficient plot for the fixed effects</span></span>
-<span id="cb10-7"><a aria-label="7"></a>dotwhisker<span class="sc">::</span><span class="fu">dwplot</span>(mixed_model, <span class="at">effects =</span> <span class="st">"fixed"</span>) <span class="sc">+</span></span>
-<span id="cb10-8"><a aria-label="8"></a>  <span class="fu">geom_vline</span>(<span class="at">xintercept =</span> <span class="dv">0</span>, <span class="at">color =</span> <span class="st">"darkblue"</span>, <span class="at">linewidth =</span> <span class="dv">1</span>)</span>
-<span id="cb10-9"><a aria-label="9"></a></span>
-<span id="cb10-10"><a aria-label="10"></a><span class="co"># Variance components</span></span>
-<span id="cb10-11"><a aria-label="11"></a><span class="fu">VarCorr</span>(mixed_model)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>✏️ <strong>Your turn:</strong> From <code>VarCorr(mixed_model)</code>, how does the variance attributed to <code>patch</code> compare to the residual variance? What does that tell you about spatial heterogeneity in this system? <code>________________________</code></p>
-<div class="callout callout-tip callout-titled callout-style-default">
-<div class="callout-body">
-<div class="callout-title">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<p><strong>Tip</strong></p>
-</div>
-<div class="callout-content">
-<p><strong>🚀 If you finish early:</strong> DHARMa’s <code>testDispersion()</code> checks for over/under-dispersion. Look up (<code>?testDispersion</code>) what a significant result would mean, and write a one-sentence summary.</p>
-<pre><code>________________________________________________________</code></pre>
-</div>
-</div>
-</div>
-</section>
-<section class="slide level2">
-
-</section></section>
-<section>
-<section id="part-5-post-hoc-comparisons" class="title-slide slide level1 center">
-<h1>Part 5 · Post-Hoc Comparisons</h1>
+<section id="part-3-post-hoc-comparisons" class="title-slide slide level1 center">
+<h1>Part 3 · Post-Hoc Comparisons</h1>
 <p><strong>▶ Run this:</strong></p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb12"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a aria-label="1"></a>emm <span class="ot">&lt;-</span> <span class="fu">emmeans</span>(nested_model, <span class="sc">~</span> treat)</span>
-<span id="cb12-2"><a aria-label="2"></a><span class="fu">summary</span>(emm)</span>
-<span id="cb12-3"><a aria-label="3"></a></span>
-<span id="cb12-4"><a aria-label="4"></a>pairs_result <span class="ot">&lt;-</span> <span class="fu">pairs</span>(emm, <span class="at">adjust =</span> <span class="st">"sidak"</span>)</span>
-<span id="cb12-5"><a aria-label="5"></a>pairs_result</span>
-<span id="cb12-6"><a aria-label="6"></a></span>
-<span id="cb12-7"><a aria-label="7"></a>cld_result <span class="ot">&lt;-</span> multcomp<span class="sc">::</span><span class="fu">cld</span>(emm, <span class="at">alpha =</span> <span class="fl">0.05</span>, <span class="at">Letters =</span> letters)</span>
-<span id="cb12-8"><a aria-label="8"></a>cld_result</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a aria-label="1"></a>emm <span class="ot">&lt;-</span> <span class="fu">emmeans</span>(nested_model, <span class="sc">~</span> treat)</span>
+<span id="cb5-2"><a aria-label="2"></a><span class="fu">summary</span>(emm)</span>
+<span id="cb5-3"><a aria-label="3"></a></span>
+<span id="cb5-4"><a aria-label="4"></a>pairs_result <span class="ot">&lt;-</span> <span class="fu">pairs</span>(emm, <span class="at">adjust =</span> <span class="st">"sidak"</span>)</span>
+<span id="cb5-5"><a aria-label="5"></a>pairs_result</span>
+<span id="cb5-6"><a aria-label="6"></a></span>
+<span id="cb5-7"><a aria-label="7"></a>cld_result <span class="ot">&lt;-</span> multcomp<span class="sc">::</span><span class="fu">cld</span>(emm, <span class="at">alpha =</span> <span class="fl">0.05</span>, <span class="at">Letters =</span> letters)</span>
+<span id="cb5-8"><a aria-label="8"></a>cld_result</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>✏️ <strong>Your turn:</strong> Mean algae cover for Control (1.30%) looks much lower than the reduced-density treatments (66%: 21.55%, 33%: 19.00%, Removed: 39.20%). Based on your compact letter display, are any of those differences actually statistically significant at α = 0.05? <code>________________________</code></p>
 </section>
 <section class="slide level2">
 
 </section></section>
 <section>
-<section id="part-6-visualization-and-reporting" class="title-slide slide level1 center">
-<h1>Part 6 · Visualization and Reporting</h1>
+<section id="part-4-visualization-and-reporting" class="title-slide slide level1 center">
+<h1>Part 4 · Visualization and Reporting</h1>
 <p><strong>▶ Run this</strong> — a publication-style boxplot:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb13"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a aria-label="1"></a><span class="fu">ggplot</span>(u_df, <span class="fu">aes</span>(<span class="at">x =</span> treat, <span class="at">y =</span> algae, <span class="at">fill =</span> treat)) <span class="sc">+</span></span>
-<span id="cb13-2"><a aria-label="2"></a>  <span class="fu">geom_boxplot</span>(<span class="at">alpha =</span> <span class="fl">0.7</span>, <span class="at">outlier.shape =</span> <span class="cn">NA</span>) <span class="sc">+</span></span>
-<span id="cb13-3"><a aria-label="3"></a>  <span class="fu">geom_jitter</span>(<span class="at">width =</span> <span class="fl">0.2</span>, <span class="at">alpha =</span> <span class="fl">0.4</span>, <span class="at">size =</span> <span class="dv">1</span>) <span class="sc">+</span></span>
-<span id="cb13-4"><a aria-label="4"></a>  <span class="fu">scale_fill_viridis_d</span>(<span class="at">option =</span> <span class="st">"D"</span>, <span class="at">end =</span> <span class="fl">0.85</span>) <span class="sc">+</span></span>
-<span id="cb13-5"><a aria-label="5"></a>  <span class="fu">labs</span>(</span>
-<span id="cb13-6"><a aria-label="6"></a>    <span class="at">title =</span> <span class="st">"Effect of Urchin Density on Filamentous Algae Cover"</span>,</span>
-<span id="cb13-7"><a aria-label="7"></a>    <span class="at">x =</span> <span class="st">"Urchin Density Treatment"</span>,</span>
-<span id="cb13-8"><a aria-label="8"></a>    <span class="at">y =</span> <span class="st">"Filamentous Algae Cover (%)"</span>,</span>
-<span id="cb13-9"><a aria-label="9"></a>    <span class="at">caption =</span> <span class="st">"Boxplots showing the distribution of algal cover across urchin density treatments."</span></span>
-<span id="cb13-10"><a aria-label="10"></a>  ) <span class="sc">+</span></span>
-<span id="cb13-11"><a aria-label="11"></a>  <span class="fu">theme</span>(</span>
-<span id="cb13-12"><a aria-label="12"></a>    <span class="at">legend.position =</span> <span class="st">"none"</span>,</span>
-<span id="cb13-13"><a aria-label="13"></a>    <span class="at">plot.title =</span> <span class="fu">element_text</span>(<span class="at">face =</span> <span class="st">"bold"</span>, <span class="at">size =</span> <span class="dv">14</span>),</span>
-<span id="cb13-14"><a aria-label="14"></a>    <span class="at">axis.title =</span> <span class="fu">element_text</span>(<span class="at">face =</span> <span class="st">"bold"</span>, <span class="at">size =</span> <span class="dv">12</span>),</span>
-<span id="cb13-15"><a aria-label="15"></a>    <span class="at">plot.caption =</span> <span class="fu">element_text</span>(<span class="at">hjust =</span> <span class="dv">0</span>, <span class="at">face =</span> <span class="st">"italic"</span>, <span class="at">size =</span> <span class="dv">10</span>)</span>
-<span id="cb13-16"><a aria-label="16"></a>  )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a aria-label="1"></a><span class="fu">ggplot</span>(u_df, <span class="fu">aes</span>(<span class="at">x =</span> treat, <span class="at">y =</span> algae, <span class="at">fill =</span> treat)) <span class="sc">+</span></span>
+<span id="cb6-2"><a aria-label="2"></a>  <span class="fu">geom_boxplot</span>(<span class="at">alpha =</span> <span class="fl">0.7</span>, <span class="at">outlier.shape =</span> <span class="cn">NA</span>) <span class="sc">+</span></span>
+<span id="cb6-3"><a aria-label="3"></a>  <span class="fu">geom_jitter</span>(<span class="at">width =</span> <span class="fl">0.2</span>, <span class="at">alpha =</span> <span class="fl">0.4</span>, <span class="at">size =</span> <span class="dv">1</span>) <span class="sc">+</span></span>
+<span id="cb6-4"><a aria-label="4"></a>  <span class="fu">scale_fill_viridis_d</span>(<span class="at">option =</span> <span class="st">"D"</span>, <span class="at">end =</span> <span class="fl">0.85</span>) <span class="sc">+</span></span>
+<span id="cb6-5"><a aria-label="5"></a>  <span class="fu">labs</span>(</span>
+<span id="cb6-6"><a aria-label="6"></a>    <span class="at">title =</span> <span class="st">"Effect of Urchin Density on Filamentous Algae Cover"</span>,</span>
+<span id="cb6-7"><a aria-label="7"></a>    <span class="at">x =</span> <span class="st">"Urchin Density Treatment"</span>,</span>
+<span id="cb6-8"><a aria-label="8"></a>    <span class="at">y =</span> <span class="st">"Filamentous Algae Cover (%)"</span>,</span>
+<span id="cb6-9"><a aria-label="9"></a>    <span class="at">caption =</span> <span class="st">"Boxplots showing the distribution of algal cover across urchin density treatments."</span></span>
+<span id="cb6-10"><a aria-label="10"></a>  ) <span class="sc">+</span></span>
+<span id="cb6-11"><a aria-label="11"></a>  <span class="fu">theme</span>(</span>
+<span id="cb6-12"><a aria-label="12"></a>    <span class="at">legend.position =</span> <span class="st">"none"</span>,</span>
+<span id="cb6-13"><a aria-label="13"></a>    <span class="at">plot.title =</span> <span class="fu">element_text</span>(<span class="at">face =</span> <span class="st">"bold"</span>, <span class="at">size =</span> <span class="dv">14</span>),</span>
+<span id="cb6-14"><a aria-label="14"></a>    <span class="at">axis.title =</span> <span class="fu">element_text</span>(<span class="at">face =</span> <span class="st">"bold"</span>, <span class="at">size =</span> <span class="dv">12</span>),</span>
+<span id="cb6-15"><a aria-label="15"></a>    <span class="at">plot.caption =</span> <span class="fu">element_text</span>(<span class="at">hjust =</span> <span class="dv">0</span>, <span class="at">face =</span> <span class="st">"italic"</span>, <span class="at">size =</span> <span class="dv">10</span>)</span>
+<span id="cb6-16"><a aria-label="16"></a>  )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p><strong>▶ Run this</strong> — a mean ± SE plot:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb14"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a aria-label="1"></a><span class="fu">ggplot</span>(summary_stats, <span class="fu">aes</span>(<span class="at">x =</span> treat, <span class="at">y =</span> mean, <span class="at">group =</span> <span class="dv">1</span>)) <span class="sc">+</span></span>
-<span id="cb14-2"><a aria-label="2"></a>  <span class="fu">geom_point</span>(<span class="at">size =</span> <span class="dv">3</span>, <span class="at">shape =</span> <span class="dv">21</span>, <span class="at">fill =</span> <span class="st">"white"</span>) <span class="sc">+</span></span>
-<span id="cb14-3"><a aria-label="3"></a>  <span class="fu">geom_errorbar</span>(<span class="fu">aes</span>(<span class="at">ymin =</span> mean <span class="sc">-</span> se, <span class="at">ymax =</span> mean <span class="sc">+</span> se), <span class="at">width =</span> <span class="fl">0.2</span>) <span class="sc">+</span></span>
-<span id="cb14-4"><a aria-label="4"></a>  <span class="fu">labs</span>(</span>
-<span id="cb14-5"><a aria-label="5"></a>    <span class="at">title =</span> <span class="st">"Mean Algae Cover by Urchin Density Treatment"</span>,</span>
-<span id="cb14-6"><a aria-label="6"></a>    <span class="at">x =</span> <span class="st">"Urchin Density Treatment"</span>,</span>
-<span id="cb14-7"><a aria-label="7"></a>    <span class="at">y =</span> <span class="st">"Mean Filamentous Algae Cover (%)"</span>,</span>
-<span id="cb14-8"><a aria-label="8"></a>    <span class="at">caption =</span> <span class="st">"Mean (+/- SE) percentage cover of filamentous algae across urchin density treatments."</span></span>
-<span id="cb14-9"><a aria-label="9"></a>  ) <span class="sc">+</span></span>
-<span id="cb14-10"><a aria-label="10"></a>  <span class="fu">theme</span>(</span>
-<span id="cb14-11"><a aria-label="11"></a>    <span class="at">plot.title =</span> <span class="fu">element_text</span>(<span class="at">face =</span> <span class="st">"bold"</span>, <span class="at">size =</span> <span class="dv">14</span>),</span>
-<span id="cb14-12"><a aria-label="12"></a>    <span class="at">axis.title =</span> <span class="fu">element_text</span>(<span class="at">face =</span> <span class="st">"bold"</span>, <span class="at">size =</span> <span class="dv">12</span>),</span>
-<span id="cb14-13"><a aria-label="13"></a>    <span class="at">plot.caption =</span> <span class="fu">element_text</span>(<span class="at">hjust =</span> <span class="dv">0</span>, <span class="at">face =</span> <span class="st">"italic"</span>, <span class="at">size =</span> <span class="dv">10</span>)</span>
-<span id="cb14-14"><a aria-label="14"></a>  )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a aria-label="1"></a><span class="fu">ggplot</span>(summary_stats, <span class="fu">aes</span>(<span class="at">x =</span> treat, <span class="at">y =</span> mean, <span class="at">group =</span> <span class="dv">1</span>)) <span class="sc">+</span></span>
+<span id="cb7-2"><a aria-label="2"></a>  <span class="fu">geom_point</span>(<span class="at">size =</span> <span class="dv">3</span>, <span class="at">shape =</span> <span class="dv">21</span>, <span class="at">fill =</span> <span class="st">"white"</span>) <span class="sc">+</span></span>
+<span id="cb7-3"><a aria-label="3"></a>  <span class="fu">geom_errorbar</span>(<span class="fu">aes</span>(<span class="at">ymin =</span> mean <span class="sc">-</span> se, <span class="at">ymax =</span> mean <span class="sc">+</span> se), <span class="at">width =</span> <span class="fl">0.2</span>) <span class="sc">+</span></span>
+<span id="cb7-4"><a aria-label="4"></a>  <span class="fu">labs</span>(</span>
+<span id="cb7-5"><a aria-label="5"></a>    <span class="at">title =</span> <span class="st">"Mean Algae Cover by Urchin Density Treatment"</span>,</span>
+<span id="cb7-6"><a aria-label="6"></a>    <span class="at">x =</span> <span class="st">"Urchin Density Treatment"</span>,</span>
+<span id="cb7-7"><a aria-label="7"></a>    <span class="at">y =</span> <span class="st">"Mean Filamentous Algae Cover (%)"</span>,</span>
+<span id="cb7-8"><a aria-label="8"></a>    <span class="at">caption =</span> <span class="st">"Mean (+/- SE) percentage cover of filamentous algae across urchin density treatments."</span></span>
+<span id="cb7-9"><a aria-label="9"></a>  ) <span class="sc">+</span></span>
+<span id="cb7-10"><a aria-label="10"></a>  <span class="fu">theme</span>(</span>
+<span id="cb7-11"><a aria-label="11"></a>    <span class="at">plot.title =</span> <span class="fu">element_text</span>(<span class="at">face =</span> <span class="st">"bold"</span>, <span class="at">size =</span> <span class="dv">14</span>),</span>
+<span id="cb7-12"><a aria-label="12"></a>    <span class="at">axis.title =</span> <span class="fu">element_text</span>(<span class="at">face =</span> <span class="st">"bold"</span>, <span class="at">size =</span> <span class="dv">12</span>),</span>
+<span id="cb7-13"><a aria-label="13"></a>    <span class="at">plot.caption =</span> <span class="fu">element_text</span>(<span class="at">hjust =</span> <span class="dv">0</span>, <span class="at">face =</span> <span class="st">"italic"</span>, <span class="at">size =</span> <span class="dv">10</span>)</span>
+<span id="cb7-14"><a aria-label="14"></a>  )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="callout callout-note callout-titled callout-style-default">
 <div class="callout-body">
 <div class="callout-title">
@@ -459,22 +362,13 @@ Bill Perry
 </div>
 <div class="callout-content">
 <p><strong>Scientific interpretation</strong></p>
-<p>This nested ANOVA reveals substantial spatial heterogeneity in algae cover, with significant variation among patches within each treatment. Whether the urchin-density treatment effect itself reaches significance depends on which test (F vs.&nbsp;Chi-square) and which model specification you use — a good reminder that “significant” is sensitive to analytical choices in nested designs. The substantial variance component associated with patches nested within treatments shows why spatial heterogeneity needs to be accounted for when designing and analyzing ecological field experiments.</p>
+<p>This nested ANOVA reveals substantial spatial heterogeneity in algae cover, with significant variation among patches within each treatment. The substantial patch-to-patch variability shown in Part 2’s ANOVA table is exactly why <code>patch</code> needed to be modeled explicitly, rather than being pooled into the residual — a good reminder that pseudoreplication doesn’t just bias your F-test, it hides real biological variation.</p>
 </div>
 </div>
 </div>
-<p>✏️ <strong>Your turn:</strong> Write a 2–3 sentence results paragraph for this analysis, using your own F-statistic, df, p-value, and variance component numbers from Parts 3–4.</p>
+<p>✏️ <strong>Your turn:</strong> Write a 2–3 sentence results paragraph for this analysis, using your own F-statistic, df, and p-value from Part 2.</p>
 <pre><code>________________________________________________________
 ________________________________________________________</code></pre>
-</section>
-<section class="slide level2">
-
-</section></section>
-<section>
-<section id="part-7-comparing-the-two-approaches" class="title-slide slide level1 center">
-<h1>Part 7 · Comparing the Two Approaches</h1>
-<p>The linear mixed-model approach (<code>lmer</code>) gives similar results to the traditional nested ANOVA (<code>aov</code> with an <code>Error()</code> term). The main advantage of the mixed-model approach is its more elegant handling of random effects, easier extension to unbalanced or more complex designs, and the extensive diagnostic tools available through packages like <code>DHARMa</code>.</p>
-<p>✏️ <strong>Your turn:</strong> Compare the p-value for <code>treat</code> from <code>nested_model</code> (Part 2) to the p-value from <code>satt_result</code> (Part 3). Are they close? Which approach would you reach for first on a future nested design of your own, and why? <code>________________________</code></p>
 </section>
 <section class="slide level2">
 
@@ -486,10 +380,8 @@ ________________________________________________________</code></pre>
 <ul class="task-list">
 <li><label><input type="checkbox">Explain why <code>patch</code> nested in <code>treat</code> cannot be analyzed as a simple factorial design</label></li>
 <li><label><input type="checkbox">Fit a nested ANOVA with <code>aov(..., Error(...))</code> and with <code>afex::aov_car()</code></label></li>
-<li><label><input type="checkbox">Fit the same design as a mixed model with <code>lme4::lmer()</code>, using correct random-effects notation</label></li>
-<li><label><input type="checkbox">Choose between the F-test and Chi-square test for a mixed model, using the rule of thumb from lecture</label></li>
-<li><label><input type="checkbox">Run DHARMa diagnostics on a mixed model</label></li>
 <li><label><input type="checkbox">Compute EMMs and post-hoc comparisons for a nested design</label></li>
+<li><label><input type="checkbox">Write a properly formatted nested-ANOVA results sentence</label></li>
 </ul>
 <div class="callout callout-note callout-titled callout-style-default">
 <div class="callout-body">
@@ -514,96 +406,12 @@ ________________________________________________________</code></pre>
 
 </section></section>
 <section>
-<section id="part-8-take-home-extension-a-linear-mixed-model-for-crayfish-growth" class="title-slide slide level1 center">
-<h1>Part 8 · Take-Home Extension — A Linear Mixed Model for Crayfish Growth</h1>
-<p><em>Due Wednesday, November 4 — before the next class.</em></p>
-<div class="callout callout-note callout-titled callout-style-default">
-<div class="callout-body">
-<div class="callout-title">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<p><strong>Note</strong></p>
-</div>
-<div class="callout-content">
-<p>This is your first time building a mixed model from scratch, using the same <code>lmer()</code> syntax from Part 3, on a new dataset with a different kind of random effect (lake, rather than nested patches).</p>
-</div>
-</div>
-</div>
-</section>
-<section id="background" class="slide level2">
-<h2>Background</h2>
-<p>Sargent &amp; Lodge (2014) reared young-of-year rusty crayfish (<em>Orconectes rusticus</em>) from native (Ohio) and invasive (Wisconsin) populations in enclosures across three northern Wisconsin lakes. Individual crayfish within the same lake share that lake’s conditions, so they’re not independent of each other — lake should be treated as a random effect.</p>
-<p><strong>▶ Run this:</strong></p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb16"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb16-1"><a aria-label="1"></a>cray_df <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="st">"data/sargent_lodge_crayfish.csv"</span>)</span>
-<span id="cb16-2"><a aria-label="2"></a><span class="fu">head</span>(cray_df)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-</section>
-<section id="your-task" class="slide level2">
-<h2>Your Task</h2>
-<p><strong>Question:</strong> Does crayfish growth rate differ between native and invasive populations, once you account for the fact that crayfish were grown in different lakes?</p>
-<p>✏️ <strong>Your turn:</strong> State your hypotheses for the fixed effect of range. Decide how you want to specify the random effect of lake (a random intercept is enough here — this is not a nested design like Part 3’s patches-within-treatments). Justify your model, fit it, run diagnostics, interpret the fixed effect and the variance components, and report the result properly.</p>
-<pre><code>H0 =
-________________________________________________________
-Ha =
-________________________________________________________
-Model I will use and why:
-________________________________________________________</code></pre>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb18"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb18-1"><a aria-label="1"></a><span class="co"># Write your code here:</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<pre><code>Interpretation:
-________________________________________________________
-________________________________________________________</code></pre>
-</section>
-<section id="final-figure" class="slide level2">
-<h2>Final Figure</h2>
-<p>Produce one publication-quality figure comparing growth rate between ranges — proper axis labels, no default <code>ggplot</code> grey background — and export it with <code>ggsave()</code>.</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb20"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb20-1"><a aria-label="1"></a><span class="co"># Write your code here:</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="callout callout-note callout-titled callout-style-default">
-<div class="callout-body">
-<div class="callout-title">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<p><strong>Note</strong></p>
-</div>
-<div class="callout-content">
-<p><strong>📤 What to turn in — due Nov 4</strong></p>
-<p>Your write-up should include:</p>
-<ul class="task-list">
-<li><label><input type="checkbox">The question</label></li>
-<li><label><input type="checkbox">Your hypotheses</label></li>
-<li><label><input type="checkbox">Which model you used, and your justification for it</label></li>
-<li><label><input type="checkbox">The code and its output</label></li>
-<li><label><input type="checkbox">Your interpretation of the result (including the random effect)</label></li>
-<li><label><input type="checkbox">A final figure showing the result</label></li>
-</ul>
-</div>
-</div>
-</div>
-<div class="callout callout-note callout-titled callout-style-default">
-<div class="callout-body">
-<div class="callout-title">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<p><strong>Note</strong></p>
-</div>
-<div class="callout-content">
-<p><strong>Reference</strong></p>
-<p>Sargent, L.W. &amp; Lodge, D.M. (2014). Evolution of invasive traits in nonindigenous species: increased survival and faster growth in invasive populations of rusty crayfish (<em>Orconectes rusticus</em>). <em>Evolutionary Applications</em>, 7, 949–961.</p>
-</div>
-</div>
-</div>
-</section>
-<section class="slide level2">
-
-</section></section>
-<section>
 <section id="getting-unstuck" class="title-slide slide level1 center scrollable">
 <h1>Getting unstuck</h1>
 <p>When code breaks — and it will, that is normal:</p>
 <ol type="1">
 <li><strong>Read the error message out loud.</strong> R usually names the line and the problem.</li>
-<li><strong>Check the usual suspects:</strong> did you run <code>library(lme4)</code>, <code>library(lmerTest)</code>, <code>library(car)</code>, <code>library(emmeans)</code>, <code>library(DHARMa)</code>, <code>library(afex)</code>, and <code>library(tidyverse)</code>? Spelling? A missing <code>)</code> or <code>%&gt;%</code> at the <em>start</em> of a line?</li>
+<li><strong>Check the usual suspects:</strong> did you run <code>library(janitor)</code>, <code>library(afex)</code>, <code>library(emmeans)</code>, and <code>library(tidyverse)</code>? Spelling? A missing <code>)</code> or <code>%&gt;%</code> at the <em>start</em> of a line?</li>
 <li><code>?function_name</code> opens the built-in help page.</li>
 <li><strong>Bring the exact error</strong> (copy-paste it) to class or office hours.</li>
 </ol>
