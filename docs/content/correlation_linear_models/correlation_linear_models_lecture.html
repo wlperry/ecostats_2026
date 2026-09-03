@@ -1343,11 +1343,21 @@ Note
 
 </main> <!-- /main -->
 <script>
-// Make every link in the "Other Formats" panel (MS Word, PowerPoint, RevealJS)
-// open in a new browser tab, so clicking one during a live lecture does not
-// navigate away from the page you are on.
+// Open certain links in a new browser tab so a click during a live lecture
+// never navigates away from the page you are teaching from:
+//
+//   1. Every link in the "Other Formats" side panel (MS Word, PowerPoint,
+//      RevealJS) on a content page.
+//   2. Every entry in a Quarto listing table (the Lectures, Activities and
+//      Vignettes index pages) so opening a lecture keeps the index open.
+//
+// Pulled in via `include-after-body` from content/_metadata.yml (content
+// pages) and from the front matter of lectures.qmd / activities.qmd /
+// vignettes/index.qmd (the listing pages).
 (function () {
-  function openFormatsInNewTab() {
+  // --- 1. "Other Formats" panel ----------------------------------------
+  // Static markup, so just stamp target/rel on the anchors.
+  function tagAltFormats() {
     document
       .querySelectorAll(".quarto-alternate-formats a")
       .forEach(function (link) {
@@ -1357,13 +1367,44 @@ Note
   }
 
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", openFormatsInNewTab);
+    document.addEventListener("DOMContentLoaded", tagAltFormats);
   } else {
-    openFormatsInNewTab();
+    tagAltFormats();
   }
+  // Re-apply once after layout settles, in case Quarto rebuilds the panel.
+  setTimeout(tagAltFormats, 500);
 
-  // Re-apply once more after layout settles, in case Quarto rebuilds the panel.
-  setTimeout(openFormatsInNewTab, 500);
+  // --- 2. Listing tables ----------------------------------------------
+  // Quarto's list.js re-renders these rows on every sort/filter, which would
+  // wipe any target attribute we set. Use capture-phase click delegation
+  // instead so it keeps working no matter how often the list redraws.
+  document.addEventListener(
+    "click",
+    function (event) {
+      var link = event.target.closest(
+        ".quarto-listing a[href], .listing-title a[href], a.listing-title[href]"
+      );
+      if (!link) return;
+      // Leave the listing's own paging / sort controls alone.
+      if (link.closest(".pagination, .listing-pagination, .quarto-listing-sort")) {
+        return;
+      }
+      // Respect modifier clicks / non-primary buttons (browser handles those).
+      if (
+        event.defaultPrevented ||
+        event.button !== 0 ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.shiftKey ||
+        event.altKey
+      ) {
+        return;
+      }
+      event.preventDefault();
+      window.open(link.href, "_blank", "noopener");
+    },
+    true
+  );
 })();
 </script>
 <script id="quarto-html-after-body" type="application/javascript">
