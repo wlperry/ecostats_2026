@@ -18,6 +18,10 @@ format:
 >
 > Work through each part in order, at your own pace. Type every line of code yourself into a **plain R script** — do not copy-paste. Blocks marked **▶ Run this** are code you should type and execute. Blocks marked **✏️ Your turn** ask you to write, modify, or answer something. Boxes marked **🚀 If you finish early** are optional bonus material that goes a bit further than what we covered in lecture.
 >
+> **Every grey `r` box below is code you type into an R script — not into the Console.** Before you start: **File → New File → R Script**, and save it as `11_multiple_regression.R` in your project's `scripts/` folder. Then work down the worksheet, adding each block to the bottom of that one script, in order.
+>
+> **Type the `# ── Part …` header comment at the top of each block, too.** Those comment lines are not decoration — they are how your script stays navigable, how you find your way back to a block that broke, and how I find your work when I read your script. A block with no header comment is a block I cannot place. In RStudio they also show up in the document outline (the `≡` button at the bottom-left of the editor) so you can jump straight to any part.
+>
 > This worksheet examines the relationship between Net Primary Production (npp) and various climate and forest characteristics across global forest sites, based on Michaletz et al. (2014). We'll explore multicollinearity, model selection, and variable transformations — the real-data, many-predictor counterpart to the lecture's two-predictor ant example.
 
 ------------------------------------------------------------------------
@@ -27,6 +31,7 @@ format:
 **▶ Run this in your Script:**
 
 ``` r
+# ── Part 1.1 · Setup and Data ───────────────────────────────────────────
 library(tidyverse)    # For data manipulation and visualization
 library(car)           # For regression diagnostics (VIF, etc.)
 library(corrplot)      # For correlation plots
@@ -46,6 +51,7 @@ head(forest_df)
 **▶ Run this** — a correlation matrix, and a visual version of it:
 
 ``` r
+# ── Part 2.1 · Exploring Multicollinearity ──────────────────────────────
 num_vars <- forest_df %>%
   select_if(is.numeric)
 
@@ -59,6 +65,7 @@ corrplot(cor_matrix, method = "color", type = "upper",
 **▶ Run this** — a pairs plot for a fuller picture:
 
 ``` r
+# ── Part 2.2 · Exploring Multicollinearity ──────────────────────────────
 forest_df %>%
   select(-leaf) %>%  # Exclude categorical variable for pairs plot
   ggpairs(
@@ -73,6 +80,7 @@ forest_df %>%
 **▶ Run this** — fit the full model with every predictor:
 
 ``` r
+# ── Part 2.3 · Exploring Multicollinearity ──────────────────────────────
 model_init <- lm(npp ~ age + biomass + season + temp +
              precip + teb + leaf, data = forest_df)
 summary(model_init)
@@ -81,6 +89,7 @@ summary(model_init)
 **▶ Run this** — check Variance Inflation Factors:
 
 ``` r
+# ── Part 2.4 · Exploring Multicollinearity ──────────────────────────────
 vif_values <- vif(model_init)
 vif_values
 
@@ -109,6 +118,7 @@ ggplot(vif_df, aes(x = reorder(Variable, VIF), y = VIF)) +
 **🚀 If you finish early:** Recompute VIF using only 3 predictors of your choice (drop the rest from the model formula). Do the remaining VIFs change? Why would dropping a correlated predictor lower the VIFs of the ones that are left?
 
 ``` r
+# ── Part 2.5 · Exploring Multicollinearity ──────────────────────────────
 # Write your code here:
 ```
 :::
@@ -122,6 +132,7 @@ Season and temperature are highly correlated. Let's remove season.
 **▶ Run this:**
 
 ``` r
+# ── Part 3.1 · Addressing Multicollinearity ─────────────────────────────
 model_2 <- lm(npp ~ age + biomass + temp + precip + teb + leaf,
              data = forest_df)
 summary(model_2)
@@ -139,6 +150,7 @@ vif_values2
 **▶ Run this** — Added Variable (partial regression) plots:
 
 ``` r
+# ── Part 4.1 · Checking the Shape of Relationships ──────────────────────
 par(mfrow = c(2, 3))
 avPlots(model_2, main = "Partial Regression Plots")
 par(mfrow = c(1, 1))
@@ -149,6 +161,7 @@ The original analysis found `age` showed a curvy relationship. Let's try a log t
 **▶ Run this:**
 
 ``` r
+# ── Part 4.2 · Checking the Shape of Relationships ──────────────────────
 forest_df <- forest_df %>%
   mutate(log_age = log10(age))
 
@@ -170,6 +183,7 @@ par(mfrow = c(1, 1))
 **▶ Run this** — the four standard diagnostic plots:
 
 ``` r
+# ── Part 5.1 · Model Diagnostics ────────────────────────────────────────
 par(mfrow = c(2, 2))
 plot(model_3)
 par(mfrow = c(1, 1))
@@ -178,6 +192,7 @@ par(mfrow = c(1, 1))
 **▶ Run this** — a closer look at residuals vs. fitted:
 
 ``` r
+# ── Part 5.2 · Model Diagnostics ────────────────────────────────────────
 residuals_data <- data.frame(
   Fitted = fitted(model_3),
   Residuals = residuals(model_3),
@@ -197,6 +212,7 @@ Let's also try a cube-root transformation of the response, `npp`:
 **▶ Run this:**
 
 ``` r
+# ── Part 5.3 · Model Diagnostics ────────────────────────────────────────
 forest_df <- forest_df %>%
   mutate(npp_cuberoot = npp^(1/3))
 
@@ -215,6 +231,7 @@ par(mfrow = c(1, 1))
 **🚀 If you finish early:** Try a square-root transform of `npp` instead of cube-root (`sqrt(npp)`). Refit the model and compare its residual plots to `model_4`'s.
 
 ``` r
+# ── Part 5.4 · Model Diagnostics ────────────────────────────────────────
 # Write your code here:
 ```
 :::
@@ -226,6 +243,7 @@ par(mfrow = c(1, 1))
 **▶ Run this** — drop the non-significant `precip` term:
 
 ``` r
+# ── Part 6.1 · Model Simplification and Comparison ──────────────────────
 model_5 <- lm(npp_cuberoot ~ log_age + biomass + temp + teb + leaf,
              data = forest_df)
 summary(model_5)
@@ -234,6 +252,7 @@ summary(model_5)
 **▶ Run this** — compare `model_4` and `model_5` by AIC:
 
 ``` r
+# ── Part 6.2 · Model Simplification and Comparison ──────────────────────
 model_comparison <- data.frame(
   Model = c("Model 4 (Full)", "Model 5 (No precip)"),
   AIC = c(AIC(model_4), AIC(model_5)),
@@ -254,6 +273,7 @@ summary(model_5, conf.int = TRUE)
 **▶ Run this** — partial R² for every predictor at once, using `sensemakr`:
 
 ``` r
+# ── Part 7.1 · Predictor Importance ─────────────────────────────────────
 library(sensemakr)
 partial_r2_sensemakr <- partial_r2(model_5)
 partial_r2_sensemakr
@@ -262,6 +282,7 @@ partial_r2_sensemakr
 **▶ Run this** — the same idea, computed by hand from a Type III ANOVA table:
 
 ``` r
+# ── Part 7.2 · Predictor Importance ─────────────────────────────────────
 anova_type3 <- Anova(model_5, type = "III")
 anova_type3
 
@@ -286,6 +307,7 @@ results_table
 **🚀 If you finish early:** Which single predictor has the highest partial R² in `model_5`? Does that match which predictor had the smallest p-value in `summary(model_5)`?
 
 ``` r
+# ── Part 7.3 · Predictor Importance ─────────────────────────────────────
 # Write your code here:
 ```
 :::
@@ -297,6 +319,7 @@ results_table
 **▶ Run this** — refit with every numeric predictor standardized (mean 0, SD 1), including a temp × precip interaction:
 
 ``` r
+# ── Part 8.1 · An Alternative ───────────────────────────────────────────
 forest_standardized <- forest_df %>%
   mutate(
     npp_sqrt_scaled = scale(sqrt(npp))[,1],
@@ -365,6 +388,7 @@ Abell et al. (2010) studied nutrient limitation in New Zealand lakes. Chlorophyl
 **▶ Run this:**
 
 ``` r
+# ── Part 9.1 · Take-Home Extension ──────────────────────────────────────
 nz_df <- read_csv("data/abel_et_al_lakes_data.csv")
 head(nz_df)
 ```
@@ -386,6 +410,7 @@ ________________________________________________________
 ```
 
 ``` r
+# ── Part 9.2 · Take-Home Extension ──────────────────────────────────────
 # Write your code here:
 ```
 
@@ -400,6 +425,7 @@ ________________________________________________________
 Produce one publication-quality figure showing the relationship between chlorophyll-a and the predictor(s) that mattered most — proper axis labels, no default `ggplot` grey background — and export it with `ggsave()`.
 
 ``` r
+# ── Part 9.3 · Take-Home Extension ──────────────────────────────────────
 # Write your code here:
 ```
 

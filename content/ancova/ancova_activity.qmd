@@ -18,11 +18,16 @@ format:
 >
 > Work through each part in order, at your own pace. Type every line of code yourself into a **plain R script** — do not copy-paste. Blocks marked **▶ Run this** are code you should type and execute. Blocks marked **✏️ Your turn** ask you to write, modify, or answer something. Boxes marked **🚀 If you finish early** are optional bonus material that goes a bit further than what we covered in lecture.
 >
+> **Every grey `r` box below is code you type into an R script — not into the Console.** Before you start: **File → New File → R Script**, and save it as `08_ancova.R` in your project's `scripts/` folder. Then work down the worksheet, adding each block to the bottom of that one script, in order.
+>
+> **Type the `# ── Part …` header comment at the top of each block, too.** Those comment lines are not decoration — they are how your script stays navigable, how you find your way back to a block that broke, and how I find your work when I read your script. A block with no header comment is a block I cannot place. In RStudio they also show up in the document outline (the `≡` button at the bottom-left of the editor) so you can jump straight to any part.
+>
 > This worksheet uses simulated cricket chirping data, the real Partridge fruitfly-longevity dataset, and simulated sea urchin data (for a heterogeneous-slopes example).
 
 **▶ Run this in your Script:**
 
-```r
+``` r
+# ── Setup (1) ───────────────────────────────────────────────────────────
 library(lmtest)
 library(interactions)
 library(janitor)
@@ -67,7 +72,8 @@ We want to compare chirping rate of two cricket species — *Oecanthus exclamati
 
 **▶ Run this** — create the simulated cricket data and visualize it:
 
-```r
+``` r
+# ── Part 1.1 · Cricket Chirping Analysis ────────────────────────────────
 set.seed(456)
 n <- 40
 spp <- rep(c("O. exclamationis", "O. niveus"), each = n/2)
@@ -86,7 +92,8 @@ ggplot(c_df, aes(x = temp, y = chirp_rate, color = spp)) +
 
 This is the most critical assumption! We test if the regression slopes are equal across all groups.
 
-```r
+``` r
+# ── Part 1.2 · Cricket Chirping Analysis ────────────────────────────────
 options(contrasts = c("contr.sum", "contr.poly")) # for true type 3 anovas
 # options(contrasts = c("contr.treatment", "contr.poly")) # original version
 # see below for interpretation...
@@ -110,7 +117,8 @@ The intercept is hard to interpret in both models because `temp = 0` is meaningl
 
 Since slopes are homogeneous (p > 0.05), fit the ANCOVA model without the interaction term.
 
-```r
+``` r
+# ── Part 1.3 · Cricket Chirping Analysis ────────────────────────────────
 ancova_model <- lm(chirp_rate ~ temp + spp, data = c_df)
 summary(ancova_model)
 ```
@@ -122,7 +130,8 @@ summary(ancova_model)
 - `temp`: the common slope — for every 1-degree increase in `temp`, `chirp_rate` increases by that many units.
 - `spp1`: the deviation from the grand mean for `O. exclamationis`; the effect for `O. niveus` is the negative of that value.
 
-```r
+``` r
+# ── Part 1.4 · Cricket Chirping Analysis ────────────────────────────────
 Anova(ancova_model, type = 2)
 ```
 
@@ -137,7 +146,8 @@ Both Type II (technically more appropriate here) and Type III end up doing the e
 
 **▶ Run this:**
 
-```r
+``` r
+# ── Part 1.5 · Cricket Chirping Analysis ────────────────────────────────
 par(mfrow = c(2, 2))
 plot(ancova_model, main = "ANCOVA Diagnostic Plots")
 par(mfrow = c(1, 1))
@@ -154,7 +164,8 @@ lmtest::bptest(ancova_model)
 
 ANCOVA compares adjusted means — what each group's mean would be at the overall mean of the covariate.
 
-```r
+``` r
+# ── Part 1.6 · Cricket Chirping Analysis ────────────────────────────────
 c_emmeans <- emmeans(ancova_model, "spp")
 
 cricket_adj_means_df <- as.data.frame(c_emmeans)
@@ -163,13 +174,15 @@ cricket_adj_means_df
 
 ## Step 5: Pairwise comparisons
 
-```r
+``` r
+# ── Part 1.7 · Cricket Chirping Analysis ────────────────────────────────
 pairs(c_emmeans, adjust = "sidak")
 ```
 
 ## Step 6: Visualize results
 
-```r
+``` r
+# ── Part 1.8 · Cricket Chirping Analysis ────────────────────────────────
 plot(c_emmeans, comparisons = TRUE)
 
 c_emmeans_df <- as.data.frame(c_emmeans)
@@ -188,7 +201,8 @@ ggplot(c_emmeans_df, aes(x = spp, y = emmean, fill = spp)) +
 ::: callout-tip
 **🚀 If you finish early:** Refit `ancova_model` with `options(contrasts = c("contr.treatment", "contr.poly"))` instead of `contr.sum`, and compare the coefficient table. Does the `Anova()` F-test for `spp` change? Does the intercept's meaning change?
 
-```r
+``` r
+# ── Part 1.9 · Cricket Chirping Analysis ────────────────────────────────
 # Write your code here:
 ```
 :::
@@ -201,7 +215,8 @@ We'll analyze the effect of mating strategy on male fruitfly longevity, using th
 
 **▶ Run this** — load and visualize the data:
 
-```r
+``` r
+# ── Part 2.1 · Partridge Longevity Analysis ─────────────────────────────
 p_df <- read.csv("data/partridge.csv") %>% clean_names() %>%
   rename(treat = treatmen)
 
@@ -228,14 +243,16 @@ ggplot(p_df, aes(x = thorax, y = longev, color = treat)) +
 
 ## Step 1: Test homogeneity of slopes
 
-```r
+``` r
+# ── Part 2.2 · Partridge Longevity Analysis ─────────────────────────────
 homo_slopes_model <- lm(longev ~ thorax * treat, data = p_df)
 Anova(homo_slopes_model, type = 3)
 ```
 
 ## Step 2: Fit the ANCOVA model
 
-```r
+``` r
+# ── Part 2.3 · Partridge Longevity Analysis ─────────────────────────────
 p_ancova_model <- lm(longev ~ thorax + treat, data = p_df)
 summary(p_ancova_model)
 
@@ -244,7 +261,8 @@ Anova(p_ancova_model, type = "II")
 
 ## Step 3: Check assumptions
 
-```r
+``` r
+# ── Part 2.4 · Partridge Longevity Analysis ─────────────────────────────
 par(mfrow = c(2, 2))
 plot(p_ancova_model)
 par(mfrow = c(1, 1))
@@ -259,14 +277,16 @@ lmtest::bptest(p_ancova_model)
 
 ## Step 4: Calculate adjusted means
 
-```r
+``` r
+# ── Part 2.5 · Partridge Longevity Analysis ─────────────────────────────
 p_means <- emmeans(p_ancova_model, "treat")
 p_means
 ```
 
 ## Step 5: Pairwise comparisons
 
-```r
+``` r
+# ── Part 2.6 · Partridge Longevity Analysis ─────────────────────────────
 pairs(p_means, adjust = "tukey")
 
 plot(p_means, comparisons = TRUE)
@@ -284,7 +304,8 @@ Let's look at an example where slopes are **NOT** homogeneous, using simulated s
 
 **▶ Run this:**
 
-```r
+``` r
+# ── Part 3.1 · Example with Heterogeneous Slopes ────────────────────────
 set.seed(345)
 n <- 72  # 24 urchins per group
 
@@ -319,7 +340,8 @@ ggplot(u_df, aes(x = volume, y = suture_width, color = treatment)) +
 
 ## Test for homogeneity of slopes
 
-```r
+``` r
+# ── Part 3.2 · Example with Heterogeneous Slopes ────────────────────────
 urchin_model <- lm(suture_width ~ volume * treatment, data = u_df)
 Anova(urchin_model, type = 3)
 ```
@@ -332,7 +354,8 @@ When slopes are not homogeneous, you have several options.
 
 **Option 1 — Analyze groups separately:**
 
-```r
+``` r
+# ── Part 3.3 · Example with Heterogeneous Slopes ────────────────────────
 initial_model <- lm(suture_width ~ volume, data = filter(u_df, treatment == "Initial"))
 low_food_model <- lm(suture_width ~ volume, data = filter(u_df, treatment == "Low Food"))
 high_food_model <- lm(suture_width ~ volume, data = filter(u_df, treatment == "High Food"))
@@ -344,7 +367,8 @@ high_food_model
 
 **Option 2 — Johnson-Neyman procedure:** identifies the specific regions of the covariate where groups do (and do not) significantly differ.
 
-```r
+``` r
+# ── Part 3.4 · Example with Heterogeneous Slopes ────────────────────────
 library(interactions)
 jn_model <- lm(suture_width ~ volume + treatment + volume * treatment, data = u_df)
 
@@ -361,7 +385,8 @@ sim_slopes(jn_model,
 ::: callout-tip
 **🚀 If you finish early:** Try `emtrends(urchin_model, "treatment", var = "volume")` to get the estimated slope for each treatment group directly, instead of fitting three separate models.
 
-```r
+``` r
+# ── Part 3.5 · Example with Heterogeneous Slopes ────────────────────────
 # Write your code here:
 ```
 :::
@@ -440,6 +465,7 @@ Part 1 used simulated cricket data to introduce ANCOVA. Below is real data on th
 **▶ Run this:**
 
 ``` r
+# ── Part 4.1 · Take-Home Extension ──────────────────────────────────────
 cricket_df <- read_csv("data/walker_cricket_chirp_rate.csv")
 head(cricket_df)
 
@@ -464,6 +490,7 @@ ________________________________________________________
 ```
 
 ``` r
+# ── Part 4.2 · Take-Home Extension ──────────────────────────────────────
 # Write your code here:
 ```
 
@@ -478,6 +505,7 @@ ________________________________________________________
 Produce one publication-quality figure showing chirp rate vs. temperature by species (adjusted means with confidence intervals, or the raw regression lines — whichever fits your model from above) — proper axis labels, no default `ggplot` grey background — and export it with `ggsave()`.
 
 ``` r
+# ── Part 4.3 · Take-Home Extension ──────────────────────────────────────
 # Write your code here:
 ```
 

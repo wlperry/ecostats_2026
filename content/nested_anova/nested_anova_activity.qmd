@@ -18,6 +18,10 @@ format:
 >
 > Work through each part in order, at your own pace. Type every line of code yourself into a **plain R script** — do not copy-paste. Blocks marked **▶ Run this** are code you should type and execute. Blocks marked **✏️ Your turn** ask you to write, modify, or answer something. Boxes marked **🚀 If you finish early** are optional bonus material that goes a bit further than what we covered in lecture.
 >
+> **Every grey `r` box below is code you type into an R script — not into the Console.** Before you start: **File → New File → R Script**, and save it as `14_nested_anova.R` in your project's `scripts/` folder. Then work down the worksheet, adding each block to the bottom of that one script, in order.
+>
+> **Type the `# ── Part …` header comment at the top of each block, too.** Those comment lines are not decoration — they are how your script stays navigable, how you find your way back to a block that broke, and how I find your work when I read your script. A block with no header comment is a block I cannot place. In RStudio they also show up in the document outline (the `≡` button at the bottom-left of the editor) so you can jump straight to any part.
+>
 > This worksheet uses the sea urchin grazing / algae cover dataset from lecture, where `patch` is nested within `treat` (each patch received only one urchin-density treatment). Next class, the Linear Mixed Models activity revisits this exact same dataset with a different (and more flexible) modeling approach — this worksheet stays entirely with the traditional method.
 
 ------------------------------------------------------------------------
@@ -27,6 +31,7 @@ format:
 **▶ Run this in your Script:**
 
 ``` r
+# ── Part 1.1 · Setup and Data ───────────────────────────────────────────
 library(janitor)
 library(afex)
 library(emmeans)       # For estimated marginal means
@@ -38,26 +43,30 @@ options(contrasts = c("contr.treatment", "contr.poly"))
 u_df <- read_csv("data/andrew.csv") %>% clean_names()
 
 u_df <- u_df %>%
+  # Map to Quinn & Keough's Table 9.1 densities. NOTE the file's dens_33 /
+  # dens_66 labels are the reverse of the book's percentages -- verified by
+  # matching patch means: dens_33 is the book's 66% group, dens_66 its 33%.
   mutate(treat = case_when(
-         treat == "removal" ~ "none",
-         treat == "control" ~ "high",
-         treat == "dens_33" ~ "low",
-         treat == "dens_66" ~ "medium",
+         treat == "removal" ~ "0%",     # book  0% density, mean algae 39.2
+         treat == "dens_66" ~ "33%",    # book 33% density, mean algae 19.0
+         treat == "dens_33" ~ "66%",    # book 66% density, mean algae 21.6
+         treat == "control" ~ "100%",   # book 100% density, mean algae 1.3
          TRUE ~ "other")) %>%
   mutate(treat = factor(treat,
-                        levels = c("none", "low", "medium", "high"),
-                        labels = c("none", "low", "medium", "high")),
+                        levels = c("0%", "33%", "66%", "100%"),
+                        labels = c("0%", "33%", "66%", "100%")),
          patch = as_factor(patch))
 
 head(u_df)
 levels(u_df$treat)
 ```
 
-`u_df` contains: `patch` (random patches 1–16 where treatments were applied), `treat` (urchin density treatment — none, low, medium, high), `quad` (replicate quadrats within each patch:treatment combination), `algae` (percentage cover of filamentous algae — the response variable).
+`u_df` contains: `patch` (random patches 1–16 where treatments were applied), `treat` (urchin density — 0%, 33%, 66%, 100% of natural density), `quad` (replicate quadrats within each patch:treatment combination), `algae` (percentage cover of filamentous algae — the response variable).
 
 **▶ Run this** — summary statistics and a first plot:
 
 ``` r
+# ── Part 1.2 · Setup and Data ───────────────────────────────────────────
 summary_stats <- u_df %>%
   group_by(treat) %>%
   summarise(
@@ -90,14 +99,19 @@ Since `patch` is nested within `treat`, we need the correct error term — the t
 **▶ Run this:**
 
 ``` r
-# This gives you the correct F-test using PATCH within TREAT as error term
-nested_model <- aov(algae ~ treat + Error(treat:patch), data = u_df)
+# ── Part 2.1 · Fitting the Nested Model ─────────────────────────────────
+# This gives you the correct F-test using PATCH as the error term.
+# Patch IDs are unique (1-16) and each patch got exactly one treatment,
+# so Error(patch) is enough -- Error(treat:patch) gives the same numbers
+# but warns "Error() model is singular".
+nested_model <- aov(algae ~ treat + Error(patch), data = u_df)
 summary(nested_model)
 ```
 
 **▶ Run this** — the `afex` package, recommended for unbalanced designs:
 
 ``` r
+# ── Part 2.2 · Fitting the Nested Model ─────────────────────────────────
 model_afx <- aov_car(algae ~ treat + Error(patch),
                      data = u_df)
 summary(model_afx)
@@ -112,6 +126,7 @@ summary(model_afx)
 **▶ Run this:**
 
 ``` r
+# ── Part 3.1 · Post-Hoc Comparisons ─────────────────────────────────────
 emm <- emmeans(nested_model, ~ treat)
 summary(emm)
 
@@ -131,6 +146,7 @@ cld_result
 **▶ Run this** — a publication-style boxplot:
 
 ``` r
+# ── Part 4.1 · Visualization and Reporting ──────────────────────────────
 ggplot(u_df, aes(x = treat, y = algae, fill = treat)) +
   geom_boxplot(alpha = 0.7, outlier.shape = NA) +
   geom_jitter(width = 0.2, alpha = 0.4, size = 1) +
@@ -152,6 +168,7 @@ ggplot(u_df, aes(x = treat, y = algae, fill = treat)) +
 **▶ Run this** — a mean ± SE plot:
 
 ``` r
+# ── Part 4.2 · Visualization and Reporting ──────────────────────────────
 ggplot(summary_stats, aes(x = treat, y = mean, group = 1)) +
   geom_point(size = 3, shape = 21, fill = "white") +
   geom_errorbar(aes(ymin = mean - se, ymax = mean + se), width = 0.2) +

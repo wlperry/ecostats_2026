@@ -18,11 +18,16 @@ format:
 >
 > Work through each part in order, at your own pace. Type every line of code yourself into a **plain R script** — do not copy-paste. Blocks marked **▶ Run this** are code you should type and execute. Blocks marked **✏️ Your turn** ask you to write, modify, or answer something. Boxes marked **🚀 If you finish early** are optional bonus material that goes a bit further than what we covered in lecture.
 >
+> **Every grey `r` box below is code you type into an R script — not into the Console.** Before you start: **File → New File → R Script**, and save it as `09_pca.R` in your project's `scripts/` folder. Then work down the worksheet, adding each block to the bottom of that one script, in order.
+>
+> **Type the `# ── Part …` header comment at the top of each block, too.** Those comment lines are not decoration — they are how your script stays navigable, how you find your way back to a block that broke, and how I find your work when I read your script. A block with no header comment is a block I cannot place. In RStudio they also show up in the document outline (the `≡` button at the bottom-left of the editor) so you can jump straight to any part.
+>
 > This worksheet uses the classic iris flower dataset — 4 measurements (sepal length/width, petal length/width) on 3 species of *Iris*.
 
 **▶ Run this in your Script:**
 
-```r
+``` r
+# ── Setup (1) ───────────────────────────────────────────────────────────
 library(vegan)
 library(corrplot)
 library(janitor)
@@ -59,7 +64,8 @@ We'll analyze the famous iris dataset with measurements from three species: *Iri
 
 **▶ Run this:**
 
-```r
+``` r
+# ── Part 1.1 · Iris Data Overview ───────────────────────────────────────
 iris_df <- read.csv("data/iris.csv") %>%
   clean_names() %>%
   mutate(ind = row_number()) %>%
@@ -78,7 +84,8 @@ iris_species_df <- iris_df %>%
 
 **▶ Run this** — visualize the raw measurements by species:
 
-```r
+``` r
+# ── Part 1.2 · Iris Data Overview ───────────────────────────────────────
 iris_long_df <- iris_df %>%
   pivot_longer(
     cols = c(sepal_length, sepal_width, petal_length, petal_width),
@@ -104,7 +111,8 @@ overview_plot
 
 **▶ Run this** — check correlations between variables:
 
-```r
+``` r
+# ── Part 2.1 · Check PCA Assumptions ────────────────────────────────────
 cor_matrix <- cor(iris_data_df)
 cor_matrix
 
@@ -116,7 +124,8 @@ corrplot(cor_matrix, method = "color", type = "upper",
 
 **▶ Run this** — check for outliers:
 
-```r
+``` r
+# ── Part 2.2 · Check PCA Assumptions ────────────────────────────────────
 outlier_plot <- iris_data_df %>%
   pivot_longer(everything(), names_to = "variable", values_to = "value") %>%
   ggplot(aes(x = variable, y = value)) +
@@ -140,7 +149,8 @@ Since our variables have different scales (e.g., petal width ranges 0.1-2.5 whil
 
 **▶ Run this:**
 
-```r
+``` r
+# ── Part 3.1 · Standardize the Data ─────────────────────────────────────
 iris_scaled <- scale(iris_data_df)
 
 iris_scaled_df <- as.data.frame(iris_scaled)
@@ -156,7 +166,8 @@ apply(iris_scaled_df, 2, sd)
 
 **▶ Run this:**
 
-```r
+``` r
+# ── Part 4.1 · Perform PCA ──────────────────────────────────────────────
 iris_pca_model <- prcomp(iris_scaled, center = FALSE, scale. = FALSE)
 
 summary(iris_pca_model)
@@ -168,7 +179,8 @@ summary(iris_pca_model)
 
 **▶ Run this** — eigenvalues and variance explained:
 
-```r
+``` r
+# ── Part 5.1 · Extract and Understand Results ───────────────────────────
 eigenvalues <- iris_pca_model$sdev^2
 prop_variance <- eigenvalues / sum(eigenvalues)
 cumsum_variance <- cumsum(prop_variance)
@@ -185,7 +197,8 @@ pca_summary_df
 
 **▶ Run this** — component loadings:
 
-```r
+``` r
+# ── Part 5.2 · Extract and Understand Results ───────────────────────────
 loadings_df <- data.frame(
   Variable = rownames(iris_pca_model$rotation),
   PC1 = iris_pca_model$rotation[, 1],
@@ -205,7 +218,8 @@ loadings_df
 
 **▶ Run this** — a scree plot:
 
-```r
+``` r
+# ── Part 6.1 · Determine Number of Components ───────────────────────────
 scree_data_df <- data.frame(
   Component = factor(1:4),
   Variance = prop_variance * 100
@@ -225,7 +239,8 @@ scree_plot
 
 **▶ Run this** — apply decision rules:
 
-```r
+``` r
+# ── Part 6.2 · Determine Number of Components ───────────────────────────
 # Eigenvalue > 1 rule
 components_to_keep <- sum(eigenvalues > 1)
 components_to_keep
@@ -241,7 +256,8 @@ components_80_percent
 
 **▶ Run this:**
 
-```r
+``` r
+# ── Part 7.1 · Create PCA Scores ────────────────────────────────────────
 pca_scores_df <- data.frame(
   iris_pca_model$x,
   species = iris_species_df$species
@@ -256,7 +272,8 @@ head(pca_scores_df)
 
 **▶ Run this** — a PCA scores plot:
 
-```r
+``` r
+# ── Part 8.1 · Visualize Results ────────────────────────────────────────
 scores_plot <- ggplot(pca_scores_df, aes(x = PC1, y = PC2, color = species)) +
   geom_point(size = 3, alpha = 0.7) +
   stat_ellipse(level = 0.68, linetype = 2) +
@@ -274,7 +291,8 @@ scores_plot
 
 **▶ Run this** — a loading plot (arrows only):
 
-```r
+``` r
+# ── Part 8.2 · Visualize Results ────────────────────────────────────────
 loading_data_df <- loadings_df %>%
   dplyr::select(Variable, PC1, PC2)
 
@@ -297,7 +315,8 @@ loading_plot
 
 **▶ Run this** — combine scores and loadings into a manual biplot:
 
-```r
+``` r
+# ── Part 8.3 · Visualize Results ────────────────────────────────────────
 arrow_scale <- 3
 
 biplot_plot <- ggplot(pca_scores_df, aes(x = PC1, y = PC2)) +
@@ -330,7 +349,8 @@ biplot_plot
 ::: callout-tip
 **🚀 If you finish early:** `arrow_scale <- 3` was chosen somewhat arbitrarily to make the arrows visible against the points. Try changing it to `1` and to `6` and re-running the biplot. What changes, and what stays the same?
 
-```r
+``` r
+# ── Part 8.4 · Visualize Results ────────────────────────────────────────
 # Write your code here:
 ```
 :::
@@ -341,7 +361,8 @@ biplot_plot
 
 **▶ Run this:**
 
-```r
+``` r
+# ── Part 9.1 · Interpret Results ────────────────────────────────────────
 pc1_loadings <- iris_pca_model$rotation[, 1]
 pc1_loadings
 

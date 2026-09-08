@@ -17,6 +17,10 @@ format:
 > ## How to use this worksheet
 >
 > Work through each part in order, at your own pace. Type every line of code yourself into a **plain R script** — do not copy-paste. Blocks marked **▶ Run this** are code you should type and execute. Blocks marked **✏️ Your turn** ask you to write, modify, or answer something. Boxes marked **🚀 If you finish early** are optional bonus material that goes a bit further than what we covered in lecture.
+>
+> **Every grey `r` box below is code you type into an R script — not into the Console.** Before you start: **File → New File → R Script**, and save it as `12_analysis_of_variance.R` in your project's `scripts/` folder. Then work down the worksheet, adding each block to the bottom of that one script, in order.
+>
+> **Type the `# ── Part …` header comment at the top of each block, too.** Those comment lines are not decoration — they are how your script stays navigable, how you find your way back to a block that broke, and how I find your work when I read your script. A block with no header comment is a block I cannot place. In RStudio they also show up in the document outline (the `≡` button at the bottom-left of the editor) so you can jump straight to any part.
 
 ------------------------------------------------------------------------
 
@@ -25,6 +29,7 @@ format:
 **▶ Run this in your Script:**
 
 ``` r
+# ── Part 1.1 · Setup and Data ───────────────────────────────────────────
 library(performance)
 library(FSA)
 library(car)         # functions for regression diagnostics, ANOVA, and VIF
@@ -43,6 +48,7 @@ c_df
 **▶ Run this** — visualize the data:
 
 ``` r
+# ── Part 1.2 · Setup and Data ───────────────────────────────────────────
 c_plot <- ggplot(c_df, aes(x = treatment, y = phase_shift, color = treatment)) +
   geom_point(position = position_jitter(width = 0.1)) +
   stat_summary(fun = mean, geom = "point", size = 5, shape = 18) +
@@ -53,6 +59,7 @@ c_plot
 **▶ Run this** — fit the ANOVA (as a linear model, exactly like a regression) and get the ANOVA table:
 
 ``` r
+# ── Part 1.3 · Setup and Data ───────────────────────────────────────────
 model_aov <- lm(phase_shift ~ treatment, data = c_df)
 summary(model_aov)
 
@@ -65,6 +72,7 @@ Anova(model_aov)
 **🚀 If you finish early:** Compute group means, SDs, and n by hand with `group_by()` + `summarize()`, and confirm they match what you'd expect from `c_plot`.
 
 ``` r
+# ── Part 1.4 · Setup and Data ───────────────────────────────────────────
 # Write your code here:
 ```
 :::
@@ -78,6 +86,7 @@ ANOVA has the same assumptions as the two-sample t-test, but applied to all k gr
 **▶ Run this** — the base R diagnostic plots:
 
 ``` r
+# ── Part 2.1 · Assumptions and Diagnostics ──────────────────────────────
 par(mfrow = c(2, 2))
 plot(model_aov)
 par(mfrow = c(1, 1))
@@ -86,12 +95,14 @@ par(mfrow = c(1, 1))
 **▶ Run this** — the `performance` package's all-in-one diagnostics:
 
 ``` r
+# ── Part 2.2 · Assumptions and Diagnostics ──────────────────────────────
 check_model(model_aov)
 ```
 
 **▶ Run this** — Levene's test (H₀: variances are homogeneous — you *want* a non-significant result):
 
 ``` r
+# ── Part 2.3 · Assumptions and Diagnostics ──────────────────────────────
 levene_test <- leveneTest(phase_shift ~ treatment, data = c_df)
 levene_test
 ```
@@ -99,6 +110,7 @@ levene_test
 **▶ Run this** — Shapiro-Wilk on the residuals (H₀: normally distributed — you *want* a non-significant result):
 
 ``` r
+# ── Part 2.4 · Assumptions and Diagnostics ──────────────────────────────
 shapiro_test <- shapiro.test(residuals(model_aov))
 shapiro_test
 ```
@@ -122,6 +134,7 @@ When ANOVA rejects H₀, we need to determine *which* groups differ. First, we c
 **▶ Run this:**
 
 ``` r
+# ── Part 3.1 · Estimated Marginal Means and Post-Hoc Testing ────────────
 emmeans_df <- emmeans(model_aov, "treatment")
 emmeans_df
 ```
@@ -131,6 +144,7 @@ emmeans_df
 **▶ Run this** — verify EMMs equal the simple group means:
 
 ``` r
+# ── Part 3.2 · Estimated Marginal Means and Post-Hoc Testing ────────────
 group_means <- c_df %>%
   group_by(treatment) %>%
   summarize(
@@ -155,6 +169,7 @@ comparison
 **▶ Run this** — pairwise comparisons with a Sidak adjustment:
 
 ``` r
+# ── Part 3.3 · Estimated Marginal Means and Post-Hoc Testing ────────────
 pairwise_comparisons <- pairs(emmeans_df, adjust = "sidak")
 pairwise_comparisons
 ```
@@ -164,6 +179,7 @@ The **estimate** is the difference between two group means. The **SE** is the st
 **▶ Run this** — letters showing which groups are (not) significantly different:
 
 ``` r
+# ── Part 3.4 · Estimated Marginal Means and Post-Hoc Testing ────────────
 letter_groups <- multcomp::cld(emmeans_df, Letters = letters, adjust = "sidak")
 letter_groups
 ```
@@ -171,6 +187,7 @@ letter_groups
 **▶ Run this** — the same thing in one pipeline:
 
 ``` r
+# ── Part 3.5 · Estimated Marginal Means and Post-Hoc Testing ────────────
 cld_result <- emmeans(model_aov, "treatment") %>%
   multcomp::cld(Letters = letters, adjust = "sidak")
 cld_result
@@ -179,6 +196,7 @@ cld_result
 **▶ Run this** — visualize the EMMs:
 
 ``` r
+# ── Part 3.6 · Estimated Marginal Means and Post-Hoc Testing ────────────
 plot(emmeans_df)
 
 emmip(model_aov, ~ treatment, CIs = TRUE) +
@@ -193,6 +211,7 @@ emmip(model_aov, ~ treatment, CIs = TRUE) +
 **🚀 If you finish early:** Rerun `pairs(emmeans_df, adjust = ...)` with `"bonferroni"` and `"tukey"` instead of `"sidak"`. Do the p-values change much for this dataset?
 
 ``` r
+# ── Part 3.7 · Estimated Marginal Means and Post-Hoc Testing ────────────
 # Write your code here:
 ```
 :::
@@ -206,6 +225,7 @@ Instead of comparing every possible pair, sometimes you have specific, planned c
 **▶ Run this:**
 
 ``` r
+# ── Part 4.1 · Planned Comparisons ──────────────────────────────────────
 levels(c_df$treatment)  # See the order
 
 emm <- emmeans(model_aov, "treatment")
@@ -220,6 +240,7 @@ planned_contrasts
 **▶ Run this** — the significance-groups plot:
 
 ``` r
+# ── Part 4.2 · Planned Comparisons ──────────────────────────────────────
 ggplot(c_df, aes(x = treatment, y = phase_shift, color = treatment)) +
   geom_jitter(width = 0.2, alpha = 0.7) +
   stat_summary(fun = mean, geom = "point", size = 4, shape = 18) +
@@ -256,6 +277,7 @@ ________________________________________________________
 **▶ Run this** — build a version of the data that clearly violates ANOVA's assumptions:
 
 ``` r
+# ── Part 6.1 · Non-Parametric ANOVA ─────────────────────────────────────
 set.seed(42)
 v_circ_df <- c_df %>%
   mutate(
@@ -282,6 +304,7 @@ violated_model <- lm(phase_shift_violated ~ treatment,
 **▶ Run this** — visualize and check assumptions on the violated data:
 
 ``` r
+# ── Part 6.2 · Non-Parametric ANOVA ─────────────────────────────────────
 ggplot(v_circ_df,
        aes(x = treatment, y = phase_shift_violated,
            color = treatment)) +
@@ -307,6 +330,7 @@ leveneTest(phase_shift_violated ~ treatment,
 **▶ Run this** — the Kruskal-Wallis test, on both the original and violated data:
 
 ``` r
+# ── Part 6.3 · Non-Parametric ANOVA ─────────────────────────────────────
 kruskal_original_result <- kruskal.test(
   phase_shift ~ treatment,
   data = c_df
@@ -329,6 +353,7 @@ anova(violated_model)  # for comparison
 **▶ Run this** — post-hoc tests: pairwise Wilcoxon, and the more appropriate Dunn's test:
 
 ``` r
+# ── Part 6.4 · Non-Parametric ANOVA ─────────────────────────────────────
 pairwise_result <- pairwise.wilcox.test(
   x = v_circ_df$phase_shift_violated,
   g = v_circ_df$treatment,
@@ -354,6 +379,7 @@ Use **Dunn's test** — it's the proper follow-up to Kruskal-Wallis, uses the *s
 **🚀 If you finish early:** Run Dunn's test with `method = "holm"` instead of `"bonferroni"`. Do any conclusions change? Which method is more conservative?
 
 ``` r
+# ── Part 6.5 · Non-Parametric ANOVA ─────────────────────────────────────
 # Write your code here:
 ```
 :::
@@ -395,6 +421,7 @@ Sargent & Lodge (2014) reared young-of-year rusty crayfish (*Orconectes rusticus
 **▶ Run this:**
 
 ``` r
+# ── Part 7.1 · Take-Home Extension ──────────────────────────────────────
 cray_df <- read_csv("data/sargent_lodge_crayfish.csv")
 head(cray_df)
 ```
@@ -415,6 +442,7 @@ ________________________________________________________
 ```
 
 ``` r
+# ── Part 7.2 · Take-Home Extension ──────────────────────────────────────
 # Write your code here:
 ```
 
@@ -429,6 +457,7 @@ ________________________________________________________
 Produce one publication-quality figure comparing growth rate across lakes, with post-hoc groupings shown (e.g. a compact letter display) — proper axis labels, no default `ggplot` grey background — and export it with `ggsave()`.
 
 ``` r
+# ── Part 7.3 · Take-Home Extension ──────────────────────────────────────
 # Write your code here:
 ```
 

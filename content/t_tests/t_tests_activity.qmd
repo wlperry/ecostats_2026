@@ -3,7 +3,7 @@ order: 6
 week: 4
 title: "Activity: T-Tests: One, Two, Paired"
 subtitle: "Comparing means"
-description: "Hands-on worksheet: hypothesis testing framework, assumption checks, and one-sample, two-sample (Student's and Welch's), and paired t-tests on the class pine needle dataset."
+description: "Hands-on worksheet: hypothesis testing framework, assumption checks, and one-sample, two-sample (Student's and Welch's), and paired t-tests on the pine needle data the class collected."
 author: "Bill Perry"
 metadata-files:
   - ../../_templates/activities.yml
@@ -14,9 +14,35 @@ format:
 
 # Worksheet: T-Tests — One, Two, Paired
 
+[📥 Download the data (.csv)](data/pine_data.csv){.btn .btn-primary download="pine_data.csv"} [📥 Download the data (.xlsx)](data/pine_data.xlsx){.btn .btn-primary download="pine_data.xlsx"}
+
 > ## How to use this worksheet
 >
 > Work through each part in order, at your own pace. Type every line of code yourself into a **plain R script** — do not copy-paste. Blocks marked **▶ Run this** are code you should type and execute. Blocks marked **✏️ Your turn** ask you to write, modify, or answer something. Boxes marked **🚀 If you finish early** are optional bonus material that goes a bit further than what we covered in lecture.
+>
+> **Every grey `r` box below is code you type into an R script — not into the Console.** Before you start: **File → New File → R Script**, and save it as `06_t_tests.R` in your project's `scripts/` folder. Then work down the worksheet, adding each block to the bottom of that one script, in order.
+>
+> **Type the `# ── Part …` header comment at the top of each block, too.** Those comment lines are not decoration — they are how your script stays navigable, how you find your way back to a block that broke, and how I find your work when I read your script. A block with no header comment is a block I cannot place. In RStudio they also show up in the document outline (the `≡` button at the bottom-left of the editor) so you can jump straight to any part.
+
+::: callout-important
+## Column names in `pine_data.csv` / `pine_data.xlsx`
+
+Both files hold the **same six columns, with exactly these names**. Type them
+exactly as written — R is case-sensitive, and `Needle_Length` or `needle_length`
+will not work:
+
+| Column             | What it is                                     |
+|--------------------|------------------------------------------------|
+| `source_file`      | the raw team file the row came from             |
+| `team`             | field team — one team = **one tree**            |
+| `replicate`        | needle number within a tree side (1-8)          |
+| `side`             | sun exposure — `"shady"` or `"sunny"`           |
+| `needle_length_mm` | needle length, millimetres                      |
+| `needle_width_mm`  | needle width, millimetres                       |
+
+After you read the file in, run `names(pine_df)` and check the names on your
+screen against this table before you write any other code.
+:::
 
 ------------------------------------------------------------------------
 
@@ -25,13 +51,12 @@ format:
 **▶ Run this in your Script:**
 
 ``` r
-library(readxl)
+# ── Part 1.1 · Setup ────────────────────────────────────────────────────
 library(tidyverse)
 library(patchwork)
 library(car)   # For diagnostic tests
 
-pine_df        <- read_excel("data/class_pine needle length.xlsx")
-pine_switch_df <- read_excel("data/class_pine needle length switched.xlsx")
+pine_df <- read_csv("data/pine_data.csv")
 
 head(pine_df)
 ```
@@ -47,24 +72,22 @@ We need to average the sunny and shady sides so the data is not pseudoreplicated
 **▶ Run this:**
 
 ``` r
+# ── Part 1.2 · Setup ────────────────────────────────────────────────────
 p_df <- pine_df %>%
-  group_by(group, tree_no, tree_char, side) %>%
-  summarise(length_mm = mean(length_mm, na.rm = TRUE), .groups = "drop")
+  group_by(team, side) %>%
+  summarise(needle_length_mm = mean(needle_length_mm, na.rm = TRUE),
+            .groups = "drop")
 
-ps_df <- pine_switch_df %>%
-  group_by(group, tree_no, tree_char, side) %>%
-  summarise(length_mm = mean(length_mm, na.rm = TRUE), .groups = "drop")
+shady_df <- p_df %>% filter(side == "shady")
+sunny_df <- p_df %>% filter(side == "sunny")
 
-ps_shady_df <- ps_df %>% filter(side == "shady")
-ps_sunny_df <- ps_df %>% filter(side == "sunny")
-
-ps_shady_df %>% arrange(tree_no) %>% head()
+p_df
 ```
 
-> ⚠️ **Watch out!** `class_pine needle length switched.xlsx` has corrected `sunny`/`shady` labels compared to the original file. From here on we use **`ps_df`** — it's the version that matches the field notes.
+> ⚠️ **Watch out!** 64 rows became 8. That is not data loss — it is the correct sample size. We measured 8 needles per side, but only **4 trees**.
 
 ::: callout-tip
-**🚀 If you finish early:** Write a `group_by()` + `summarize()` pipeline that gets `n`, `mean_length`, `sd_length`, and `se_length` for `ps_df`, grouped by `side` — the same summary the lecture built as `stats_df`.
+**🚀 If you finish early:** Write a `group_by()` + `summarize()` pipeline that gets `n`, `mean_length`, `sd_length`, and `se_length` for `p_df`, grouped by `side` — the same summary the lecture built as `stats_df`.
 :::
 
 ------------------------------------------------------------------------
@@ -91,6 +114,7 @@ ________________________________________________________
 **🚀 If you finish early:** A two-sample t-test on 14 degrees of freedom produces an observed t-statistic of 2.31. Use `2 * (1 - pt(2.31, df = 14))` to compute the two-tailed p-value by hand, then compare it to the p-value table from lecture (p \< 0.05 = moderate-to-strong evidence). Is H₀ rejected at α = 0.05?
 
 ``` r
+# ── Part 2.1 · Hypothesis Testing Framework ─────────────────────────────
 # Write your code here:
 ```
 :::
@@ -113,26 +137,28 @@ Ha: mu ≠ _____ (the mean needle length on the shady side is not _____ mm)
 **▶ Run this:**
 
 ``` r
+# ── Part 3.1 · One-Sample t-Test ────────────────────────────────────────
 # The test below is about the SHADY side, so check normality of that group
 # -- not the two sides pooled together.
-qqPlot(ps_shady_df$length_mm,
+qqPlot(shady_df$needle_length_mm,
        main = "QQ Plot — shady side needle length",
        ylab = "Sample Quantiles")
 
-shapiro.test(ps_shady_df$length_mm)
+shapiro.test(shady_df$needle_length_mm)
 ```
 
 ✏️ **Your turn:** For the Shapiro-Wilk test, what is the null hypothesis? Do we want a significant or a non-significant result here? `________________________`
 
-✏️ **Your turn:** Why do we check the shady side on its own rather than `ps_df$length_mm` (both sides pooled)? What would pooling two groups with different means do to the shape of the distribution? `________________________`
+✏️ **Your turn:** Why do we check the shady side on its own rather than `p_df$needle_length_mm` (both sides pooled)? What would pooling two groups with different means do to the shape of the distribution? `________________________`
 
 **Check assumptions — outliers:**
 
 **▶ Run this:**
 
 ``` r
-ps_df %>%
-  ggplot(aes(x = side, y = length_mm, fill = side)) +
+# ── Part 3.2 · One-Sample t-Test ────────────────────────────────────────
+p_df %>%
+  ggplot(aes(x = side, y = needle_length_mm, fill = side)) +
   geom_boxplot() +
   labs(x = "side", y = "Length (mm)", fill = "side")
 ```
@@ -142,10 +168,11 @@ ps_df %>%
 **▶ Run this:**
 
 ``` r
-ps_shade_mean <- mean(ps_shady_df$length_mm, na.rm = TRUE)
-cat("Mean:", round(ps_shade_mean, 1), "mm\n")
+# ── Part 3.3 · One-Sample t-Test ────────────────────────────────────────
+shady_mean <- mean(shady_df$needle_length_mm, na.rm = TRUE)
+cat("Mean:", round(shady_mean, 1), "mm\n")
 
-t_test_result <- t.test(ps_shady_df$length_mm, mu = 15)
+t_test_result <- t.test(shady_df$needle_length_mm, mu = 15)
 t_test_result
 ```
 
@@ -173,9 +200,10 @@ ________________________________________________________
 $$95\% \text{ CI} = \bar{x} \pm t_{\alpha/2, n-1} \times \frac{s}{\sqrt{n}}$$
 
 ``` r
-shady_mean <- mean(ps_shady_df$length_mm, na.rm = TRUE)
-shady_se   <- sd(ps_shady_df$length_mm, na.rm = TRUE) / sum(!is.na(ps_shady_df$length_mm))^.5
-shady_n    <- sum(!is.na(ps_shady_df$length_mm))
+# ── Part 3.4 · One-Sample t-Test ────────────────────────────────────────
+shady_mean <- mean(shady_df$needle_length_mm, na.rm = TRUE)
+shady_se   <- sd(shady_df$needle_length_mm, na.rm = TRUE) / sum(!is.na(shady_df$needle_length_mm))^.5
+shady_n    <- sum(!is.na(shady_df$needle_length_mm))
 
 t_critical <- qt(0.975, df = shady_n - 1)
 shady_ci_lower <- shady_mean - t_critical * shady_se
@@ -205,12 +233,13 @@ Ha = ________________________________________________________
 **▶ Run this:**
 
 ``` r
-group_summary <- ps_df %>%
+# ── Part 4.1 · Two-Sample t-Test ────────────────────────────────────────
+group_summary <- p_df %>%
   group_by(side) %>%
   summarize(
-    mean_length = mean(length_mm, na.rm = TRUE),
-    sd_length   = sd(length_mm, na.rm = TRUE),
-    n           = sum(!is.na(length_mm)),
+    mean_length = mean(needle_length_mm, na.rm = TRUE),
+    sd_length   = sd(needle_length_mm, na.rm = TRUE),
+    n           = sum(!is.na(needle_length_mm)),
     se_length   = sd_length / sqrt(n),
     .groups = "drop"
   )
@@ -223,7 +252,8 @@ group_summary %>%
 **▶ Run this** — plot the mean ± SE directly:
 
 ``` r
-ggplot(ps_df, aes(x = side, y = length_mm, color = side)) +
+# ── Part 4.2 · Two-Sample t-Test ────────────────────────────────────────
+ggplot(p_df, aes(x = side, y = needle_length_mm, color = side)) +
   stat_summary(fun = mean, geom = "point") +
   stat_summary(fun.data = mean_se, geom = "errorbar", width = 0.2) +
   labs(x = "side", y = "Mean Length (mm)") +
@@ -235,11 +265,12 @@ ggplot(ps_df, aes(x = side, y = length_mm, color = side)) +
 **▶ Run this:**
 
 ``` r
-normality_results <- ps_df %>%
+# ── Part 4.3 · Two-Sample t-Test ────────────────────────────────────────
+normality_results <- p_df %>%
   group_by(side) %>%
   summarize(
-    shapiro_stat    = shapiro.test(length_mm)$statistic,
-    shapiro_p_value = shapiro.test(length_mm)$p.value,
+    shapiro_stat    = shapiro.test(needle_length_mm)$statistic,
+    shapiro_p_value = shapiro.test(needle_length_mm)$p.value,
     normal_distribution = if_else(shapiro_p_value > 0.05, "Normal", "Non-normal"))
 normality_results
 ```
@@ -249,7 +280,8 @@ normality_results
 **▶ Run this:**
 
 ``` r
-levene_result <- leveneTest(length_mm ~ factor(side), data = ps_df)
+# ── Part 4.4 · Two-Sample t-Test ────────────────────────────────────────
+levene_result <- leveneTest(needle_length_mm ~ factor(side), data = p_df)
 levene_result
 ```
 
@@ -260,13 +292,14 @@ levene_result
 **▶ Run this:**
 
 ``` r
+# ── Part 4.5 · Two-Sample t-Test ────────────────────────────────────────
 # Standard t-test (equal variances assumed)
-t_test_result <- t.test(length_mm ~ side, data = ps_df, var.equal = TRUE)
+t_test_result <- t.test(needle_length_mm ~ side, data = p_df, var.equal = TRUE)
 print("Standard two-sample t-test:")
 print(t_test_result)
 
 # Welch's t-test (unequal variances allowed)
-welch_test_result <- t.test(length_mm ~ side, data = ps_df, var.equal = FALSE)
+welch_test_result <- t.test(needle_length_mm ~ side, data = p_df, var.equal = FALSE)
 print("Welch's two-sample t-test:")
 print(welch_test_result)
 ```
@@ -285,11 +318,12 @@ ________________________________________________________
 $$t = \frac{\bar{x}_1 - \bar{x}_2}{S_p\sqrt{\frac{1}{n_1} + \frac{1}{n_2}}}$$
 
 ``` r
-n1 <- sum(!is.na(ps_shady_df$length_mm)); n2 <- sum(!is.na(ps_sunny_df$length_mm))
-s1 <- sd(ps_shady_df$length_mm); s2 <- sd(ps_sunny_df$length_mm)
+# ── Part 4.6 · Two-Sample t-Test ────────────────────────────────────────
+n1 <- sum(!is.na(shady_df$needle_length_mm)); n2 <- sum(!is.na(sunny_df$needle_length_mm))
+s1 <- sd(shady_df$needle_length_mm); s2 <- sd(sunny_df$needle_length_mm)
 
 sp <- sqrt(((n1 - 1) * s1^2 + (n2 - 1) * s2^2) / (n1 + n2 - 2))
-t_by_hand <- (mean(ps_shady_df$length_mm) - mean(ps_sunny_df$length_mm)) /
+t_by_hand <- (mean(shady_df$needle_length_mm) - mean(sunny_df$needle_length_mm)) /
   (sp * sqrt(1/n1 + 1/n2))
 
 t_by_hand
@@ -307,13 +341,15 @@ A paired t-test compares two measurements taken from the *same* subject — here
 **▶ Run this:**
 
 ``` r
-ps_wide_df <- ps_df %>%
+# ── Part 5.1 · Paired t-Test ────────────────────────────────────────────
+p_wide_df <- p_df %>%
   pivot_wider(
     names_from = "side",
-    values_from = length_mm
+    values_from = needle_length_mm
   )
 
-paired_t_test_result <- t.test(ps_wide_df$sunny, ps_wide_df$shady, paired = TRUE)
+# shady first, then sunny — the same order the two-sample test used
+paired_t_test_result <- t.test(p_wide_df$shady, p_wide_df$sunny, paired = TRUE)
 paired_t_test_result
 ```
 
@@ -323,6 +359,7 @@ paired_t_test_result
 **🚀 If you finish early — compare the paired and two-sample p-values side by side:**
 
 ``` r
+# ── Part 5.2 · Paired t-Test ────────────────────────────────────────────
 cat("Two-sample p-value:", t_test_result$p.value, "\n")
 cat("Paired p-value:     ", paired_t_test_result$p.value, "\n")
 ```
@@ -391,6 +428,7 @@ The **Island Rule** predicts that when mainland species colonize islands, small-
 **▶ Run this:**
 
 ``` r
+# ── Part 7.1 · Take-Home Extension ──────────────────────────────────────
 mice_df <- read_csv("data/mice_weights.csv")
 head(mice_df)
 ```
@@ -411,6 +449,7 @@ ________________________________________________________
 ```
 
 ``` r
+# ── Part 7.2 · Take-Home Extension ──────────────────────────────────────
 # Write your code here:
 ```
 
@@ -436,6 +475,7 @@ ________________________________________________________
 ```
 
 ``` r
+# ── Part 7.3 · Take-Home Extension ──────────────────────────────────────
 # Write your code here:
 ```
 
@@ -450,6 +490,7 @@ ________________________________________________________
 Produce one publication-quality figure summarizing island vs. mainland body mass — proper axis labels, no default `ggplot` grey background — and export it with `ggsave()`.
 
 ``` r
+# ── Part 7.4 · Take-Home Extension ──────────────────────────────────────
 # Write your code here:
 ```
 

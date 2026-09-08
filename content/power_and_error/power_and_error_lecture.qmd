@@ -3,7 +3,7 @@ metadata-files:
   - ../../_templates/_lectures.yml
 title: "Lecture: Power and Type I & II Error"
 subtitle: "Errors and power"
-description: "P-values and the hypothesis-testing framework, Type I/II error, effect size, statistical power, error bars, and pseudoreplication — on the mouse-mass and class pine needle datasets."
+description: "P-values and the hypothesis-testing framework, Type I/II error, effect size, statistical power, error bars, and pseudoreplication — on the mouse-mass and pine needle datasets."
 categories: [Inference, Power]
 order: 8
 week: 5
@@ -232,7 +232,7 @@ Note there's a difference in how the hypotheses are stated for a one-sample vs. 
 ::::
 
 :::: {.column width="40%"}
-```{r}
+```{r power-and-error-01}
 #| echo: false
 #| message: false
 #| warning: false
@@ -397,7 +397,7 @@ The farther apart the means, or the lower the variance, the lower the β error �
 ::::
 
 :::: {.column width="40%"}
-```{r}
+```{r power-and-error-02}
 #| echo: false
 #| message: false
 #| warning: false
@@ -455,11 +455,10 @@ Given the following scenarios, identify whether a Type I or Type II error might 
 - **Pooled standard deviation** — the combined standard deviation of both groups, weighted by their respective degrees of freedom
 - **Cohen's d** — the standardized difference between means; here assuming a difference of 1 unit (g)
 
-```{r}
+```{r power-and-error-03}
 library(car)
 library(patchwork)
 library(tidyverse)
-library(readxl)
 
 m_df <- read_csv("data/mice_weights.csv") %>%
   filter(!is.na(mass_g))
@@ -493,26 +492,73 @@ power
 
 ::::::: columns
 :::: {.column width="60%"}
-```{r}
-pine_switch_df <- read_excel("data/class_pine needle length switched.xlsx")
-ps_df <- pine_switch_df %>%
-  group_by(group, tree_no, tree_char, side) %>%
-  summarise(length_mm = mean(length_mm, na.rm=TRUE))
+```{r power-and-error-04}
+#| message: false
+pine_df <- read_csv("data/pine_data.csv")
 
-ps_shady_df <- ps_df %>% filter(side == "shady")
-ps_sunny_df <- ps_df %>% filter(side == "sunny")
+# the two-stage summary again: one value per tree per side
+p_df <- pine_df %>%
+  group_by(team, side) %>%
+  summarise(needle_length_mm = mean(needle_length_mm, na.rm = TRUE),
+            .groups = "drop")
 
-pine_alpha <- 0.05
+shady_df <- p_df %>% filter(side == "shady")
+sunny_df <- p_df %>% filter(side == "sunny")
 
-pine_n1 <- nrow(ps_shady_df)
-pine_n2 <- nrow(ps_sunny_df)
+pine_n <- nrow(shady_df)
 
-pine_sd_pooled <- sqrt((var(ps_shady_df$length_mm) * (pine_n1-1) +
-                       var(ps_sunny_df$length_mm) * (pine_n2-1)) /
-                       (pine_n1 + pine_n2 - 2))
+pine_sd_pooled <- sqrt((var(shady_df$needle_length_mm) * (pine_n - 1) +
+                        var(sunny_df$needle_length_mm) * (pine_n - 1)) /
+                       (2 * pine_n - 2))
 
-cat("Pooled SD:", round(pine_sd_pooled, 2), "mm\n\n")
+observed_diff <- abs(mean(shady_df$needle_length_mm) -
+                     mean(sunny_df$needle_length_mm))
+
+cat("Trees per side:", pine_n, "\n")
+cat("Observed difference:", round(observed_diff, 2), "mm\n")
+cat("Pooled SD:", round(pine_sd_pooled, 2), "mm\n")
 ```
+
+[📥 Download the data](data/pine_data.csv){.btn .btn-primary download="pine_data.csv"}
+::::
+
+:::: {.column width="40%"}
+```{r power-and-error-05}
+cohens_d <- observed_diff / pine_sd_pooled
+cat("Cohen's d =", round(cohens_d, 2), "\n\n")
+
+pine_power <- power.t.test(n = pine_n,
+                           delta = cohens_d,
+                           sd = 1,
+                           sig.level = 0.05,
+                           type = "two.sample",
+                           alternative = "two.sided")
+
+cat("Power to detect it:", round(pine_power$power, 3), "\n")
+```
+
+::: callout-important
+**⚠️ 11% power**
+
+Even if this difference is completely real, an unpaired study with 4 trees per side would **miss it about 9 times out of 10.**
+:::
+::::
+:::::::
+
+## How Many Trees Would We Have Needed?
+
+::::::: columns
+:::: {.column width="60%"}
+Turn the calculation around: instead of asking "what power do we have?", ask **"what n would we need?"** This is the version you should run *before* collecting anything.
+
+```{r power-and-error-06}
+# n per side for the conventional 80% power, unpaired
+power.t.test(delta = cohens_d, sd = 1,
+             power = 0.80, sig.level = 0.05,
+             type = "two.sample")$n
+```
+
+**44 trees per side.** We collected four.
 
 ::: callout-note
 **📖 Reference**
@@ -522,21 +568,59 @@ Whitlock & Schluter, Ch. 14 — Designing Experiments, includes planning the sam
 ::::
 
 :::: {.column width="40%"}
-```{r}
-# More realistic effect sizes to test:
-observed_diff <- abs(mean(ps_shady_df$length_mm) - mean(ps_sunny_df$length_mm))
-pine_effect_size_observed <- observed_diff / pine_sd_pooled
-cat("Effect size for observed", round(observed_diff, 2), "mm difference: Cohen's d =", round(pine_effect_size_observed, 2), "\n")
+::: callout-warning
+**⚠️ This is why "we found no difference" is usually the wrong conclusion**
 
-pine_power_observed <- power.t.test(n = min(pine_n1, pine_n2),
-                                   delta = pine_effect_size_observed,
-                                   sd = 1,
-                                   sig.level = pine_alpha,
-                                   type = "two.sample",
-                                   alternative = "two.sided")
+A non-significant result from an underpowered study does not mean there is no effect. It means **the study could never have found one.**
 
-cat("Power for observed", round(observed_diff, 2), "mm difference:", round(pine_power_observed$power, 3), "\n")
+"Absence of evidence is not evidence of absence" — but only if you actually check your power.
+:::
+::::
+:::::::
+
+## Pairing Buys You Power — Here Is How Much
+
+::::::: columns
+:::: {.column width="60%"}
+The paired design does not just give a smaller p-value. It changes the **whole economics of the study.**
+
+```{r power-and-error-07}
+p_wide_df <- p_df %>%
+  pivot_wider(names_from = side, values_from = needle_length_mm)
+
+diffs <- p_wide_df$shady - p_wide_df$sunny
+dz    <- abs(mean(diffs)) / sd(diffs)      # effect size for the DIFFERENCES
+
+cat("Differences:", round(diffs, 2), "\n")
+cat("Cohen's dz =", round(dz, 2), "\n\n")
+
+cat("Paired power at n = 4:",
+    round(power.t.test(n = 4, delta = dz, sd = 1,
+                       type = "paired")$power, 3), "\n")
+
+cat("Trees needed for 80% power, paired:",
+    ceiling(power.t.test(delta = dz, sd = 1, power = 0.80,
+                         type = "paired")$n), "\n")
 ```
+::::
+
+:::: {.column width="40%"}
+| Design | Power at n = 4 | Trees for 80% |
+|-----------|-----------|-----------|
+| Unpaired | 11% | **44 per side** |
+| Paired | 46% | **7 total** |
+
+::: callout-important
+**Same trees. Same needles. Same measurements.**
+
+Pairing takes this study from needing **44 trees per side** to needing **7 trees**. That is not a statistical trick — it is what respecting the design of your own experiment is worth.
+:::
+
+::: callout-tip
+**🖐 Now the p-value makes sense**
+
+Our paired test gave p = 0.072. With 46% power, landing just outside significance is exactly what you should expect — not a surprise, and not evidence of no effect.
+:::
 ::::
 :::::::
 
@@ -544,20 +628,28 @@ cat("Power for observed", round(observed_diff, 2), "mm difference:", round(pine_
 
 ::::::: columns
 :::: {.column width="60%"}
-Statistical power represents the probability of detecting a true effect (rejecting the null hypothesis when it is false). With a power of 97%, there's a 97% chance of detecting a true difference of X units between the means of the two groups, if such a difference actually exists.
+Statistical power is the probability of detecting a true effect — of rejecting the null hypothesis when it really is false. Power of 80% means an 80% chance of finding a difference of a given size, **if that difference is actually there.**
 
-A power analysis like this is typically done for one of these purposes:
+A power analysis is typically done for one of these purposes:
 
-1. Before data collection, to determine required sample size
-2. After a study, to evaluate if the sample size was adequate
-3. To determine the minimum detectable effect size with the given sample
-::::
+1. **Before data collection**, to determine required sample size — by far the most useful
+2. After a study, to evaluate whether the sample size was adequate
+3. To determine the minimum detectable effect size with the sample you have
 
-:::: {.column width="40%"}
 ::: callout-note
 **✅ Key idea**
 
-With 97% power, this test has excellent ability to detect the specified effect size. Generally, **80% power is considered acceptable** — so 97% indicates a very well-powered study for detecting a difference of this size between the groups.
+**80% power is the usual convention** for an adequately powered study. Our unpaired pine analysis has 11%, and our paired analysis 46% — both below it. This is a *pilot study*: enough to estimate an effect size and plan a real one, not enough to settle the question.
+:::
+::::
+
+:::: {.column width="40%"}
+::: callout-warning
+**⚠️ A warning about "post-hoc power"**
+
+Computing power *from the effect size you observed* — which is exactly what we just did — is a known trap. It is fine for what we used it for: **planning the next study**.
+
+It is **not** a valid way to explain away a non-significant result, because observed power is just a re-expression of the p-value. If someone reports "our result was non-significant but we had low power," they have said the same thing twice.
 :::
 ::::
 :::::::
@@ -588,7 +680,7 @@ When interpreting graphs:
 ::::
 
 :::: {.column width="40%"}
-```{r}
+```{r power-and-error-08}
 #| echo: false
 #| message: false
 #| warning: false
@@ -665,10 +757,18 @@ ggplot() +
 - Identify the true experimental unit
 - Use appropriate statistical techniques (e.g., mixed models)
 - Be clear about the level of replication
+
+::: callout-important
+**We have been doing this all along**
+
+Our pine needle data has 64 rows. Analysed as 64 independent needles it would look like a large, well-powered study. Analysed honestly — **4 trees** — it has 11% power unpaired, 46% paired.
+
+Pseudoreplication would not have made the study better. It would only have made us **believe** it was.
+:::
 ::::
 
 :::: {.column width="40%"}
-```{r}
+```{r power-and-error-09}
 #| echo: false
 #| message: false
 #| warning: false

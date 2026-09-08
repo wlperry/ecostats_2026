@@ -122,6 +122,8 @@ Darlingtonia californica (Cobra Lily)
 
 ## Loading the Data
 
+[📥 Download the data](data/darlingtonia.csv){.btn .btn-primary download="darlingtonia.csv"}
+
 ### Step 1: Import and Prepare the Data
 
 ::: panel
@@ -132,7 +134,7 @@ Darlingtonia californica (Cobra Lily)
 #| paged-print: false
 
 # Load the data
-darlingtonia <- read_csv("darlingtonia.csv")
+darlingtonia <- read_csv("data/darlingtonia.csv")
 
 # View the structure
 head(darlingtonia)
@@ -551,7 +553,7 @@ Conceptual diagram of PCA: reducing 2 variables to 1 principal axis
 # scale. = TRUE: scale variables (sd = 1)
 pca_result <- prcomp(darl_numeric, 
                      center = TRUE, 
-                     scale = TRUE)
+                     scale. = TRUE)
 
 # What's in the result?
 names(pca_result)
@@ -1262,7 +1264,7 @@ site_dist
 ## Visualization of the distances
 
 ::: panel
-```{r euclidian distances}
+```{r euclidean-distances}
 #| echo: true
 #| message: false
 #| warning: false
@@ -1432,8 +1434,6 @@ ggplot(pc_scores_outliers, aes(x = PC1, y = PC2)) +
 
 ## PCA vs. Other Ordination Methods
 
-## Comparison Table
-
 | Method | Data Type | Distance/Similarity | Linear? | Eigenanalysis? |
 |----|----|----|----|----|
 | **PCA** | Continuous, correlated | Euclidean (correlation) | Yes | Yes |
@@ -1470,9 +1470,7 @@ ggplot(pc_scores_outliers, aes(x = PC1, y = PC2)) +
 
 ## Part 8 · Best Practices and Reporting {.divider}
 
-## Practical Tips for PCA
-
-## Best Practices
+## Practical Tips for PCA — Best Practices
 
 ::::: columns
 ::: {.column width="50%"}
@@ -1487,7 +1485,7 @@ ggplot(pc_scores_outliers, aes(x = PC1, y = PC2)) +
     -   Ensure variables are correlated
     -   Consider removing redundant variables
 3.  **Standardize appropriately**
-    -   Use `scale = TRUE` for different units
+    -   Use `scale. = TRUE` (note the dot) for different units
     -   Consider centering only for same units
 4.  **Check sample size**
     -   Need at least 3× variables
@@ -1523,9 +1521,7 @@ ggplot(pc_scores_outliers, aes(x = PC1, y = PC2)) +
 :::
 :::::
 
-## Reporting PCA Results
-
-## What to Include in Papers/Theses
+## Reporting PCA Results — What to Include
 
 ::::: columns
 ::: {.column width="50%"}
@@ -1575,7 +1571,7 @@ high positive loadings for most morphological and biomass variables..."
 ## Mistakes Students Make:
 
 ❌ **Not standardizing** data with different units\
-→ ✓ Always use `scale = TRUE` for different units
+→ ✓ Always use `scale. = TRUE` for different units
 
 ❌ **Forgetting to check correlations**\
 → ✓ Make correlation plot first
@@ -1788,7 +1784,12 @@ legend("topright", legend = levels(site_factor),
 #| fig-alt: "PCA biplot of plants colored and grouped by site with confidence ellipses, titled with the PERMANOVA p-value testing whether site groups differ significantly in multivariate space."
 # Analysis
 pca_vegan <- rda(darl_matrix)
-permanova <- adonis2(darl_matrix ~ site, data = darlingtonia)
+
+# darl_matrix is SCALED, so it contains negative values. adonis2() defaults
+# to Bray-Curtis, which is undefined for negatives -- R warns "results may be
+# meaningless". For standardized continuous data the right choice is Euclidean.
+permanova <- adonis2(darl_matrix ~ site, data = darlingtonia,
+                     method = "euclidean")
 
 # Visualization
 fviz_pca_biplot(pca_result,
@@ -1812,6 +1813,33 @@ permanova_scaled <- adonis2(darl_scaled ~ site,
                            permutations = 999)
 permanova_scaled
 ```
+:::
+
+## PERMANOVA's Assumption: Equal Dispersion
+
+::: panel
+A significant PERMANOVA can mean groups have different **centroids** (what we
+usually want) *or* merely different **spread**. `betadisper()` separates them.
+
+```{r l16-06b}
+#| collapse: true
+# Are the groups equally variable around their own centroids?
+disp <- betadisper(vegdist(darl_matrix, method = "euclidean"),
+                   darlingtonia$site)
+anova(disp)
+
+# average distance to centroid, by site
+round(tapply(disp$distances, darlingtonia$site, mean), 2)
+```
+
+::: callout-important
+**⚠️ Read both tests together**
+
+- **PERMANOVA significant + dispersion NOT significant** → groups genuinely sit in different places. Clean result.
+- **PERMANOVA significant + dispersion ALSO significant** → the location difference may be partly or wholly a spread difference. Say so.
+
+Here dispersion is **borderline** (F = 2.64, p = 0.055): LEH plants are noticeably more variable (mean distance to centroid 2.83, vs 1.97–2.32 elsewhere). The site effect is strong enough (R² = 0.25, p = 0.001) that it is not *only* dispersion — but an honest write-up mentions it.
+:::
 :::
 
 ## Ordination with Convex Hulls

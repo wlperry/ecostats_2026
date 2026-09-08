@@ -501,7 +501,7 @@ ggplot(param_data, aes(x = x, y = y, color = group)) +
     - `model_ancova <- lm(y ~ A + x, data = mydata)`
   - Model assumes slope of y \~ x relationship is same for all groups in A.
 
-## Building the ANCOVA Model in R
+## Building the ANCOVA Model in R — The Two Formulas
 
 - **ANCOVA (Interaction Model):**
   - What if the slopes are different for each group?
@@ -510,7 +510,7 @@ ggplot(param_data, aes(x = x, y = y, color = group)) +
   - Shorthand for: `lm(y ~ A + x + A:x, data = mydata)`
   - The `A:x` term tests if the slopes are different.
 
-## ANCOVA in R: The 3-Step Workflow
+## ANCOVA in R: Workflow Steps 1 and 2
 
 - **Step 1: Test for Homogeneity of Slopes - Always Start Here**
 
@@ -534,7 +534,7 @@ ggplot(param_data, aes(x = x, y = y, color = group)) +
   - \*\* standard ANCOVA model (`y ~ A + x`) inappropriate\*\*
   - Analysis stops here and interpret interaction (often most interesting result!)
 
-## ANCOVA in R: The 3-Step Workflow
+## ANCOVA in R: Workflow Step 3
 
 - Step 3: Run the ANCOVA (Additive Model)
 
@@ -832,17 +832,22 @@ ggplot(all_data, aes(x = x, y = y, color = group)) +
 # We've already loaded this, but good practice
 partridge <- read.csv("data/partridge.csv")
 
-# Create better names for treatments
+# Build the treatment labels from the DESIGN columns, not from the
+# TREATMEN code order. PARTNERS = number of females (0/1/8);
+# TYPE = 0 newly inseminated (will not mate), 1 virgin (will mate),
+# 9 not applicable. Deriving them this way means the labels cannot
+# drift out of step with the data.
 partridge$treatment <- factor(
-  partridge$TREATMEN,
-  levels = 1:5,
-  labels = c(
-    "No females",
-    "One virgin female daily",
-    "Eight virgin females daily",
-    "One inseminated female daily",
-    "Eight inseminated females daily"
-  )
+  dplyr::case_when(
+    partridge$PARTNERS == 0                       ~ "No females",
+    partridge$PARTNERS == 1 & partridge$TYPE == 1 ~ "One virgin female daily",
+    partridge$PARTNERS == 8 & partridge$TYPE == 1 ~ "Eight virgin females daily",
+    partridge$PARTNERS == 1 & partridge$TYPE == 0 ~ "One inseminated female daily",
+    partridge$PARTNERS == 8 & partridge$TYPE == 0 ~ "Eight inseminated females daily"
+  ),
+  levels = c("No females",
+             "One inseminated female daily", "Eight inseminated females daily",
+             "One virgin female daily",       "Eight virgin females daily")
 )
 
 # 2. Create a plot of the data showing relationship
@@ -860,12 +865,22 @@ ggplot(partridge, aes(x = THORAX, y = LONGEV, color = treatment)) +
 ```
 :::
 
-## Partridge Example: Step 1 - Test Homogeneity
+## Partridge Example: Steps 1–2 — Test Homogeneity of Slopes
+
+```{r l15-10-setup}
+#| include: false
+# Fit ahead of the prose so the inline p-value below has something to read.
+# The visible chunk on the right re-runs the same two lines.
+homo_slopes_model <- lm(LONGEV ~ THORAX * treatment, data = partridge)
+p_interaction <- Anova(homo_slopes_model, type = "III")["THORAX:treatment", "Pr(>F)"]
+```
 
 - **Testing Homogeneity of Slopes**
   - First, fit interaction model.
-  - The p-value for the interaction term (THORAX:treatment) is xl.
-  - Since this value is \> 0.05, we conclude the slopes are homogeneous.
+  - The p-value for the interaction term (`THORAX:treatment`) is **`r round(p_interaction, 4)`**.
+  - Since this is well \> 0.05, we conclude the slopes are homogeneous — the
+    five treatment groups share a common relationship between thorax length
+    and longevity.
   - We can proceed to Step 3 and fit the simpler additive model.
 
 ::: {.panel column="screen"}
@@ -882,7 +897,7 @@ p_interaction <- Anova(homo_slopes_model, type = "III")[
 ```
 :::
 
-## Partridge Example: Step 3 ANCOVA Analysis
+## Partridge Example: Step 3 — Fit the Additive ANCOVA
 
 - Since the interaction was not significant, we re-run the model without it.
   - **Interpretation:**
@@ -941,7 +956,7 @@ pairs(adjusted_means, adjust = "tukey")
 ```
 :::
 
-## Partridge Example: Pairwise Comparisons
+## Partridge Example: Pairwise Comparisons — Compact Letters
 
 - **Pairwise Comparisons of Adjusted Means to see which groups differ**
   - **Interpretation:**
@@ -1296,11 +1311,17 @@ cat(
 
 Here's how you might write up ANCOVA results for publication:
 
-> "We analyzed the effects of mating strategy on male fruitfly longevity using analysis of covariance (ANCOVA), with thorax length as a covariate. Before conducting the main analysis, we tested the homogeneity of slopes assumption and found no significant interaction between treatment and thorax length (F₄,₁₁₅ = xxx , indicating that the effect of body size on longevity was consistent across treatments.
+> "We analyzed the effects of mating opportunity on male fruitfly longevity using analysis of covariance (ANCOVA), with thorax length as a covariate. Before conducting the main analysis, we tested the homogeneity-of-slopes assumption and found no significant treatment × thorax length interaction (F₄,₁₁₅ = 0.09, P = 0.98), indicating that the effect of body size on longevity was consistent across treatments.
 >
-> The ANCOVA revealed significant effects of both treatment (F₄,₁₁₉ = xxxx and thorax length (F₁,₁₁₉ = xxxx, P \< 0.001) on longevity. Thorax length was positively associated with longevity...
+> The ANCOVA revealed significant effects of both treatment (F₄,₁₁₉ = 21.75, P \< 0.001) and thorax length (F₁,₁₁₉ = 119.22, P \< 0.001) on longevity. Thorax length was positively associated with longevity.
 >
-> After adjusting for body size, males with no female partners lived significantly longer (adjusted mean ± SE: xxxx\` days) than males in any other treatment group. Pairwise comparisons using Tukey's HSD test indicated significant differences between most treatment groups (P \< 0.05) except between the 'One virgin female' and 'One inseminated female' groups (P = x)."
+> After adjusting for body size, longevity declined with the number of *virgin* females a male was housed with (adjusted mean ± SE: 54.5 ± 2.11 days for one virgin female and 41.6 ± 2.12 days for eight, versus 61.5 ± 2.11 days for males housed alone). Males housed with **inseminated** females — which do not mate — did not differ from males housed alone (64.2 ± 2.10 and 65.4 ± 2.11 days; Tukey P = 0.90 and P = 0.68). Six of the ten pairwise comparisons were significant at P \< 0.05; the four that were not all involved comparisons among the no-female and inseminated-female groups."
+
+::: callout-important
+**⚠️ Why the inseminated-female groups are the point of the design**
+
+Newly inseminated females will not mate. Males housed with them get the *presence* of females without the *mating*. Those groups are the control that isolates the cost of mating itself from the cost of simply having company — and they show no reduction in longevity at all.
+:::
 
 ## Publication Quality Figure
 

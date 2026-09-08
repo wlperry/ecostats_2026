@@ -33,7 +33,7 @@ A brief review:
 
 - Hypotheses
 - One- and two-sided t-tests
-- Power — what it is and why we talk about it
+- One-sample, two-sample, and **paired** t-tests — and how much more the paired test got out of the same four trees
 - **Assumptions of parametric tests**
 - What next — when assumptions fail!
   - we will always cover parametric tests first
@@ -78,14 +78,14 @@ Let's work with the lake trout data, as the weights are pretty cool and the assu
 
 ::::::: columns
 :::: {.column width="60%"}
-```{r}
+```{r nonparametric-t-tests-01}
 # Load libraries
 library(car)          # For diagnostic tests
 library(patchwork)
 library(tidyverse)    # For data manipulation and visualization
 ```
 
-```{r}
+```{r nonparametric-t-tests-02}
 #| message: false
 #| warning: false
 #| fig-height: 3
@@ -109,7 +109,7 @@ Six lakes' worth of trout: `sampling_site`, `species`, `length_mm`, `mass_g`, `l
 
 ::::::: columns
 :::: {.column width="60%"}
-```{r}
+```{r nonparametric-t-tests-03}
 # I had accidentally asked you to do mode in HW2 without
 # telling you how... here is one approach
 lt_df %>%
@@ -206,7 +206,7 @@ Let's test normality for one lake — **`NE 12`** — as if we were going to run
 ::::
 
 :::: {.column width="40%"}
-```{r}
+```{r nonparametric-t-tests-04}
 #| echo: false
 #| message: false
 #| warning: false
@@ -272,7 +272,7 @@ combined_stats_plot
 ::::
 
 :::: {.column width="40%"}
-```{r}
+```{r nonparametric-t-tests-05}
 #| echo: false
 #| message: false
 #| warning: false
@@ -295,7 +295,7 @@ shapiro_test
 ::::
 
 :::: {.column width="40%"}
-```{r}
+```{r nonparametric-t-tests-06}
 #| echo: false
 #| message: false
 #| warning: false
@@ -326,7 +326,7 @@ Outliers are a problem for non-parametric tests as well — switching to a rank-
 ::::
 
 :::: {.column width="40%"}
-```{r}
+```{r nonparametric-t-tests-07}
 #| echo: false
 #| fig-width: 3.2
 #| fig-height: 2.8
@@ -350,7 +350,7 @@ What if t-test assumptions fail? Alternative tests, with more relaxed assumption
 ::::
 
 :::: {.column width="40%"}
-```{r}
+```{r nonparametric-t-tests-08}
 #| echo: false
 #| fig-width: 3.2
 #| fig-height: 4
@@ -372,7 +372,7 @@ ne12_histo_plot + ne12_box_plot + ne12_qq_plot + plot_layout(ncol = 1)
 ::::
 
 :::: {.column width="40%"}
-```{r}
+```{r nonparametric-t-tests-09}
 #| message: false
 #| warning: false
 #| echo: false
@@ -431,7 +431,7 @@ In some cases, data can be mathematically "transformed" to meet the assumptions 
 ::::
 
 :::: {.column width="40%"}
-```{r}
+```{r nonparametric-t-tests-10}
 #| echo: false
 #| message: false
 #| warning: false
@@ -459,7 +459,7 @@ Let's compare a parametric t-test to a Welch's t-test:
 ::::
 
 :::: {.column width="40%"}
-```{r}
+```{r nonparametric-t-tests-11}
 #| echo: false
 #| message: false
 #| warning: false
@@ -514,7 +514,7 @@ Whitlock & Schluter, Ch. 13, covers the Mann-Whitney U test and Wilcoxon signed-
 
 ::::::: columns
 :::: {.column width="60%"}
-```{r}
+```{r nonparametric-t-tests-12}
 #| echo: false
 wilcox_test_result <- wilcox.test(
   mass_g ~ lake,
@@ -536,6 +536,134 @@ The test statistic is `W`, not `t` — a signal you're reading rank-based test o
 ::::
 :::::::
 
+## Part 5b · Back to Our Pine Needles {.divider}
+
+## The same question, the non-parametric way
+
+::::::: columns
+:::: {.column width="60%"}
+Last week we tested our own needle data two ways. Let's run the rank-based versions of **exactly the same two comparisons** and see what changes.
+
+```{r nonparametric-t-tests-13}
+#| message: false
+pine_df <- read_csv("data/pine_data.csv")
+
+# same two-stage summary as last week: one value per tree per side
+p_df <- pine_df %>%
+  group_by(team, side) %>%
+  summarise(needle_length_mm = mean(needle_length_mm, na.rm = TRUE),
+            .groups = "drop")
+
+p_wide_df <- p_df %>%
+  pivot_wider(names_from = side, values_from = needle_length_mm)
+
+p_wide_df
+```
+
+[📥 Download the data](data/pine_data.csv){.btn .btn-primary download="pine_data.csv"}
+::::
+
+:::: {.column width="40%"}
+::: callout-note
+**✅ Reminder**
+
+4 teams, 4 trees, both sides of each tree. The data are **paired** by design.
+:::
+::::
+:::::::
+
+## Running both rank-based tests
+
+::::::: columns
+:::: {.column width="60%"}
+```{r nonparametric-t-tests-14}
+#| warning: false
+# Unpaired: Mann-Whitney U  (the t-test's two-sample partner)
+wilcox.test(needle_length_mm ~ side, data = p_df)
+```
+
+```{r nonparametric-t-tests-15}
+#| warning: false
+# Paired: Wilcoxon signed-rank  (the paired t-test's partner)
+wilcox.test(p_wide_df$shady, p_wide_df$sunny, paired = TRUE)
+```
+::::
+
+:::: {.column width="40%"}
+::: callout-tip
+**🖐 Notice `V = 0`**
+
+The signed-rank statistic is **zero** — meaning *every single tree* moved in the same direction. There is no arrangement of these four trees that would look more consistent.
+
+Notice too that R says **"exact test"** for both. With no tied values it enumerates every possible arrangement rather than approximating. Hold on to that word — the next slide explains why it matters.
+:::
+::::
+:::::::
+
+## Same answer, less power
+
+::::::: columns
+:::: {.column width="60%"}
+| Comparison | Parametric | Non-parametric |
+|------------------|------------------|------------------|
+| Unpaired (2 groups) | t-test **p = 0.425** | Mann-Whitney **p = 0.486** |
+| Paired (4 trees) | paired t **p = 0.072** | signed-rank **p = 0.125** |
+
+**Both methods tell the same story:**
+
+- the unpaired comparison finds nothing
+- the paired comparison is far more sensitive
+- the direction is identical — shady needles shorter
+
+**But the rank test costs you.** In both rows the non-parametric p-value is larger. That is the price of throwing away the actual measurements and keeping only their order.
+::::
+
+:::: {.column width="40%"}
+::: callout-important
+**⚠️ At n = 4, the signed-rank test hits a wall**
+
+With 4 pairs there are only 2⁴ = **16** possible arrangements of plus and minus signs. The most extreme possible result — all four the same way, which is exactly what we got — has a two-sided p of 2/16 = **0.125**.
+
+So with four trees, a Wilcoxon signed-rank test **can never return a p-value below 0.125**, no matter how enormous the effect.
+
+```{r nonparametric-t-tests-16}
+2 / 2^4     # smallest possible two-sided p, 4 pairs
+```
+
+The test did not fail to find our effect. It was **arithmetically incapable** of declaring it significant.
+:::
+::::
+:::::::
+
+## What that means in practice
+
+::::::: columns
+:::: {.column width="60%"}
+- Non-parametric tests are the right call when normality is genuinely broken and cannot be fixed
+- But they are **not free**, and they are **not a safe default**
+- At small n they can be so blunt that no result could ever reach significance — check the floor **before** you run one
+
+::: callout-note
+**✅ Key idea**
+
+Choose the test that matches your data's distribution, not the one that feels safest. For our four trees, the *parametric* paired t-test — whose assumptions we checked and could not reject — is the more honest and more informative choice.
+:::
+::::
+
+:::: {.column width="40%"}
+::: callout-tip
+**🖐 Try it yourself**
+
+How many pairs would you need before a signed-rank test could reach p \< 0.05?
+
+``` r
+2 / 2^5    # 5 pairs
+2 / 2^6    # 6 pairs
+```
+:::
+::::
+:::::::
+
 ## Part 6 · Permutation Tests {.divider}
 
 ## Permutation Tests — Concept
@@ -551,7 +679,7 @@ The test statistic is `W`, not `t` — a signal you're reading rank-based test o
 ::::
 
 :::: {.column width="40%"}
-```{r}
+```{r nonparametric-t-tests-17}
 #| echo: false
 #| message: false
 #| warning: false
@@ -588,7 +716,7 @@ ne12_island_box_plot
 :::: {.column width="60%"}
 In R, using the `perm` package. Assumptions: both groups have a similar distribution; equal variance.
 
-```{r}
+```{r nonparametric-t-tests-18}
 library(perm)
 
 ne12_perm_data <- isl_ne12_df %>%
@@ -608,7 +736,7 @@ observed_diff <- mean(ne12_perm_data, na.rm = TRUE) - mean(island_perm_data, na.
 ::::
 
 :::: {.column width="40%"}
-```{r}
+```{r nonparametric-t-tests-19}
 permTS(ne12_perm_data, island_perm_data,
        alternative = "two.sided",
        method = "exact.mc",
@@ -712,6 +840,7 @@ Weaknesses:
 - Less statistical power than parametric tests
 - Still assumes similar distributions and approximately equal variance
 - Tests median differences rather than mean differences
+- **At small n there is a hard floor on the p-value** — with 4 pairs a signed-rank test cannot go below 0.125 (see Part 5b)
 :::
 
 ::: {.column width="50%"}
@@ -721,7 +850,7 @@ Strengths:
 
 - Distribution-free: doesn't assume a specific distribution
 - Can be applied to many types of test statistics
-- Handles small sample sizes well
+- Valid at small n — the p-value is exact, not an approximation
 - Directly estimates p-values through resampling
 
 Weaknesses:
@@ -729,6 +858,7 @@ Weaknesses:
 - Computationally intensive
 - Assumes exchangeability under the null hypothesis
 - Requires similar distributions and equal variance
+- **Hits the same small-n floor as the rank tests** — being exact is not the same as being powerful, because there are only so many ways to rearrange 8 numbers
 :::
 ::::::
 

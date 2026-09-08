@@ -18,6 +18,10 @@ format:
 >
 > Work through each part in order, at your own pace. Type every line of code yourself into a **plain R script** — do not copy-paste. Blocks marked **▶ Run this** are code you should type and execute. Blocks marked **✏️ Your turn** ask you to write, modify, or answer something. Boxes marked **🚀 If you finish early** are optional bonus material that goes a bit further than what we covered in lecture.
 >
+> **Every grey `r` box below is code you type into an R script — not into the Console.** Before you start: **File → New File → R Script**, and save it as `13_two_way_anova.R` in your project's `scripts/` folder. Then work down the worksheet, adding each block to the bottom of that one script, in order.
+>
+> **Type the `# ── Part …` header comment at the top of each block, too.** Those comment lines are not decoration — they are how your script stays navigable, how you find your way back to a block that broke, and how I find your work when I read your script. A block with no header comment is a block I cannot place. In RStudio they also show up in the document outline (the `≡` button at the bottom-left of the editor) so you can jump straight to any part.
+>
 > This worksheet runs the same species × sex factorial ANOVA on penguin body mass **twice** — once on a balanced subsample, once on the full, naturally unbalanced dataset — so you can see directly how imbalance changes the analysis.
 
 ------------------------------------------------------------------------
@@ -27,6 +31,7 @@ format:
 **▶ Run this in your Script:**
 
 ``` r
+# ── Part 1.1 · Setup and Data ───────────────────────────────────────────
 library(palmerpenguins) # has the data for penguins and they are cute
 library(car)             # For Levene's test and Type III SS
 library(emmeans)         # For estimated marginal means
@@ -45,6 +50,7 @@ head(p_df)
 **▶ Run this** — check for and remove missing values:
 
 ``` r
+# ── Part 1.2 · Setup and Data ───────────────────────────────────────────
 p_df %>%
   summarise_all(~sum(is.na(.)))
 
@@ -58,6 +64,7 @@ head(p_df)
 **▶ Run this** — summary statistics by group:
 
 ``` r
+# ── Part 1.3 · Setup and Data ───────────────────────────────────────────
 p_df %>%
   group_by(spp, sex) %>%
   summarise(
@@ -73,6 +80,7 @@ p_df %>%
 **🚀 If you finish early:** How many species and sexes are there? Compute `n_distinct()` for each column of `p_df` to confirm.
 
 ``` r
+# ── Part 1.4 · Setup and Data ───────────────────────────────────────────
 # Write your code here:
 ```
 :::
@@ -82,6 +90,7 @@ p_df %>%
 # Part 2 · Building a Balanced Dataset
 
 ``` r
+# ── Part 2.1 · Building a Balanced Dataset ──────────────────────────────
 original_n <- p_df %>%
   count(spp, sex) %>%
   arrange(spp, sex)
@@ -106,6 +115,7 @@ balanced_n
 ```
 
 ``` r
+# ── Part 2.2 · Building a Balanced Dataset ──────────────────────────────
 summary_df <- pb_df %>%
   group_by(spp, sex) %>%
   summarise(
@@ -130,6 +140,7 @@ The factorial ANOVA needs the same assumptions checked after fitting the model: 
 **▶ Run this:**
 
 ``` r
+# ── Part 3.1 · Fitting the Balanced Factorial ANOVA ─────────────────────
 options(contrasts = c("contr.sum", "contr.poly"))  # for Type III SS
 
 pb_model <- lm(mass_g ~ spp * sex, data = pb_df)
@@ -147,6 +158,7 @@ Anova(pb_model, type = 3)
 **▶ Run this** — the base R diagnostic plots:
 
 ``` r
+# ── Part 4.1 · Assumptions and Diagnostics ──────────────────────────────
 par(mfrow = c(2, 2))
 plot(pb_model)
 par(mfrow = c(1, 1))
@@ -155,6 +167,7 @@ par(mfrow = c(1, 1))
 **▶ Run this** — build a residuals data frame and check normality:
 
 ``` r
+# ── Part 4.2 · Assumptions and Diagnostics ──────────────────────────────
 pb_resid_df <- augment(pb_model)
 
 ggplot(pb_resid_df, aes(sample = .resid)) +
@@ -172,6 +185,7 @@ shapiro.test(residuals(pb_model))
 **▶ Run this** — check homogeneity of variance:
 
 ``` r
+# ── Part 4.3 · Assumptions and Diagnostics ──────────────────────────────
 leveneTest(mass_g ~ spp * sex, data = pb_df)
 
 ggplot(pb_resid_df, aes(x = .fitted, y = .resid)) +
@@ -203,6 +217,7 @@ ________________________________________________________
 **▶ Run this** — main effect of species:
 
 ``` r
+# ── Part 5.1 · Estimated Marginal Means and Post-Hoc ────────────────────
 sppb_emm <- emmeans(pb_model, ~ spp)
 sppb_emm
 pairs(sppb_emm)
@@ -212,6 +227,7 @@ plot(sppb_emm)
 **▶ Run this** — main effect of sex:
 
 ``` r
+# ── Part 5.2 · Estimated Marginal Means and Post-Hoc ────────────────────
 sexb_emm <- emmeans(pb_model, ~ sex)
 sexb_emm
 pairs(sexb_emm)
@@ -221,6 +237,7 @@ plot(sexb_emm)
 **▶ Run this** — the interaction, compared to raw means:
 
 ``` r
+# ── Part 5.3 · Estimated Marginal Means and Post-Hoc ────────────────────
 interactionb_emm <- emmeans(pb_model, ~ spp * sex)
 interactionb_emm
 
@@ -235,6 +252,7 @@ pairs(interactionb_emm)
 **▶ Run this** — compact letter display and an interaction plot:
 
 ``` r
+# ── Part 5.4 · Estimated Marginal Means and Post-Hoc ────────────────────
 cldb_interaction <- multcomp::cld(interactionb_emm,
                        Letters = letters,
                        adjust = "sidak")
@@ -249,6 +267,7 @@ emmip(pb_model, sex ~ spp, CIs = TRUE) +
 **▶ Run this** — a publication-quality version of that plot:
 
 ``` r
+# ── Part 5.5 · Estimated Marginal Means and Post-Hoc ────────────────────
 pubb_interaction_df <- as.data.frame(interactionb_emm)
 
 pubb_plot <- ggplot(pubb_interaction_df, aes(x = spp, y = emmean,
@@ -268,6 +287,7 @@ pubb_plot
 **🚀 If you finish early:** `emmip(pb_model, sex ~ spp, ...)` plots sex as separate lines across species. Swap the formula to `emmip(pb_model, spp ~ sex, CIs = TRUE)` instead. How does the plot's emphasis change?
 
 ``` r
+# ── Part 5.6 · Estimated Marginal Means and Post-Hoc ────────────────────
 # Write your code here:
 ```
 :::
@@ -279,6 +299,7 @@ pubb_plot
 **▶ Run this** — fit and compare all three types of SS:
 
 ``` r
+# ── Part 6.1 · Understanding Sums-of-Squares Types ──────────────────────
 type1b_anova <- anova(pb_model)          # Type I - order matters!
 type1b_anova
 
@@ -290,6 +311,7 @@ type3b_anova
 ```
 
 ``` r
+# ── Part 6.2 · Understanding Sums-of-Squares Types ──────────────────────
 ssb_comparison_df <- data.frame(
   Effect = c("Species", "Sex", "Species:Sex"),
   Type_I_F = round(type1b_anova$`F value`[1:3], 2),
@@ -318,6 +340,7 @@ Now let's redo the whole analysis on the full, naturally unbalanced `p_df` (not 
 **▶ Run this** — fit the model and check the ANOVA table:
 
 ``` r
+# ── Part 7.1 · The Same Analysis, Unbalanced ────────────────────────────
 pu_model <- lm(mass_g ~ spp * sex, data = p_df)
 summary(pu_model)
 
@@ -327,6 +350,7 @@ Anova(pu_model, type = 3)
 **▶ Run this** — diagnostics:
 
 ``` r
+# ── Part 7.2 · The Same Analysis, Unbalanced ────────────────────────────
 par(mfrow = c(2, 2))
 plot(pu_model)
 par(mfrow = c(1, 1))
@@ -346,6 +370,7 @@ leveneTest(mass_g ~ spp * sex, data = p_df)
 **▶ Run this** — EMMs, pairwise comparisons, and the interaction plot:
 
 ``` r
+# ── Part 7.3 · The Same Analysis, Unbalanced ────────────────────────────
 sppu_emm <- emmeans(pu_model, ~ spp)
 sppu_emm
 pairs(sppu_emm)
@@ -377,6 +402,7 @@ emmip(pu_model, sex ~ spp, CIs = TRUE) +
 **▶ Run this** — compare all three SS types on the unbalanced data:
 
 ``` r
+# ── Part 7.4 · The Same Analysis, Unbalanced ────────────────────────────
 type1_anova <- anova(pu_model)
 type1_anova
 
@@ -401,6 +427,7 @@ ss_comparison_df
 **🚀 If you finish early:** Compute the difference in AIC between `pb_model` (balanced) and `pu_model` (unbalanced) — they're not directly comparable since they're fit to different data, but compare their `summary()$r.squared` instead. Does using *more* (unbalanced) data change how much variance is explained?
 
 ``` r
+# ── Part 7.5 · The Same Analysis, Unbalanced ────────────────────────────
 # Write your code here:
 ```
 :::
@@ -456,6 +483,7 @@ Sargent & Lodge (2014) reared young-of-year rusty crayfish (*Orconectes rusticus
 **▶ Run this:**
 
 ``` r
+# ── Part 9.1 · Take-Home Extension ──────────────────────────────────────
 cray_df <- read_csv("data/sargent_lodge_crayfish.csv")
 head(cray_df)
 
@@ -480,6 +508,7 @@ ________________________________________________________
 ```
 
 ``` r
+# ── Part 9.2 · Take-Home Extension ──────────────────────────────────────
 # Write your code here:
 ```
 
@@ -494,6 +523,7 @@ ________________________________________________________
 Produce one publication-quality interaction plot (growth rate by lake, colored by range) — proper axis labels, no default `ggplot` grey background — and export it with `ggsave()`.
 
 ``` r
+# ── Part 9.3 · Take-Home Extension ──────────────────────────────────────
 # Write your code here:
 ```
 

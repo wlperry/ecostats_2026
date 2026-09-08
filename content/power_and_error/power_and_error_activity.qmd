@@ -14,9 +14,35 @@ format:
 
 # Worksheet: Power and Type I & II Error
 
+[📥 Download the data (.csv)](data/pine_data.csv){.btn .btn-primary download="pine_data.csv"} [📥 Download the data (.xlsx)](data/pine_data.xlsx){.btn .btn-primary download="pine_data.xlsx"}
+
 > ## How to use this worksheet
 >
 > Work through each part in order, at your own pace. Type every line of code yourself into a **plain R script** — do not copy-paste. Blocks marked **▶ Run this** are code you should type and execute. Blocks marked **✏️ Your turn** ask you to write, modify, or answer something. Boxes marked **🚀 If you finish early** are optional bonus material that goes a bit further than what we covered in lecture.
+>
+> **Every grey `r` box below is code you type into an R script — not into the Console.** Before you start: **File → New File → R Script**, and save it as `07_power_and_error.R` in your project's `scripts/` folder. Then work down the worksheet, adding each block to the bottom of that one script, in order.
+>
+> **Type the `# ── Part …` header comment at the top of each block, too.** Those comment lines are not decoration — they are how your script stays navigable, how you find your way back to a block that broke, and how I find your work when I read your script. A block with no header comment is a block I cannot place. In RStudio they also show up in the document outline (the `≡` button at the bottom-left of the editor) so you can jump straight to any part.
+
+::: callout-important
+## Column names in `pine_data.csv` / `pine_data.xlsx`
+
+Both files hold the **same six columns, with exactly these names**. Type them
+exactly as written — R is case-sensitive, and `Needle_Length` or `needle_length`
+will not work:
+
+| Column             | What it is                                     |
+|--------------------|------------------------------------------------|
+| `source_file`      | the raw team file the row came from             |
+| `team`             | field team — one team = **one tree**            |
+| `replicate`        | needle number within a tree side (1-8)          |
+| `side`             | sun exposure — `"shady"` or `"sunny"`           |
+| `needle_length_mm` | needle length, millimetres                      |
+| `needle_width_mm`  | needle width, millimetres                       |
+
+After you read the file in, run `names(pine_df)` and check the names on your
+screen against this table before you write any other code.
+:::
 
 ------------------------------------------------------------------------
 
@@ -25,25 +51,27 @@ format:
 **▶ Run this in your Script:**
 
 ``` r
+# ── Part 1.1 · Setup ────────────────────────────────────────────────────
 library(patchwork)
 library(car)          # For diagnostic tests
 library(tidyverse)    # For data manipulation and visualization
-library(readxl)
 
-pine_switch_df <- read_excel("data/class_pine needle length switched.xlsx")
-head(pine_switch_df)
+pine_df <- read_csv("data/pine_data.csv")
+head(pine_df)
 
-ps_df <- pine_switch_df %>%
-  group_by(group, tree_no, tree_char, side) %>%
-  summarise(length_mm = mean(length_mm, na.rm = TRUE))
+# the two-stage summary: one value per tree per side
+p_df <- pine_df %>%
+  group_by(team, side) %>%
+  summarise(needle_length_mm = mean(needle_length_mm, na.rm = TRUE),
+            .groups = "drop")
 
-ps_shady_df <- ps_df %>% filter(side == "shady")
-ps_sunny_df <- ps_df %>% filter(side == "sunny")
+shady_df <- p_df %>% filter(side == "shady")
+sunny_df <- p_df %>% filter(side == "sunny")
 
-head(ps_df)
+p_df
 ```
 
-✏️ **Your turn:** Why do we average by `group`, `tree_no`, `tree_char`, and `side` before doing anything else? `________________________`
+✏️ **Your turn:** Why do we average by `team` and `side` before doing anything else? How many rows did we start with, and how many are left? `________________________`
 
 ------------------------------------------------------------------------
 
@@ -69,6 +97,7 @@ ________________________________________________________
 **🚀 If you finish early:** With df = 14 and a two-tailed α = 0.05, find the critical t-value with `qt(0.975, df = 14)`. Then use `pt()` to find the p-value for an observed t of 2.8 on the same df: `2 * (1 - pt(2.8, df = 14))`. Is 2.8 inside or outside the rejection region?
 
 ``` r
+# ── Part 2.1 · Hypothesis Testing Recap ─────────────────────────────────
 # Write your code here:
 ```
 :::
@@ -80,24 +109,26 @@ ________________________________________________________
 **▶ Run this:**
 
 ``` r
-pine_summary <- ps_df %>%
+# ── Part 3.1 · Exploratory Data Analysis and Effect Size ────────────────
+pine_summary_df <- p_df %>%
   group_by(side) %>%
   summarize(
-    mean_length = mean(length_mm, na.rm = TRUE),
-    sd_length   = sd(length_mm, na.rm = TRUE),
-    n           = sum(!is.na(length_mm)),
-    se_length   = sd_length / (n^0.5),
+    mean_mm = mean(needle_length_mm, na.rm = TRUE),
+    sd_mm   = sd(needle_length_mm, na.rm = TRUE),
+    n           = sum(!is.na(needle_length_mm)),
+    se_mm   = sd_mm / (n^0.5),
     t_critical  = qt(0.975, df = n - 1),  # 95% CI uses 0.975 (two-tailed)
-    ci_lower    = mean_length - t_critical * se_length,
-    ci_upper    = mean_length + t_critical * se_length
+    ci_lower    = mean_mm - t_critical * se_mm,
+    ci_upper    = mean_mm + t_critical * se_mm
   )
-print(pine_summary)
+print(pine_summary_df)
 ```
 
 **▶ Run this** — visualize the distribution:
 
 ``` r
-ggplot(ps_df, aes(x = length_mm, fill = side)) +
+# ── Part 3.2 · Exploratory Data Analysis and Effect Size ────────────────
+ggplot(p_df, aes(x = needle_length_mm, fill = side)) +
   geom_histogram(binwidth = 2) +
   labs(title = "Distribution of Pine Needle Lengths",
        x = "Length (mm)", y = "Frequency") +
@@ -108,16 +139,18 @@ ggplot(ps_df, aes(x = length_mm, fill = side)) +
 **▶ Run this** — the effect size (difference in means):
 
 ``` r
-pine_summary %>%
-  summarize(difference = mean_length[side == "sunny"] - mean_length[side == "shady"])
+# ── Part 3.3 · Exploratory Data Analysis and Effect Size ────────────────
+pine_summary_df %>%
+  summarize(difference = mean_mm[side == "sunny"] - mean_mm[side == "shady"])
 ```
 
 ✏️ **Your turn:** Looking at the histogram, do the two distributions look like they overlap a lot, or are they clearly separated? Does that match the size of the `difference` you just calculated? `________________________`
 
 ::: callout-tip
-**🚀 If you finish early:** Recompute `pine_summary`, but group by `group` (field team) instead of `side`. Do all teams show a similar mean and spread, or does one team look different?
+**🚀 If you finish early:** Recompute `pine_summary_df`, but group by `team` (the field team, one tree each) instead of `side`. Do all teams show a similar mean and spread, or does one team look different?
 
 ``` r
+# ── Part 3.4 · Exploratory Data Analysis and Effect Size ────────────────
 # Write your code here:
 ```
 :::
@@ -135,7 +168,8 @@ Deciding between the standard t-test (equal variances) and Welch's t-test (unequ
 **▶ Run this:**
 
 ``` r
-t_test_result <- t.test(length_mm ~ side, data = ps_df, var.equal = TRUE)
+# ── Part 4.1 · The Two-Sample t-Test ────────────────────────────────────
+t_test_result <- t.test(needle_length_mm ~ side, data = p_df, var.equal = TRUE)
 print("Standard two-sample t-test:")
 print(t_test_result)
 ```
@@ -151,6 +185,7 @@ Decision: ________________________
 **🚀 If you finish early:** Rerun the test with `var.equal = FALSE` (Welch's t-test) and compare the p-value to the standard version above. How different are they?
 
 ``` r
+# ── Part 4.2 · The Two-Sample t-Test ────────────────────────────────────
 # Write your code here:
 ```
 :::
@@ -166,17 +201,18 @@ $$s_p = \sqrt{\frac{(n_1 - 1)s_1^2 + (n_2 - 1)s_2^2}{n_1 + n_2 - 2}}$$
 **▶ Run this** — power to detect a 1mm difference:
 
 ``` r
+# ── Part 5.1 · Statistical Power ────────────────────────────────────────
 side_diff <- 1
 
-sunny_n <- nrow(ps_sunny_df)
-shady_n <- nrow(ps_shady_df)
+sunny_n <- nrow(sunny_df)
+shady_n <- nrow(shady_df)
 
-sun_sd_pooled <- sqrt((var(ps_sunny_df$length_mm) * (sunny_n - 1) +
-                      var(ps_shady_df$length_mm) * (shady_n - 1)) /
+sun_sd_pooled <- sqrt((var(sunny_df$needle_length_mm) * (sunny_n - 1) +
+                      var(shady_df$needle_length_mm) * (shady_n - 1)) /
                       (sunny_n + shady_n - 2))
 
 sun_effect_size <- side_diff / sun_sd_pooled
-sun_df <- sunny_n + shady_n - 2
+sun_deg_free <- sunny_n + shady_n - 2
 sun_alpha <- 0.05
 
 sun_power <- power.t.test(n = min(sunny_n, shady_n),
@@ -200,6 +236,7 @@ print(sun_power)
 **🚀 If you finish early:** `power.t.test()` can also solve for **sample size** instead of power — leave `n` out and add `power = 0.80` instead. How many needles per side would you need to reliably (80% power) detect a 1mm difference?
 
 ``` r
+# ── Part 5.2 · Statistical Power ────────────────────────────────────────
 power.t.test(delta = side_diff,
              sd = sun_sd_pooled,
              sig.level = sun_alpha,
@@ -218,16 +255,18 @@ Typically we present a plot with the mean and standard error to represent the da
 **▶ Run this:**
 
 ``` r
-pine_mean_se <- ps_df %>%
-  ggplot(aes(side, length_mm, color = side)) +
+# ── Part 6.1 · A Publication-Quality Plot ───────────────────────────────
+pine_mean_se_plot <- p_df %>%
+  ggplot(aes(side, needle_length_mm, color = side)) +
   stat_summary(fun = "mean", na.rm = TRUE, geom = "point", size = 3) +
   stat_summary(fun.data = "mean_se", width = 0.2, geom = "errorbar")
-pine_mean_se
+pine_mean_se_plot
 ```
 
 **▶ Run this** — a custom theme you can reuse on any plot:
 
 ``` r
+# ── Part 6.2 · A Publication-Quality Plot ───────────────────────────────
 theme_class <- function(base_size = 14, base_family = "Sans") {
   theme(
     panel.background = element_rect(fill = "transparent", colour = "transparent"),
@@ -256,18 +295,20 @@ theme_class <- function(base_size = 14, base_family = "Sans") {
 
 > ⚠️ **Watch out!** Run the whole `theme_class <- function(...) {...}` block at once (select it all and run) — running just the inside line by line will fail, since those lines only make sense as part of the function.
 
-**▶ Run this** — apply your theme to the plot (note `+`, not `<-`, so the original `pine_mean_se` object is untouched):
+**▶ Run this** — apply your theme to the plot (note `+`, not `<-`, so the original `pine_mean_se_plot` object is untouched):
 
 ``` r
-pine_mean_se +
+# ── Part 6.3 · A Publication-Quality Plot ───────────────────────────────
+pine_mean_se_plot +
   theme_class()
 ```
 
 **▶ Run this** — put it all together with proper labels, a fixed y-axis range, and custom colors:
 
 ``` r
-pine_mean_se <- ps_df %>%
-  ggplot(aes(side, length_mm, color = side)) +
+# ── Part 6.4 · A Publication-Quality Plot ───────────────────────────────
+pine_mean_se_plot <- p_df %>%
+  ggplot(aes(side, needle_length_mm, color = side)) +
   stat_summary(fun = "mean", na.rm = TRUE, geom = "point", size = 4) +
   stat_summary(fun.data = "mean_se", geom = "errorbar", width = 0.1, linewidth = 0.35) +
   labs(x = "Side of Tree", y = "Mean Length (mm ± 1 SE)") +
@@ -278,19 +319,21 @@ pine_mean_se <- ps_df %>%
     labels = c("shady" = "Shady Side", "sunny" = "Sunny Side"),
     values = c("shady" = "darkgreen", "sunny" = "coral")
   )
-pine_mean_se
+pine_mean_se_plot
 ```
 
 ✏️ **Your turn:** Change the two hex-ish color names in `values =` to two colors of your own choosing (e.g., `"darkblue"`, `"darkorange"`). Re-run and confirm the plot updates.
 
 ``` r
+# ── Part 6.5 · A Publication-Quality Plot ───────────────────────────────
 # Write your code here:
 ```
 
 ::: callout-tip
-**🚀 If you finish early:** `pine_mean_se` currently uses `color =`, which only affects points and error bars — not a filled shape. Build a boxplot version using `aes(side, length_mm, fill = side)` + `geom_boxplot()` + `scale_fill_manual()` with the same `labels`/`values` pattern.
+**🚀 If you finish early:** `pine_mean_se_plot` currently uses `color =`, which only affects points and error bars — not a filled shape. Build a boxplot version using `aes(side, needle_length_mm, fill = side)` + `geom_boxplot()` + `scale_fill_manual()` with the same `labels`/`values` pattern.
 
 ``` r
+# ── Part 6.6 · A Publication-Quality Plot ───────────────────────────────
 # Write your code here:
 ```
 :::
@@ -348,7 +391,7 @@ Upload both of these to the course management system:
 When code breaks — and it will, that is normal:
 
 1. **Read the error message out loud.** R usually names the line and the problem.
-2. **Check the usual suspects:** did you run `library(tidyverse)`, `library(car)`, and `library(readxl)`? Spelling? A missing `)` or `%>%` at the *start* of a line?
+2. **Check the usual suspects:** did you run `library(tidyverse)` and `library(car)`? Spelling? A missing `)` or `%>%` at the *start* of a line?
 3. `?function_name` opens the built-in help page.
 4. **Bring the exact error** (copy-paste it) to class or office hours.
 

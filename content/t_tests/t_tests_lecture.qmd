@@ -3,7 +3,7 @@ metadata-files:
   - ../../_templates/_lectures.yml
 title: "Lecture: T-Tests: One, Two, Paired"
 subtitle: "Comparing means"
-description: "The hypothesis-testing framework, the t-distribution, and one-sample, two-sample (Student's and Welch's), and paired t-tests — with assumption checks — on the class pine needle dataset."
+description: "The hypothesis-testing framework, the t-distribution, and one-sample, two-sample (Student's and Welch's), and paired t-tests — with assumption checks — on the pine needle data the class collected."
 categories: [Mean comparison, T-test]
 order: 6
 week: 4
@@ -61,26 +61,26 @@ A t-score is just a z-score computed with the *sample* standard deviation instea
 
 ## Part 1 · Our Data {.divider}
 
-## Setup — Loading the Class Pine Needle Data
+## Setup — Loading Our Pine Needle Data
 
 ::::::: columns
 :::: {.column width="60%"}
-```{r}
-library(readxl)
+```{r t-tests-01}
 library(tidyverse)
 library(patchwork)
 library(car)   # For diagnostic tests
 
-pine_df        <- read_excel("data/class_pine needle length.xlsx")
-pine_switch_df <- read_excel("data/class_pine needle length switched.xlsx")
+pine_df <- read_csv("data/pine_data.csv")
 
 glimpse(pine_df)
 ```
 
+[📥 Download the data](data/pine_data.csv){.btn .btn-primary download="pine_data.csv"}
+
 ::: callout-note
 **✅ Key idea**
 
-For two sample T-tests, degrees of freedom = n₁ + n₂ − 2. Once we average the needles up to one value per tree side (next slide), we have 8 trees per side — so df = 8 + 8 − 2 = 14. Note that n is the number of *trees*, not needles.
+For two sample T-tests, degrees of freedom = n₁ + n₂ − 2. Once we average the needles up to one value per tree side (next slide), we have **4 trees per side** — so df = 4 + 4 − 2 = **6**. Note that n is the number of *trees*, not needles.
 :::
 ::::
 
@@ -88,7 +88,9 @@ For two sample T-tests, degrees of freedom = n₁ + n₂ − 2. Once we average 
 ::: callout-tip
 **🖐 Recap**
 
-`group` is the class team, `tree_no`/`tree_char` identify the tree, `side` is sunny vs. shady, `length_mm` is the needle length.
+This is the data **you** collected: `team` is your field team (one tree each), `side` is sunny vs. shady, `replicate` is which of the 8 needles, and `needle_length_mm` is the measurement.
+
+64 rows — but only **4 trees**.
 :::
 ::::
 :::::::
@@ -97,37 +99,38 @@ For two sample T-tests, degrees of freedom = n₁ + n₂ − 2. Once we average 
 
 :::::: columns
 :::: {.column width="60%"}
-```{r}
-# Multiple needles per tree side are pseudoreplicates —
+```{r t-tests-02}
+# The 8 needles from one side of one tree are pseudoreplicates —
 # average them so each tree/side is ONE data point
 p_df <- pine_df %>%
-  group_by(group, tree_no, tree_char, side) %>%
-  summarise(length_mm = mean(length_mm, na.rm = TRUE), .groups = "drop")
+  group_by(team, side) %>%
+  summarise(needle_length_mm = mean(needle_length_mm, na.rm = TRUE),
+            .groups = "drop")
 
-ps_df <- pine_switch_df %>%
-  group_by(group, tree_no, tree_char, side) %>%
-  summarise(length_mm = mean(length_mm, na.rm = TRUE), .groups = "drop")
+shady_df <- p_df %>% filter(side == "shady")
+sunny_df <- p_df %>% filter(side == "sunny")
 
-ps_shady_df <- ps_df %>% filter(side == "shady")
-ps_sunny_df <- ps_df %>% filter(side == "sunny")
+p_df
 ```
 
 ::: callout-important
-**Why average first?** The true experimental unit here is *tree side*, not *needle*. Treating every needle as independent would inflate our sample size and our confidence — the same pseudoreplication trap from earlier in the course.
+**Why average first?** The true experimental unit here is *tree side*, not *needle*. Treating every needle as independent would inflate our sample size and our confidence — the same pseudoreplication trap from Getting Started.
+
+This is exactly the **two-stage summary** from Describing Your Data: `group_by()` down to the unit you actually replicated, *then* analyse. Everything from here on runs on one number per tree side.
 :::
 ::::
 
 ::: {.column width="40%"}
-```{r}
+```{r t-tests-03}
 #| fig-width: 3
 #| fig-height: 2.6
-stats_df <- ps_df %>%
+stats_df <- p_df %>%
   group_by(side) %>%
   summarize(
-    mean_length = mean(length_mm, na.rm = TRUE),
-    sd_length   = sd(length_mm, na.rm = TRUE),
-    se_length   = sd(length_mm, na.rm = TRUE) / sum(!is.na(length_mm))^.5,
-    count       = sum(!is.na(length_mm)),
+    mean_length = mean(needle_length_mm, na.rm = TRUE),
+    sd_length   = sd(needle_length_mm, na.rm = TRUE),
+    se_length   = sd(needle_length_mm, na.rm = TRUE) / sum(!is.na(needle_length_mm))^.5,
+    count       = sum(!is.na(needle_length_mm)),
     .groups = "drop"
   )
 stats_df
@@ -135,67 +138,43 @@ stats_df
 :::
 ::::::
 
-## The Data — Two Versions
+## The Data We'll Test — `p_df`
 
-:::::: columns
+::::: columns
 ::: {.column width="60%"}
-```{r}
+```{r t-tests-04}
 #| fig-width: 3.2
 #| fig-height: 2.6
 #| message: false
 #| warning: false
-#| fig-alt: "Boxplot of needle length by side of tree (shady vs. sunny) from the original (unswitched) pine needle file, with points for each field team connected by a line, showing each team's shady and sunny values."
+#| fig-alt: "Boxplot of mean needle length by side of tree (shady vs. sunny), with one point per field team and a line joining each team's shady and sunny tree means, showing that the two boxes overlap heavily while every team's line slopes the same way."
 p_plot <- p_df %>%
-  ggplot(aes(side, length_mm, fill = side)) +
+  ggplot(aes(side, needle_length_mm, fill = side)) +
   geom_boxplot(alpha = 0.7) +
-  geom_point(aes(group = group, color = group)) +
-  geom_line(aes(group = group, color = group)) +
-  labs(x = "Side of tree", y = "Length (mm)", caption = "Pine needles") +
+  geom_point(aes(group = team, color = team)) +
+  geom_line(aes(group = team, color = team)) +
+  labs(x = "Side of tree", y = "Mean needle length (mm)",
+       caption = "One point per team's tree") +
   theme_minimal(base_size = 9) +
   theme(legend.position = "none")
 p_plot
 ```
 :::
 
-:::: {.column width="40%"}
-::: callout-warning
-**⚠️ Watch out!**
-
-`class_pine needle length switched.xlsx` has the `sunny`/`shady` labels swapped relative to the original file. From here on, **`ps_df`** (the switched version) is the dataset we'll actually test — it's the one that matches the field notes.
-:::
-::::
-::::::
-
-## The Data We'll Test — `ps_df`
-
-::::: columns
-::: {.column width="60%"}
-```{r}
-#| fig-width: 3.2
-#| fig-height: 2.6
-#| message: false
-#| warning: false
-#| fig-alt: "Boxplot of needle length by side of tree (shady vs. sunny) from the corrected, switched-labels pine needle file, with points for each field team connected by a line — this is the dataset used for the rest of the analysis."
-ps_plot <- ps_df %>%
-  ggplot(aes(side, length_mm, fill = side)) +
-  geom_boxplot(alpha = 0.7) +
-  geom_point(aes(group = group, color = group)) +
-  geom_line(aes(group = group, color = group)) +
-  labs(x = "Side of tree", y = "Length (mm)", caption = "Pine needles switched") +
-  theme_minimal(base_size = 9) +
-  theme(legend.position = "none")
-ps_plot
-```
-:::
-
 ::: {.column width="40%"}
-**Goals for today, using `ps_df`:**
+**Goals for today, using `p_df`:**
 
 - Statistical inference fundamentals
 - Hypothesis testing principles
 - t-distributions
 - One-sample, two-sample, and paired t-tests
 - Assumption tests
+
+::: callout-tip
+**🖐 Look at the lines before we test anything**
+
+The boxes overlap a lot. But **every line slopes the same way.** Hold that thought — it is the whole story of today's last section.
+:::
 :::
 :::::
 
@@ -263,8 +242,12 @@ p(data \| H₀) is **not** the same as p(H₀ \| data). A t-test never tells you
 ::: {.column width="60%"}
 One-tailed questions ask about the area of the distribution to the left (or right) of a certain value, for a one-sample test.
 
+*Worked example for reading the table — n = 8, df = 7:*
+
 - n = 8 (df = 7) — 95% of the observations found to the left
 - t = 1.895 (5% are outside)
+
+(Our own data has 4 trees per side, so df = 3 for a paired test and df = 6 for a two-sample test. Same table, different row.)
 
 ![Bell-shaped t-distribution curve with the area to the left of the critical value shaded, illustrating a one-tailed cutoff where the shaded region represents the proportion of the distribution below that t-value (here t = 1.895 at df = 7).](images/clipboard-1822465473.png){width="2.78in" height="2.06in"}
 :::
@@ -305,14 +288,28 @@ Using a two-sided test:
 
 $$\text{CI} = \bar{y} \pm t \cdot \frac{s}{\sqrt{n}}$$
 
-- 95% CI, Sample A: 17.6 ± 2.365 × (2.51 / 8\^0.5) = ± 2.10
+**By hand, for an example Sample A** (mean 17.6, s = 2.51, n = 8, so df = 7 — the row highlighted in the table):
+
+- 95% CI = 17.6 ± 2.365 × (2.51 / 8\^0.5) = ± 2.10
 - The 95% CI is between 15.50 and 19.70
-- "The 95% CI for the population mean from sample A is 17.6 ± 2.1"
 
-::: callout-note
-**📖 Reference**
+**Now our own shady-side trees** (n = 4, so df = 3, and the critical t is much larger):
 
-Whitlock & Schluter, *Analysis of Biological Data*, Ch. 11 — Inference for a Normal Population.
+```{r t-tests-05}
+n_shady    <- sum(!is.na(shady_df$needle_length_mm))
+mean_shady <- mean(shady_df$needle_length_mm)
+se_shady   <- sd(shady_df$needle_length_mm) / sqrt(n_shady)
+t_crit     <- qt(0.975, df = n_shady - 1)
+
+cat("n =", n_shady, " t crit =", round(t_crit, 3), "\n")
+cat("95% CI:", round(mean_shady - t_crit * se_shady, 2),
+    "to",     round(mean_shady + t_crit * se_shady, 2), "mm\n")
+```
+
+::: callout-warning
+**⚠️ Four trees is a *wide* interval**
+
+With df = 3 the critical t is **3.182**, not 1.96. Small n costs you twice: a bigger multiplier *and* a bigger SE.
 :::
 ::::
 
@@ -373,7 +370,7 @@ Whitlock & Schluter, Ch. 11, covers the one-sample t-test as the simplest hypoth
 
 :::::: columns
 ::: {.column width="60%"}
-```{r}
+```{r t-tests-06}
 #| fig-width: 3.2
 #| fig-height: 2.6
 #| message: false
@@ -381,7 +378,7 @@ Whitlock & Schluter, Ch. 11, covers the one-sample t-test as the simplest hypoth
 #| fig-alt: "QQ-plot of pine needle length with a confidence envelope, used to visually check whether needle length is approximately normally distributed."
 # The one-sample test below is on the SHADY side, so that is the group
 # whose normality we need to check -- not the two sides pooled together.
-qqPlot(ps_shady_df$length_mm,
+qqPlot(shady_df$needle_length_mm,
        main = "QQ Plot — shady side needle length",
        ylab = "Sample Quantiles")
 ```
@@ -400,14 +397,22 @@ Points that hug the blue line support normality; points that curve away — espe
 
 ::::::: columns
 ::: {.column width="60%"}
-```{r}
-shapiro.test(ps_shady_df$length_mm)
+```{r t-tests-07}
+shapiro.test(shady_df$needle_length_mm)
 ```
 :::
 
 ::::: {.column width="40%"}
 ::: callout-important
 **H₀ for Shapiro-Wilk is "the data ARE normal."** A *non-significant* result (p \> 0.05) is what we're hoping for here — it means we fail to reject normality.
+:::
+
+::: callout-warning
+**⚠️ With n = 4, this test proves almost nothing**
+
+Shapiro-Wilk on four numbers has essentially no power — it will pass almost anything. A high p-value here is **not** evidence that the data are normal; it is evidence that we don't have enough data to tell.
+
+Run it, report it, but lean on the QQ plot, the biology, and the design — not on a p-value from four points.
 :::
 
 ::: callout-tip
@@ -422,12 +427,12 @@ We test the group the hypothesis is about. Pooling shady and sunny would mix two
 
 :::::: columns
 ::: {.column width="60%"}
-```{r}
+```{r t-tests-08}
 #| fig-width: 3.2
 #| fig-height: 2.6
 #| fig-alt: "Boxplot of pine needle length by side of tree (shady vs. sunny), used to visually check for outliers before running t-tests."
-shady_sunny_plot <- ps_df %>%
-  ggplot(aes(x = side, y = length_mm, fill = side)) +
+shady_sunny_plot <- p_df %>%
+  ggplot(aes(x = side, y = needle_length_mm, fill = side)) +
   geom_boxplot() +
   labs(x = "side", y = "Length (mm)", fill = "side") +
   theme_minimal(base_size = 9)
@@ -449,11 +454,11 @@ Points beyond the whiskers are potential outliers — always look before you tes
 
 Let's perform a one-sample t-test to determine if the mean needle length on the shady side differs from 15mm:
 
-```{r}
-ps_shade_mean <- mean(ps_shady_df$length_mm, na.rm = TRUE)
-cat("Mean:", round(ps_shade_mean, 1), "mm\n")
+```{r t-tests-09}
+shady_mean <- mean(shady_df$needle_length_mm, na.rm = TRUE)
+cat("Mean:", round(shady_mean, 1), "mm\n")
 
-t_test_result <- t.test(ps_shady_df$length_mm, mu = 15)
+t_test_result <- t.test(shady_df$needle_length_mm, mu = 15)
 t_test_result
 ```
 
@@ -470,7 +475,7 @@ Interpret this test result by answering these questions:
 
 :::::: columns
 ::: {.column width="60%"}
-```{r}
+```{r t-tests-10}
 #| echo: false
 #| message: false
 #| warning: false
@@ -538,7 +543,7 @@ The green line (our observed t) falls inside the red rejection region — that's
 
 :::::: columns
 ::: {.column width="60%"}
-```{r}
+```{r t-tests-11}
 #| echo: false
 #| message: false
 #| warning: false
@@ -640,7 +645,7 @@ How would you assess this question using what we learned?
 :::
 
 :::: {.column width="40%"}
-```{r}
+```{r t-tests-12}
 #| fig-width: 3
 #| fig-height: 2.6
 #| fig-alt: "The boxplot of pine needle length by side of tree, repeated here as a lead-in to the two-sample t-test comparing the two sides."
@@ -709,13 +714,13 @@ Whitlock & Schluter, Ch. 12 — Comparing Two Means.
 
 Before conducting the test, we need to understand the data for each group.
 
-```{r}
-group_summary <- ps_df %>%
+```{r t-tests-13}
+group_summary <- p_df %>%
   group_by(side) %>%
   summarize(
-    mean_length = mean(length_mm, na.rm = TRUE),
-    sd_length   = sd(length_mm, na.rm = TRUE),
-    n           = sum(!is.na(length_mm)),
+    mean_length = mean(needle_length_mm, na.rm = TRUE),
+    sd_length   = sd(needle_length_mm, na.rm = TRUE),
+    n           = sum(!is.na(needle_length_mm)),
     se_length   = sd_length / sqrt(n),
     .groups = "drop"
   )
@@ -730,7 +735,7 @@ group_summary
 
 We could also look at the difference in means:
 
-```{r}
+```{r t-tests-14}
 group_summary %>%
   summarize(difference = mean_length[side == "shady"] - mean_length[side == "sunny"])
 ```
@@ -743,11 +748,11 @@ group_summary %>%
 
 `ggplot` can compute and plot the mean and standard error directly:
 
-```{r}
+```{r t-tests-15}
 #| fig-width: 3.2
 #| fig-height: 2.6
 #| fig-alt: "Point-and-error-bar plot of mean needle length ± standard error for the shady and sunny sides."
-needle_mean_se_plot <- ggplot(ps_df, aes(x = side, y = length_mm, color = side)) +
+needle_mean_se_plot <- ggplot(p_df, aes(x = side, y = needle_length_mm, color = side)) +
   stat_summary(fun = mean, geom = "point") +
   stat_summary(fun.data = mean_se, geom = "errorbar", width = 0.2) +
   labs(x = "side", y = "Mean Length (mm)") +
@@ -788,10 +793,10 @@ Whitlock & Schluter, Ch. 13 — Handling Violations of Assumptions, covers non-p
 
 Note you need to test each group separately for normality — first, split the data:
 
-```{r}
+```{r t-tests-16}
 #| paged-print: false
-head(ps_shady_df)
-head(ps_sunny_df)
+head(shady_df)
+head(sunny_df)
 ```
 :::
 
@@ -802,12 +807,12 @@ head(ps_sunny_df)
 
 There are always a lot of ways to do this in R:
 
-```{r}
-normality_results <- ps_df %>%
+```{r t-tests-17}
+normality_results <- p_df %>%
   group_by(side) %>%
   summarize(
-    shapiro_stat    = shapiro.test(length_mm)$statistic,
-    shapiro_p_value = shapiro.test(length_mm)$p.value,
+    shapiro_stat    = shapiro.test(needle_length_mm)$statistic,
+    shapiro_p_value = shapiro.test(needle_length_mm)$p.value,
     normal_distribution = if_else(shapiro_p_value > 0.05, "Normal", "Non-normal"))
 normality_results
 ```
@@ -822,12 +827,12 @@ Levene's test can be done on the original data frame.
 
 **Note:** the Levene's test result should be **NOT significant** — what is the null hypothesis here?
 
-```{r}
+```{r t-tests-18}
 #| message: false
 #| warning: false
 #| paged-print: false
 # leveneTest needs the grouping variable as a factor
-levene_result <- leveneTest(length_mm ~ factor(side), data = ps_df)
+levene_result <- leveneTest(needle_length_mm ~ factor(side), data = p_df)
 print("Levene's Test for Homogeneity of Variance:")
 print(levene_result)
 ```
@@ -849,10 +854,10 @@ Deciding between:
 :::
 
 ::: {.column width="40%"}
-```{r}
+```{r t-tests-19}
 # Use var.equal = TRUE for standard t-test,
 # var.equal = FALSE for Welch's t-test
-t_test_result <- t.test(length_mm ~ side, data = ps_df, var.equal = TRUE)
+t_test_result <- t.test(needle_length_mm ~ side, data = p_df, var.equal = TRUE)
 print("Standard two-sample t-test:")
 print(t_test_result)
 ```
@@ -875,8 +880,8 @@ Deciding between:
 :::
 
 ::: {.column width="40%"}
-```{r}
-t_test_result <- t.test(length_mm ~ side, data = ps_df, var.equal = FALSE)
+```{r t-tests-20}
+t_test_result <- t.test(needle_length_mm ~ side, data = p_df, var.equal = FALSE)
 print("Welch's two-sample t-test:")
 print(t_test_result)
 ```
@@ -921,15 +926,15 @@ What can we conclude about needle lengths on the sunny vs. shady sides?
 ::::
 
 ::: {.column width="40%"}
-```{r}
+```{r t-tests-21}
 #| echo: false
 #| message: false
 #| warning: false
 #| fig-width: 3.4
 #| fig-height: 3.2
-#| fig-alt: "T-distribution curve with 14 degrees of freedom for the two-sample needle-length test, red rejection regions in both tails beyond the critical t-values of plus and minus 2.145, and a dashed blue line marking the observed t-statistic of 1.128, which falls inside the light blue non-rejection region."
+#| fig-alt: "T-distribution curve with 6 degrees of freedom for the two-sample needle-length test, red rejection regions in both tails beyond the critical t-values of plus and minus 2.447, and a dashed blue line marking the observed t-statistic of -0.855, which falls well inside the light blue non-rejection region."
 # Drive the figure from the ACTUAL test so the labels can never drift
-student_tt <- t.test(length_mm ~ side, data = ps_df, var.equal = TRUE)
+student_tt <- t.test(needle_length_mm ~ side, data = p_df, var.equal = TRUE)
 obs_t   <- unname(student_tt$statistic)
 obs_df  <- unname(student_tt$parameter)
 obs_p   <- student_tt$p.value
@@ -978,6 +983,12 @@ print(t_plot)
 - Uses the *differences* between pairs as the data
 - Generally more powerful, because it controls for individual variation
 
+::: callout-warning
+**⚠️ Order matters for the sign**
+
+`t.test(shady, sunny, paired = TRUE)` computes **shady − sunny**. Reverse the arguments and `t` flips sign — the p-value is identical, but the story you tell about direction is backwards. Always state which way you subtracted.
+:::
+
 ::: callout-note
 **📖 Reference**
 
@@ -986,14 +997,16 @@ Whitlock & Schluter, Ch. 12, section on the paired design.
 ::::
 
 ::: {.column width="40%"}
-```{r}
-ps_wide_df <- ps_df %>%
+```{r t-tests-22}
+p_wide_df <- p_df %>%
   pivot_wider(
     names_from = "side",
-    values_from = length_mm
+    values_from = needle_length_mm
   )
 
-paired_t_test_result <- t.test(ps_wide_df$sunny, ps_wide_df$shady, paired = TRUE)
+# shady first, then sunny — the SAME order the two-sample test used,
+# so the two t-statistics are directly comparable
+paired_t_test_result <- t.test(p_wide_df$shady, p_wide_df$sunny, paired = TRUE)
 print("Paired t-test:")
 print(paired_t_test_result)
 ```
@@ -1004,36 +1017,46 @@ print(paired_t_test_result)
 
 :::::: columns
 :::: {.column width="60%"}
-Look carefully at what just happened — **both tests used exactly the same 16 numbers**:
+Look carefully at what just happened — **both tests used exactly the same 8 numbers**, and both measured shady − sunny:
 
-| Test       | t      | df  | p     | Conclusion          |
-|------------|--------|-----|-------|---------------------|
-| Two-sample | 1.128  | 14  | 0.278 | **Not** significant |
-| Paired     | −2.782 | 7   | 0.027 | **Significant**     |
+| Test       | t      | df  | p     |
+|------------|--------|-----|-------|
+| Two-sample | −0.855 | 6   | 0.425 |
+| Paired     | −2.723 | 3   | 0.072 |
 
-Why the difference?
+Same estimated difference (**−1.09 mm** — shady needles shorter). Same data. The p-value dropped by a factor of **almost six**.
 
-- The **two-sample** test throws the pairing away. Tree-to-tree variation (some teams' trees just have longer needles) lands in the *noise*, swamping the signal.
+Why?
+
+- The **two-sample** test throws the pairing away. Tree-to-tree variation (some teams' trees just have longer needles than others) lands in the *noise*, swamping the signal.
 - The **paired** test looks only at the shady−sunny difference *within each tree*, so tree-to-tree variation cancels out entirely.
 
+Notice the paired test has **half the degrees of freedom** (3 vs 6) — it is working with 4 differences, not 8 values. It still does far better, because the noise it removed mattered more than the df it gave up.
+
+::: callout-note
+**This is about sensitivity, not about 0.05**
+
+Neither test crosses α = 0.05, so neither "wins" by the usual rule. That is not the point. The point is that **the correct test extracted six times more evidence from the identical measurements** — and with only 4 trees, that is the difference between a study that could detect this effect and one that never could.
+:::
+
 ::: callout-important
-**These data are paired by design** — each team measured both sides of the *same* tree. The paired test is the correct one here; the two-sample test is the wrong tool, and it would have made us miss a real effect.
+**These data are paired by design** — each team measured both sides of the *same* tree. The paired test is the correct one here. The two-sample test is not just less powerful, it is answering a question our design never asked.
 :::
 ::::
 
 ::: {.column width="40%"}
-```{r}
+```{r t-tests-23}
 #| echo: false
 #| fig-width: 3
 #| fig-height: 2.6
-#| fig-alt: "Slope plot showing each team's tree as a line connecting its shady value to its sunny value; nearly every line slopes downward from shady to sunny, showing a consistent within-tree effect even though the two groups overlap heavily overall."
-ps_df %>%
-  ggplot(aes(side, length_mm, group = group)) +
+#| fig-alt: "Slope plot showing each team's tree as a line connecting its shady mean to its sunny mean; all four lines slope upward from shady to sunny, showing a consistent within-tree effect even though the two groups overlap heavily overall."
+p_df %>%
+  ggplot(aes(side, needle_length_mm, group = team)) +
   geom_line(color = "grey50") +
   geom_point(aes(color = side), size = 2) +
   labs(x = "Side of tree", y = "Length (mm)",
        title = "Each line = one tree",
-       caption = "Consistent within-tree drop") +
+       caption = "All four trees shift the same way") +
   theme_minimal(base_size = 9) +
   theme(legend.position = "none")
 ```
@@ -1048,11 +1071,11 @@ Note that there is a lot of variation *within* trees, but the trend is the same 
 :::
 
 ::: {.column width="40%"}
-```{r}
+```{r t-tests-24}
 #| fig-width: 3
 #| fig-height: 2.6
 #| fig-alt: "The needle length by side-of-tree boxplot with team lines, repeated to show within-tree variation alongside the consistent shady-vs-sunny trend across trees, motivating the paired t-test."
-ps_plot
+p_plot
 ```
 :::
 :::::

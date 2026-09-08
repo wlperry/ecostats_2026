@@ -33,7 +33,7 @@ editor:
     wrap: 72
 ---
 
-```{r}
+```{r nested-anova-01}
 #| echo: false
 #| message: false
 #| warning: false
@@ -268,7 +268,7 @@ example.](images/clipboard-1621781711.png){width="3.96in"}
 ::: {.column width="40%"}
 Effects of sea urchin grazing on biomass of filamentous algae:
 
-- 4 levels of urchin grazing: none, low, medium, high
+- 4 urchin densities: 0%, 33%, 66%, 100% of natural density
 - 4 patches of rocky bottom (3–4 m²) nested in each grazing level
 - 5 replicate quadrats per patch
 
@@ -594,8 +594,8 @@ the percentage cover of filamentous algae. The experiment was designed
 with:
 
 - Four random patches
-- Four urchin density treatments (none = removed, low = control, medium
-  = 33% of original density, high = 66% of original density)
+- Four urchin density treatments — **0%** (urchins removed), **33%**,
+  **66%**, and **100%** of natural density (the unmanipulated control)
 - Five replicate quadrats measured within each treatment-patch
   combination
 :::
@@ -620,7 +620,7 @@ were applied), `treat` (urchin density treatment), `quad` (replicate
 quadrats within each treatment-patch combination), `algae` (percentage
 cover of filamentous algae — the response variable).
 
-```{r}
+```{r nested-anova-02}
 #| echo: false
 #| message: false
 #| warning: false
@@ -629,15 +629,18 @@ cover of filamentous algae — the response variable).
 u_df <- read_csv("data/andrew.csv") %>% clean_names()
 
 u_df <- u_df %>%
+  # Map to Quinn & Keough's Table 9.1 densities. NOTE the file's dens_33 /
+  # dens_66 labels are the reverse of the book's percentages -- verified by
+  # matching patch means: dens_33 is the book's 66% group, dens_66 its 33%.
   mutate(treat = case_when(
-         treat == "removal" ~ "none",
-         treat == "control" ~ "high",
-         treat == "dens_33" ~ "low",
-         treat == "dens_66" ~ "medium",
+         treat == "removal" ~ "0%",     # book  0% density, mean algae 39.2
+         treat == "dens_66" ~ "33%",    # book 33% density, mean algae 19.0
+         treat == "dens_33" ~ "66%",    # book 66% density, mean algae 21.6
+         treat == "control" ~ "100%",   # book 100% density, mean algae 1.3
          TRUE ~ "other")) %>%
   mutate(treat = factor(treat,
-                        levels = c("none", "low", "medium", "high"),
-                        labels = c("none", "low", "medium", "high")),
+                        levels = c("0%", "33%", "66%", "100%"),
+                        labels = c("0%", "33%", "66%", "100%")),
          patch = as_factor(patch))
 
 cat("Data\n\n")
@@ -648,7 +651,7 @@ levels(u_df$treat)
 :::
 
 ::: {.column width="50%"}
-```{r}
+```{r nested-anova-03}
 #| echo: false
 #| message: false
 #| warning: false
@@ -672,7 +675,7 @@ u_summary
 
 ## A First Look at the Data
 
-```{r}
+```{r nested-anova-04}
 #| echo: false
 #| fig-width: 3.6
 #| fig-height: 3
@@ -706,7 +709,7 @@ using $MS_{resid}$ when it should use $MS_{treat:patch}$.
 :::
 
 ::: {.column width="40%"}
-```{r}
+```{r nested-anova-05}
 #| echo: true
 #| message: false
 #| warning: false
@@ -731,15 +734,243 @@ summary(u_fact_model)
 :::
 
 ::: {.column width="60%"}
-```{r}
+```{r nested-anova-06}
 #| echo: true
 #| message: false
 #| warning: false
 #| paged-print: false
 #| collapse: true
-u_nested_model <- aov(algae ~ treat + Error(treat:patch), data = u_df)
+# Error(patch) -- not Error(treat:patch). Patch IDs are already unique
+# (1-16) and each patch sits in exactly one treatment, so naming the patch
+# alone is enough. Writing treat:patch asks for 4 x 16 = 64 combinations
+# when only 16 exist, which makes R warn "Error() model is singular".
+# Both give identical numbers; this one does it without the warning.
+u_nested_model <- aov(algae ~ treat + Error(patch), data = u_df)
 cat("Correctly specified nested ANOVA:\n\n")
 summary(u_nested_model)
 ```
 :::
 :::::
+
+## Same Numerator, Different Denominator
+
+::::::: columns
+:::: {.column width="60%"}
+Both models used the **same 80 quadrats** and produced the **same sums of squares**. Only the F-test's denominator changed:
+
+| | MS treat | ÷ MS error | = F | p |
+|-----------|-----------|-----------|-----------|-----------|
+| **Naive factorial** | 4810 | ÷ **299** (quadrats) | **16.11** | 0.00000007 |
+| **Nested** | 4810 | ÷ **1770** (patches) | **2.72** | 0.091 |
+
+::: callout-important
+**The p-value moved by six orders of magnitude.**
+
+The naive model tested the treatment against variation *between quadrats within a patch* — but quadrats are not what we assigned treatments to. **Patches are.**
+
+There are 80 quadrats but only **16 patches**, four per treatment. The honest test has 12 denominator degrees of freedom, not 64.
+:::
+::::
+
+:::: {.column width="40%"}
+::: callout-note
+**✅ How to find the right denominator**
+
+Ask: **what did I randomly assign the treatment to?**
+
+That unit — patch here — supplies the error term. Everything measured *inside* it is a subsample, and subsamples tell you about measurement noise, not about treatment effects.
+:::
+
+::: callout-tip
+**🖐 Notice `MS(patch)` is large**
+
+1770 vs 299 — patches genuinely differ from one another. That variability is real biology, and the nested model makes you pay for it. The naive model pretended it was not there.
+:::
+::::
+:::::::
+
+## Where You Have Seen This Before
+
+::::::: columns
+:::: {.column width="60%"}
+This is the **pine needle problem** again, one level up:
+
+| Our pine study | This urchin study |
+|------------------------|------------------------|
+| 8 needles per side | 5 quadrats per patch |
+| within one tree | within one patch |
+| **4 trees** are the replicates | **16 patches** are the replicates |
+| 64 rows, n = 4 | 80 rows, n = 16 |
+
+In Week 1 we solved it by **averaging** each tree to one number. That works, and it is honest.
+
+A nested ANOVA does something better: it keeps every quadrat, estimates *both* levels of variability, and still tests the treatment against the right error term.
+
+::: callout-note
+**✅ Key idea**
+
+Averaging throws the subsamples away. Nesting *uses* them — to estimate how noisy your measurements are — while still refusing to count them as replicates.
+:::
+::::
+
+:::: {.column width="40%"}
+::: callout-warning
+**⚠️ The limit of `aov(Error(...))`**
+
+This syntax needs a (near-)balanced design. Ours is perfectly balanced — 4 patches per treatment, 5 quadrats per patch — so it works.
+
+Real data usually is not. That is the problem **mixed models** solve, and it is where we go next.
+:::
+::::
+:::::::
+
+## How Do I Know If My Design Is Nested?
+
+::::::: columns
+:::: {.column width="60%"}
+Three questions, in order. Ask them of **your own** data before you fit anything.
+
+**1. What did I apply the treatment to?**
+→ Whole patches. Not quadrats.
+
+**2. Does every level of B appear under every level of A?**
+→ Patch 7 only ever received the 66% density. It cannot appear under 100%.
+→ **No ⇒ nested.** (Yes ⇒ crossed/factorial.)
+
+**3. How many of those units do I have per treatment?**
+→ 4 patches, not 20 quadrats. **That is your n.**
+
+::: callout-important
+**The answer to Q1 is your error term.**
+
+```r
+aov(algae ~ treat + Error(patch), data = u_df)
+#                   ^^^^^^^^^^^^
+#                   the thing treatments were assigned to
+```
+:::
+::::
+
+:::: {.column width="40%"}
+::: callout-tip
+**🖐 A quick tell**
+
+If two rows of your data share a value for the thing you randomized, they are **not** independent replicates of it.
+
+Two quadrats in patch 3 share patch 3. Two needles on one tree share that tree.
+:::
+
+::: callout-warning
+**⚠️ Nested factors are random**
+
+We are not asking "is patch 7 different from patch 12?" — those specific patches are of no interest. They are a **sample of possible patches**, so `patch` enters as a random effect.
+
+The factor above it (`treat`) is fixed: those four densities are exactly the ones we care about.
+:::
+::::
+:::::::
+
+## Reporting a Nested ANOVA
+
+::::::: columns
+:::: {.column width="60%"}
+::: callout-note
+**How to report this result**
+
+"Algal cover did not differ significantly among urchin density treatments (nested ANOVA, **F₃,₁₂ = 2.72, p = 0.091**), with patches treated as a random factor nested within treatment. Variation among patches within treatments was substantial, accounting for approximately **50% of the total variance** (σ²_patch = 294, σ²_within = 299; n = 4 patches per treatment, 5 quadrats per patch)."
+:::
+
+**The three things people get wrong:**
+
+1. **The degrees of freedom.** It is **F(3, 12)** — the denominator df comes from the *patch* stratum, not the 64 on the "Within" line. Reporting F(3, 64) is reporting the wrong test.
+2. **Silence about the nesting.** Say the word "nested" and name the random factor. A reader cannot tell from "F = 2.72" alone whether you did this correctly.
+3. **Throwing away the patch variance.** It is a result, not a nuisance — here it is half the story.
+::::
+
+:::: {.column width="40%"}
+```{r nested-anova-07}
+#| echo: true
+#| collapse: true
+# Variance components, straight from
+# the two mean squares
+MS_patch  <- 1770.2   # Error: patch
+MS_within <- 298.6    # Error: Within
+n_quad    <- 5        # quadrats per patch
+
+var_patch  <- (MS_patch - MS_within) / n_quad
+var_within <- MS_within
+
+cat("among patches:", round(var_patch, 1), "
+")
+cat("within patch: ", round(var_within, 1), "
+")
+cat("% among patches:",
+    round(100 * var_patch /
+          (var_patch + var_within), 1), "%
+")
+```
+
+::: callout-tip
+**🖐 Half the variance is *between patches***
+
+Ignore that and you are pretending 80 quadrats are 80 independent observations. They are closer to 16.
+:::
+::::
+:::::::
+
+## Wrap-up
+
+::::::: columns
+:::: {.column width="60%"}
+Today you:
+
+- Told a **nested** design from a **crossed** one, and learned the three questions that decide it
+- Found the right **error term** by asking what the treatment was applied to
+- Watched the same data give **F = 16.11 (p < 0.0000001)** the wrong way and **F = 2.72 (p = 0.091)** the right way
+- Estimated **variance components**, and found that half the variation lives between patches
+- Wrote it up with the correct degrees of freedom
+
+::: callout-important
+**⚠️ The mistake this lecture exists to prevent**
+
+Using the residual mean square as your denominator when the treatment was applied to something coarser than a single measurement. It inflates F, shrinks p, and it is the most common error in ecological field experiments (Hurlbert 1984).
+:::
+::::
+
+:::: {.column width="40%"}
+::: callout-note
+**✅ This has been the plan all along**
+
+| Week | Same idea, new tool |
+|------|------|
+| 1 | 64 needles, but 4 trees |
+| 3 | two-stage `summarise()` |
+| 4 | the paired t-test |
+| 5 | power: 44 trees vs 7 |
+| 9 | **nested ANOVA** |
+
+Today it finally got its own name and its own model. **Sums of squares were never the problem — the denominator was.**
+:::
+
+::: callout-tip
+**🖐 Before next class**
+
+Take a dataset you actually care about — yours, or one from a paper — and answer the three questions on the first slide of this section. Write down what your true *n* is. If it is smaller than the number of rows, you have found a nested design.
+:::
+::::
+:::::::
+
+## Getting unstuck
+
+When code breaks — and it will, that is normal:
+
+1.  Read the **error message** out loud; it usually names the line
+2.  Check the usual suspects: are `patch` and `treat` **factors**? Are your nested unit IDs *unique* across the whole dataset (patch 1–16), or do they restart within each treatment (1–4, 1–4, …)? If they restart, R cannot tell nesting from crossing — renumber them, or write `Error(treat:patch)`
+3.  Seeing **"Error() model is singular"**? You asked for more error-term combinations than your design contains — usually `Error(a:b)` where `Error(b)` is enough
+4.  Bring the **exact error** (copy-paste it) to class or office hours
+
+::: callout-note
+**✅ Key idea**
+
+Every working scientist googles error messages daily. Getting stuck is not failing — it is the job.
+:::

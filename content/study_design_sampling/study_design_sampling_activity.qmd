@@ -18,6 +18,10 @@ format:
 >
 > Work through each part in order, at your own pace. Type every line of code yourself into a **plain R script** — do not copy-paste. Blocks marked **▶ Run this** are code you should type and execute. Blocks marked **✏️ Your turn** ask you to write, modify, or answer something. Boxes marked **🚀 If you finish early** are optional bonus material that goes a bit further than what we covered in lecture.
 >
+> **Every grey `r` box below is code you type into an R script — not into the Console.** Before you start: **File → New File → R Script**, and save it as `09_study_design_sampling.R` in your project's `scripts/` folder. Then work down the worksheet, adding each block to the bottom of that one script, in order.
+>
+> **Type the `# ── Part …` header comment at the top of each block, too.** Those comment lines are not decoration — they are how your script stays navigable, how you find your way back to a block that broke, and how I find your work when I read your script. A block with no header comment is a block I cannot place. In RStudio they also show up in the document outline (the `≡` button at the bottom-left of the editor) so you can jump straight to any part.
+>
 > This worksheet uses a *simulated* fish dataset — we build the data ourselves in R, rather than loading a file — so you can see exactly what assumptions go into it. We'll study fish mass above and below waterfalls across multiple streams, and use it to practice recognizing proper replication vs. pseudoreplication and running power analysis before and after data collection.
 
 ------------------------------------------------------------------------
@@ -27,6 +31,7 @@ format:
 **▶ Run this in your Script:**
 
 ``` r
+# ── Part 1.1 · Setup and the Research Question ──────────────────────────
 library(tidyverse)
 library(pwr)
 
@@ -53,6 +58,7 @@ We'll sample fish above and below waterfalls in several streams. This is a **nat
 **▶ Run this** — simulate the data:
 
 ``` r
+# ── Part 2.1 · Study Design ─────────────────────────────────────────────
 # ADJUST THESE VARIABLES TO EXPLORE DIFFERENT SCENARIOS:
 n_streams <- 5         # Number of streams to sample
 n_fish_per_site <- 6   # Number of fish per site (above/below)
@@ -81,6 +87,7 @@ head(f_df, 12)
 **▶ Run this** — visualize the pooled data, then by stream:
 
 ``` r
+# ── Part 2.2 · Study Design ─────────────────────────────────────────────
 basic_plot <- f_df %>%
   ggplot(aes(x = position, y = mass_g, fill = position)) +
   geom_boxplot() +
@@ -106,6 +113,7 @@ stream_plot
 **🚀 If you finish early:** Change `waterfall_effect` to `0` and rerun the whole simulation. Does `basic_plot` still look like there's a difference? This is what "no true effect" looks like in this simulated world.
 
 ``` r
+# ── Part 2.3 · Study Design ─────────────────────────────────────────────
 # Write your code here:
 ```
 :::
@@ -130,6 +138,7 @@ ________________________________________________________
 **▶ Run this** — the WRONG analysis, treating every fish as independent:
 
 ``` r
+# ── Part 3.1 · Replication Issues ───────────────────────────────────────
 # This ignores that fish within a stream may be similar
 pseudo_test <- t.test(mass_g ~ position, data = f_df)
 pseudo_test
@@ -138,6 +147,7 @@ pseudo_test
 **▶ Run this** — the CORRECT analysis, averaging by stream first:
 
 ``` r
+# ── Part 3.2 · Replication Issues ───────────────────────────────────────
 stream_means <- f_df %>%
   group_by(stream_id, position) %>%
   summarize(mean_mass = mean(mass_g), .groups = "drop")
@@ -157,6 +167,7 @@ The proper analysis uses **streams as replicates** (n = 5, if you kept the defau
 **🚀 If you finish early:** Rerun Part 2's simulation with `n_fish_per_site <- 50` instead of 6 (keep everything else the same). Does `pseudo_test`'s p-value get even smaller, even though the true number of streams (and true replicates) hasn't changed?
 
 ``` r
+# ── Part 3.3 · Replication Issues ───────────────────────────────────────
 # Write your code here:
 ```
 :::
@@ -170,6 +181,7 @@ Cohen's d measures the difference between two group means in standard deviations
 **▶ Run this** — set expected values from pilot data, and compute the effect size:
 
 ``` r
+# ── Part 4.1 · Power Analysis ───────────────────────────────────────────
 above_mean <- 85
 below_mean <- 110
 pooled_sd <- 20
@@ -181,6 +193,7 @@ effect_val
 **▶ Run this** — required sample size for 80% power:
 
 ``` r
+# ── Part 4.2 · Power Analysis ───────────────────────────────────────────
 power_result <- pwr.t.test(
   d = effect_val,
   sig.level = 0.05,
@@ -195,6 +208,7 @@ power_result
 **▶ Run this** — visualize the power curve:
 
 ``` r
+# ── Part 4.3 · Power Analysis ───────────────────────────────────────────
 power_curve_df <- tibble(streams = 3:15) %>%
   rowwise() %>%
   mutate(power = pwr.t.test(n = streams,
@@ -215,6 +229,7 @@ curve_plot
 ✏️ **Your turn — experiment with different scenarios.** Change the values below and rerun:
 
 ``` r
+# ── Part 4.4 · Power Analysis ───────────────────────────────────────────
 above_mean <- 85
 below_mean <- 100    # Try changing this
 pooled_sd <- 25       # Try changing this
@@ -242,6 +257,7 @@ ________________________________________________________
 **🚀 If you finish early:** Re-derive `power_result` using `type = "two.sample"` instead of `"paired"`, keeping the same effect size. Does the paired or unpaired design need fewer streams for 80% power? Does that match what lecture said about paired designs and power?
 
 ``` r
+# ── Part 4.5 · Power Analysis ───────────────────────────────────────────
 # Write your code here:
 ```
 :::
@@ -255,6 +271,7 @@ Now let's analyze the power we actually had with our streams from Part 2.
 **▶ Run this:**
 
 ``` r
+# ── Part 5.1 · Post-Hoc Power Analysis ──────────────────────────────────
 observed_above <- mean(stream_wide$above)
 observed_below <- mean(stream_wide$below)
 observed_diff <- observed_below - observed_above
@@ -265,6 +282,7 @@ observed_effect
 ```
 
 ``` r
+# ── Part 5.2 · Post-Hoc Power Analysis ──────────────────────────────────
 actual_power <- pwr.t.test(
   n = 6,
   d = observed_effect,
@@ -276,10 +294,26 @@ actual_power
 
 ✏️ **Your turn:** What was our actual power? Is it above or below the 80% "acceptable" threshold from lecture? `________________________`
 
+::: callout-important
+**⚠️ Careful — this is *observed* power**
+
+We just computed power using `observed_effect`, the effect size from **this very sample**. That number is a mathematical re-expression of the p-value you already have: a small p always gives high observed power, a large p always gives low observed power. It cannot tell you anything the p-value did not.
+
+Use it the way we did in the Power lecture — as an **input to planning the next study**. Do not use it to argue "our result was non-significant *because* we had low power," which is circular.
+
+✏️ **Your turn:** Redo the calculation for an effect size you decide in advance is biologically meaningful — say `d = 0.8` — instead of the observed one. That answers a real question: *could this design have detected an effect worth caring about?*
+
+``` r
+# ── Part 5.3 · Post-Hoc Power Analysis ──────────────────────────────────
+# Write your code here:
+```
+:::
+
 ::: callout-tip
 **🚀 If you finish early:** `actual_power` used `n = 6` hardcoded. Replace it with `n = n_streams` so it automatically matches whatever you set in Part 2. Rerun Part 2 with `n_streams <- 10` and confirm `actual_power` updates accordingly.
 
 ``` r
+# ── Part 5.4 · Post-Hoc Power Analysis ──────────────────────────────────
 # Write your code here:
 ```
 :::
@@ -291,6 +325,7 @@ actual_power
 **▶ Run this** — what if we ignored the stream pairing?
 
 ``` r
+# ── Part 6.1 · Alternative Analysis Approaches ──────────────────────────
 unpaired_test <- t.test(mean_mass ~ position, data = stream_means)
 unpaired_test
 ```
@@ -298,6 +333,7 @@ unpaired_test
 **▶ Run this** — summary statistics at both levels:
 
 ``` r
+# ── Part 6.2 · Alternative Analysis Approaches ──────────────────────────
 # By individual fish (the WRONG level of replication)
 summary_df <- f_df %>%
   group_by(position) %>%
@@ -327,6 +363,7 @@ stream_summary
 **🚀 If you finish early:** Compare the p-value of `unpaired_test` (Part 6) to `proper_test` (Part 3, which was paired). Which is more powerful for this same data — the paired or unpaired analysis at the stream level?
 
 ``` r
+# ── Part 6.3 · Alternative Analysis Approaches ──────────────────────────
 # Write your code here:
 ```
 :::
@@ -348,6 +385,7 @@ ________________________________________________________
 2. **How many replicates do you need?** Use these values: fast water mean = 75g, slow water mean = 85g, standard deviation = 15g, desired power = 80%.
 
 ``` r
+# ── Part 7.1 · Design Your Own Study ────────────────────────────────────
 fast_mean <- 75
 slow_mean <- 85
 sd_val <- 15
@@ -379,6 +417,7 @@ ________________________________________________________
 **🚀 If you finish early:** If fast and slow water sites can be paired *within* the same stream (like above/below waterfall was), redo the calculation with `type = "paired"`. How many fewer replicates do you need?
 
 ``` r
+# ── Part 7.2 · Design Your Own Study ────────────────────────────────────
 # Write your code here:
 ```
 :::

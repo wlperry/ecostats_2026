@@ -18,6 +18,10 @@ format:
 >
 > Work through each part in order, at your own pace. Type every line of code yourself into a **plain R script** — do not copy-paste. Blocks marked **▶ Run this** are code you should type and execute. Blocks marked **✏️ Your turn** ask you to write, modify, or answer something. Boxes marked **🚀 If you finish early** are optional bonus material that goes a bit further than what we covered in lecture.
 >
+> **Every grey `r` box below is code you type into an R script — not into the Console.** Before you start: **File → New File → R Script**, and save it as `08_glm_logistic_regression.R` in your project's `scripts/` folder. Then work down the worksheet, adding each block to the bottom of that one script, in order.
+>
+> **Type the `# ── Part …` header comment at the top of each block, too.** Those comment lines are not decoration — they are how your script stays navigable, how you find your way back to a block that broke, and how I find your work when I read your script. A block with no header comment is a block I cannot place. In RStudio they also show up in the document outline (the `≡` button at the bottom-left of the editor) so you can jump straight to any part.
+>
 > This worksheet uses the `gala` island-biogeography dataset (from the `faraway` package) for Gaussian, Poisson, and negative binomial GLMs, and a simulated lizard presence/absence dataset for logistic regression.
 
 Generalized Linear Models (GLMs) extend linear models to handle different types of response variables:
@@ -53,7 +57,8 @@ Generalized Linear Models (GLMs) extend linear models to handle different types 
 
 **▶ Run this in your Script:**
 
-```r
+``` r
+# ── Part 1.1 · Setup and the Data ───────────────────────────────────────
 library(janitor)
 library(pscl)
 library(tinytable)
@@ -82,13 +87,14 @@ The `gala` dataframe from the `faraway` package contains data on 30 Galapagos is
 - `endemics` — Number of endemic species (count data)
 - `area` — Island area (km²)
 - `elevation` — Maximum elevation (m)
-- `Nearest` — Distance to nearest island (km)
+- `nearest` — Distance to nearest island (km)
 - `scruz` — Distance to Santa Cruz island (km)
 - `adjacent` — Area of adjacent island (km²)
 
 **▶ Run this** — clean the data and create a size category variable:
 
-```r
+``` r
+# ── Part 1.2 · Setup and the Data ───────────────────────────────────────
 g_df <- gala %>% clean_names() %>%
   rename(spp = species) %>%
   mutate(size_cat = case_when(
@@ -105,13 +111,15 @@ head(g_df %>% dplyr::select(-scruz, -adjacent), 10)
 
 **▶ Run this** — check for data completeness:
 
-```r
+``` r
+# ── Part 1.3 · Setup and the Data ───────────────────────────────────────
 g_df %>% skim()
 ```
 
 **▶ Run this** — visualize the data graphically:
 
-```r
+``` r
+# ── Part 1.4 · Setup and the Data ───────────────────────────────────────
 ggplot(g_df, aes(x = spp)) +
   geom_histogram(binwidth = 25, fill = "darkblue", color = "black") +
   labs(title = "Distribution of Species Richness",
@@ -139,7 +147,8 @@ The simplest form of GLM uses a normal (Gaussian) distribution with an identity 
 
 **▶ Run this** — fit the linear model the old way:
 
-```r
+``` r
+# ── Part 2.1 · Gaussian GLM = Linear Model ──────────────────────────────
 lm_model <- lm(endemics ~ size_cat, data = g_df)
 summary(lm_model)
 
@@ -148,7 +157,8 @@ Anova(lm_model, type = 3)
 
 **▶ Run this** — fit the equivalent Gaussian GLM:
 
-```r
+``` r
+# ── Part 2.2 · Gaussian GLM = Linear Model ──────────────────────────────
 gauss_model <- glm(endemics ~ size_cat, data = g_df,
                     family = gaussian(link = "identity"))
 
@@ -161,7 +171,8 @@ Anova(gauss_model, type = "III", test = "F")
 
 **▶ Run this** — check assumptions of both models:
 
-```r
+``` r
+# ── Part 2.3 · Gaussian GLM = Linear Model ──────────────────────────────
 # Linear model diagnostics
 plot(lm_model)
 
@@ -178,7 +189,8 @@ leveneTest(endemics ~ size_cat, data = g_df)
 
 **▶ Run this** — DHARMa simulation-based diagnostics:
 
-```r
+``` r
+# ── Part 2.4 · Gaussian GLM = Linear Model ──────────────────────────────
 sim_gauss_res <- simulateResiduals(fittedModel = gauss_model, n = 1000)
 testDispersion(sim_gauss_res)
 plot(sim_gauss_res)
@@ -186,7 +198,8 @@ plot(sim_gauss_res)
 
 **▶ Run this** — estimated marginal means and post-hoc comparisons for both models:
 
-```r
+``` r
+# ── Part 2.5 · Gaussian GLM = Linear Model ──────────────────────────────
 lm_emmeans <- emmeans(lm_model, ~ size_cat)
 lm_emmeans
 
@@ -218,7 +231,8 @@ plot(gauss_emmeans, comparisons = TRUE)
 
 **▶ Run this** — fit a Poisson GLM with size category as predictor:
 
-```r
+``` r
+# ── Part 3.1 · Poisson GLM ──────────────────────────────────────────────
 poiss_model <- glm(spp ~ size_cat,
                     data = g_df,
                     family = poisson(link = "log"))
@@ -229,19 +243,22 @@ Does island size category, as a whole, have a statistically significant effect o
 
 **▶ Run this:**
 
-```r
+``` r
+# ── Part 3.2 · Poisson GLM ──────────────────────────────────────────────
 Anova(poiss_model, type = "III", test = "LR")
 ```
 
 **▶ Run this** — check for overdispersion (should be close to 1 for a well-fitting Poisson model; > 1.5 may indicate overdispersion):
 
-```r
+``` r
+# ── Part 3.3 · Poisson GLM ──────────────────────────────────────────────
 performance::check_overdispersion(poiss_model)
 ```
 
 **▶ Run this** — DHARMa diagnostics:
 
-```r
+``` r
+# ── Part 3.4 · Poisson GLM ──────────────────────────────────────────────
 sim_res <- simulateResiduals(fittedModel = poiss_model, n = 1000)
 testDispersion(sim_res)
 plot(sim_res)
@@ -255,7 +272,8 @@ plot(sim_res)
 
 **▶ Run this** — estimated marginal means, pairwise comparisons, and a plot:
 
-```r
+``` r
+# ── Part 3.5 · Poisson GLM ──────────────────────────────────────────────
 pois_emm <- emmeans(poiss_model,
                      specs = ~ size_cat,
                      type = "response")
@@ -298,14 +316,16 @@ When count data shows more variability than a Poisson distribution expects (vari
 
 **▶ Run this:**
 
-```r
+``` r
+# ── Part 4.1 · Negative Binomial GLM ────────────────────────────────────
 nb_model <- glm.nb(spp ~ size_cat, data = g_df)
 summary(nb_model)
 ```
 
 **▶ Run this** — assumptions and overdispersion check:
 
-```r
+``` r
+# ── Part 4.2 · Negative Binomial GLM ────────────────────────────────────
 nb_sim_res <- simulateResiduals(fittedModel = nb_model)
 plot(nb_sim_res)
 
@@ -318,7 +338,8 @@ check_overdispersion(nb_model)
 
 **▶ Run this** — ANOVA, estimated marginal means, and pairwise comparisons:
 
-```r
+``` r
+# ── Part 4.3 · Negative Binomial GLM ────────────────────────────────────
 nb_anova <- Anova(nb_model, type = "III", test = "LR")
 print(nb_anova)
 
@@ -337,7 +358,8 @@ print(nb_cld)
 ::: callout-tip
 **🚀 If you finish early:** Compare AIC values for `poiss_model` and `nb_model` using `AIC(poiss_model, nb_model)`. Which model is preferred?
 
-```r
+``` r
+# ── Part 4.4 · Negative Binomial GLM ────────────────────────────────────
 # Write your code here:
 ```
 :::
@@ -350,7 +372,8 @@ So far we've used a categorical predictor (`size_cat`). Now let's redo the same 
 
 **▶ Run this** — explore the relationships graphically:
 
-```r
+``` r
+# ── Part 5.1 · Gaussian, Poisson & Negative-Binomial ────────────────────
 p1 <- ggplot(g_df, aes(x = endemics)) +
   geom_histogram(binwidth = 10, fill = "darkblue", color = "black") +
   labs(title = "Distribution of Endemic Species",
@@ -389,7 +412,8 @@ We model the continuous `endemics` variable as a function of the continuous `are
 
 **▶ Run this:**
 
-```r
+``` r
+# ── Part 5.2 · Gaussian, Poisson & Negative-Binomial ────────────────────
 lm_reg_model <- lm(endemics ~ area, data = g_df)
 summary(lm_reg_model)
 
@@ -417,7 +441,8 @@ We now model the total number of species (`spp`) as a function of island `area`.
 
 **▶ Run this:**
 
-```r
+``` r
+# ── Part 5.3 · Gaussian, Poisson & Negative-Binomial ────────────────────
 poiss_reg_model <- glm(spp ~ area,
                         data = g_df,
                         family = poisson(link = "log"))
@@ -450,7 +475,8 @@ ggplot(g_df, aes(x = area, y = spp)) +
 
 **▶ Run this:**
 
-```r
+``` r
+# ── Part 5.4 · Gaussian, Poisson & Negative-Binomial ────────────────────
 nb_reg_model <- glm.nb(spp ~ area, data = g_df)
 summary(nb_reg_model)
 
@@ -500,7 +526,8 @@ Based on the example from Polis et al. (1998), we'll model the presence/absence 
 
 **▶ Run this** — build the dataset and look at it graphically:
 
-```r
+``` r
+# ── Part 6.1 · Logistic Regression ──────────────────────────────────────
 set.seed(123)
 island_data <- data.frame(
   island_id = 1:30,
@@ -524,7 +551,8 @@ ggplot() +
 
 **▶ Run this** — fit the logistic regression model:
 
-```r
+``` r
+# ── Part 6.2 · Logistic Regression ──────────────────────────────────────
 lizard_model <- glm(uta_present ~ pa_ratio,
                      data = island_data,
                      family = binomial(link = "logit"))
@@ -534,7 +562,8 @@ summary(lizard_model)
 
 **▶ Run this** — visualize the fitted probability curve:
 
-```r
+``` r
+# ── Part 6.3 · Logistic Regression ──────────────────────────────────────
 pred_data <- data.frame(
   pa_ratio = seq(min(island_data$pa_ratio),
                  max(island_data$pa_ratio),
@@ -566,7 +595,8 @@ We want to test the null hypothesis that β₁ = 0 — no relationship between P
 
 **▶ Run this:**
 
-```r
+``` r
+# ── Part 6.4 · Logistic Regression ──────────────────────────────────────
 reduced_model <- glm(uta_present ~ 1,
                       data = island_data,
                       family = binomial(link = "logit"))
@@ -584,7 +614,8 @@ The odds ratio represents how the odds of the event (e.g., lizard presence) chan
 
 **▶ Run this** — three different ways to get the odds ratio and its confidence interval:
 
-```r
+``` r
+# ── Part 6.5 · Logistic Regression ──────────────────────────────────────
 coef_lizard <- coef(lizard_model)[2]
 odds_ratio <- exp(coef_lizard)
 ci <- exp(confint(lizard_model, "pa_ratio"))
@@ -605,7 +636,8 @@ tidy(lizard_model, exponentiate = TRUE, conf.int = TRUE)
 
 **▶ Run this** — several ways to assess goodness-of-fit for a logistic regression model:
 
-```r
+``` r
+# ── Part 6.6 · Logistic Regression ──────────────────────────────────────
 # McFadden's and other popular R² values
 performance::r2(lizard_model)
 
@@ -624,7 +656,8 @@ Logistic regression has different — and generally fewer — assumptions to tes
 
 **▶ Run this** — check linearity of the logit (looking for a flat, non-curved line):
 
-```r
+``` r
+# ── Part 6.7 · Logistic Regression ──────────────────────────────────────
 check_model(lizard_model, residual_type = "normal")
 ```
 
@@ -632,7 +665,8 @@ DHARMa is excellent for GLMs — it simulates residuals and plots them against p
 
 **▶ Run this:**
 
-```r
+``` r
+# ── Part 6.8 · Logistic Regression ──────────────────────────────────────
 sim_res <- simulateResiduals(fittedModel = lizard_model)
 
 plotResiduals(sim_res, lizard_model$model$pa_ratio,
@@ -647,7 +681,8 @@ Overall model fit isn't an "assumption" so much as a check that the model as a w
 ::: callout-tip
 **🚀 If you finish early:** Refit `lizard_model` with a quadratic term (`pa_ratio + I(pa_ratio^2)`) and compare AIC to the original model. Does adding curvature improve the fit?
 
-```r
+``` r
+# ── Part 6.9 · Logistic Regression ──────────────────────────────────────
 # Write your code here:
 ```
 :::

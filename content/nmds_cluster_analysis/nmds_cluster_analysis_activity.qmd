@@ -18,11 +18,16 @@ format:
 >
 > Work through each part in order, at your own pace. Type every line of code yourself into a **plain R script** — do not copy-paste. Blocks marked **▶ Run this** are code you should type and execute. Blocks marked **✏️ Your turn** ask you to write, modify, or answer something. Boxes marked **🚀 If you finish early** are optional bonus material that goes a bit further than what we covered in lecture.
 >
+> **Every grey `r` box below is code you type into an R script — not into the Console.** Before you start: **File → New File → R Script**, and save it as `10_nmds_permanova.R` in your project's `scripts/` folder. Then work down the worksheet, adding each block to the bottom of that one script, in order.
+>
+> **Type the `# ── Part …` header comment at the top of each block, too.** Those comment lines are not decoration — they are how your script stays navigable, how you find your way back to a block that broke, and how I find your work when I read your script. A block with no header comment is a block I cannot place. In RStudio they also show up in the document outline (the `≡` button at the bottom-left of the editor) so you can jump straight to any part.
+>
 > This worksheet uses the iris dataset, treating the four flower measurements as if they were abundances of different "species" at different "sites" — a handy stand-in for real community data.
 
 **▶ Run this in your Script:**
 
-```r
+``` r
+# ── Setup (1) ───────────────────────────────────────────────────────────
 library(vegan)
 library(janitor)
 library(patchwork)
@@ -60,7 +65,8 @@ We'll use the iris dataset for this analysis, treating it as if the measurements
 
 **▶ Run this:**
 
-```r
+``` r
+# ── Part 1.1 · Data Preparation and Exploration ─────────────────────────
 iris_df <- read_csv("data/iris.csv") %>%
   clean_names()
 
@@ -69,7 +75,8 @@ head(iris_df)
 
 **▶ Run this** — separate the grouping variable from the numeric "community" matrix:
 
-```r
+``` r
+# ── Part 1.2 · Data Preparation and Exploration ─────────────────────────
 iris_species_df <- iris_df %>%
   dplyr::select(species)
 
@@ -81,7 +88,8 @@ str(iris_numeric_df)
 
 **▶ Run this** — a quick pairs plot to see relationships:
 
-```r
+``` r
+# ── Part 1.3 · Data Preparation and Exploration ─────────────────────────
 iris_pairs_plot <- iris_df %>%
   dplyr::select(-species) %>%
   pairs(main = "Iris Measurements Relationships")
@@ -93,7 +101,8 @@ iris_pairs_plot <- iris_df %>%
 
 ## Step 1: Calculate a distance matrix
 
-```r
+``` r
+# ── Part 2.1 · Running NMDS ─────────────────────────────────────────────
 # For iris data, we'll use Euclidean distance since these are measurements
 # (Bray-Curtis is more common for real abundance/count data)
 iris_dist <- dist(iris_numeric_df, method = "euclidean")
@@ -103,7 +112,8 @@ iris_dist[1:5]
 
 ## Step 2: Run NMDS
 
-```r
+``` r
+# ── Part 2.2 · Running NMDS ─────────────────────────────────────────────
 set.seed(123)
 iris_nmds_model <- metaMDS(iris_numeric_df,
                            distance = "euclidean",
@@ -117,7 +127,8 @@ iris_nmds_model
 
 ## Step 3: Extract NMDS scores
 
-```r
+``` r
+# ── Part 2.3 · Running NMDS ─────────────────────────────────────────────
 nmds_scores_df <- as.data.frame(iris_nmds_model$points) %>%
   rename(nmds1 = MDS1, nmds2 = MDS2) %>%
   bind_cols(iris_species_df)
@@ -127,7 +138,8 @@ head(nmds_scores_df)
 
 ## Step 4: Create an NMDS plot
 
-```r
+``` r
+# ── Part 2.4 · Running NMDS ─────────────────────────────────────────────
 nmds_basic_plot <- ggplot(nmds_scores_df, aes(x = nmds1, y = nmds2, color = species)) +
   geom_point(size = 3, alpha = 0.8) +
   labs(title = "NMDS Ordination of Iris Data",
@@ -142,7 +154,8 @@ nmds_basic_plot
 
 ## Step 5: Add confidence ellipses
 
-```r
+``` r
+# ── Part 2.5 · Running NMDS ─────────────────────────────────────────────
 nmds_ellipse_plot <- ggplot(nmds_scores_df, aes(x = nmds1, y = nmds2, color = species)) +
   geom_point(size = 3, alpha = 0.8) +
   stat_ellipse(level = 0.95, linewidth = 1) +
@@ -158,7 +171,8 @@ nmds_ellipse_plot
 
 ## Step 6: Stress plot (Shepard diagram)
 
-```r
+``` r
+# ── Part 2.6 · Running NMDS ─────────────────────────────────────────────
 stressplot(iris_nmds_model, main = "Shepard Diagram: Ordination vs Original Distances")
 ```
 
@@ -172,7 +186,8 @@ PERMANOVA (Permutational Multivariate Analysis of Variance) tests whether groups
 
 ## Step 1: Run PERMANOVA
 
-```r
+``` r
+# ── Part 3.1 · PERMANOVA Analysis ───────────────────────────────────────
 set.seed(456)
 iris_permanova_model <- adonis2(iris_numeric_df ~ species,
                                 data = iris_df,
@@ -188,7 +203,8 @@ iris_permanova_model
 
 Before interpreting PERMANOVA, we need to check if groups have similar multivariate spread.
 
-```r
+``` r
+# ── Part 3.2 · PERMANOVA Analysis ───────────────────────────────────────
 iris_dist_full <- dist(iris_numeric_df)
 dispersion_model <- betadisper(iris_dist_full, iris_df$species)
 
@@ -198,13 +214,15 @@ dispersion_test
 
 ## Step 3: Visualize dispersions
 
-```r
+``` r
+# ── Part 3.3 · PERMANOVA Analysis ───────────────────────────────────────
 plot(dispersion_model, main = "Multivariate Dispersion by Species")
 ```
 
 ## Step 4: Pairwise PERMANOVA
 
-```r
+``` r
+# ── Part 3.4 · PERMANOVA Analysis ───────────────────────────────────────
 pairwise_permanova <- function(data_matrix, groups, distance_method = "euclidean") {
   group_levels <- unique(groups)
   comparisons <- combn(group_levels, 2)
@@ -252,7 +270,8 @@ pairwise_results_df
 ::: callout-tip
 **🚀 If you finish early:** Does the dispersion test in Step 2 suggest the three species have similar multivariate spread? If not, how would that affect how you interpret the PERMANOVA result from Step 1?
 
-```r
+``` r
+# ── Part 3.5 · PERMANOVA Analysis ───────────────────────────────────────
 # Write your notes/code here:
 ```
 :::
@@ -265,7 +284,8 @@ ANOSIM (Analysis of Similarities) tests whether there is a significant differenc
 
 ## Step 1: Run ANOSIM
 
-```r
+``` r
+# ── Part 4.1 · ANOSIM Analysis ──────────────────────────────────────────
 set.seed(789)
 iris_anosim_model <- anosim(iris_dist_full, iris_df$species, permutations = 999)
 
@@ -276,7 +296,8 @@ iris_anosim_model
 
 ## Step 2: Plot ANOSIM results
 
-```r
+``` r
+# ── Part 4.2 · ANOSIM Analysis ──────────────────────────────────────────
 plot(iris_anosim_model, main = "ANOSIM Results: Distribution of Permuted R Statistics")
 ```
 
@@ -288,7 +309,8 @@ If we had environmental variables, we could fit them to the ordination. For demo
 
 **▶ Run this:**
 
-```r
+``` r
+# ── Part 5.1 · Environmental Fitting (Optional) ─────────────────────────
 env_data_df <- data.frame(petal_length = iris_df$petal_length)
 
 env_fit_model <- envfit(iris_nmds_model, env_data_df, permutations = 999)
@@ -297,7 +319,8 @@ env_fit_model
 
 **▶ Run this** — visualize the environmental vector on the ordination:
 
-```r
+``` r
+# ── Part 5.2 · Environmental Fitting (Optional) ─────────────────────────
 env_coords_df <- as.data.frame(env_fit_model$vectors$arrows * 2)  # Scale for visibility
 env_coords_df$variable <- rownames(env_coords_df)
 
@@ -324,7 +347,8 @@ nmds_env_plot
 ::: callout-tip
 **🚀 If you finish early:** Repeat the environmental fitting with `sepal_width` instead of `petal_length`. Does it point in a similar direction, or a very different one?
 
-```r
+``` r
+# ── Part 5.3 · Environmental Fitting (Optional) ─────────────────────────
 # Write your code here:
 ```
 :::
