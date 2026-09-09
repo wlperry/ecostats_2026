@@ -719,25 +719,28 @@ In R, using the `perm` package. Assumptions: both groups have a similar distribu
 ```{r nonparametric-t-tests-18}
 library(perm)
 
-ne12_perm_data <- isl_ne12_df %>%
-  filter(lake == "NE 12") %>%
-  pull(length_mm)
-
-# Randomly sample exactly 25 observations from NE 12
+# Balance the design: take 25 NE 12 fish, keep all of Island Lake
 set.seed(123)
-ne12_perm_data <- sample(ne12_perm_data, size = 25, replace = FALSE)
+perm_df <- bind_rows(
+  isl_ne12_df %>%
+    filter(lake == "NE 12") %>%
+    slice_sample(n = 25),
+  isl_ne12_df %>%
+    filter(lake == "Island Lake")
+)
 
-island_perm_data <- isl_ne12_df %>%
-  filter(lake == "Island Lake") %>%
-  pull(length_mm)
-
-observed_diff <- mean(ne12_perm_data, na.rm = TRUE) - mean(island_perm_data, na.rm = TRUE)
+# The difference the test is about
+perm_df %>%
+  group_by(lake) %>%
+  summarize(n       = sum(!is.na(length_mm)),
+            mean_mm = round(mean(length_mm, na.rm = TRUE), 2))
 ```
 ::::
 
 :::: {.column width="40%"}
 ```{r nonparametric-t-tests-19}
-permTS(ne12_perm_data, island_perm_data,
+permTS(length_mm ~ lake,
+       data = perm_df,
        alternative = "two.sided",
        method = "exact.mc",
        control = permControl(nmc = 10000))
