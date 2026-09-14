@@ -2,8 +2,8 @@
 metadata-files:
   - ../../_templates/_lectures.yml
 title: "Lecture: Graphing Effectively"
-subtitle: "Boxplots, group comparisons, and saving a publication-ready figure"
-description: "Boxplots with jittered raw points, writing axis labels and titles properly with labs(), mapping color and fill by group, histograms and density curves, plotting mean ± SE directly with stat_summary(), faceting, a quick theme tour, custom colors and legends with scale_color_manual(), and a real ggsave() drill — all on the pine needle dataset."
+subtitle: "Boxplots, axis limits, a reusable themes file, multi-panel figures, and saving publication-ready output"
+description: "Boxplots with jittered raw points, axis labels with labs(), mapping color and fill by group, setting axis limits honestly with coord_cartesian(), plotting mean ± SE with stat_summary(), sourcing a reusable themes file for publication-ready figures, combining panels with patchwork, and a real ggsave() drill — all on the pine needle data the class collected."
 categories: [Graphing, ggplot2, R]
 order: 4
 week: 3
@@ -48,13 +48,15 @@ You now have real numbers describing shady vs. sunny needles. Today we make thos
 
 1.  The `ggplot` grammar, recapped
 2.  Boxplots done right — with raw points
-3.  Axis labels and titles, done right
-4.  Mapping color by group
-5.  Histograms and density curves
-6.  Plotting mean ± SE directly
-7.  Faceting and a quick theme tour
-8.  Custom colors and legends with `scale_color_manual()`
+3.  Axis labels and titles with `labs()`
+4.  Axis limits with `coord_cartesian()`
+5.  Mapping color by group
+6.  Mean ± SE with `stat_summary()`
+7.  **A themes file you `source()` once** — publication-ready figures
+8.  **`patchwork`** — many plots on one page
 9.  `ggsave()`, for real this time
+
+⏱ Histograms, density curves, faceting, and `scale_color_manual()` are in the notes as time allows — the worksheet has them either way.
 :::
 ::::
 :::::::
@@ -195,6 +197,16 @@ Whitlock & Schluter, Ch. 2 — Displaying Data, "How to draw a good graph," make
 ::::
 ::::::
 
+## ▶ Your Turn — Code It Now
+
+::: callout-important
+**Stop here and write code.**
+
+Worksheet **Parts 1, 2 and 3** — load the data, build the boxplot, add the raw points.
+
+Come back when it runs. If it does not run, that is the interesting part — bring the error.
+:::
+
 ## Part 2b · Axis Labels and Titles, Done Right {.divider}
 
 ## Before `labs()` — Never Ship This
@@ -297,6 +309,169 @@ The legend title comes from whatever you write for **the aesthetic you mapped** 
 ::::
 ::::::
 
+## ▶ Your Turn — Code It Now
+
+::: callout-important
+**Stop here and write code.**
+
+Worksheet **Part 3b** — write real titles, axis labels, and a legend title with `labs()`.
+
+Come back when it runs. If it does not run, that is the interesting part — bring the error.
+:::
+
+## Part 2c · Setting the Axis Limits — `coord_cartesian()` {.divider}
+
+## `coord_cartesian()` — Choosing What the Reader Sees
+
+:::::: columns
+::: {.column width="60%"}
+```{r graphing-effectively-coord-1}
+#| fig-width: 3
+#| fig-height: 2.6
+#| fig-alt: "Boxplot of needle length by side of tree with the y-axis set to run from 0 to 25 mm using coord_cartesian, so the two boxes sit in the upper half of the panel against a zero baseline."
+ggplot(pine_df, aes(x = side, y = needle_length_mm, fill = side)) +
+  geom_boxplot(alpha = 0.6, outlier.shape = NA) +
+  labs(
+    title = "Needle Length by Side of Tree",
+    x = "Side of tree",
+    y = "Needle length (mm)"
+  ) +
+  coord_cartesian(ylim = c(0, 25)) +
+  theme_minimal(base_size = 9) +
+  theme(legend.position = "none")
+```
+:::
+
+:::: {.column width="40%"}
+`ggplot` picks axis limits from your data. That is a fine default for exploring — and the wrong default the moment a reader has to judge *how big* a difference is.
+
+- `coord_cartesian(ylim = c(0, 25))` — set the y-axis range
+- `coord_cartesian(xlim = c(...))` — same for x
+- Both at once: `coord_cartesian(xlim = c(...), ylim = c(...))`
+
+::: callout-note
+**✅ Key idea**
+
+Starting a measurement axis at **zero** is what keeps a 1 mm difference from looking like a canyon. Decide the limits deliberately; don't inherit them.
+:::
+::::
+::::::
+
+## `coord_cartesian()` — Both Axes at Once
+
+:::::: columns
+::: {.column width="60%"}
+```{r graphing-effectively-coord-2}
+#| fig-width: 3
+#| fig-height: 2.6
+#| fig-alt: "Scatterplot of needle width against needle length, colored by side of tree, with both axes set using coord_cartesian to x from 5 to 25 mm and y from 0.4 to 1.8 mm, a window that comfortably contains every point."
+pine_scatter_plot <- ggplot(pine_df, aes(x = needle_length_mm, y = needle_width_mm,
+                                         color = side)) +
+  geom_point(alpha = 0.6, size = 2) +
+  labs(
+    title = "Needle Width vs. Length",
+    x = "Needle length (mm)",
+    y = "Needle width (mm)",
+    color = "Side"
+  ) +
+  coord_cartesian(xlim = c(5, 25), ylim = c(0.4, 1.8)) +
+  theme_minimal(base_size = 9)
+
+pine_scatter_plot
+```
+:::
+
+:::: {.column width="40%"}
+::: callout-tip
+**🖐 Notice**
+
+Two continuous axes, so both `xlim =` and `ylim =` are useful here. On the boxplot, `x` was a category — there is nothing to zoom.
+:::
+
+::: callout-note
+**📖 Reference**
+
+[📖 R4DS §11.4 — Scales](https://r4ds.hadley.nz/communication.html#scales)
+:::
+::::
+::::::
+
+## The Trap — `ylim()` Deletes Data, `coord_cartesian()` Does Not
+
+::: callout-note
+**🔮 Predict first:** Both plots below ask for a y-axis running 14 to 16 mm. One of them changes where the boxes are drawn. Which one, and why?
+:::
+
+::::::: columns
+:::: {.column width="60%"}
+```{r graphing-effectively-coord-3}
+#| fig-width: 3
+#| fig-height: 2.2
+#| fig-alt: "Boxplot of needle length by side with ylim used to restrict the axis to 14 to 16 mm, which silently removes every needle outside that range and redraws the boxes from the surviving rows only."
+# ❌ ylim() THROWS AWAY every row outside the range first
+ggplot(pine_df, aes(x = side, y = needle_length_mm, fill = side)) +
+  geom_boxplot(alpha = 0.6) +
+  ylim(14, 16) +
+  labs(title = "ylim() — boxes redrawn from survivors") +
+  theme_minimal(base_size = 8) +
+  theme(legend.position = "none")
+```
+
+```{r graphing-effectively-coord-4}
+#| fig-width: 3
+#| fig-height: 2.2
+#| fig-alt: "The same boxplot with coord_cartesian used to zoom to 14 to 16 mm, which keeps every row in the calculation and simply crops the view, so the medians and quartiles are unchanged."
+# ✅ coord_cartesian() keeps every row and just crops the view
+ggplot(pine_df, aes(x = side, y = needle_length_mm, fill = side)) +
+  geom_boxplot(alpha = 0.6) +
+  coord_cartesian(ylim = c(14, 16)) +
+  labs(title = "coord_cartesian() — same boxes, zoomed") +
+  theme_minimal(base_size = 8) +
+  theme(legend.position = "none")
+```
+::::
+
+:::: {.column width="40%"}
+::: callout-warning
+**⚠️ Watch out!**
+
+`ylim(14, 16)` and `scale_y_continuous(limits = c(14, 16))` **filter the data before the geom draws it**. Every needle outside 14–16 mm is silently dropped, and the median, the quartiles, and the whiskers are all recomputed from what is left. R warns about "removed rows" and students read past it every time.
+
+`coord_cartesian()` computes the statistics on **all** the data and then zooms the camera. The boxes do not move.
+:::
+
+::: callout-tip
+**🖐 The rule**
+
+Use `coord_cartesian()` to zoom. Use `filter()` when you actually mean to remove data — on purpose, in the data step, where you can see it.
+:::
+
+::: callout-note
+**📖 Worth knowing — changing the axis *scale*, not just its limits**
+
+Right-skewed data (a few very large values squashing everything else into a corner) is usually better read on a log axis:
+
+``` r
++ scale_x_log10()      # the AXIS is logged; the data are untouched
+```
+
+That is different again from logging the data itself with `mutate(log_length = log(needle_length_mm))`, which changes the numbers every later calculation sees.
+
+Nothing today needs it — our needles are not skewed. Try it on your scatterplot if you are curious, and we will come back to it when a distribution actually calls for it.
+:::
+::::
+:::::::
+
+## ▶ Your Turn — Code It Now
+
+::: callout-important
+**Stop here and write code.**
+
+Worksheet **Part 3c** — set your axis limits with `coord_cartesian()`. The `ylim()` trap stays on screen; you do not need to type it.
+
+Come back when it runs. If it does not run, that is the interesting part — bring the error.
+:::
+
 ## Part 3 · Mapping Color by Group {.divider}
 
 ## Mapping Color by Group
@@ -337,6 +512,25 @@ pine_team_plot
 :::
 
 ::: callout-note
+**📖 Worth knowing — where you put `aes()` matters too**
+
+An `aes()` inside `ggplot()` is **global**: every layer inherits it. An `aes()` inside a single geom applies to **that layer only**:
+
+``` r
+# global — both layers colored by side
+ggplot(pine_df, aes(x = side, y = needle_length_mm, color = side)) +
+  geom_point() + stat_summary(fun = mean, geom = "point", size = 4)
+
+# per-layer — points colored by team, the mean drawn in plain black
+ggplot(pine_df, aes(x = side, y = needle_length_mm)) +
+  geom_point(aes(color = team)) +
+  stat_summary(fun = mean, geom = "point", size = 4)
+```
+
+Just know it exists for now — we will lean on it later, when a plot has to show raw data and a fitted model at the same time.
+:::
+
+::: callout-note
 **📖 Reference**
 
 [📖 R4DS §9.1 — Aesthetic mappings](https://r4ds.hadley.nz/layers.html#aesthetic-mappings)
@@ -344,7 +538,21 @@ pine_team_plot
 ::::
 ::::::
 
+## ▶ Your Turn — Code It Now
+
+::: callout-important
+**Stop here and write code.**
+
+Worksheet **Part 4** — map `color =` / `fill =` to a third variable.
+
+Come back when it runs. If it does not run, that is the interesting part — bring the error.
+:::
+
 ## Part 3b · Histograms and Density — Seeing the Whole Distribution {.divider}
+
+::: callout-note
+**⏱ If time allows** — everything in this part is on the worksheet, so it is safe to work through on your own if we run short in class.
+:::
 
 ## Histograms — the Shape Behind the Summary
 
@@ -456,6 +664,16 @@ Gotelli & Ellison, *A Primer of Ecological Statistics*, Ch. 3 — Summary Statis
 ::::
 ::::::
 
+## ▶ Your Turn — Code It Now
+
+::: callout-important
+**Stop here and write code.**
+
+Worksheet **Part 4b** — histograms and density curves. ⏱ Skip it if we are short; nothing later depends on it.
+
+Come back when it runs. If it does not run, that is the interesting part — bring the error.
+:::
+
 ## Part 4 · Mean ± SE — Plotted Directly {.divider}
 
 ## Mean ± SE — Plotted Directly
@@ -562,7 +780,21 @@ Before you draw an error bar, ask what one point in it represents. `stat_summary
 ::::
 :::::::
 
+## ▶ Your Turn — Code It Now
+
+::: callout-important
+**Stop here and write code.**
+
+Worksheet **Part 5** — mean ± SE with `stat_summary()`.
+
+Come back when it runs. If it does not run, that is the interesting part — bring the error.
+:::
+
 ## Part 5 · Faceting — One Panel Per Group {.divider}
+
+::: callout-note
+**⏱ If time allows** — the worksheet walks through this one too.
+:::
 
 ## Faceting — One Panel Per Group
 
@@ -602,47 +834,236 @@ A faceted plot answers a different question than a single colored plot: not just
 ::::
 ::::::
 
-## Part 6 · A Quick Theme Tour {.divider}
+## ▶ Your Turn — Code It Now
 
-## A Quick Theme Tour
+::: callout-important
+**Stop here and write code.**
+
+Worksheet **Part 6** — facet by field team. ⏱ Skip it if we are short.
+
+Come back when it runs. If it does not run, that is the interesting part — bring the error.
+:::
+
+## Part 6 · Themes — Write It Once, Use It Everywhere {.divider}
+
+## The Built-in Themes
 
 :::::: columns
 ::: {.column width="60%"}
 ```{r graphing-effectively-15}
 #| fig-width: 3
-#| fig-height: 2.6
+#| fig-height: 2.4
 #| fig-alt: "The boxplot-with-jittered-points figure re-rendered using theme_bw, a white background with a black-and-white frame."
 pine_jitter_plot + theme_bw(base_size = 9)
-```
-
-```{r graphing-effectively-16}
-#| fig-width: 3
-#| fig-height: 2.6
-#| fig-alt: "The boxplot-with-jittered-points figure re-rendered using theme_classic, showing only x and y axis lines with no gridlines."
-pine_jitter_plot + theme_classic(base_size = 9)
 ```
 :::
 
 :::: {.column width="40%"}
-- `theme_minimal()` — light, few gridlines (what we've used so far)
+- `theme_minimal()` — light, few gridlines (what we have used so far)
 - `theme_bw()` — white background, black-and-white frame
-- `theme_classic()` — just x/y axis lines, no gridlines at all
+- `theme_classic()` — just x/y axis lines, no gridlines
 
-::: callout-note
-**✅ Key idea**
+A theme changes **appearance only** — never the data or the statistics underneath.
 
-A theme changes *appearance* only — never the data or the statistics underneath. Pick one and use it consistently across a report.
-:::
+::: callout-warning
+**⚠️ The problem with the built-ins**
 
-::: callout-note
-**📖 Reference**
-
-[📖 R4DS §11.5 — Themes](https://r4ds.hadley.nz/communication.html#sec-themes)
+None of them is quite publication-ready, so you end up appending ten lines of `theme(axis.title = element_text(...), ...)` to every single plot — and retyping them in every script, slightly differently each time.
 :::
 ::::
 ::::::
 
-## Part 7 · Saving a Real Figure {.divider}
+## The Themes File — Three Sizes, Written Once
+
+::::::: columns
+:::: {.column width="60%"}
+Download **`r_themes_for_3_sizes.R`** from the activity page and save it in your **project folder**, next to your `.Rproj` file.
+
+It defines three functions, each sized for a different final output:
+
+| Function | Built for | Base font |
+|---|---|---|
+| `theme_small()` | ~3 × 3 in — a journal panel | 9 pt |
+| `theme_regular()` | ~7 × 7 in — a report figure | 16 pt |
+| `theme_large()` | ~16 × 16 in — a poster | 36 pt |
+
+All three give you the same publication look: white background, a black panel border, black axis lines and ticks, bold axis titles, no gridlines.
+
+::: callout-important
+**Two steps, once each**
+
+1. **Open the file and run it** (Ctrl/Cmd + Shift + Enter, or Source). Look at your Environment pane — `theme_small`, `theme_regular`, and `theme_large` appear as functions. That is all "running it" does: it defines them.
+2. **From then on, `source()` it** at the top of any script that makes a figure. One line replaces the whole block of theme code you would otherwise paste into every script.
+:::
+::::
+
+:::: {.column width="40%"}
+```{r graphing-effectively-themes-1}
+#| eval: false
+# At the top of your script,
+# with library(tidyverse):
+source("r_themes_for_3_sizes.R")
+```
+
+::: callout-note
+**✅ Why `source()` and not copy-paste**
+
+`source()` runs that file top to bottom, exactly as if you had typed it. Fix a margin in the themes file once and **every** figure in every script picks up the change the next time you run it.
+
+Copy-pasted theme code gives you fifteen slightly different themes and no way to fix them all.
+:::
+
+::: callout-warning
+**⚠️ Watch out!**
+
+`source()` needs the path to be right. With the file in your project root and an `.Rproj` open, `"r_themes_for_3_sizes.R"` is enough. Put it in a `scripts/` folder and it becomes `source("scripts/r_themes_for_3_sizes.R")`.
+:::
+::::
+:::::::
+
+```{r graphing-effectively-themes-setup}
+#| echo: false
+#| message: false
+# Rendered from the content folder, so the file sits under data/ here.
+# In your project it will be in the project root: source("r_themes_for_3_sizes.R")
+source("data/r_themes_for_3_sizes.R")
+```
+
+## Using the Themes
+
+:::::: columns
+::: {.column width="60%"}
+```{r graphing-effectively-themes-2}
+#| fig-width: 3.2
+#| fig-height: 2.8
+#| fig-alt: "The needle length boxplot rendered with the custom theme_small function: white background, black panel border, bold axis titles, and no gridlines."
+pine_theme_plot <- ggplot(pine_df, aes(x = side, y = needle_length_mm, fill = side)) +
+  geom_boxplot(alpha = 0.6, outlier.shape = NA) +
+  labs(
+    title = "Needle Length by Side of Tree",
+    x = "Side of tree",
+    y = "Needle length (mm)"
+  ) +
+  coord_cartesian(ylim = c(0, 25)) +
+  theme_small() +
+  theme(legend.position = "none")
+
+pine_theme_plot
+```
+:::
+
+:::: {.column width="40%"}
+It is one more `+` layer, exactly like `theme_minimal()`:
+
+``` r
++ theme_small()      # 3 × 3 in
++ theme_regular()    # 7 × 7 in
++ theme_large()      # poster
+```
+
+::: callout-tip
+**🖐 Match the theme to the size you will save**
+
+Pick the theme for the figure's **final printed size**, then pass that same size to `ggsave()`. A `theme_large()` plot saved at 3 × 3 in is unreadable, and `theme_small()` on a poster disappears.
+:::
+
+::: callout-note
+**Still your plot**
+
+Anything you add after the theme still wins — `theme_small() + theme(legend.position = "none")` keeps the theme and drops the legend.
+:::
+::::
+::::::
+
+## ▶ Your Turn — Code It Now
+
+::: callout-important
+**Stop here and write code.**
+
+Worksheet **Parts 7 and 7b** — try the built-in themes, then download, run, and `source()` the themes file.
+
+Come back when it runs. If it does not run, that is the interesting part — bring the error.
+:::
+
+## Part 7 · Many Plots on One Page — `patchwork` {.divider}
+
+## `patchwork` — `+` for Whole Plots
+
+::::::: columns
+:::: {.column width="60%"}
+```{r graphing-effectively-patchwork-1}
+#| eval: false
+install.packages("patchwork")   # once per computer
+```
+
+```{r graphing-effectively-patchwork-2}
+#| message: false
+library(patchwork)
+```
+
+Save each plot into an object, then combine them:
+
+``` r
+plot_a + plot_b     # side by side
+plot_a / plot_b     # stacked
+```
+
+::: callout-note
+**✅ Key idea**
+
+`patchwork` reuses the operators you already know. `+` puts plots **beside** each other, `/` puts one **over** the other — and the result is still a plot object you can save.
+:::
+::::
+
+:::: {.column width="40%"}
+```{r graphing-effectively-patchwork-3}
+#| fig-width: 5
+#| fig-height: 2.4
+#| fig-alt: "Two panels side by side: the boxplot with jittered raw points on the left and the mean plus or minus standard error plot on the right."
+pine_jitter_plot + pine_mean_se_plot
+```
+::::
+:::::::
+
+## `patchwork` — Building a Real Figure
+
+:::::: columns
+::: {.column width="60%"}
+```{r graphing-effectively-patchwork-4}
+#| fig-width: 5
+#| fig-height: 4
+#| fig-alt: "A three-panel figure: the boxplot and the mean plus or minus standard error plot side by side on the top row, with the width-versus-length scatterplot spanning the bottom row, each panel tagged A, B, and C."
+combined_plot <- (pine_jitter_plot + pine_mean_se_plot) / pine_scatter_plot +
+  plot_annotation(tag_levels = "A")
+
+combined_plot
+```
+:::
+
+:::: {.column width="40%"}
+- Parentheses group plots, exactly like arithmetic: `(a + b) / c` is two on top, one across the bottom
+- `plot_annotation(tag_levels = "A")` tags the panels **A**, **B**, **C** — what a figure caption refers to
+- `combined_plot` is one object, so `ggsave()` saves the whole multi-panel figure in one call
+
+::: callout-tip
+**🖐 Size it for the whole figure**
+
+A three-panel figure needs roughly three panels' worth of space. Give `ggsave()` a `width`/`height` for the **combined** plot, not for one panel.
+:::
+::::
+::::::
+
+## ▶ Your Turn — Code It Now
+
+::: callout-important
+**Stop here and write code.**
+
+Worksheet **Part 7c** — combine your plots with `patchwork`.
+
+Come back when it runs. If it does not run, that is the interesting part — bring the error.
+:::
+
+## Part 8 · Saving a Real Figure {.divider}
 
 ## Saving a Real Figure
 
@@ -650,11 +1071,22 @@ A theme changes *appearance* only — never the data or the statistics underneat
 :::: {.column width="60%"}
 ```{r graphing-effectively-17}
 #| eval: false
+# One panel, built with theme_small() — save it at the size the theme was written for
 ggsave(
   "figures/pine_needle_boxplot.png",
-  plot = pine_jitter_plot,
+  plot = pine_theme_plot,
   width = 3,
   height = 3,
+  units = "in",
+  dpi = 300
+)
+
+# The three-panel patchwork figure — bigger canvas, one call
+ggsave(
+  "figures/pine_needle_combined.png",
+  plot = combined_plot,
+  width = 7,
+  height = 6,
   units = "in",
   dpi = 300
 )
@@ -684,7 +1116,17 @@ Whitlock & Schluter, Ch. 2 — Displaying Data, on what a figure has to carry to
 ::::
 :::::::
 
-## Part 8 · Custom Colors and Legends — `scale_color_manual()` {.divider}
+## ▶ Your Turn — Code It Now
+
+::: callout-important
+**Stop here and write code.**
+
+Worksheet **Part 8** — save both figures with `ggsave()`.
+
+Come back when it runs. If it does not run, that is the interesting part — bring the error.
+:::
+
+## Part 9 · Custom Colors and Legends — `scale_color_manual()` {.divider}
 
 ## `scale_color_manual()` — Choosing Your Own Colors
 
@@ -797,6 +1239,14 @@ Same three arguments, same pattern — `scale_fill_manual()` is `scale_color_man
 ::::
 ::::::
 
+## ▶ Your Turn — Code It Now
+
+::: callout-important
+**Stop here and write code.**
+
+Worksheet **Part 8b** — 🚀 optional bonus: pick your own colors with `scale_color_manual()`, and check them against a colorblind-safe palette.
+:::
+
 ## Wrap-up
 
 ::::::: columns
@@ -806,16 +1256,17 @@ Today you:
 - Built boxplots with raw points overlaid, not hidden
 - Wrote real axis labels, titles, and legend titles with `labs()` — never shipped a default column name
 - Mapped a third variable with `color =` / `fill =` inside `aes()`
-- Built histograms and density curves to see a whole distribution's shape
+- Set axis limits deliberately with `coord_cartesian()` — and learned that `ylim()` deletes rows while `coord_cartesian()` only zooms
 - Plotted mean ± SE directly with `stat_summary()` — and saw that an error bar is only as honest as the rows you feed it
-- Faceted a plot with `facet_wrap()` to check every group at once
-- Compared themes, and saved a real, correctly-sized figure with `ggsave()`
-- *(Advanced)* Set exact colors and legend text by hand with `scale_color_manual()` / `scale_fill_manual()`
+- **`source()`d a themes file** so `theme_small()` / `theme_regular()` / `theme_large()` are one `+` layer away in every script, forever
+- **Combined panels with `patchwork`** — `a + b`, `a / b`, `(a + b) / c`, tagged A/B/C
+- Saved a real, correctly-sized figure with `ggsave()`
+- *(As time allowed)* Histograms, density curves, `facet_wrap()`, and custom colors with `scale_color_manual()`
 
 ::: callout-tip
 **🖐 Before next class**
 
-Finish the worksheet: build a mean ± SE plot faceted by `team`, pick a theme, and save it to `figures/` at 3×3in, 300 dpi.
+Finish the worksheet: source the themes file, build a two-panel `patchwork` figure with `coord_cartesian()` limits you chose on purpose, and save it to `figures/` at 300 dpi.
 :::
 ::::
 
