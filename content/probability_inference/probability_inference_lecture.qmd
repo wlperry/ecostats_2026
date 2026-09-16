@@ -2,8 +2,8 @@
 metadata-files:
   - ../../_templates/_lectures.yml
 title: "Lecture: Probability & Inference"
-subtitle: "Foundations of inference"
-description: "Probability distributions, the standard normal and t-distributions, Z-scores, confidence intervals, one- and two-tailed hypothesis testing, p-values, and Type I/II error — on the Arctic grayling length dataset."
+subtitle: "From the normal curve to the confidence interval"
+description: "The normal distribution, standardizing to the standard normal, z-scores and areas under the curve, checking the normality assumption, standard error, confidence intervals, the t-distribution, and one- and two-tailed hypothesis testing — on the Arctic grayling length dataset."
 categories: [Probability, Inference]
 order: 5
 week: 3
@@ -11,7 +11,7 @@ author: "Bill Perry"
 
 format:
   html:
-    downloads: [docx, pptx]  # This creates download links for all three
+    downloads: [docx, pptx]
   revealjs:
     output-ext: "slides.html"
   docx:
@@ -19,1753 +19,954 @@ format:
     fig-width: 2.5
     fig-height: 2.5
     fig-dpi: 300
-    dpi: 300            # tell Pandoc the real render dpi so it sizes figures correctly
+    dpi: 300
   pptx: default
 execute:
   echo: true
 ---
 
-```{r probability-inference-01}
+```{r pi-setup}
 #| message: false
 #| warning: false
 #| include: false
 library(tidyverse)
-library(patchwork)
+library(janitor)   # round_half_up() - rounds 0.5 up, the way you were taught
 
 grayling_df <- read_csv("data/gray_I3_I8.csv")
 
 i3_df <- grayling_df %>% filter(lake == "I3")
+
+# the three numbers the whole lecture hangs on
+i3_mean <- mean(i3_df$length_mm, na.rm = TRUE)
+i3_sd   <- sd(i3_df$length_mm,   na.rm = TRUE)
+i3_n    <- sum(!is.na(i3_df$length_mm))
+i3_se   <- i3_sd / sqrt(i3_n)
+
+# one helper, used by every "shade a tail" figure in this lecture, so the
+# same 40 lines of ggplot are not repeated five times
+shade_curve <- function(dens, from = -Inf, to = Inf, xlim = c(-4, 4),
+                        xlab = "z", title = NULL, subtitle = NULL,
+                        marks = NULL) {
+  curve_df <- tibble(x = seq(xlim[1], xlim[2], length.out = 600)) %>%
+    mutate(y = dens(x))
+  fill_df <- curve_df %>% filter(x >= from, x <= to)
+
+  ggplot(curve_df, aes(x, y)) +
+    geom_area(data = fill_df, fill = "#1F78B4", alpha = 0.35) +
+    geom_line(linewidth = 0.8) +
+    {if (!is.null(marks)) geom_vline(xintercept = marks, colour = "red",
+                                     linetype = "dashed")} +
+    labs(x = xlab, y = "Density", title = title, subtitle = subtitle) +
+    theme_classic(base_size = 9)
+}
 ```
 
 ## Probability and Statistical Inference
 
 ::::: columns
 ::: {.column width="60%"}
-- Review of probability distributions
-- Standard normal distribution and Z-scores
-- Standard error and confidence intervals
-- Statistical inference fundamentals
-- Hypothesis testing principles
+Today we build one chain of reasoning, start to finish:
 
-[📥 Download the data](data/gray_I3_I8.csv){.btn .btn-primary download="gray_I3_I8.csv"}
+1.  Real data have a **distribution**
+2.  Any normal distribution can be **standardized** to standard normal distribution
+3.  Area under that curve is **probability**
+4.  All of it **assumes normality** — so we check
+5.  From one fish to the **mean**: SD, SE, confidence intervals
+6.  When σ is unknown we use the **t-distribution** the safe alternative
+7.  Putting a number on evidence: **hypothesis tests**
+
+[📥 Download the data](https://wlperry.github.io/ecostats_2026/content/probability_inference/data/gray_I3_I8.csv){.btn .btn-primary download="gray_I3_I8.csv"}
 :::
 
 ::: {.column width="40%"}
-```{r l04-02}
+```{r pi-01}
 #| echo: false
-#| message: false
-#| warning: false
-#| paged-print: false
-#| fig-height: 4
-#| fig-width: 3.6
-#| fig-alt: "Dodged histogram of Arctic grayling length in millimeters, colored by lake (I3 and I8), showing the distribution of fish lengths for each lake."
-grayling_i3i8_plot <- grayling_df %>%
-  ggplot(aes(length_mm, fill=lake)) + 
+#| fig-alt: "Dodged histogram of Arctic grayling length in millimeters, coloured by lake (I3 and I8), showing the distribution of fish lengths for each lake."
+grayling_df %>%
+  ggplot(aes(length_mm, fill = lake)) +
   geom_histogram(alpha = 0.7, binwidth = 10, position = "dodge") +
-  labs(x = "Length (mm)", y = "Count", caption = "Arctic grayling length data from lakes I3 and I8")
-grayling_i3i8_plot
-```
-:::
-:::::
-
-## Practice Exercise 1: Exploring the Grayling Dataset
-
-::: callout-tip
-## Practice Exercise 1: Exploring the Grayling Dataset
-
-Let's explore the Arctic grayling data from lakes I3 and I8. Use the `grayling_df` data frame to create basic summary statistics.
-
-```{r l04-03}
-# Write your code here to explore the basic structure of the data
-# also note plotting a box plot is really useful
-
-
-# Calculate summary statistics
-grayling_summary <- grayling_df %>% 
-  group_by(lake) %>%
-  summarize(
-    mean_length = mean(length_mm, na.rm = TRUE),
-    sd_length = sd(length_mm, na.rm = TRUE),
-    se_length = sd_length/sqrt(sum(!is.na(length_mm))),
-    count = sum(!is.na(length_mm)),
-    .groups = "drop")
-grayling_summary
-
-```
-:::
-
-## Probability Distributions
-
-:::::: columns
-:::: {.column width="60%"}
-### Probability Distribution Functions
-
-- A **probability distribution** describes the probability of different outcomes in an experiment
-- We've seen histograms of observed data
-- Theoretical distributions help us model and understand real-world data
-- We will focus on the **standard normal distribution** and **Student's t-distribution**
-
-::: callout-note
-**📖 Reference**
-
-Gotelli & Ellison, *A Primer of Ecological Statistics*, Ch. 2 — Random Variables and Probability Distributions.\
-Whitlock & Schluter, *Analysis of Biological Data*, Ch. 5 — Probability, and Ch. 10 — The Normal Distribution.
-:::
-::::
-
-::: {.column width="40%"}
-```{r l04-04}
-#| echo: false
-#| message: false
-#| warning: false
-#| fig-height: 4
-#| fig-width: 3.6
-#| paged-print: false
-#| fig-alt: "The dodged histogram of Arctic grayling length by lake, repeated as context for introducing probability distributions."
-grayling_i3i8_plot
-```
-:::
-::::::
-
-## The Standard Normal Distribution
-
-:::::: columns
-:::: {.column width="60%"}
-The standard normal distribution is crucial for understanding statistical inference:
-
-- Has mean (μ) = 0 and standard deviation (σ) = 1
-- Symmetrical bell-shaped curve
-- Area under the curve = 1 (total probability)
-- **Approximately**:
-  - 68% of data within ±1σ of the mean
-  - **95% of data within ±2σ of the mean - really 1.96σ**
-  - 99.7% of data within ±3σ of the mean
-
-Z-scores allow us to convert any **normal distribution** to the **standard normal distribution.**
-
-::: callout-note
-**📖 Reference**
-
-Whitlock & Schluter, *Analysis of Biological Data*, Ch. 10 — The Normal Distribution.
-:::
-::::
-
-::: {.column width="40%"}
-```{r l04-05}
-#| echo: false
-#| message: false
-#| warning: false
-#| fig-height: 4
-#| fig-width: 3.6
-#| paged-print: false
-#| fig-alt: "Standard normal density curve with vertical lines and labels marking -3 through 3 standard deviations from the mean."
-# Create a standard normal distribution plot
-x <- seq(-4, 4, length.out = 1000)
-y <- dnorm(x)
-
-normal_plot <- data.frame(x = x, y = y) %>%
-  ggplot(aes(x = x, y = y)) +
-  geom_line(color="red") +
-  geom_vline(xintercept = c(-3, -2, -1, 0, 1, 2, 3), 
-             linetype = c(3, 2, 2, 1, 2, 2, 3),
-             color = c("blue", "blue", "blue", "black", "blue", "blue", "blue")) +
-  annotate("text", x = c(-3.4, -2.4, -1.4, 0.2, 1.4, 2.4, 3.4), y = 0.5, 
-           label = c("-3σ", "-2σ", "-1σ", "0", "1σ", "2σ", "3σ")) +
-  labs(title = "Standard Normal Distribution",
-       x = "Z-score",
-       y = "Probability Density") +
+  labs(x = "Length (mm)", y = "Count",
+       caption = "Arctic grayling, lakes I3 and I8") +
   theme_classic(base_size = 9)
-normal_plot
+```
+:::
+:::::
+
+## Part 1 · From data to a distribution {.divider}
+
+## The normal distribution
+
+:::::: columns
+:::: {.column width="60%"}
+A **probability distribution** gives the probability of each possible outcome.
+
+The **normal distribution** is the one we lean on:
+
+- Symmetric, bell-shaped, defined by exactly **two numbers**
+- **μ** sets where the curve sits
+- **σ** sets how wide it is
+- Area under the whole curve = 1
+
+Lake I3 grayling: **μ ≈ `r round_half_up(i3_mean, 1)` mm**, **σ ≈ `r round_half_up(i3_sd, 1)` mm**.
+
+That is a normal curve — but it is *our* normal curve. Every dataset has a different one.
+
+::: {.content-visible unless-format="revealjs"}
+::: callout-note
+**📖 Reference**
+
+Whitlock & Schluter Ch. 10 — The Normal Distribution.\
+Gotelli & Ellison Ch. 2 — Random Variables and Probability Distributions.
+:::
+:::
+::::
+
+::: {.column width="40%"}
+```{r pi-02}
+#| echo: false
+#| fig-alt: "Histogram of Lake I3 grayling lengths on the density scale with a red normal curve, using the sample mean and standard deviation, drawn over the top."
+i3_df %>%
+  ggplot(aes(length_mm)) +
+  geom_histogram(aes(y = after_stat(density)), binwidth = 10,
+                 fill = "lightblue", colour = "white") +
+  stat_function(fun = dnorm, args = list(mean = i3_mean, sd = i3_sd),
+                colour = "red", linewidth = 1) +
+  labs(x = "Length (mm)", y = "Density",
+       caption = "I3 fish, with the normal curve for this mean and SD") +
+  theme_classic(base_size = 9)
 ```
 :::
 ::::::
 
-## Practice Exercise 2: Calculating Z-scores of lake I3
+## Why we standardize
+
+::::: columns
+::: {.column width="60%"}
+There is a **different normal curve for every μ and σ**. Nobody can tabulate ***infinitely*** many curves.
+
+So we rescale every value into the same units — **standard deviations from the mean**:
+
+### $z = \frac{x_i - \mu}{\sigma}$
+
+- $x_i$ = the observation
+- $μ$ = mean of the distribution
+- $σ$ = standard deviation of the distribution
+
+Subtracting μ slides the curve to centre 0. Dividing by σ squeezes it to width 1.
+
+The result is the **standard normal distribution**: **μ = 0, σ = 1**. One curve. One table.
+
+> A z-score is not a new measurement. It is the same fish, expressed as "how many SDs from average."
+:::
+
+::: {.column width="40%"}
+```{r pi-03}
+#| echo: false
+#| fig-alt: "Standard normal density curve centred at zero with dashed vertical lines at minus three through three standard deviations."
+tibble(x = seq(-4, 4, length.out = 600)) %>%
+  mutate(y = dnorm(x)) %>%
+  ggplot(aes(x, y)) +
+  geom_line(colour = "red", linewidth = 0.9) +
+  geom_vline(xintercept = -3:3, linetype = "dashed",
+             colour = "grey50", linewidth = 0.3) +
+  scale_x_continuous(breaks = -3:3,
+                     labels = c("-3σ", "-2σ", "-1σ", "0", "1σ", "2σ", "3σ")) +
+  labs(title = "Standard normal", x = "z", y = "Density") +
+  theme_classic(base_size = 9)
+```
+:::
+:::::
+
+## Practice 1 · Standardize the I3 fish
 
 ::: callout-tip
-## Practice Exercise 2: Calculating Z-scores
+**z = (length − mean) / standard deviation**
 
-Let's practice converting raw values to Z-scores using the Arctic grayling data.
+```{r pi-04}
+i3_mean <- mean(i3_df$length_mm, na.rm = TRUE)
+i3_sd   <- sd(i3_df$length_mm,   na.rm = TRUE)
 
-**Z Score = (length - mean) / standard deviation**
-
-```{r l04-06}
-#| echo: true
-# Calculate the mean and standard deviation of fish lengths
-mean_length <- mean(i3_df$length_mm, na.rm = TRUE)
-sd_length <- sd(i3_df$length_mm, na.rm = TRUE)
-
-# Calculate Z-scores for fish lengths
 i3_df <- i3_df %>%
-  mutate(z_score = (length_mm - mean_length) / sd_length)
+  mutate(z_score = (length_mm - i3_mean) / i3_sd)
 
-# View the first few rows with Z-scores
-head(i3_df)
-
-
+i3_df %>%
+  select(lake, length_mm, z_score) %>%
+  head(4)
 ```
+
+**A fish of `r round_half_up(i3_mean, 0)` mm gets z = 0. A fish one SD above average gets z = 1.**
 :::
 
-## The fish data as a z score
+## The same fish, two sets of units
 
 ::::: columns
 ::: {.column width="60%"}
-So if we plot this data what does it look like in a standard normal distribution?
+Standardizing changes the **axis labels**, not the **shape**.
+
+- Left histogram: millimetres, centred near `r round_half_up(i3_mean, 0)`
+- Right histogram: z, centred at 0
+- Same fish, same skew, same everything
+
+That matters: **standardizing does not make non-normal data normal.** It only puts it on a common ruler. We come back to this in Part 3.
 :::
 
 ::: {.column width="40%"}
-```{r l04-07}
+```{r pi-05}
 #| echo: false
-#| message: false
-#| warning: false
-#| fig-height: 4
-#| fig-width: 3.6
-#| paged-print: false
-#| fig-alt: "Histogram of z-scores for Lake I3 grayling lengths, showing the shape of the standardized length distribution."
-z_fish_plot <- i3_df %>%
-  ggplot(aes(x=z_score)) +
-  geom_histogram()
-z_fish_plot
-```
-:::
-:::::
-
-## Z-score Results
-
-### How to get area under 1 STD DEV?
-
-Proportion within 1 standard deviation = **count** the observations whose absolute z-score is ≤ 1, then divide by the number in the sample.
-
-(That is exactly what `sum(abs(z) <= 1)` does: `abs(z) <= 1` is `TRUE`/`FALSE` for each fish, and summing `TRUE`s counts them.)
-
-Remember in a true normal distribution it is 68% within 1 std dev.
-
-should be **approximately (varies if distribution is not normal)**:
-
-- 68% of data within ±1σ of the mean
-- **95% of data within ±2σ of the mean - really 1.96σ**
-- 99.7% of data within ±3σ of the mean
-
-```{r l04-08}
-# What proportion of fish are within 1 standard deviation of the mean?
-within_1sd <- sum(abs(i3_df$z_score) <= 1, na.rm = TRUE) / sum(!is.na(i3_df$z_score))
-cat("Proportion within 1 SD:", round(within_1sd * 100, 1), "%\n")
-```
-
-## Standard normal distribution - Fish Data
-
-::::: columns
-::: {.column width="60%"}
-You want to know things about this population like
-
-- probability of a fish having a certain length (e.g., \> 300 mm)
-- Can solve this by integrating the area under curve
-- But it is tedious to do every time
-- Instead
-  - we can use the *standard normal distribution* (SND)
-  - and can use the proportions from the density curve
-:::
-
-::: {.column width="40%"}
-```{r l04-09}
-#| echo: false
-#| message: false
-#| warning: false
-#| fig-height: 4
-#| fig-width: 3.6
-#| paged-print: false
-#| fig-alt: "Histogram of Lake I3 grayling length in millimeters, with a red vertical line and label marking a length of 266 mm."
-
-mean_length_i3_val<- i3_df %>%
-  summarize(
-    mean_length = round(mean(length_mm, na.rm = TRUE), 4))
-mean_length_i3_val
-
-i3_mean_plot <- i3_df%>% 
-  ggplot(aes(length_mm)) + 
-  geom_histogram(fill = "blue", alpha = 0.5, binwidth = 10) +
-  labs(x = "Length (mm)", y = "Count" , caption = "data from I3")+
-  geom_vline(xintercept = 266, color = "red", linewidth = 1) +
-  annotate("text", x = 266, y = Inf, label = "266 mm", color = "red", vjust = 1, hjust = 0) 
-i3_mean_plot
-```
-:::
-:::::
-
-## Standard normal distribution properties
-
-::::: columns
-::: {.column width="60%"}
-Standard Normal Distribution
-
-- "benchmark" normal distribution with µ = 0, σ = 1
-- The Standard Normal Distribution is defined so that:
-  - \~68% of the curve area within +/- 1 σ of the mean,
-
-  - \~95% within +/- 2 σ of the mean,
-
-  - \~99.7% within +/- 3 σ of the mean
-
-\*remember σ = standard deviation
-:::
-
-::: {.column width="40%"}
-```{r l04-10}
-#| echo: false
-#| message: false
-#| warning: false
-#| fig-height: 3.6
-#| fig-width: 3.6
-#| paged-print: false
-#| fig-alt: "Histogram of z-scores for Lake I3 grayling lengths, with vertical lines marking the mean and the ±1, ±2, and ±3 standard deviation boundaries, illustrating the z-distribution."
-
-gray_i3_df <- grayling_df %>% filter(lake=="I3")
-
-i3_result <- gray_i3_df %>% 
-  summarize(
-    mean = mean(length_mm, na.rm = TRUE),
-    sd = sd(length_mm, na.rm = TRUE),
-    se = sd(length_mm, na.rm = TRUE)/(sum(!is.na(length_mm))^0.5),
-    count = sum(!is.na(length_mm)), 
-    .groups = "drop") 
-
-
-i3_z_plot <- i3_df %>% 
-  mutate(z_score = (length_mm - i3_result$mean) / i3_result$sd) %>%
-  ggplot(aes(z_score)) + 
-  geom_histogram(fill = "blue", alpha = 0.7, binwidth = 0.2) +
-  geom_vline(xintercept = 0, color = "black", linewidth = 1) +
-  geom_vline(xintercept = c(-1, 1), color = "red", linewidth = 0.8) +
-  geom_vline(xintercept = c(-2, 2), color = "red", linewidth = 0.8, linetype = "dashed") +
-  geom_vline(xintercept = c(-3, 3), color = "red", linewidth = 0.8, linetype = "dotted") +
-  scale_x_continuous(breaks = c(-3, -2, -1, 0, 1, 2, 3)) +
-  # Add annotations
-  annotate("text", x = 0, y = Inf, label = "Mean", vjust = 1.5, size = 3) +
-  annotate("text", x = c(-1, 1), y = Inf, label = "±1 SD", vjust = 1.5, size = 3) +
-  annotate("text", x = c(-2, 2), y = Inf, label = "±2 SD", vjust = 1.5, size = 3) +
-  annotate("text", x = c(-3, 3), y = Inf, label = "±3 SD", vjust = 1.5, size = 3) +
-  labs(
-    x = "Standard deviations from mean (z-score)", 
-    y = "Count",
-    title = "Z-distribution of I3 fish lengths",
-    caption = "Red lines show ±1, ±2, and ±3 standard deviations"
-  ) +
-  theme_minimal(base_size = 9)
+#| fig-alt: "Histogram of Lake I3 grayling z-scores with vertical lines at the mean and at plus and minus one, two, and three standard deviations."
+i3_z_plot <- i3_df %>%
+  ggplot(aes(z_score)) +
+  geom_histogram(fill = "blue", alpha = 0.7, binwidth = 0.25) +
+  geom_vline(xintercept = 0, linewidth = 0.8) +
+  geom_vline(xintercept = c(-1, 1), colour = "red", linewidth = 0.6) +
+  geom_vline(xintercept = c(-2, 2), colour = "red", linewidth = 0.6,
+             linetype = "dashed") +
+  geom_vline(xintercept = c(-3, 3), colour = "red", linewidth = 0.6,
+             linetype = "dotted") +
+  scale_x_continuous(breaks = -3:3) +
+  labs(x = "z (SDs from the mean)", y = "Count",
+       caption = "Red lines: ±1, ±2, ±3 SD") +
+  theme_classic(base_size = 9)
 i3_z_plot
 ```
 :::
 :::::
 
-## Using Z-tables
+## Part 2 · Area under the curve is probability {.divider}
+
+## The 68–95–99.7 rule
 
 ::::: columns
 ::: {.column width="60%"}
-Areas under curve of Standard Normal Distribution
+Because the standard normal is **one fixed curve**, its areas are fixed too:
 
-- Calculated once for the standard normal curve — no sample size needed (unlike the t-table, which needs df)
-- Can be looked up in z-table
-- No need to integrate
-- Any normally distributed data can be standardized
-  - transformed into the standard normal distribution
+- **68%** of the curve within ±1σ
+- **95%** within ±**1.96**σ — "±2" is the rule of thumb, 1.96 is the number
+- **99.7%** within ±3σ
 
-  - a value can be looked up in a table
+Our I3 fish, counted directly:
 
+```{r pi-06}
+within_1sd <- mean(abs(i3_df$z_score) <= 1, na.rm = TRUE)
+round_half_up(100 * within_1sd, 1)   # percent within 1 SD
+```
+
+Theory says 68%. We get **`r round_half_up(100 * mean(abs(i3_df$z_score) <= 1, na.rm = TRUE), 1)`%**.
+
+Hold that gap. It is the whole point of Part 3.
+:::
+
+::: {.column width="40%"}
+```{r pi-07}
+#| echo: false
+#| fig-alt: "Standard normal curve with the region between minus one and one shaded, labelled 68 percent."
+shade_curve(dnorm, from = -1, to = 1, marks = c(-1, 1),
+            title = "68% lies within ±1σ")
+```
+:::
+:::::
+
+## `pnorm`, `qnorm`, `dnorm` — which is which
+
+::::: columns
+::: {.column width="60%"}
+All three describe the **same** standard normal curve. They differ in what you hand them and what you get back.
+
+| Function   | You give it | You get back                   |
+|------------|-------------|--------------------------------|
+| `pnorm(z)` | a **z**     | the **area to the left** of it |
+| `qnorm(p)` | an **area** | the **z** that cuts it off     |
+| `dnorm(z)` | a **z**     | the **height** of the curve    |
+
+- **`p` = probability, `q` = quantile** — and they are inverses
+- `dnorm` is the curve's **height**, used to *draw* it. **A height is not a probability** — only area is
+
+```{r pi-08}
+pnorm(1.96)     # area left of 1.96
+qnorm(0.975)    # the z that puts 97.5% on its left
+```
+:::
+
+::: {.column width="40%"}
+```{r pi-09}
+#| echo: false
+#| fig-alt: "Standard normal curve with the area to the left of z equals 1.22 shaded blue, a red dashed line at 1.22, and an arrow marking the curve height at that point."
+shade_curve(dnorm, to = 1.22, marks = 1.22,
+            title = "pnorm(1.22) = shaded area",
+            subtitle = "dnorm(1.22) = height of the line at 1.22") +
+  annotate("point", x = 1.22, y = dnorm(1.22), colour = "darkgreen", size = 2)
+```
+:::
+:::::
+
+## Reading the z-table
+
+:::::: columns
+:::: {.column width="60%"}
+The z-table is `pnorm()` printed on paper: **cumulative area to the LEFT of z**.
+
+- Find the **ones and tenths** of z down the left column
+- Find the **hundredths** across the top
+- Read the area where they meet
+
+One table works for every dataset — because every dataset gets standardized first. (Contrast the t-table later, which needs a row for each sample size.)
+
+::: {.content-visible unless-format="revealjs"}
 ::: callout-note
 **📖 Reference**
 
-Whitlock & Schluter, Ch. 10 — The Normal Distribution, on standardizing a value and reading the standard normal table.
+Whitlock & Schluter Ch. 10 — standardizing a value and reading the standard normal table.
 :::
+:::
+::::
+
+::: {.column width="40%"}
+![](images/clipboard-1995791111.png){fig-alt="Standard normal (z) table giving the cumulative area to the left of z, with z values from 0.0 to 3.4 down the rows and hundredths across the columns." width="3.96in"}
+:::
+::::::
+
+## Worked example — how rare is a 300 mm grayling?
+
+::::: columns
+::: {.column width="60%"}
+**Step 1 — standardize.**
+
+$z = \frac{300 - `r round_half_up(i3_mean, 2)`}{`r round_half_up(i3_sd, 2)`} = `r round_half_up((300 - i3_mean) / i3_sd, 2)`$
+
+**Step 2 — look it up.** Row 1.2, column 0.02 → **0.8888**
+
+**Step 3 — read it as biology.**
+
+- 88.9% of I3 fish are **shorter** than 300 mm
+- 100 − 88.9 = **11.1%** are **longer**
+
+Catch 100 fish in I3 and about 11 should beat 300 mm.
+
+**Same answer, in R — no table:**
+
+```{r pi-10}
+z_fish <- (300 - i3_mean) / i3_sd
+round_half_up(z_fish, 2)              # 1.22, matches the table
+round_half_up(100 * (1 - pnorm(z_fish)), 1)   # % longer than 300 mm
+```
 :::
 
 ::: {.column width="40%"}
-```{r l04-11}
+```{r pi-11}
 #| echo: false
-#| message: false
-#| warning: false
-#| fig-height: 3.6
-#| fig-width: 3.6
-#| paged-print: false
-#| fig-alt: "The Lake I3 z-distribution histogram repeated, shown in the context of using z-tables to look up areas under the standard normal curve."
-i3_z_plot
+#| fig-alt: "Standard normal curve with the upper tail beyond z equals 1.22 shaded, representing the 11 percent of fish longer than 300 millimetres."
+shade_curve(dnorm, from = (300 - i3_mean) / i3_sd, marks = (300 - i3_mean) / i3_sd,
+            title = "P(fish > 300 mm)",
+            subtitle = "the shaded upper tail ≈ 11%")
 ```
 :::
 :::::
 
-## Z-score Formula
+## Running it backwards — `qnorm`
 
 ::::: columns
 ::: {.column width="60%"}
-Done by converting original data points to z-scores
+The table question can be asked the other way round, and in fisheries it usually is:
 
-- Z-scores calculated as:
+> *We had a length and wanted a probability. Now we have a probability and want a length.*
 
-### $\text{Z = }\frac{x_i-\mu}{\sigma}$
+**"How big must a grayling be to land in the top 5%?"** — the trophy-fish question, and the size-limit question.
 
-- z = z-score for observation
-- xi = original observation
-- µ = mean of data distribution
-- σ = SD of data distribution
+- `qnorm(0.95)` = **`r round_half_up(qnorm(0.95), 3)`** — the z with 5% above it
+- Back to millimetres: $x = \mu + z\sigma$
 
-So let's do this for a fish that is 300mm long and guess the probability of catching something larger
+```{r pi-12}
+z_top5 <- qnorm(0.95)
+length_top5 <- i3_mean + z_top5 * i3_sd
+round_half_up(length_top5, 1)   # mm
+```
 
-z = (300 - 265.61)/28.3 = 1.215194
+Only 5% of I3 fish should exceed **`r round_half_up(i3_mean + qnorm(0.95) * i3_sd, 1)` mm**.
+
+**Every number on this slide assumed the fish are normal. Do we know that?**
 :::
 
 ::: {.column width="40%"}
-```{r l04-12}
+```{r pi-13}
 #| echo: false
-#| message: false
-#| warning: false
-#| fig-height: 3.6
-#| fig-width: 3.6
-#| paged-print: false
-#| fig-alt: "The Lake I3 z-distribution histogram repeated, shown alongside the worked z-score calculation for a 300 mm fish."
-i3_z_plot
-
-
+#| fig-alt: "Standard normal curve with the upper five percent shaded beyond z equals 1.645."
+shade_curve(dnorm, from = qnorm(0.95), marks = qnorm(0.95),
+            title = "The top 5%",
+            subtitle = "z = 1.645  →  312 mm")
 ```
 :::
 :::::
 
-## Z-score example from table
+## Part 3 · Checking the assumption {.divider}
+
+## Shapiro-Wilk — and its backwards logic
 
 ::::: columns
 ::: {.column width="60%"}
-Done by converting original data points to z-scores
+The Shapiro-Wilk test asks one question, and its hypotheses run **opposite** to what you expect:
 
-- Z-scores calculated as:
+- **H₀: the data ARE normal**
+- **Hₐ: the data are NOT normal**
 
-### $\text{Z = }\frac{X_i-\mu}{\sigma}$
+So:
 
-- z = z-score for observation
-- xi = original observation
-- µ = mean of data distribution
-- σ = SD of data distribution
+- **p \> 0.05** → no evidence against normal → **carry on**
+- **p \< 0.05** → evidence of **non-normality** → **be careful**
 
-So let's do this for a fish that is 300mm long and guess the probability of catching something larger
+> A small p-value here is **bad news**, not a result. That reversal is why this test gets misread every semester.
 
-- z = (300 - 265.61)/28.3 = 1.22
-- look up 1.2 on left and 0.02 on top to get 0.8888 in table
-- Means 88.9% is the area left of the curve **and**
-- 100 - 88.9 = 11.1% of fish are expected to be longer
-
-**At what point do you think its not likely to catch a larger fish - what percentage?**
-
-Now work it backwards: pick a percentage first, and find the length it corresponds to. Why might you want to do it in that direction?
+**Two cautions:** with **large n** it flags departures too small to matter; with **small n** it misses ones that matter. Always **read the Q-Q plot too** — points on the line = normal.
 :::
 
 ::: {.column width="40%"}
-![Standard normal (Z) table giving the cumulative area to the left of z for z-values from 0.0 to 3.4 in rows and hundredths in columns, used to look up the proportion of a normal distribution below a given z-score.](images/clipboard-1995791111.png){width="3.96in" height="3.82in"}
-:::
-:::::
+```{r pi-14}
+shapiro.test(i3_df$length_mm)
+```
 
-## Z-score example calculation in r
-
-::::: columns
-::: {.column width="60%"}
-We can use R to get these values easier...
-
-For the standard normal distribution (mean = 0, sd = 1):
-
-- `pnorm(z)` — cumulative probability (area to the left)
-- `qnorm(p)` — the z-value for a given probability
-- `dnorm(z)` — the probability density at z
-:::
-
-::: {.column width="40%"}
-```{r z_in_r_1}
-# --- Look up OUR fish: the 300 mm grayling, z = 1.22 ---
-z_fish <- 1.22
-
-pnorm(z_fish)        # 0.8888 -> 88.9% of fish are SHORTER than 300 mm
-1 - pnorm(z_fish)    # 0.1112 -> 11.1% are LONGER (matches the z-table slide)
-
-# --- Where does the famous 1.96 come from? ---
-# "95% within +/- 2 SD" is the rule of thumb; the exact value is 1.96.
-pnorm(2) - pnorm(-2)         # 0.9545 -> +/-2 SD is really 95.4%, not 95%
-pnorm(1.96) - pnorm(-1.96)   # 0.9500 -> +/-1.96 SD is exactly 95%
-
-qnorm(0.975)   # 1.96  <- the z with 2.5% in each tail
-qnorm(0.95)    # 1.645 <- the z with 5% in ONE tail (we use this next slide)
+```{r pi-15}
+#| echo: false
+#| fig-alt: "Normal quantile-quantile plot of Lake I3 grayling lengths, with points curving away from the reference line at both ends."
+i3_df %>%
+  ggplot(aes(sample = length_mm)) +
+  stat_qq(size = 0.8) + stat_qq_line(colour = "red") +
+  labs(title = "Q-Q plot: I3 lengths",
+       x = "Theoretical quantiles", y = "Sample quantiles") +
+  theme_classic(base_size = 9)
 ```
 :::
 :::::
 
-## We can now use this for fun in the fish
+## So how wrong were we?
 
-::::: columns
-::: {.column width="60%"}
-Let's say we are interested in knowing at what point from I3 it is not likely to catch a larger fish?
+:::::: columns
+:::: {.column width="60%"}
+p = 0.0002. The I3 fish are **not** normal. Every probability in Part 2 assumed they were — so let's audit them against the fish themselves.
 
-Maybe we expect 95% of the time to catch a fish that is "common" but the 5% is the unlikely portion....
-:::
+|   | normal theory | actual data |
+|------------------------|------------------------|------------------------|
+| within ±1 SD | 68% | **`r round_half_up(100 * mean(abs(i3_df$z_score) <= 1, na.rm = TRUE), 1)`%** |
+| 95th percentile | `r round_half_up(i3_mean + qnorm(0.95) * i3_sd, 1)` mm | `r round_half_up(unname(quantile(i3_df$length_mm, 0.95, na.rm = TRUE)), 1)` mm |
+| P(fish \> 300 mm) | `r round_half_up(100 * (1 - pnorm(300, i3_mean, i3_sd)), 1)`% | **`r round_half_up(100 * mean(i3_df$length_mm > 300, na.rm = TRUE), 1)`%** |
 
-::: {.column width="40%"}
-```{r z_in_r}
-# Examples:
-# What fish length corresponds to the top 5% (unlikely)?
-top_5_percent_z <- qnorm(0.95)  # z-score for 95th percentile
-unlikely_length <- mean_length + (top_5_percent_z * sd_length)
+**The centre is fine. The tail is off by a third.**
 
-cat("Only 5% of fish are longer than:", round(unlikely_length, 1), "mm\n")
-cat("This corresponds to z-score:", round(top_5_percent_z, 3), "\n")
-```
-:::
-:::::
-
-## But wait — are these fish actually normal?
-
-::::: columns
-::: {.column width="60%"}
-Every probability we just calculated **assumed a normal distribution**. Let's check that assumption.
-
-- The normal curve says 68% of fish should be within 1 SD
-- Our fish: **81.8%** are
-- Shapiro-Wilk test: **p = 0.0002** — significantly non-normal
-
-So how wrong were we?
-
-|                   | normal theory | actual data |
-|-------------------|---------------|-------------|
-| 95th percentile   | 312.2 mm      | 310.0 mm    |
-| P(fish \> 300 mm) | 11.2%         | **7.6%**    |
-
-The percentile is fine. The **tail probability is off by a third** — and the tails are exactly where we do hypothesis testing.
+And the tail is exactly where inference lives — critical values, rejection regions, p-values all sit out in the tails.
 
 **This is why we check assumptions before trusting a p-value.**
 
+::: {.content-visible unless-format="revealjs"}
 ::: callout-note
 **📖 Reference**
 
-Whitlock & Schluter, Ch. 13 — Handling Violations of Assumptions, on checking normality and what to do when it fails.
+Whitlock & Schluter Ch. 13 — Handling Violations of Assumptions.
 :::
-:::
-
-::: {.column width="40%"}
-```{r l04-normcheck}
-#| echo: true
-# Does the normal model actually fit?
-shapiro.test(i3_df$length_mm)
-
-# theory vs reality out in the tail
-mean_i3 <- mean(i3_df$length_mm, na.rm = TRUE)
-sd_i3   <- sd(i3_df$length_mm,   na.rm = TRUE)
-
-cat("normal theory P(>300):",
-    round(100 * (1 - pnorm(300, mean_i3, sd_i3)), 1), "%\n")
-cat("actual        P(>300):",
-    round(100 * mean(i3_df$length_mm > 300, na.rm = TRUE), 1), "%\n")
-```
-:::
-:::::
-
-## What this means
-
-- Given that we can: transform data to z-scores from standard normal distribution...
-- ...figure out area under the curve (probability) associated with range of z-scores...
-- ...can therefore figure out probability associated with a range of original data
-
-## Careful: two different distributions
-
-::::: columns
-::: {.column width="60%"}
-We have now used the normal curve for **two different things**. Keep them straight:
-
-| Question                        | Spread to use |
-|---------------------------------|---------------|
-| How long is a *single fish*?    | **SD** (s)    |
-| Where is the *population mean*? | **SE** (s/√n) |
-
-- The distribution of **fish** is as wide as the fish actually are — it does not get narrower if you catch more fish
-- The distribution of **sample means** gets narrower as n grows, because averages are more stable than individuals
-
-That is why:
-
-- "5% of fish are longer than 312 mm" uses **SD**
-- "the 95% CI for mean length is 258.6–272.6 mm" uses **SE**
-
-**Using SE when you meant SD makes your interval about √n times too narrow.**
-
-::: callout-note
-**📖 Reference**
-
-Whitlock & Schluter, Ch. 4 — Estimating with Uncertainty, is the chapter that separates these two ideas.
-:::
-:::
-
-::: {.column width="40%"}
-```{r l04-sd-vs-se}
-#| echo: true
-sd_i3 <- sd(i3_df$length_mm, na.rm = TRUE)
-n_i3  <- sum(!is.na(i3_df$length_mm))
-se_i3 <- sd_i3 / sqrt(n_i3)
-
-cat("SD (spread of fish):  ", round(sd_i3, 1), "mm\n")
-cat("SE (spread of means): ", round(se_i3, 1), "mm\n")
-cat("n =", n_i3, " -> SE is", round(sd_i3/se_i3, 1), "x smaller\n")
-```
-:::
-:::::
-
-## So what is next...
-
-We can look at Standard normal distributions and know probability of a value being in a range under the standard normal curve...
-
-Previously we had calculated Standard Error and Confidence Intervals -
-
-- Now can assess our confidence that the population mean is within a certain range\
-- Can use t distribution to ask questions like:
-  - "What is the probability of getting a sample with mean = ȳ from a population with mean = µ?" (1 sample t-test)\
-  - "What is the probability that two samples came from the same population?" (2 sample t-test)
-
-## When Population σ is Unknown
-
-:::: columns
-::: {.column width="60%"}
-### When calculating confidence intervals we usually DON'T know the population σ (standard deviation) or 𝝁 population mean
-
-- we estimate σ from the sample, using s
-- that estimate carries its own uncertainty — so the z distribution is too narrow
-- **whenever σ is estimated, use t — at any sample size**
-- t and z agree to \~2 decimals once n is past \~30, which is where the "n \> 30" rule of thumb comes from — it's a convenience, not the rule
-
-*Instead, we use Student's t distribution*
-
-::: callout-note
-**📖 Reference**
-
-Whitlock & Schluter, Ch. 11 — Inference for a Normal Population, introduces the t-distribution for exactly this situation.
-:::
-:::
-
-![Vintage photo of William Sealy Gosset (the statistician 'Student' who derived the t-distribution while working at the Guinness brewery), edited with a speech bubble saying 'Cheers!' and a pint of Guinness beer beside him, a humorous nod to why the t-test is called 'Student's t-test.'](images/clipboard-1052237789.png){width="2.49in" height="3.20in"}
-::::
-
-## Understanding t-distribution
-
-::::: columns
-::: {.column width="60%"}
-### When sample sizes are small, the **t-distribution** is more appropriate than the normal distribution.
-
-- Similar to normal distribution but with heavier tails
-- Shape depends on **degrees of freedom** (df = n-1)
-- With large df (\>30), approaches the normal distribution
-- Used for:
-  - Small sample sizes
-
-  - When population standard deviation is unknown
-
-  - Calculating confidence intervals
-
-  - Conducting t-tests
-
-::: callout-note
-**📖 Reference**
-
-Whitlock & Schluter, Ch. 11 — Inference for a Normal Population.\
-Gotelli & Ellison, Ch. 3 — Summary Statistics, on the standard error that sits inside every t.
-:::
-:::
-
-::: {.column width="40%"}
-```{r l04-13}
-#| echo: false
-#| message: false
-#| warning: false
-#| fig-height: 3.6
-#| fig-width: 3.6
-#| paged-print: false
-#| fig-alt: "Overlaid density curves comparing the standard normal distribution (dashed black) to t-distributions with 3, 10, and 30 degrees of freedom, showing the t-distribution's heavier tails at low degrees of freedom converging toward the normal curve as df increases."
-library(ggplot2)
-library(dplyr)
-
-# Create a plot comparing normal and t-distributions with better tail visualization
-x <- seq(-4, 4, length.out = 1000)
-normal_y <- dnorm(x)
-t_df3_y <- dt(x, df = 3)
-t_df10_y <- dt(x, df = 10)
-t_df30_y <- dt(x, df = 30)
-
-# Create data frame with proper factor ordering
-dist_data <- data.frame(
-  x = rep(x, 4),
-  y = c(normal_y, t_df3_y, t_df10_y, t_df30_y),
-  Distribution = rep(c("Normal", "t (df=3)", "t (df=10)", "t (df=30)"), each = 1000)
-)
-
-# Set the factor levels to control legend order: df 3, df 10, df 30, then Normal
-dist_data$Distribution <- factor(dist_data$Distribution, 
-                                levels = c("t (df=3)", "t (df=10)", "t (df=30)", "Normal"))
-
-# Create main comparison plot
-dist_plot <- dist_data %>%
-  ggplot(aes(x = x, y = y, color = Distribution, linetype = Distribution)) +
-  geom_line(linewidth = .8) +
-  scale_color_manual(values = c("t (df=3)" = "#E31A1C", 
-                               "t (df=10)" = "#FF7F00", 
-                               "t (df=30)" = "#1F78B4", 
-                               "Normal" = "#000000")) +
-  scale_linetype_manual(values = c("t (df=3)" = "solid", 
-                                  "t (df=10)" = "solid", 
-                                  "t (df=30)" = "solid", 
-                                  "Normal" = "dashed")) +
-  labs(title = "Comparison of Normal and t-distributions",
-       subtitle = "Note the heavier tails of t-distributions, especially with lower degrees of freedom",
-       x = "Value",
-       y = "Probability Density") +
-  theme_minimal(base_size = 9) +
-  theme(legend.position = "bottom",
-        plot.title = element_text(hjust = 0.5),
-        plot.subtitle = element_text(hjust = 0.5))
-
-print(dist_plot)
-```
-:::
-:::::
-
-## Student's t-distribution Formula
-
-::::: columns
-::: {.column width="60%"}
-### To calculate CI for sample from "unknown" population:
-
-### $\text{CI} = \bar{y} \pm t \cdot \frac{s}{\sqrt{n}}$
-
-Where:
-
-- ȳ is sample mean
-- 𝑛 is sample size
-- s is sample standard deviation
-- t t-value corresponding the probability of the CI
-- t in t-table for different degrees of freedom (n-1)
-:::
-
-::: {.column width="40%"}
-![Student's t critical-value table with one-tail and two-tail probabilities across the columns and degrees of freedom down the rows, used to look up the t-value for a chosen confidence level and sample size.](images/clipboard-3203878802.png){width="3.96in" height="4.08in"}
-:::
-:::::
-
-## Student's t-distribution Table
-
-::::: columns
-::: {.column width="60%"}
-### Here is a t-table
-
-- Values of t that correspond to probabilities
-- Probabilities listed along top
-- Sample dfs are listed in the left-most column
-- Probabilities are given for one-tailed and two-tailed "questions"
-:::
-
-::: {.column width="40%"}
-![The same Student's t critical-value table repeated, with probabilities along the top and degrees of freedom down the left column, illustrating how to read off a critical t-value for a given df and confidence level.](images/clipboard-3203878802.png){width="3.96in" height="4.27in"}
-:::
-:::::
-
-## One-tailed Questions
-
-::::: columns
-::: {.column width="60%"}
-### One-tailed questions: area of distribution left or (right) of a certain value
-
-- n=20 (df=19) - 90% of the observations found left
-- t= 1.328 (10% are outside)
-
-![Bell-shaped t-distribution curve with the area to the left of t = 1.328 shaded, illustrating a one-tailed cutoff.](images/clipboard-1822465473.png){width="1.88in" height="1.56in"}
-:::
-
-::: {.column width="40%"}
-![Student's t critical-value table with the one-tail 0.10 column and df = 19 row highlighted, intersecting at the critical value 1.328, the value used for a one-tailed test with n = 20.](images/clipboard-641796945.png){width="3.96in" height="4.22in"}
-:::
-:::::
-
-## Two-tailed Questions
-
-::::: columns
-::: {.column width="60%"}
-Two-tailed questions refer to area between certain values
-
-- n= 20 (df=19), 90% of the observations are between
-- t=-1.729 and t=1.729 (10% are outside)
-
-![Bell-shaped t-distribution curve with both tails shaded beyond t = -1.729 and t = 1.729, illustrating a two-tailed cutoff.](images/clipboard-2234740159.png){width="2.88in" height="2.08in"}
-:::
-
-::: {.column width="40%"}
-![Student's t critical-value table with the two-tail 0.10 column and df = 19 row highlighted, intersecting at the critical value 1.729, the value used for a two-tailed test with n = 20.](images/clipboard-1734806681.png){width="3.96in" height="4.83in"}
-:::
-:::::
-
-## t-distribution CI Example
-
-::::: columns
-::: {.column width="60%"}
-Let's calculate CIs again:
-
-Use two-sided test
-
-### $\text{CI} = \bar{y} \pm t \cdot \frac{s}{\sqrt{n}}$
-
-- 95% CI Sample A: = 272.8 ± 2.306 \* (37.81/(9\^0.5))
-- mean = 272.8, N = 9, and s = 37.81 - t is ? (df = N - 1 = 8)
-- CI = 29.06
-- The 95% CI is between 243.7 and 301.9
-- "The 95% CI for the population mean from sample A is 272.8 ± 29.06
-
-::: callout-note
-**📖 Reference**
-
-Whitlock & Schluter, Ch. 4 — Estimating with Uncertainty (what a confidence interval means), and Ch. 11 — Inference for a Normal Population (why the multiplier is *t*, not 1.96).
-:::
-:::
-
-::: {.column width="40%"}
-![Student's t critical-value table with the two-tail 0.05 column and df = 8 row highlighted, intersecting at the critical value 2.306, the value used to compute the 95% confidence interval in this worked example.](images/clipboard-3959630930.png){width="3.96in" height="3.79in"}
-:::
-:::::
-
-## Practice Exercise 4: Using the t-distribution
-
-::: callout-tip
-## Practice Exercise 4: Using the t-distribution
-
-Let's compare confidence intervals using the normal approximation (z) versus the t-distribution for our fish data — a random sample of 10 fish from I3.
-
-Look at how much wider the t interval is: with n = 10 the critical value is **t = 2.262** rather than **z = 1.96**, about **15% wider**. That extra width is the price of having estimated σ from only 10 fish.
-
-$\text{CI} = \bar{y} \pm t \cdot \frac{s}{\sqrt{n}}$
-
-```{r l04-14}
-#| message: false
-#| warning: false
-#| include: false
-#| paged-print: false
-set.seed(42)   # so the numbers on this slide are the same every render
-small_sample <- grayling_df %>% filter(lake == "I3") %>% slice_sample(n = 10)
-sample_mean <- mean(small_sample$length_mm)
-sample_sd <- sd(small_sample$length_mm)
-sample_n <- nrow(small_sample)
-sample_se <- sample_sd / sqrt(sample_n)
-z_ci_lower <- sample_mean - 1.96 * sample_se
-z_ci_upper <- sample_mean + 1.96 * sample_se
-t_crit <- qt(0.975, df = sample_n - 1)
-t_ci_lower <- sample_mean - t_crit * sample_se
-t_ci_upper <- sample_mean + t_crit * sample_se
-```
-
-```{r l04-15}
-# Display results
-cat("Mean:", round(sample_mean, 1), "mm\n",
-    "Standard deviation:", round(sample_sd, 2), "mm\n",
-    "Standard error:", round(sample_se, 2), "mm\n",
-    "95% CI using z:", round(z_ci_lower, 1), "to", round(z_ci_upper, 1), "mm\n",
-    "95% CI using t:", round(t_ci_lower, 1), "to", round(t_ci_upper, 1), "mm\n",
-    "t critical value:", round(t_crit, 3), "vs z critical value: 1.96\n")
-```
-:::
-
-## Intro to Hypothesis Testing (One-Tailed) — The Numbers
-
-:::::: columns
-:::: {.column width="60%"}
-Hypothesis testing is a systematic way to evaluate research questions using data.
-
-**Key components:**
-
-1.  **Null hypothesis (H₀)**: Typically assumes "no effect" or "no difference"
-
-2.  **Alternative hypothesis (Hₐ)**: The claim we're trying to support
-
-3.  **Statistical test**: Method for evaluating evidence against H₀
-
-4.  **P-value**: Probability of observing our results (or more extreme) if H₀ is true
-
-5.  **Significance level (α)**: Threshold for rejecting H₀, typically 0.05
-
-**Decision rule**: Reject H₀ if p-value \< α\
-\
-let's test if our sample mean of 320 is larger than 285 or not? Essentially we are looking at the confidence intervals!!! But we are only interested if it is larger
-
-::: callout-note
-**📖 Reference**
-
-Gotelli & Ellison, Ch. 4 — Framing and Testing Hypotheses.\
-Whitlock & Schluter, Ch. 6 — Hypothesis Testing, including one-tailed vs. two-tailed tests.
 :::
 ::::
 
 ::: {.column width="40%"}
-```{r l04-16}
+```{r pi-16}
+# theory vs. the actual fish, out in the tail
+round_half_up(100 * (1 - pnorm(300, i3_mean, i3_sd)), 1)
+round_half_up(100 * mean(i3_df$length_mm > 300, na.rm = TRUE), 1)
+```
+
+```{r pi-17}
 #| echo: false
-#| message: false
-#| warning: false
-#| fig-height: 3.6
-#| fig-width: 3.6
-#| paged-print: false
-
-library(ggplot2)
-
-# Define parameters
-sample_mean_1t <- 320
-sample_sd_1t <- 42.15
-sample_size_1t <- 12
-hypothesized_mean_1t <- 285
-alpha_1t <- 0.05
-df_1t <- sample_size_1t - 1
-
-# Calculate critical t-value for one-tailed test (right tail)
-t_crit_1t <- qt(1 - alpha_1t, df_1t)
-
-# Create measurement scale data
-measurement_x_1t <- seq(220, 360, length.out = 1000)
-standard_error_1t <- sample_sd_1t / sqrt(sample_size_1t)
-
-# Calculate probability density values
-measurement_null_y_1t <- dt((measurement_x_1t - hypothesized_mean_1t) / standard_error_1t, df_1t) * (1 / standard_error_1t)
-
-measurement_data_1t <- data.frame(
-  x = measurement_x_1t,
-  y = measurement_null_y_1t
-)
-
-# Critical value in original scale (only upper tail for one-tailed test)
-critical_value_upper_1t <- hypothesized_mean_1t + t_crit_1t * standard_error_1t
-
-# Create rejection region (ONLY upper tail)
-rejection_upper_1t <- data.frame(
-  x = seq(critical_value_upper_1t, max(measurement_x_1t), length.out = 100),
-  y = dt((seq(critical_value_upper_1t, max(measurement_x_1t), length.out = 100) - hypothesized_mean_1t) / standard_error_1t, df_1t) * (1 / standard_error_1t)
-)
-
-# Calculate t-statistic
-t_stat_1t <- (sample_mean_1t - hypothesized_mean_1t) / standard_error_1t
-
-# Create the measurement scale plot - CORRECTED NAME
-measurement_plot_1t <- ggplot(measurement_data_1t, aes(x = x, y = y)) +
-  geom_line(color = "blue", linewidth = 1) +
-  # ONLY upper rejection region
-  geom_area(data = rejection_upper_1t, aes(x = x, y = y), 
-            fill = "red", alpha = 0.3, inherit.aes = FALSE) +
-  # ONLY upper critical line
-  geom_vline(xintercept = critical_value_upper_1t, linetype = "dashed", color = "red") +
-  geom_vline(xintercept = sample_mean_1t, linetype = "solid", color = "green", linewidth = 1.2) +
-  geom_vline(xintercept = hypothesized_mean_1t, linetype = "solid", color = "blue", linewidth = 1.2) +
-  # ONLY one rejection region label
-  annotate("text", x = critical_value_upper_1t + 15, y = max(measurement_null_y_1t) * 0.6, 
-           label = "Rejection\nRegion\n(α = 0.05)", color = "red", size = 3.5) +
-  annotate("text", x = sample_mean_1t + 5, y = max(measurement_null_y_1t) * 0.8, 
-           label = paste("Sample Mean =", sample_mean_1t), color = "green", size = 3.5) +
-  annotate("text", x = hypothesized_mean_1t - 5, y = max(measurement_null_y_1t) * 0.9, 
-           label = paste("Ho: μ =", hypothesized_mean_1t), color = "blue", size = 3.5) +
-  annotate("text", x = 240, y = max(measurement_null_y_1t) * 0.3,
-           label = paste("t =", round(t_stat_1t, 3)), size = 3.5) +
-  annotate("text", x = 240, y = max(measurement_null_y_1t) * 0.2,
-           label = paste("Critical t =", round(t_crit_1t, 3)), size = 3.5) +
-  labs(title = "One-Tailed t-Test (Upper Tail)",
-       subtitle = paste0("Testing Ho: μ = ", hypothesized_mean_1t, " vs H1: μ > ", hypothesized_mean_1t, " (α = ", alpha_1t, ", df = ", df_1t, ")"),
-       x = "Measurement Value",
-       y = "Probability Density") +
-  theme_minimal(base_size = 9) +
-  theme(plot.title = element_text(size = 14, face = "bold"),
-        plot.subtitle = element_text(size = 12),
-        axis.title = element_text(size = 12),
-        axis.text = element_text(size = 10))
-
-# Display the plot
-# print(measurement_plot_1t)
-
-# Print summary statistics
-cat("Summary of One-Tailed Hypothesis Test:\n")
-cat("Sample mean:", sample_mean_1t, "\n")
-cat("Hypothesized mean:", hypothesized_mean_1t, "\n")
-cat("Sample size:", sample_size_1t, "\n")
-cat("Standard deviation:", sample_sd_1t, "\n")
-cat("Standard error:", round(standard_error_1t, 3), "\n")
-cat("t-statistic:", round(t_stat_1t, 3), "\n")
-cat("Critical t-value (one-tailed):", round(t_crit_1t, 3), "\n")
-cat("Critical value:", round(critical_value_upper_1t, 2), "\n")
-
-# Determine if we reject H0 (one-tailed test)
-if(t_stat_1t > t_crit_1t) {
-  cat("Decision: Reject Ho (sample mean falls in upper rejection region)\n")
-} else {
-  cat("Decision: Fail to reject Ho (sample mean does not fall in rejection region)\n")
-}
-
-
+#| fig-alt: "Density of Lake I3 grayling lengths in blue with the fitted normal curve dashed in red, showing the normal curve sitting above the data in the right tail."
+i3_df %>%
+  ggplot(aes(length_mm)) +
+  geom_density(fill = "lightblue", alpha = 0.6) +
+  stat_function(fun = dnorm, args = list(mean = i3_mean, sd = i3_sd),
+                colour = "red", linetype = "dashed", linewidth = 0.9) +
+  geom_vline(xintercept = 300, colour = "darkgreen") +
+  labs(x = "Length (mm)", y = "Density",
+       caption = "red dashed = normal model; green = 300 mm") +
+  theme_classic(base_size = 9)
 ```
 :::
 ::::::
 
-## Intro to Hypothesis Testing (One-Tailed) — The Picture
+## Part 4 · From one fish to the mean {.divider}
+
+## SD and SE answer different questions
 
 ::::: columns
 ::: {.column width="60%"}
-Hypothesis testing is a systematic way to evaluate research questions using data.
+Everything so far described **individual fish**. Science usually asks about the **mean**. Those need different spreads.
 
-**Key components:**
+| Question                          | Spread        |
+|-----------------------------------|---------------|
+| How long is a **single fish**?    | **SD** (s)    |
+| Where is the **population mean**? | **SE** (s/√n) |
 
-1.  **Null hypothesis (H₀)**: Typically assumes "no effect" or "no difference"
+- Fish spread is however wide the fish are — more fish does **not** narrow it
+- Mean spread **shrinks as n grows** — averages are steadier than individuals
+- "5% of fish exceed `r round_half_up(i3_mean + qnorm(0.95) * i3_sd, 1)` mm" uses **SD**; "the mean is near `r round_half_up(i3_mean, 1)`" uses **SE**
 
-2.  **Alternative hypothesis (Hₐ)**: The claim we're trying to support
-
-3.  **Statistical test**: Method for evaluating evidence against H₀
-
-4.  **P-value**: Probability of observing our results (or more extreme) if H₀ is true
-
-5.  **Significance level (α)**: Threshold for rejecting H₀, typically 0.05
-
-**Decision rule**: Reject H₀ if p-value \< α\
-\
-let's test if our sample mean of 320 is larger than 285 or not? Essentially we are looking at the confidence intervals!!! But we are only interested if it is larger
+**Using SE where you meant SD makes your interval √n times too narrow.**
 :::
 
 ::: {.column width="40%"}
-```{r l04-17}
-#| echo: false
-#| message: false
-#| warning: false
-#| fig-height: 3.6
-#| fig-width: 3.6
-#| paged-print: false
-#| fig-alt: "One-tailed t-test rejection region plot on the measurement scale, with a red shaded rejection region above the critical value, a blue vertical line at the hypothesized mean (285), and a green vertical line at the observed sample mean (320), which falls inside the rejection region."
+```{r pi-18}
+i3_n  <- sum(!is.na(i3_df$length_mm))
+i3_se <- i3_sd / sqrt(i3_n)
 
-library(ggplot2)
-
-# Define parameters
-sample_mean_1t <- 320
-sample_sd_1t <- 42.15
-sample_size_1t <- 12
-hypothesized_mean_1t <- 285
-alpha_1t <- 0.05
-df_1t <- sample_size_1t - 1
-
-# Calculate critical t-value for one-tailed test (right tail)
-t_crit_1t <- qt(1 - alpha_1t, df_1t)
-
-# Create measurement scale data
-measurement_x_1t <- seq(220, 360, length.out = 1000)
-standard_error_1t <- sample_sd_1t / sqrt(sample_size_1t)
-
-# Calculate probability density values
-measurement_null_y_1t <- dt((measurement_x_1t - hypothesized_mean_1t) / standard_error_1t, df_1t) * (1 / standard_error_1t)
-
-measurement_data_1t <- data.frame(
-  x = measurement_x_1t,
-  y = measurement_null_y_1t
+tibble(
+  n  = i3_n,
+  SD = round_half_up(i3_sd, 1),
+  SE = round_half_up(i3_se, 1)
 )
-
-# Critical value in original scale (only upper tail for one-tailed test)
-critical_value_upper_1t <- hypothesized_mean_1t + t_crit_1t * standard_error_1t
-
-# Create rejection region (ONLY upper tail)
-rejection_upper_1t <- data.frame(
-  x = seq(critical_value_upper_1t, max(measurement_x_1t), length.out = 100),
-  y = dt((seq(critical_value_upper_1t, max(measurement_x_1t), length.out = 100) - hypothesized_mean_1t) / standard_error_1t, df_1t) * (1 / standard_error_1t)
-)
-
-# Calculate t-statistic
-t_stat_1t <- (sample_mean_1t - hypothesized_mean_1t) / standard_error_1t
-
-# Create the measurement scale plot - CORRECTED NAME
-measurement_plot_1t <- ggplot(measurement_data_1t, aes(x = x, y = y)) +
-  geom_line(color = "blue", linewidth = 1) +
-  # ONLY upper rejection region
-  geom_area(data = rejection_upper_1t, aes(x = x, y = y), 
-            fill = "red", alpha = 0.3, inherit.aes = FALSE) +
-  # ONLY upper critical line
-  geom_vline(xintercept = critical_value_upper_1t, linetype = "dashed", color = "red") +
-  geom_vline(xintercept = sample_mean_1t, linetype = "solid", color = "green", linewidth = 1.2) +
-  geom_vline(xintercept = hypothesized_mean_1t, linetype = "solid", color = "blue", linewidth = 1.2) +
-  # ONLY one rejection region label
-  annotate("text", x = critical_value_upper_1t + 15, y = max(measurement_null_y_1t) * 0.6, 
-           label = "Rejection\nRegion\n(α = 0.05)", color = "red", size = 3.5) +
-  annotate("text", x = sample_mean_1t + 5, y = max(measurement_null_y_1t) * 0.8, 
-           label = paste("Sample Mean =", sample_mean_1t), color = "green", size = 3.5) +
-  annotate("text", x = hypothesized_mean_1t - 5, y = max(measurement_null_y_1t) * 0.9, 
-           label = paste("Ho: μ =", hypothesized_mean_1t), color = "blue", size = 3.5) +
-  annotate("text", x = 240, y = max(measurement_null_y_1t) * 0.3,
-           label = paste("t =", round(t_stat_1t, 3)), size = 3.5) +
-  annotate("text", x = 240, y = max(measurement_null_y_1t) * 0.2,
-           label = paste("Critical t =", round(t_crit_1t, 3)), size = 3.5) +
-  labs(title = "One-Tailed t-Test (Upper Tail)",
-       subtitle = paste0("Testing Ho: μ = ", hypothesized_mean_1t, " vs H1: μ > ", hypothesized_mean_1t, " (α = ", alpha_1t, ", df = ", df_1t, ")"),
-       x = "Measurement Value",
-       y = "Probability Density") +
-  theme_minimal(base_size = 9) +
-  theme(plot.title = element_text(size = 14, face = "bold"),
-        plot.subtitle = element_text(size = 12),
-        axis.title = element_text(size = 12),
-        axis.text = element_text(size = 10))
-
-# Display the plot
-print(measurement_plot_1t)
-
-# # Print summary statistics
-# cat("Summary of One-Tailed Hypothesis Test:\n")
-# cat("Sample mean:", sample_mean_1t, "\n")
-# cat("Hypothesized mean:", hypothesized_mean_1t, "\n")
-# cat("Sample size:", sample_size_1t, "\n")
-# cat("Standard deviation:", sample_sd_1t, "\n")
-# cat("Standard error:", round(standard_error_1t, 3), "\n")
-# cat("t-statistic:", round(t_stat_1t, 3), "\n")
-# cat("Critical t-value (one-tailed):", round(t_crit_1t, 3), "\n")
-# cat("Critical value:", round(critical_value_upper_1t, 2), "\n")
-# 
-# # Determine if we reject H0 (one-tailed test)
-# if(t_stat_1t > t_crit_1t) {
-#   cat("Decision: Reject Ho (sample mean falls in upper rejection region)\n")
-# } else {
-#   cat("Decision: Fail to reject Ho (sample mean does not fall in rejection region)\n")
-# }
-# 
-
 ```
 :::
 :::::
 
-## Hypothesis Testing (Two-Tailed) — The Numbers
+## What a confidence interval actually is
 
-::::: columns
-::: {.column width="60%"}
-Hypothesis testing is a systematic way to evaluate research questions using data.
+:::::: columns
+:::: {.column width="60%"}
+We have one sample and one mean, `r round_half_up(i3_mean, 1)` mm. The true μ is some other number we will never see. A **confidence interval** is our honest statement of how close we probably are.
 
-**Key components:**
+**The recipe:** $\bar{y} \pm (\text{critical value}) \times SE$
 
-1.  **Null hypothesis (H₀)**: Typically assumes "no effect" or "no difference"
-2.  **Alternative hypothesis (Hₐ)**: The claim we're trying to support
-3.  **Statistical test**: Method for evaluating evidence against H₀
-4.  **P-value**: Probability of observing our results (or more extreme) if H₀ is true
-5.  **Significance level (α)**: Threshold for rejecting H₀, typically 0.05
-
-**Decision rule**: Reject H₀ if p-value \< α
-
-let's test if our sample mean of 320 is equal to 270 or not? Essentially we are looking at the confidence intervals!!!\
-
-::: callout-note
-**📖 Reference**
-
-Whitlock & Schluter, Ch. 6 — Hypothesis Testing, on why a two-tailed test is the default and what it costs to go one-tailed.
-:::
-:::
-
-::: {.column width="40%"}
-```{r l04-18}
-#| echo: false
-#| message: false
-#| warning: false
-#| fig-height: 3.6
-#| fig-width: 3.6
-#| paged-print: false
-
-# Define parameters
-ht2_mean <- 320
-ht2_sd <- 37.81
-ht2_n <- 9
-ht2_mu0 <- 270
-ht2_alpha <- 0.05
-ht2_df <- ht2_n - 1
-
-# Calculate critical t-value for two-tailed test
-ht2_tcrit <- qt(1 - ht2_alpha/2, ht2_df)
-
-# Create measurement scale data
-ht2_x <- seq(200, 380, length.out = 1000)
-ht2_se <- ht2_sd / sqrt(ht2_n)
-
-# Calculate probability density values
-ht2_y <- dt((ht2_x - ht2_mu0) / ht2_se, ht2_df) * (1 / ht2_se)
-
-ht2_data <- data.frame(
-  x = ht2_x,
-  y = ht2_y
-)
-
-# Critical values in original scale
-ht2_cv_hi <- ht2_mu0 + ht2_tcrit * ht2_se
-ht2_cv_lo <- ht2_mu0 - ht2_tcrit * ht2_se
-
-# Create rejection regions
-ht2_rej_hi <- data.frame(
-  x = seq(ht2_cv_hi, max(ht2_x), length.out = 100),
-  y = dt((seq(ht2_cv_hi, max(ht2_x), length.out = 100) - ht2_mu0) / ht2_se, ht2_df) * (1 / ht2_se)
-)
-
-ht2_rej_lo <- data.frame(
-  x = seq(min(ht2_x), ht2_cv_lo, length.out = 100),
-  y = dt((seq(min(ht2_x), ht2_cv_lo, length.out = 100) - ht2_mu0) / ht2_se, ht2_df) * (1 / ht2_se)
-)
-
-# Calculate t-statistic
-ht2_tstat <- (ht2_mean - ht2_mu0) / ht2_se
-
-# Create the measurement scale plot
-ht2_plot <- ggplot(ht2_data, aes(x = x, y = y)) +
-  geom_line(color = "blue", linewidth = 1) +
-  geom_area(data = ht2_rej_hi, aes(x = x, y = y), 
-            fill = "red", alpha = 0.3, inherit.aes = FALSE) +
-  geom_area(data = ht2_rej_lo, aes(x = x, y = y), 
-            fill = "red", alpha = 0.3, inherit.aes = FALSE) +
-  geom_vline(xintercept = ht2_cv_hi, linetype = "dashed", color = "red") +
-  geom_vline(xintercept = ht2_cv_lo, linetype = "dashed", color = "red") +
-  geom_vline(xintercept = ht2_mean, linetype = "solid", color = "green", linewidth = 1.2) +
-  geom_vline(xintercept = ht2_mu0, linetype = "solid", color = "blue", linewidth = 1.2) +
-  annotate("text", x = ht2_cv_hi + 8, y = max(ht2_y) * 0.6, 
-           label = "Rejection\nRegion", color = "red", size = 3.5) +
-  annotate("text", x = ht2_cv_lo - 8, y = max(ht2_y) * 0.6,  
-           label = "Rejection\nRegion", color = "red", size = 3.5) +
-  annotate("text", x = ht2_mean + 5, y = max(ht2_y) * 0.8, 
-           label = paste("Sample Mean =", ht2_mean), color = "green", size = 3.5) +
-  annotate("text", x = ht2_mu0 - 5, y = max(ht2_y) * 0.9, 
-           label = paste("Ho: μ =", ht2_mu0), color = "blue", size = 3.5) +
-  annotate("text", x = 230, y = max(ht2_y) * 0.3,
-           label = paste("t =", round(ht2_tstat, 3)), size = 3.5) +
-  annotate("text", x = 230, y = max(ht2_y) * 0.2,
-           label = paste("Critical t = ±", round(ht2_tcrit, 3)), size = 3.5) +
-  labs(title = "Two-Tailed t-Test (Original Scale)",
-       subtitle = paste0("Testing Ho: μ = ", ht2_mu0, " vs H1: μ ≠ ", ht2_mu0, " (α = ", ht2_alpha, ", df = ", ht2_df, ")"),
-       x = "Measurement Value",
-       y = "Probability Density") +
-  theme_minimal(base_size = 9) +
-  theme(plot.title = element_text(size = 14, face = "bold"),
-        plot.subtitle = element_text(size = 12),
-        axis.title = element_text(size = 12),
-        axis.text = element_text(size = 10))
-
-# Display the plot
-# print(ht2_plot)
-
-# Print summary statistics
-cat("Summary of Hypothesis Test:\n")
-cat("Sample mean:", ht2_mean, "\n")
-cat("Hypothesized mean:", ht2_mu0, "\n")
-cat("Standard error:", round(ht2_se, 3), "\n")
-cat("t-statistic:", round(ht2_tstat, 3), "\n")
-cat("Critical t-value (±):", round(ht2_tcrit, 3), "\n")
-cat("Critical values:", round(ht2_cv_lo, 2), "to", round(ht2_cv_hi, 2), "\n")
-
-# Determine if we reject H0
-if(abs(ht2_tstat) > ht2_tcrit) {
-  cat("Decision: Reject Ho (sample mean falls in rejection region)\n")
-} else {
-  cat("Decision: Fail to reject Ho (sample mean falls in the fail-to-reject region)\n")
-}
-```
-:::
-:::::
-
-## Hypothesis Testing (Two-Tailed) — The Picture
-
-::::: columns
-::: {.column width="60%"}
-Hypothesis testing is a systematic way to evaluate research questions using data.
-
-**Key components:**
-
-1.  **Null hypothesis (H₀)**: Typically assumes "no effect" or "no difference"
-2.  **Alternative hypothesis (Hₐ)**: The claim we're trying to support
-3.  **Statistical test**: Method for evaluating evidence against H₀
-4.  **P-value**: Probability of observing our results (or more extreme) if H₀ is true
-5.  **Significance level (α)**: Threshold for rejecting H₀, typically 0.05
-
-**Decision rule**: Reject H₀ if p-value \< α
-
-let's test if our sample mean of 320 is equal to 270 or not? Essentially we are looking at the confidence intervals!!!
-:::
-
-::: {.column width="40%"}
-```{r l04-19}
-#| echo: false
-#| message: false
-#| warning: false
-#| fig-height: 3.6
-#| fig-width: 3.6
-#| paged-print: false
-#| fig-alt: "Two-tailed t-test rejection region plot on the measurement scale, with red shaded rejection regions in both tails beyond the critical values, a blue vertical line at the hypothesized mean (270), and a green vertical line at the observed sample mean (320), which falls in the upper rejection region."
-
-# Define parameters
-ht2_mean <- 320
-ht2_sd <- 37.81
-ht2_n <- 9
-ht2_mu0 <- 270
-ht2_alpha <- 0.05
-ht2_df <- ht2_n - 1
-
-# Calculate critical t-value for two-tailed test
-ht2_tcrit <- qt(1 - ht2_alpha/2, ht2_df)
-
-# Create measurement scale data
-ht2_x <- seq(200, 380, length.out = 1000)
-ht2_se <- ht2_sd / sqrt(ht2_n)
-
-# Calculate probability density values
-ht2_y <- dt((ht2_x - ht2_mu0) / ht2_se, ht2_df) * (1 / ht2_se)
-
-ht2_data <- data.frame(
-  x = ht2_x,
-  y = ht2_y
-)
-
-# Critical values in original scale
-ht2_cv_hi <- ht2_mu0 + ht2_tcrit * ht2_se
-ht2_cv_lo <- ht2_mu0 - ht2_tcrit * ht2_se
-
-# Create rejection regions
-ht2_rej_hi <- data.frame(
-  x = seq(ht2_cv_hi, max(ht2_x), length.out = 100),
-  y = dt((seq(ht2_cv_hi, max(ht2_x), length.out = 100) - ht2_mu0) / ht2_se, ht2_df) * (1 / ht2_se)
-)
-
-ht2_rej_lo <- data.frame(
-  x = seq(min(ht2_x), ht2_cv_lo, length.out = 100),
-  y = dt((seq(min(ht2_x), ht2_cv_lo, length.out = 100) - ht2_mu0) / ht2_se, ht2_df) * (1 / ht2_se)
-)
-
-# Calculate t-statistic
-ht2_tstat <- (ht2_mean - ht2_mu0) / ht2_se
-
-# Create the measurement scale plot
-ht2_plot <- ggplot(ht2_data, aes(x = x, y = y)) +
-  geom_line(color = "blue", linewidth = 1) +
-  geom_area(data = ht2_rej_hi, aes(x = x, y = y), 
-            fill = "red", alpha = 0.3, inherit.aes = FALSE) +
-  geom_area(data = ht2_rej_lo, aes(x = x, y = y), 
-            fill = "red", alpha = 0.3, inherit.aes = FALSE) +
-  geom_vline(xintercept = ht2_cv_hi, linetype = "dashed", color = "red") +
-  geom_vline(xintercept = ht2_cv_lo, linetype = "dashed", color = "red") +
-  geom_vline(xintercept = ht2_mean, linetype = "solid", color = "green", linewidth = 1.2) +
-  geom_vline(xintercept = ht2_mu0, linetype = "solid", color = "blue", linewidth = 1.2) +
-  annotate("text", x = ht2_cv_hi + 8, y = max(ht2_y) * 0.6, 
-           label = "Rejection\nRegion", color = "red", size = 3.5) +
-  annotate("text", x = ht2_cv_lo - 8, y = max(ht2_y) * 0.6,  
-           label = "Rejection\nRegion", color = "red", size = 3.5) +
-  annotate("text", x = ht2_mean + 5, y = max(ht2_y) * 0.8, 
-           label = paste("Sample Mean =", ht2_mean), color = "green", size = 3.5) +
-  annotate("text", x = ht2_mu0 - 5, y = max(ht2_y) * 0.9, 
-           label = paste("Ho: μ =", ht2_mu0), color = "blue", size = 3.5) +
-  annotate("text", x = 230, y = max(ht2_y) * 0.3,
-           label = paste("t =", round(ht2_tstat, 3)), size = 3.5) +
-  annotate("text", x = 230, y = max(ht2_y) * 0.2,
-           label = paste("Critical t = ±", round(ht2_tcrit, 3)), size = 3.5) +
-  labs(title = "Two-Tailed t-Test (Original Scale)",
-       subtitle = paste0("Testing Ho: μ = ", ht2_mu0, " vs H1: μ ≠ ", ht2_mu0, " (α = ", ht2_alpha, ", df = ", ht2_df, ")"),
-       x = "Measurement Value",
-       y = "Probability Density") +
-  theme_minimal(base_size = 9) +
-  theme(plot.title = element_text(size = 14, face = "bold"),
-        plot.subtitle = element_text(size = 12),
-        axis.title = element_text(size = 12),
-        axis.text = element_text(size = 10))
-
-# Display the plot
-print(ht2_plot)
-
-# # Print summary statistics
-# cat("Summary of Hypothesis Test:\n")
-# cat("Sample mean:", ht2_mean, "\n")
-# cat("Hypothesized mean:", ht2_mu0, "\n")
-# cat("Standard error:", round(ht2_se, 3), "\n")
-# cat("t-statistic:", round(ht2_tstat, 3), "\n")
-# cat("Critical t-value (±):", round(ht2_tcrit, 3), "\n")
-# cat("Critical values:", round(ht2_cv_lo, 2), "to", round(ht2_cv_hi, 2), "\n")
-# 
-# # Determine if we reject H0
-# if(abs(ht2_tstat) > ht2_tcrit) {
-#   cat("Decision: Reject Ho (sample mean falls in rejection region)\n")
-# } else {
-#   cat("Decision: Fail to reject Ho (sample mean falls in the fail-to-reject region)\n")
-# }
-```
-:::
-:::::
-
-## Practice Exercise 5: One-Sample t-Test
-
-::: callout-tip
-## Practice Exercise 5: Lets practice a One-Sample t-Test
-
-Let's perform a one-sample t-test to determine if the mean fish length in Lake I3 differs from 260 mm:
-
-```{r l04-20}
-# get only lake I3
-i3_df <- grayling_df %>% filter(lake=="I3")
-
-# what is the mean
-i3_mean <- mean(i3_df$length_mm, na.rm=TRUE)
-cat("Mean:", round(i3_mean, 1), "mm\n")
-
-# Perform a one-sample t-test
-t_test_result <- t.test(i3_df$length_mm, mu = 260)
-
-# View the test results
-t_test_result
-```
-
-Interpret this test result by answering these questions:
-
-1.  What was the null hypothesis?
-2.  What was the alternative hypothesis?
-3.  What does the p-value tell us?
-4.  Should we reject or fail to reject the null hypothesis at α = 0.05?
-5.  What is the practical interpretation of this result for fish biologists?
-:::
-
-## Practice Exercise 6: Formulating Hypotheses
-
-::: callout-tip
-## Practice Exercise 6: Formulating Hypotheses
-
-For the following research questions about Arctic grayling, write the null and alternative hypotheses:
-
-1.  Are fish in Lake I8 longer than fish in Lake I3?
-
-```{r l04-21}
-# Let's test one of these hypotheses: Are fish in Lake I8 longer than fish in Lake I3?
-
-# Perform an independent t-test
-t_test_result <- t.test(length_mm ~ lake, data = grayling_df, 
-                       alternative = "less")  # H₀: μ_I3 ≥ μ_I8, H₁: μ_I3 < μ_I8
-
-# Display the results
-t_test_result
-```
-
-Based on this t-test, what can we conclude about the difference in fish length between the two lakes?
-:::
-
-## Understanding P-values
-
-::::: columns
-::: {.column width="60%"}
-A **p-value** is the probability of observing the sample result (or something more extreme) if the null hypothesis is true.
-
-**Common interpretations:**
-
-- p \< 0.05: Strong evidence against H₀
-- 0.05 ≤ p \< 0.10: Moderate evidence against H₀
-- p ≥ 0.10: Insufficient evidence against H₀
-
-**Common misinterpretations:**
-
-- p-value is NOT the probability that H₀ is true
-- p-value is NOT the probability that results occurred by chance
-- Statistical significance ≠ practical significance
-- a very small p-value means the effect is **detectable**, not that it is **large** — with n = 168 a biologically trivial difference can give p = 10\^-16
-- so report `p < 0.001` rather than `p = 1.2e-16`, and always report the effect size alongside it
-
-::: callout-note
-**📖 Reference**
-
-Whitlock & Schluter, Ch. 6 — Hypothesis Testing.\
-Gotelli & Ellison, Ch. 4 — Framing and Testing Hypotheses, "Statistical Significance and P-Values," covers these misinterpretations directly.
-:::
-:::
-
-::: {.column width="40%"}
-```{r l04-22}
-#| echo: false
-#| message: false
-#| warning: false
-#| fig-height: 4
-#| fig-width: 3.6
-#| paged-print: false
-#| fig-alt: "Standard normal density curve with a red dashed vertical line marking an observed test statistic (z = 2.1) and the area under the curve beyond it shaded blue to represent the p-value."
-# Visualize the p-value concept
-x <- seq(-4, 4, length.out = 1000)
-y <- dnorm(x)
-
-# Mark "observed" test statistic
-observed_z <- 2.1
-observed_p <- 1 - pnorm(observed_z)
-
-# Create data for shaded region (p-value)
-p_region <- data.frame(
-  x = seq(observed_z, 4, length.out = 100),
-  y = dnorm(seq(observed_z, 4, length.out = 100))
-)
-
-p_plot <- ggplot() +
-  geom_line(data = data.frame(x = x, y = y), aes(x = x, y = y)) +
-  geom_area(data = p_region, aes(x = x, y = y), fill = "blue", alpha = 0.3) +
-  geom_vline(xintercept = observed_z, linetype = "dashed", color = "red") +
-  annotate("text", x = 2.7, y = 0.05, 
-           label = paste("one-tailed\np-value =", round(observed_p, 3)),
-           color = "blue") +
-  annotate("text", x = observed_z, y = 0.15, 
-           label = "Observed\nTest Statistic", 
-           color = "red", hjust = -0.1) +
-  labs(title = "Visualizing the p-value",
-       subtitle = "Null distribution with observed test statistic",
-       x = "Test Statistic (z)",
-       y = "Probability Density") +
-  theme_minimal(base_size = 9)
-p_plot
-```
-:::
-:::::
-
-## Type I and Type II Errors
-
-::::: columns
-::: {.column width="60%"}
-When making decisions based on hypothesis tests, two types of errors can occur:
-
-**Type I Error (False Positive)**
-
-- Rejecting H₀ when it's actually true
-- Probability = α (significance level)
-- "Finding an effect that isn't real"
-
-**Type II Error (False Negative)**
-
-- Failing to reject H₀ when it's actually false
-- Probability = β
-- "Missing an effect that is real"
-
-::: callout-note
-**📖 Reference**
-
-Whitlock & Schluter, Ch. 6 — Hypothesis Testing, and Gotelli & Ellison, Ch. 4 — "Errors in Hypothesis Testing." We return to both in Power and Type I and II Error.
-:::
-
-**Statistical Power = 1 - β**
-
-- Probability of correctly rejecting a false H₀
-- Increases with:
-  - Larger sample size
-
-  - Larger effect size
-
-  - Lower variability
-
-  - Higher α level
-:::
-
-::: {.column width="40%"}
-```{r l04-23}
-#| echo: false
-#| message: false
-#| warning: false
-#| fig-height: 3.6
-#| fig-width: 3.6
-#| paged-print: false
-#| fig-alt: "Overlapping density curves for a null distribution (black) centered at 0 and an alternative distribution (green) centered at 3, with the Type I error region shaded red beyond the critical value under the null curve, and the Type II error region shaded blue under the alternative curve below the critical value."
-# Create a visualization of Type I and Type II errors
-x <- seq(-4, 8, length.out = 1000)
-null_y <- dnorm(x, mean = 0, sd = 1)
-# same SD as the null - both are the sampling distribution of the SAME
-# statistic, just shifted by the effect size
-alt_y <- dnorm(x, mean = 3, sd = 1)
-
-# Critical value for alpha = 0.05
-crit_val <- qnorm(0.95)
-
-# Type I and II error regions
-type_1_region <- data.frame(
-  x = seq(crit_val, 8, length.out = 100),
-  y = dnorm(seq(crit_val, 8, length.out = 100), mean = 0, sd = 1)
-)
-
-type_2_region <- data.frame(
-  x = seq(-4, crit_val, length.out = 100),
-  y = dnorm(seq(-4, crit_val, length.out = 100), mean = 3, sd = 1)
-)
-
-# Create the plot
-error_plot <- ggplot() +
-  # Distributions
-  geom_line(data = data.frame(x = x, y = null_y), 
-            aes(x = x, y = y, color = "Null Distribution")) +
-  geom_line(data = data.frame(x = x, y = alt_y), 
-            aes(x = x, y = y, color = "Alternative Distribution")) +
-  
-  # Error regions
-  geom_area(data = type_1_region, aes(x = x, y = y), 
-            fill = "red", alpha = 0.3) +
-  geom_area(data = type_2_region, aes(x = x, y = y), 
-            fill = "blue", alpha = 0.3) +
-  
-  # Critical value line
-  geom_vline(xintercept = crit_val, linetype = "dashed") +
-  
-  # Labels
-  annotate("text", x = 2, y = 0.3, label = "Type I Error (α)", color = "red") +
-  annotate("text", x = 1.0, y = 0.06, label = "Type II Error (β)", color = "blue") +
-  
-  # Theme and formatting
-  scale_color_manual(values = c("Null Distribution" = "black", 
-                                "Alternative Distribution" = "darkgreen"),
-                     name = "") +
-  labs(title = "Type I and Type II Errors",
-       x = "Test Statistic",
-       y = "Probability Density") +
-  theme_minimal(base_size = 9)
-error_plot
-```
-:::
-:::::
-
-## Type I and Type II Errors — What It Means
-
-::::: columns
-::: {.column width="60%"}
-- What does it mean...
-  - Black curve (Null Distribution): distribution of test statistics when Ho is true
-
-  - Green curve (Alternative Distribution): distribution when Ha is true (is an effect)
-- Red shaded area (Type I Error): probability of rejecting Ho when it's actually true
-  - area under the null distribution (black curve) to the right of the critical value (set by α = 0.05)
-- Blue shaded area (Type II Error): probability of failing to reject Ho when alternative is actually true
-  - area under alternative distribution (green curve) left of α (depends on effect size, sample size, etc.)
-
-The Key Insight fundamental trade-off in hypothesis testing:
-
-- as α value moves left or right, change balance between Type I and Type II errors
-- Moving left reduces Type II errors increases Type I errors, and vice versa
-- power (1 - β) area under the green curve RIGHT of dashed line
-- the probability of correctly detecting a real effect.
-:::
-
-::: {.column width="40%"}
-```{r l04-24}
-#| echo: false
-#| message: false
-#| warning: false
-#| fig-height: 3.6
-#| fig-width: 3.6
-#| paged-print: false
-#| fig-alt: "The Type I and Type II error density-curve plot repeated, shown alongside the explanation of what the red and blue shaded regions mean."
-
-error_plot
-```
-:::
-:::::
-
-## Practice Exercise 7: Interpreting Errors and Power
-
-::: callout-tip
-## Practice Exercise 7: Interpreting P-values and Errors
-
-Given the following scenarios, identify whether a Type I or Type II error might have occurred:
-
-1.  A researcher concludes that a new fishing regulation increased grayling size, when in fact it had no effect.
-
-2.  A study fails to detect a real decline in grayling population due to warming water, concluding there was no effect.
-
-3.  Let's calculate the power of our t-test to detect a 30 mm difference in length between lakes:
-
-```{r l04-25}
-# Power to detect a 30 mm difference in mean length between lakes
-lake_I3 <- grayling_df %>% filter(lake == "I3")
-lake_I8 <- grayling_df %>% filter(lake == "I8")
-
-# count only the fish we actually measured (the length() trap from week 2)
-n1 <- sum(!is.na(lake_I3$length_mm))
-n2 <- sum(!is.na(lake_I8$length_mm))
-
-sd_pooled <- sqrt((var(lake_I3$length_mm, na.rm = TRUE) * (n1 - 1) +
-                   var(lake_I8$length_mm, na.rm = TRUE) * (n2 - 1)) /
-                  (n1 + n2 - 2))
-
-# power.t.test assumes EQUAL group sizes. Ours are 66 and 102, so use the
-# harmonic mean - the effective n per group when the design is unbalanced.
-n_effective <- 2 / (1/n1 + 1/n2)
-
-power_result <- power.t.test(n = n_effective,
-                             delta = 30,          # difference we care about, in mm
-                             sd = sd_pooled,      # same scale as delta
-                             sig.level = 0.05,
-                             type = "two.sample",
-                             alternative = "two.sided")
-
-cat("n per group (harmonic mean):", round(n_effective, 1), "\n")
-cat("pooled SD:", round(sd_pooled, 1), "mm\n")
-cat("Cohen's d for a 30 mm difference:", round(30 / sd_pooled, 2), "\n\n")
-power_result
-```
-:::
+**What "95%" means:** repeat the whole study many times, build an interval each time, and **95% of those intervals will contain μ**. The figure shows 20 such studies — one misses.
 
 ::: callout-warning
-**⚠️ An assumption we just quietly made**
+**The interpretation everyone gets wrong**
 
-`sd_pooled` averages the two lakes' SDs, which assumes they are equal. They are not: sd(I3) = 28.3 mm but sd(I8) = 52.3 mm — nearly double. That is also why the t-test two slides back was a **Welch** test (R's default), which does *not* assume equal variances.
+❌ "There is a 95% chance μ is in **my** interval."
 
-So treat this power number as a rough guide, not a precise answer.
+✅ "95% of intervals built this way capture μ."
+
+μ is a fixed number — it is not moving around. **The interval is what is random.** Yours either caught μ or it didn't; you don't get to know which.
 :::
+::::
+
+::: {.column width="40%"}
+```{r pi-19}
+#| echo: false
+#| fig-alt: "Twenty simulated confidence intervals drawn as horizontal segments against a vertical line at the true mean; nineteen cross the line in grey and one that misses is shown in red."
+set.seed(11)
+ci_sim <- map_dfr(1:20, function(i) {
+  s <- rnorm(15, mean = i3_mean, sd = i3_sd)
+  tt <- t.test(s)
+  tibble(study = i, lo = tt$conf.int[1], hi = tt$conf.int[2],
+         est = mean(s))
+}) %>%
+  mutate(caught = lo <= i3_mean & hi >= i3_mean)
+
+ci_sim %>%
+  ggplot(aes(y = study, colour = caught)) +
+  geom_segment(aes(x = lo, xend = hi, yend = study), linewidth = 0.7) +
+  geom_point(aes(x = est), size = 0.9) +
+  geom_vline(xintercept = i3_mean, linewidth = 0.8) +
+  scale_colour_manual(values = c("TRUE" = "grey40", "FALSE" = "red"),
+                      guide = "none") +
+  labs(x = "Length (mm)", y = "Study #",
+       caption = "vertical line = true μ") +
+  theme_classic(base_size = 9)
+```
+:::
+::::::
+
+## If we knew σ, we would use z
+
+::::: columns
+::: {.column width="60%"}
+When the population σ is **genuinely known**, the critical value comes straight off the standard normal:
+
+### $CI = \bar{y} \pm 1.96 \cdot \frac{\sigma}{\sqrt{n}}$
+
+- 1.96 because 95% of the standard normal lies within ±1.96
+- 90% CI → 1.645 · 99% CI → 2.576 · all from `qnorm()`
+
+```{r pi-20}
+qnorm(0.975)   # 95%
+qnorm(0.95)    # 90%
+```
+
+**Wider confidence costs a wider interval.** You cannot be more certain and more precise at the same time — only a bigger n buys you both.
+:::
+
+::: {.column width="40%"}
+```{r pi-21}
+#| echo: false
+#| fig-alt: "Standard normal curve with the central 95 percent shaded between minus 1.96 and 1.96 and dashed red lines at both boundaries."
+shade_curve(dnorm, from = -1.96, to = 1.96, marks = c(-1.96, 1.96),
+            title = "95% of the standard normal",
+            subtitle = "lies between z = ±1.96")
+```
+:::
+:::::
+
+## But we never know σ — so z is too confident
+
+::::: columns
+::: {.column width="60%"}
+Look again at that formula. It needs **σ**, the *population* standard deviation. We have never once had it.
+
+What we actually have is **s**, computed from our `r i3_n` fish. And s is itself an estimate — a different sample gives a different s.
+
+**Two sources of uncertainty, not one:**
+
+1.  the mean wobbles from sample to sample
+2.  our **estimate of the spread** also wobbles
+
+Using 1.96 accounts for the first and ignores the second. Intervals come out **too narrow** and we claim more precision than we earned.
+
+Gosset hit exactly this at Guinness — tiny barley samples, σ never known. His fix: **use a curve with fatter tails**, so the critical value is bigger and the interval honest.
+
+**That curve is Student's t.**
+:::
+
+::: {.column width="40%"}
+![](images/clipboard-1052237789.png){fig-alt="Vintage photo of William Sealy Gosset, who published as 'Student' while working at the Guinness brewery, with a humorous speech bubble reading 'Cheers!' and a pint of Guinness beside him." width="2.49in"}
+:::
+:::::
+
+## The t-distribution
+
+:::::: columns
+:::: {.column width="60%"}
+Same bell shape as the normal, but **heavier in the tails** — that extra thickness is the price of estimating σ.
+
+- Shape set by **degrees of freedom, df = n − 1**
+- **Small df** → very heavy tails → large critical values
+- **df grows** → t creeps toward the normal
+- Past n ≈ 30 they agree to about two decimals — which is where the "n \> 30" rule of thumb came from
+
+::: callout-important
+**The rule that matters:** whenever σ is **estimated from the sample**, use **t** — at *any* sample size. "n \> 30, use z" is a convenience from the era of paper tables, not a statistical law. R uses t always.
+:::
+::::
+
+::: {.column width="40%"}
+```{r pi-22}
+#| echo: false
+#| fig-alt: "Overlaid density curves comparing the standard normal as a dashed black line with t-distributions at 3, 10 and 30 degrees of freedom, showing heavier tails at low degrees of freedom."
+tibble(x = rep(seq(-4, 4, length.out = 400), 4),
+       Distribution = rep(c("t (df=3)", "t (df=10)", "t (df=30)", "Normal"),
+                          each = 400)) %>%
+  mutate(
+    Distribution = factor(Distribution,
+                          levels = c("t (df=3)", "t (df=10)", "t (df=30)", "Normal")),
+    y = case_when(
+      Distribution == "t (df=3)"  ~ dt(x, 3),
+      Distribution == "t (df=10)" ~ dt(x, 10),
+      Distribution == "t (df=30)" ~ dt(x, 30),
+      TRUE                        ~ dnorm(x))) %>%
+  ggplot(aes(x, y, colour = Distribution, linetype = Distribution)) +
+  geom_line(linewidth = 0.8) +
+  scale_colour_manual(values = c("#E31A1C", "#FF7F00", "#1F78B4", "black")) +
+  scale_linetype_manual(values = c("solid", "solid", "solid", "dashed")) +
+  labs(x = "Value", y = "Density") +
+  theme_classic(base_size = 9) +
+  theme(legend.position = "bottom", legend.title = element_blank())
+```
+:::
+::::::
+
+## Reading the t-table
+
+::::: columns
+::: {.column width="60%"}
+### $CI = \bar{y} \pm t \cdot \frac{s}{\sqrt{n}}$
+
+Only the multiplier changed: **t in place of 1.96**.
+
+- **Rows** = degrees of freedom (n − 1)
+- **Columns** = probability, with **two header rows**: one-tail and two-tail
+- **A CI is always two-tailed** — it has two ends. Use the two-tail column
+
+The bottom row (df = ∞) is 1.96: the t-table *contains* the z-table.
+
+```{r pi-23}
+qt(0.975, df = 8)    # 95% CI, n = 9
+qt(0.975, df = 65)   # 95% CI, n = 66
+```
+:::
+
+::: {.column width="40%"}
+![](images/clipboard-3203878802.png){fig-alt="Student's t critical-value table with one-tail and two-tail probabilities across the top and degrees of freedom down the rows." width="3.96in"}
+:::
+:::::
+
+## Worked CI — by table and by R
+
+::::: columns
+::: {.column width="60%"}
+A sample of **9** fish: mean = 272.8, s = 37.81
+
+1.  **df** = 9 − 1 = **8**
+2.  **Two-tail 0.05 column, row 8** → **t = 2.306**
+3.  **SE** = 37.81 / √9 = 12.60
+4.  **Margin** = 2.306 × 12.60 = **29.06**
+5.  **CI** = 272.8 ± 29.06 = **243.7 to 301.9 mm**
+
+> "The 95% CI for mean length is 243.7–301.9 mm."
+
+Had we wrongly used 1.96, we'd have reported ±24.7 — an interval **15% too narrow**, claiming precision we never had.
+:::
+
+::: {.column width="40%"}
+![](images/clipboard-3959630930.png){fig-alt="Student's t critical-value table with the two-tail 0.05 column and the df = 8 row highlighted, meeting at the critical value 2.306." width="3.96in"}
+:::
+:::::
+
+## Practice 2 · z vs t on a real sample
+
+::: callout-tip
+Ten fish from I3. Same mean, same SE — only the multiplier differs.
+
+```{r pi-24}
+set.seed(42)
+small_sample <- i3_df %>% slice_sample(n = 10)
+s_mean <- mean(small_sample$length_mm)
+s_se   <- sd(small_sample$length_mm) / sqrt(10)
+
+tibble(method = c("z (wrong)", "t (correct)"),
+       crit  = round_half_up(c(1.96, qt(0.975, 9)), 3),
+       lower = round_half_up(s_mean - crit * s_se, 1),
+       upper = round_half_up(s_mean + crit * s_se, 1))
+```
+
+R agrees:
+
+```{r pi-25}
+t.test(small_sample$length_mm)$conf.int
+```
+
+**The t interval is wider — and that extra width is the honest cost of not knowing σ.**
+:::
+
+## Part 5 · Hypothesis testing {.divider}
+
+## The logic
+
+:::::: columns
+:::: {.column width="60%"}
+A confidence interval asks *where is μ?* A hypothesis test asks *is μ equal to some specific value?* Same machinery, different question.
+
+1.  **H₀** — the boring claim: no effect, no difference
+2.  **Hₐ** — what we suspect instead
+3.  **Assume H₀ is true** and ask: how likely is data like ours?
+4.  **p-value** — probability of our result, or more extreme, **if H₀ is true**
+5.  **α** — how rare is rare enough, set **before** looking. Usually 0.05
+6.  **Decide** — p \< α → reject H₀
+
+$t = \frac{\bar{y} - \mu_0}{s / \sqrt{n}}$ — how many SEs is our mean from the claim?
+
+::: {.content-visible unless-format="revealjs"}
+::: callout-note
+**📖 Reference**
+
+Whitlock & Schluter Ch. 6 — Hypothesis Testing.\
+Gotelli & Ellison Ch. 4 — Framing and Testing Hypotheses.
+:::
+:::
+::::
+
+::: {.column width="40%"}
+```{r pi-26}
+#| echo: false
+#| fig-alt: "A t-distribution curve with the upper tail beyond the observed test statistic shaded, illustrating a p-value as tail area."
+shade_curve(function(x) dt(x, 11), from = 2.1, marks = 2.1,
+            xlab = "t",
+            title = "The p-value is an AREA",
+            subtitle = "our result, and everything more extreme")
+```
+:::
+::::::
+
+## One-tailed: all of α at one end
+
+::::: columns
+::: {.column width="60%"}
+**Use when the question has a direction**: *are these fish **longer** than 285 mm?* A shorter result would not interest us — it goes with H₀.
+
+- **H₀: μ ≤ 285 · Hₐ: μ \> 285**
+- n = 20, so **df = 19**
+- **All 5% sits in the upper tail**
+- t-table, **one-tail** 0.05, row 19 → **t = 1.729**
+
+Reject H₀ only if our t exceeds **+1.729**.
+
+```{r pi-27}
+qt(0.95, df = 19)     # one-tailed, α = 0.05
+```
+:::
+
+::: {.column width="40%"}
+```{r pi-28}
+#| echo: false
+#| fig-alt: "A t-distribution with 19 degrees of freedom and only the upper tail beyond 1.729 shaded red as the rejection region."
+shade_curve(function(x) dt(x, 19), from = qt(0.95, 19),
+            marks = qt(0.95, 19), xlab = "t",
+            title = "One-tailed, df = 19",
+            subtitle = "5% all in one tail → t = 1.729")
+```
+
+![](images/clipboard-641796945.png){fig-alt="Student's t table with the one-tail column and df row highlighted at the critical value." width="2.6in"}
+:::
+:::::
+
+## Two-tailed: α split between both ends
+
+:::::: columns
+:::: {.column width="60%"}
+**Use when either direction would matter**: *do these fish **differ** from 285 mm?* Longer or shorter, we want to know.
+
+- **H₀: μ = 285 · Hₐ: μ ≠ 285**
+- Same df = 19, same total α = 0.05
+- But now **2.5% in each tail**
+- t-table, **two-tail** 0.05, row 19 → **t = 2.093**
+
+```{r pi-29}
+qt(0.975, df = 19)    # two-tailed, α = 0.05
+```
+
+::: callout-important
+**Same α, same df, bigger critical value** (2.093 \> 1.729) — splitting α pushes each cutoff further out, so a two-tailed test is **harder to pass**.
+
+Pick your tails from the **question**, before seeing the data. **When in doubt, two-tailed** — it is also R's default.
+:::
+::::
+
+::: {.column width="40%"}
+```{r pi-30}
+#| echo: false
+#| fig-alt: "A t-distribution with 19 degrees of freedom and both tails beyond plus and minus 2.093 shaded red as rejection regions."
+tcrit <- qt(0.975, 19)
+curve_df <- tibble(x = seq(-4, 4, length.out = 600)) %>% mutate(y = dt(x, 19))
+ggplot(curve_df, aes(x, y)) +
+  geom_area(data = filter(curve_df, x <= -tcrit), fill = "#1F78B4", alpha = 0.35) +
+  geom_area(data = filter(curve_df, x >=  tcrit), fill = "#1F78B4", alpha = 0.35) +
+  geom_line(linewidth = 0.8) +
+  geom_vline(xintercept = c(-tcrit, tcrit), colour = "red", linetype = "dashed") +
+  labs(x = "t", y = "Density", title = "Two-tailed, df = 19",
+       subtitle = "2.5% each side → t = ±2.093") +
+  theme_classic(base_size = 9)
+```
+
+![](images/clipboard-1734806681.png){fig-alt="Student's t table with the two-tail column and df row highlighted at the critical value." width="2.6in"}
+:::
+::::::
+
+## Practice 3 · One-sample t-test
+
+::: callout-tip
+**Are I3 grayling different from a historical mean of 260 mm?**
+
+H₀: μ = 260 · Hₐ: μ ≠ 260
+
+```{r pi-31}
+t.test(i3_df$length_mm, mu = 260)
+```
+
+Read the output in this order:
+
+1.  **t** — how many SEs from 260 we landed
+2.  **df** — n − 1
+3.  **p-value** — compare to α = 0.05
+4.  **conf.int** — and notice: *does it contain 260?* The CI and the test always agree
+:::
+
+## Practice 4 · Two-sample t-test
+
+::: callout-tip
+**Are I8 fish longer than I3 fish?** Directional → one-tailed.
+
+```{r pi-32}
+t.test(length_mm ~ lake, data = grayling_df, alternative = "less")
+```
+
+`lake` is alphabetical, so R tests **I3 − I8**. "I8 longer" therefore means I3 − I8 is **less** than zero → `alternative = "less"`.
+
+Note "Welch Two Sample t-test" — R does **not** assume the two lakes have equal variances, and here that matters: sd(I3) = `r round_half_up(i3_sd, 1)` mm but sd(I8) = `r round_half_up(sd(grayling_df$length_mm[grayling_df$lake == "I8"], na.rm = TRUE), 1)` mm.
+:::
+
+## What a p-value is not
+
+:::::: columns
+:::: {.column width="60%"}
+**It is:** the probability of data like ours **if H₀ were true**.
+
+**It is not:**
+
+- the probability that H₀ is true
+- the probability the result is due to chance
+- a measure of **how big** the effect is
+
+**Small p means detectable, not large.** With n = 168, a biologically meaningless 2 mm difference can return p = 10⁻¹⁶.
+
+**So, every time:**
+
+- report **p \< 0.001**, not `p = 1.2e-16`
+- report the **effect size** — the difference in millimetres
+- report the **CI** — it shows size *and* uncertainty in one line
+- **significant ≠ important**. That call is biology, not arithmetic
+
+::: {.content-visible unless-format="revealjs"}
+::: callout-note
+**📖 Reference**
+
+Gotelli & Ellison Ch. 4 — "Statistical Significance and P-Values."
+:::
+:::
+::::
+
+::: {.column width="40%"}
+```{r pi-33}
+#| echo: false
+#| fig-alt: "Standard normal curve with a red dashed line at an observed statistic of 2.1 and the area beyond it shaded, labelled as the one-tailed p-value."
+shade_curve(dnorm, from = 2.1, marks = 2.1,
+            title = "p = the shaded area",
+            subtitle = "not the height, not the line")
+```
+:::
+::::::
 
 ## Summary
 
-::::: columns
-::: {.column width="60%"}
-**Key concepts covered:**
+**The chain, end to end:**
 
-1.  **Probability distributions** model random phenomena
-    - Normal distribution is especially important
-    - Z-scores standardize measurements
-2.  **Standard error** measures precision of estimates
-    - Decreases with larger sample sizes
-    - Used to construct confidence intervals
-3.  **Confidence intervals** express uncertainty
-    - Provide plausible range for parameters
-    - 95% CI: `mean ± t(0.975, df) × SE`
-    - t ≈ 1.96 only once n is large — with n = 10 it is 2.26
-4.  **Hypothesis testing** evaluates claims
-    - Null vs. alternative hypotheses
-    - P-values quantify evidence against H₀
-    - Consider both statistical and practical significance
-:::
+1.  Data have a distribution — μ and σ describe a **normal** one
+2.  **z = (x − μ)/σ** collapses every normal curve onto **one** standard curve
+3.  Area under that curve is **probability** — `pnorm` for areas, `qnorm` for cutoffs
+4.  **All of it assumes normality.** Shapiro-Wilk plus a Q-Q plot; our fish failed, and the *tail* was off by a third
+5.  **SD** describes fish; **SE = s/√n** describes means. Never swap them
+6.  **CI = ȳ ± t · SE** — 95% of intervals built this way capture μ
+7.  σ is never known, so the multiplier is **t**, not 1.96 — fatter tails, wider interval, honest
+8.  A **p-value** is tail area under H₀. It measures detectability, never importance
 
-::: {.column width="40%"}
-```{r l04-26}
-#| echo: false
-#| message: false
-#| warning: false
-#| fig-height: 3.6
-#| fig-width: 3.6
-#| paged-print: false
-#| fig-alt: "The Type I and Type II error density-curve plot repeated once more as a closing summary visual."
-error_plot
-```
+::: callout-note
+**Up next — t-Tests**, then **Power and Error**, where Type I/II errors and statistical power get the full treatment they need.
 :::
-:::::
 
 ## Readings
 
-::::::: columns
-:::: {.column width="60%"}
-**Before next class** — chapter PDFs are posted on **Canvas**:
+:::::: columns
+::: {.column width="60%"}
+**Before next class** — chapter PDFs are on **Canvas**:
 
-- **Whitlock & Schluter**, *The Analysis of Biological Data* — **Ch. 5**, Probability; **Ch. 10**, The Normal Distribution; **Ch. 6**, Hypothesis Testing. If you read only one, read Ch. 6
-- **Gotelli & Ellison**, *A Primer of Ecological Statistics* — **Ch. 2**, Random Variables and Probability Distributions, and **Ch. 4**, Framing and Testing Hypotheses
+- **Whitlock & Schluter** — **Ch. 10**, The Normal Distribution; **Ch. 4**, Estimating with Uncertainty; **Ch. 11**, Inference for a Normal Population. If you read only one, read **Ch. 4**
+- **Gotelli & Ellison** — **Ch. 2**, Random Variables and Probability Distributions; **Ch. 4**, Framing and Testing Hypotheses
 
-**Where each piece of today lives:**
-
-| Today's topic | Read |
-|---------------|------|
-| Probability distributions | W&S Ch. 5; Gotelli Ch. 2 |
-| Normal distribution, z-scores | W&S Ch. 10 |
-| SE and confidence intervals | W&S Ch. 4 |
-| The t-distribution | W&S Ch. 11 |
-| Hypothesis tests, p-values | W&S Ch. 6; Gotelli Ch. 4 |
-| Type I / Type II error, power | W&S Ch. 6; Gotelli Ch. 4 |
-| Checking normality | W&S Ch. 13 |
-::::
+| Today's topic                 | Read                     |
+|-------------------------------|--------------------------|
+| Normal distribution, z-scores | W&S Ch. 10               |
+| Checking normality            | W&S Ch. 13               |
+| SE and confidence intervals   | W&S Ch. 4                |
+| The t-distribution            | W&S Ch. 11               |
+| Hypothesis tests, p-values    | W&S Ch. 6; Gotelli Ch. 4 |
+:::
 
 :::: {.column width="40%"}
 ::: callout-note
-**Up next — T-Tests**
-
-Everything today was the machinery. Next module we point it at a real comparison between two groups, and Whitlock & Schluter **Ch. 11** and **Ch. 12** become the chapters to have read.
-:::
-
-::: callout-note
 **📖 R for Data Science (2e)**
-
-Little new R today — but the plots in this lecture are the same grammar as ever:
 
 - [§9 — Layers](https://r4ds.hadley.nz/layers.html)
 - [§10 — Exploratory data analysis](https://r4ds.hadley.nz/EDA.html)
-- [§13 — Numbers](https://r4ds.hadley.nz/numbers.html) — `mean()`, `sd()`, rounding
+- [§13 — Numbers](https://r4ds.hadley.nz/numbers.html)
 :::
 ::::
-:::::::
+::::::
