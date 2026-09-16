@@ -30,6 +30,7 @@ execute:
 #| warning: false
 #| include: false
 library(tidyverse)
+library(patchwork) # stacks the two panels on the "two sets of units" slide
 library(janitor)   # round_half_up() - rounds 0.5 up, the way you were taught
 
 grayling_df <- read_csv("data/gray_I3_I8.csv")
@@ -52,7 +53,7 @@ shade_curve <- function(dens, from = -Inf, to = Inf, xlim = c(-4, 4),
   fill_df <- curve_df %>% filter(x >= from, x <= to)
 
   ggplot(curve_df, aes(x, y)) +
-    geom_area(data = fill_df, fill = "#1F78B4", alpha = 0.35) +
+    geom_area(data = fill_df, fill = "darkblue", alpha = 0.35) +
     geom_line(linewidth = 0.8) +
     {if (!is.null(marks)) geom_vline(xintercept = marks, colour = "red",
                                      linetype = "dashed")} +
@@ -96,30 +97,30 @@ grayling_df %>%
 
 ## The normal distribution
 
-:::::: columns
-:::: {.column width="60%"}
-A **probability distribution** gives the probability of each possible outcome.
+::::::: columns
+::::: {.column width="60%"}
+A **probability distribution** spreads probability across the possible outcomes — but *how* depends on the data:
 
-The **normal distribution** is the one we lean on:
+- **Discrete** (a die): each outcome has its own probability, P(4) = 1/6
+- **Continuous** (fish length): any *exact* value has probability **zero**. Probability lives in **ranges**, as **area** under the curve
 
-- Symmetric, bell-shaped, defined by exactly **two numbers**
-- **μ** sets where the curve sits
-- **σ** sets how wide it is
-- Area under the whole curve = 1
+The curve's height is a **density** — probability *per mm*, not a probability. **Density × width ≈ probability.**
 
-Lake I3 grayling: **μ ≈ `r round_half_up(i3_mean, 1)` mm**, **σ ≈ `r round_half_up(i3_sd, 1)` mm**.
+> Density is a **rate**, so it is not capped at 1: `dnorm(0, sd = 0.1)` = **3.989**. Nothing is 399% likely — proof that height ≠ probability.
 
-That is a normal curve — but it is *our* normal curve. Every dataset has a different one.
+The **normal** is the density we lean on: symmetric, fixed by **μ** (where it sits) and **σ** (how wide), total area 1.
 
-::: {.content-visible unless-format="revealjs"}
+Lake I3: **μ ≈ `r round_half_up(i3_mean, 1)` mm**, **σ ≈ `r round_half_up(i3_sd, 1)` mm** — *our* curve. Every dataset has its own.
+
+:::: {.content-visible unless-format="revealjs"}
 ::: callout-note
 **📖 Reference**
 
 Whitlock & Schluter Ch. 10 — The Normal Distribution.\
 Gotelli & Ellison Ch. 2 — Random Variables and Probability Distributions.
 :::
-:::
 ::::
+:::::
 
 ::: {.column width="40%"}
 ```{r pi-02}
@@ -136,7 +137,7 @@ i3_df %>%
   theme_classic(base_size = 9)
 ```
 :::
-::::::
+:::::::
 
 ## Why we standardize
 
@@ -203,9 +204,9 @@ i3_df %>%
 ::: {.column width="60%"}
 Standardizing changes the **axis labels**, not the **shape**.
 
-- Left histogram: millimetres, centred near `r round_half_up(i3_mean, 0)`
-- Right histogram: z, centred at 0
-- Same fish, same skew, same everything
+- **Top**: millimetres, centred near `r round_half_up(i3_mean, 0)`
+- **Bottom**: z, centred at 0
+- Same fish, same bars, same skew — only the ruler changed
 
 That matters: **standardizing does not make non-normal data normal.** It only puts it on a common ruler. We come back to this in Part 3.
 :::
@@ -213,10 +214,24 @@ That matters: **standardizing does not make non-normal data normal.** It only pu
 ::: {.column width="40%"}
 ```{r pi-05}
 #| echo: false
-#| fig-alt: "Histogram of Lake I3 grayling z-scores with vertical lines at the mean and at plus and minus one, two, and three standard deviations."
+#| fig-alt: "Two stacked histograms of the same Lake I3 grayling. The top panel is raw length in millimetres centred near 266; the bottom panel is the same fish as z-scores centred at 0. Both have identical shape, with red lines marking plus and minus one, two and three standard deviations."
+# the SAME fish, drawn twice - only the x-axis changes
+raw_plot <- i3_df %>%
+  ggplot(aes(length_mm)) +
+  geom_histogram(fill = "darkblue", alpha = 0.7, binwidth = 10) +
+  geom_vline(xintercept = i3_mean, linewidth = 0.8) +
+  geom_vline(xintercept = i3_mean + c(-1, 1) * i3_sd,
+             colour = "red", linewidth = 0.6) +
+  geom_vline(xintercept = i3_mean + c(-2, 2) * i3_sd,
+             colour = "red", linewidth = 0.6, linetype = "dashed") +
+  geom_vline(xintercept = i3_mean + c(-3, 3) * i3_sd,
+             colour = "red", linewidth = 0.6, linetype = "dotted") +
+  labs(title = "Original data", x = "Length (mm)", y = "Count") +
+  theme_classic(base_size = 9)
+
 i3_z_plot <- i3_df %>%
   ggplot(aes(z_score)) +
-  geom_histogram(fill = "blue", alpha = 0.7, binwidth = 0.25) +
+  geom_histogram(fill = "darkblue", alpha = 0.7, binwidth = 0.35) +
   geom_vline(xintercept = 0, linewidth = 0.8) +
   geom_vline(xintercept = c(-1, 1), colour = "red", linewidth = 0.6) +
   geom_vline(xintercept = c(-2, 2), colour = "red", linewidth = 0.6,
@@ -224,10 +239,10 @@ i3_z_plot <- i3_df %>%
   geom_vline(xintercept = c(-3, 3), colour = "red", linewidth = 0.6,
              linetype = "dotted") +
   scale_x_continuous(breaks = -3:3) +
-  labs(x = "z (SDs from the mean)", y = "Count",
-       caption = "Red lines: ±1, ±2, ±3 SD") +
+  labs(title = "Standardized (z)", x = "z (SDs from the mean)", y = "Count") +
   theme_classic(base_size = 9)
-i3_z_plot
+
+raw_plot / i3_z_plot
 ```
 :::
 :::::
@@ -301,8 +316,8 @@ shade_curve(dnorm, to = 1.22, marks = 1.22,
 
 ## Reading the z-table
 
-:::::: columns
-:::: {.column width="60%"}
+::::::: columns
+::::: {.column width="42%"}
 The z-table is `pnorm()` printed on paper: **cumulative area to the LEFT of z**.
 
 - Find the **ones and tenths** of z down the left column
@@ -311,19 +326,19 @@ The z-table is `pnorm()` printed on paper: **cumulative area to the LEFT of z**.
 
 One table works for every dataset — because every dataset gets standardized first. (Contrast the t-table later, which needs a row for each sample size.)
 
-::: {.content-visible unless-format="revealjs"}
+:::: {.content-visible unless-format="revealjs"}
 ::: callout-note
 **📖 Reference**
 
 Whitlock & Schluter Ch. 10 — standardizing a value and reading the standard normal table.
 :::
-:::
 ::::
+:::::
 
-::: {.column width="40%"}
-![](images/clipboard-1995791111.png){fig-alt="Standard normal (z) table giving the cumulative area to the left of z, with z values from 0.0 to 3.4 down the rows and hundredths across the columns." width="3.96in"}
+::: {.column width="58%"}
+![](images/clipboard-1995791111.png){fig-alt="Standard normal (z) table giving the cumulative area to the left of z, with z values from 0.0 to 3.4 down the rows and hundredths across the columns." width="5.5in" .stat-table}
 :::
-::::::
+:::::::
 
 ## Worked example — how rare is a 300 mm grayling?
 
@@ -438,8 +453,8 @@ i3_df %>%
 
 ## So how wrong were we?
 
-:::::: columns
-:::: {.column width="60%"}
+::::::: columns
+::::: {.column width="60%"}
 p = 0.0002. The I3 fish are **not** normal. Every probability in Part 2 assumed they were — so let's audit them against the fish themselves.
 
 |   | normal theory | actual data |
@@ -454,14 +469,14 @@ And the tail is exactly where inference lives — critical values, rejection reg
 
 **This is why we check assumptions before trusting a p-value.**
 
-::: {.content-visible unless-format="revealjs"}
+:::: {.content-visible unless-format="revealjs"}
 ::: callout-note
 **📖 Reference**
 
 Whitlock & Schluter Ch. 13 — Handling Violations of Assumptions.
 :::
-:::
 ::::
+:::::
 
 ::: {.column width="40%"}
 ```{r pi-16}
@@ -484,7 +499,7 @@ i3_df %>%
   theme_classic(base_size = 9)
 ```
 :::
-::::::
+:::::::
 
 ## Part 4 · From one fish to the mean {.divider}
 
@@ -656,7 +671,7 @@ tibble(x = rep(seq(-4, 4, length.out = 400), 4),
       TRUE                        ~ dnorm(x))) %>%
   ggplot(aes(x, y, colour = Distribution, linetype = Distribution)) +
   geom_line(linewidth = 0.8) +
-  scale_colour_manual(values = c("#E31A1C", "#FF7F00", "#1F78B4", "black")) +
+  scale_colour_manual(values = c("#E31A1C", "#FF7F00", "darkblue", "grey50")) +
   scale_linetype_manual(values = c("solid", "solid", "solid", "dashed")) +
   labs(x = "Value", y = "Density") +
   theme_classic(base_size = 9) +
@@ -668,7 +683,7 @@ tibble(x = rep(seq(-4, 4, length.out = 400), 4),
 ## Reading the t-table
 
 ::::: columns
-::: {.column width="60%"}
+::: {.column width="50%"}
 ### $CI = \bar{y} \pm t \cdot \frac{s}{\sqrt{n}}$
 
 Only the multiplier changed: **t in place of 1.96**.
@@ -685,15 +700,15 @@ qt(0.975, df = 65)   # 95% CI, n = 66
 ```
 :::
 
-::: {.column width="40%"}
-![](images/clipboard-3203878802.png){fig-alt="Student's t critical-value table with one-tail and two-tail probabilities across the top and degrees of freedom down the rows." width="3.96in"}
+::: {.column width="50%"}
+![](images/clipboard-3203878802.png){fig-alt="Student's t critical-value table with one-tail and two-tail probabilities across the top and degrees of freedom down the rows." width="5.5in" .stat-table}
 :::
 :::::
 
 ## Worked CI — by table and by R
 
 ::::: columns
-::: {.column width="60%"}
+::: {.column width="50%"}
 A sample of **9** fish: mean = 272.8, s = 37.81
 
 1.  **df** = 9 − 1 = **8**
@@ -707,8 +722,8 @@ A sample of **9** fish: mean = 272.8, s = 37.81
 Had we wrongly used 1.96, we'd have reported ±24.7 — an interval **15% too narrow**, claiming precision we never had.
 :::
 
-::: {.column width="40%"}
-![](images/clipboard-3959630930.png){fig-alt="Student's t critical-value table with the two-tail 0.05 column and the df = 8 row highlighted, meeting at the critical value 2.306." width="3.96in"}
+::: {.column width="50%"}
+![](images/clipboard-3959630930.png){fig-alt="Student's t critical-value table with the two-tail 0.05 column and the df = 8 row highlighted, meeting at the critical value 2.306." width="5.5in" .stat-table}
 :::
 :::::
 
@@ -742,8 +757,8 @@ t.test(small_sample$length_mm)$conf.int
 
 ## The logic
 
-:::::: columns
-:::: {.column width="60%"}
+::::::: columns
+::::: {.column width="60%"}
 A confidence interval asks *where is μ?* A hypothesis test asks *is μ equal to some specific value?* Same machinery, different question.
 
 1.  **H₀** — the boring claim: no effect, no difference
@@ -755,15 +770,15 @@ A confidence interval asks *where is μ?* A hypothesis test asks *is μ equal to
 
 $t = \frac{\bar{y} - \mu_0}{s / \sqrt{n}}$ — how many SEs is our mean from the claim?
 
-::: {.content-visible unless-format="revealjs"}
+:::: {.content-visible unless-format="revealjs"}
 ::: callout-note
 **📖 Reference**
 
 Whitlock & Schluter Ch. 6 — Hypothesis Testing.\
 Gotelli & Ellison Ch. 4 — Framing and Testing Hypotheses.
 :::
-:::
 ::::
+:::::
 
 ::: {.column width="40%"}
 ```{r pi-26}
@@ -775,12 +790,12 @@ shade_curve(function(x) dt(x, 11), from = 2.1, marks = 2.1,
             subtitle = "our result, and everything more extreme")
 ```
 :::
-::::::
+:::::::
 
 ## One-tailed: all of α at one end
 
 ::::: columns
-::: {.column width="60%"}
+::: {.column width="55%"}
 **Use when the question has a direction**: *are these fish **longer** than 285 mm?* A shorter result would not interest us — it goes with H₀.
 
 - **H₀: μ ≤ 285 · Hₐ: μ \> 285**
@@ -795,9 +810,10 @@ qt(0.95, df = 19)     # one-tailed, α = 0.05
 ```
 :::
 
-::: {.column width="40%"}
+::: {.column width="45%"}
 ```{r pi-28}
 #| echo: false
+#| fig-height: 2.8
 #| fig-alt: "A t-distribution with 19 degrees of freedom and only the upper tail beyond 1.729 shaded red as the rejection region."
 shade_curve(function(x) dt(x, 19), from = qt(0.95, 19),
             marks = qt(0.95, 19), xlab = "t",
@@ -805,14 +821,14 @@ shade_curve(function(x) dt(x, 19), from = qt(0.95, 19),
             subtitle = "5% all in one tail → t = 1.729")
 ```
 
-![](images/clipboard-641796945.png){fig-alt="Student's t table with the one-tail column and df row highlighted at the critical value." width="2.6in"}
+![](images/clipboard-641796945.png){fig-alt="Student's t table with the one-tail column and df row highlighted at the critical value." width="4.2in" .stat-table-half}
 :::
 :::::
 
 ## Two-tailed: α split between both ends
 
 :::::: columns
-:::: {.column width="60%"}
+:::: {.column width="55%"}
 **Use when either direction would matter**: *do these fish **differ** from 285 mm?* Longer or shorter, we want to know.
 
 - **H₀: μ = 285 · Hₐ: μ ≠ 285**
@@ -831,15 +847,16 @@ Pick your tails from the **question**, before seeing the data. **When in doubt, 
 :::
 ::::
 
-::: {.column width="40%"}
+::: {.column width="45%"}
 ```{r pi-30}
 #| echo: false
+#| fig-height: 2.8
 #| fig-alt: "A t-distribution with 19 degrees of freedom and both tails beyond plus and minus 2.093 shaded red as rejection regions."
 tcrit <- qt(0.975, 19)
 curve_df <- tibble(x = seq(-4, 4, length.out = 600)) %>% mutate(y = dt(x, 19))
 ggplot(curve_df, aes(x, y)) +
-  geom_area(data = filter(curve_df, x <= -tcrit), fill = "#1F78B4", alpha = 0.35) +
-  geom_area(data = filter(curve_df, x >=  tcrit), fill = "#1F78B4", alpha = 0.35) +
+  geom_area(data = filter(curve_df, x <= -tcrit), fill = "darkblue", alpha = 0.35) +
+  geom_area(data = filter(curve_df, x >=  tcrit), fill = "darkblue", alpha = 0.35) +
   geom_line(linewidth = 0.8) +
   geom_vline(xintercept = c(-tcrit, tcrit), colour = "red", linetype = "dashed") +
   labs(x = "t", y = "Density", title = "Two-tailed, df = 19",
@@ -847,7 +864,7 @@ ggplot(curve_df, aes(x, y)) +
   theme_classic(base_size = 9)
 ```
 
-![](images/clipboard-1734806681.png){fig-alt="Student's t table with the two-tail column and df row highlighted at the critical value." width="2.6in"}
+![](images/clipboard-1734806681.png){fig-alt="Student's t table with the two-tail column and df row highlighted at the critical value." width="4.2in" .stat-table-half}
 :::
 ::::::
 
@@ -886,8 +903,8 @@ Note "Welch Two Sample t-test" — R does **not** assume the two lakes have equa
 
 ## What a p-value is not
 
-:::::: columns
-:::: {.column width="60%"}
+::::::: columns
+::::: {.column width="60%"}
 **It is:** the probability of data like ours **if H₀ were true**.
 
 **It is not:**
@@ -905,14 +922,14 @@ Note "Welch Two Sample t-test" — R does **not** assume the two lakes have equa
 - report the **CI** — it shows size *and* uncertainty in one line
 - **significant ≠ important**. That call is biology, not arithmetic
 
-::: {.content-visible unless-format="revealjs"}
+:::: {.content-visible unless-format="revealjs"}
 ::: callout-note
 **📖 Reference**
 
 Gotelli & Ellison Ch. 4 — "Statistical Significance and P-Values."
 :::
-:::
 ::::
+:::::
 
 ::: {.column width="40%"}
 ```{r pi-33}
@@ -923,7 +940,7 @@ shade_curve(dnorm, from = 2.1, marks = 2.1,
             subtitle = "not the height, not the line")
 ```
 :::
-::::::
+:::::::
 
 ## Summary
 
