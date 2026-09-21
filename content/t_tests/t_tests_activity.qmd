@@ -3,7 +3,7 @@ order: 6
 week: 4
 title: "Activity: T-Tests: One, Two, Paired"
 subtitle: "Comparing means"
-description: "Hands-on worksheet: hypothesis testing framework, assumption checks, and one-sample, two-sample (Student's and Welch's), and paired t-tests on the pine needle data the class collected."
+description: "Hands-on worksheet: exploratory plots, then one-sample (two- and one-tailed), two-sample, and paired t-tests on the pine needle data the class collected — with questions, predictions, hypotheses, degrees of freedom, and interpretation written out by hand."
 author: "Bill Perry"
 metadata-files:
   - ../../_templates/activities.yml
@@ -14,504 +14,1071 @@ format:
 
 # Worksheet: T-Tests — One, Two, Paired
 
-[📥 Download the data (.csv)](data/pine_data.csv){.btn .btn-primary download="pine_data.csv"} [📥 Download the data (.xlsx)](data/pine_data.xlsx){.btn .btn-primary download="pine_data.xlsx"}
+[📥 Data (.csv)](data/pine_data.csv){.btn .btn-primary download="pine_data.csv"} [📥 Data (.xlsx)](data/pine_data.xlsx){.btn .btn-primary download="pine_data.xlsx"} [📥 Tools script (.R)](themes_functions/r_themes_and_functions.R){.btn .btn-primary download="r_themes_and_functions.R"} [📥 Script skeleton (.R)](data/05_T_tests.R){.btn .btn-primary download="05_T_tests.R"}
 
 > ## How to use this worksheet
 >
-> Work through each part in order, at your own pace. Type every line of code yourself into a **plain R script** — do not copy-paste. Blocks marked **▶ Run this** are code you should type and execute. Blocks marked **✏️ Your turn** ask you to write, modify, or answer something. Boxes marked **🚀 If you finish early** are optional bonus material that goes a bit further than what we covered in lecture.
+> There are **four sections**:
 >
-> **Every grey `r` box below is code you type into an R script — not into the Console.** Before you start: **File → New File → R Script**, and save it as `06_t_tests.R` in your project's `scripts/` folder. Then work down the worksheet, adding each block to the bottom of that one script, in order.
+> 1.  **Read in the data and look at it** — all 64 needles first, then the 8 tree means. No tests, just plots
+> 2.  **One-sample t-test** — is one group different from a fixed number? (plus the one-tailed variation)
+> 3.  **Two-sample t-test** — are the two sides different from each other?
+> 4.  **Paired t-test** — is each *tree* different on its two sides?
 >
-> **Type the `# ── Part …` header comment at the top of each block, too.** Those comment lines are not decoration — they are how your script stays navigable, how you find your way back to a block that broke, and how I find your work when I read your script. A block with no header comment is a block I cannot place. In RStudio they also show up in the document outline (the `≡` button at the bottom-left of the editor) so you can jump straight to any part.
+> Work through them in order. Type every line of code yourself into the **script skeleton** — do not copy-paste from this worksheet. Blocks marked **▶ Run this** are code you type and execute. Blocks marked **✏️ Your turn** are for you to write in, by hand, on this sheet.
+>
+> **Before you start:** download the **script skeleton** from the button above and save it as `05_T_tests.R` in your project's `scripts/` folder. It already has the `# ── Part …` headers laid out in order, and the blocks you have typed a dozen times — setup, reading the data, averaging away pseudoreplication, the `summarize()` block — are filled in for you. Everything else is blank, and that blank space is the lesson. Work down the worksheet and type your code under the matching header.
+>
+> **Type the `# ── Part …` header comment at the top of each block, too.** Those comment lines are not decoration — they are how your script stays navigable, how you find your way back to a block that broke, and how I find your work when I read your script.
+>
+> **The code here is deliberately bare.** No titles, no axis labels, no legends, no colours. That is not an oversight — it is so you can see what each line actually *does*. Once a plot works, dress it up however you like.
 
 ::: callout-important
 ## Column names in `pine_data.csv` / `pine_data.xlsx`
 
-Both files hold the **same six columns, with exactly these names**. Type them
-exactly as written — R is case-sensitive, and `Needle_Length` or `needle_length`
-will not work:
+Both files hold the **same six columns, with exactly these names**. Type them exactly as written — R is case-sensitive, and `Needle_Length` or `needle_length` will not work:
 
-| Column             | What it is                                     |
-|--------------------|------------------------------------------------|
-| `source_file`      | the raw team file the row came from             |
-| `team`             | field team — one team = **one tree**            |
-| `replicate`        | needle number within a tree side (1-8)          |
-| `side`             | sun exposure — `"shady"` or `"sunny"`           |
-| `needle_length_mm` | needle length, millimetres                      |
-| `needle_width_mm`  | needle width, millimetres                       |
+| Column | What it is |
+|:-----------------|:-----------------------------------------------------|
+| `source_file` | the raw team file the row came from |
+| `team` | field team — one team = **one tree** |
+| `replicate` | needle number within a tree side (1-8) |
+| `side` | sun exposure — `"shady"` or `"sunny"` |
+| `needle_length_mm` | needle length, millimetres |
+| `needle_width_mm` | needle width, millimetres |
 
-After you read the file in, run `names(pine_df)` and check the names on your
-screen against this table before you write any other code.
+After you read the file in, click `pine_df` in the **Variables** pane in Positron and check the names on your screen against this table before you write any other code.
 :::
 
 ------------------------------------------------------------------------
 
-# Part 1 · Setup — Load and De-Pseudoreplicate the Data
+# Section 1 · Read In the Data and Look at It
 
-**▶ Run this in your Script:**
+## 1.1 · Setup
 
-``` r
-# ── Part 1.1 · Setup ────────────────────────────────────────────────────
-library(tidyverse)
-library(patchwork)
-library(car)   # For diagnostic tests
+Download the **tools script** from the button at the top. In your project folder, make a new folder called **`themes_functions`** and save the file into it, so the path is `themes_functions/r_themes_and_functions.R`.
 
-pine_df <- read_csv("data/pine_data.csv")
+That is a *different* folder from `scripts/` — `scripts/` holds the code **you** write, `themes_functions/` holds tools you `source()` and do not edit.
 
-head(pine_df)
-```
+One `source()` line then gives you two things you will use for the rest of the semester:
 
-✏️ **Your turn:** What is our true sample unit here — needles? branches? trees? sides? Why does that matter for how we analyze this data?
-
-```         
-________________________________________________________
-```
-
-We need to average the sunny and shady sides so the data is not pseudoreplicated — multiple needles per tree side are not independent observations.
+- `theme_regular()` — the publication theme from the Graphing lecture
+- `summary_stats()` — hand it a column of numbers, get back `n` / `mean` / `sd` / `se` and a 95% CI
 
 **▶ Run this:**
 
 ``` r
-# ── Part 1.2 · Setup ────────────────────────────────────────────────────
+# ── Part 1.1 · Setup ────────────────────────────────────────────────────
+library(tidyverse)
+library(janitor)   # round_half_up(), used inside summary_stats()
+library(car)       # leveneTest()
+
+source("themes_functions/r_themes_and_functions.R")
+
+pine_df <- read_csv("data/pine_data.csv")
+```
+
+> ⚠️ **Watch out!** `source()` needs the path to be right. If R says *cannot open file*, that is exactly what it is telling you — check that the folder is called `themes_functions`, spelled exactly that way, and that it sits next to your `.Rproj` file.
+
+> 💡 **You do not need `glimpse()` or `head()`.** Click `pine_df` in the **Variables** pane in Positron and look at it there.
+
+## 1.2 · Look at all the data — spread
+
+Before we do anything clever, look at **every needle we measured** — all 64 rows, exactly as they came out of the field.
+
+**▶ Run this:**
+
+``` r
+# ── Part 1.2 · Boxplot of all the raw needles ───────────────────────────
+raw_box_plot <- pine_df %>%
+  ggplot(aes(side, needle_length_mm)) +
+  geom_boxplot() +
+  geom_point(position = position_jitter(width = 0.08)) +
+  theme_regular(base_size = 10)
+
+raw_box_plot
+```
+
+> 💡 **Why `position_jitter()` here?** 32 needles land on a single x value, so a plain `geom_point()` would stack them into a line and hide the duplicates. Jitter nudges them sideways so you can see how many there are.
+
+✏️ **Your turn:** How many points are on this plot, and how many trees did we actually climb?
+
+```         
+points = ________        trees = ________
+```
+
+## 1.3 · Look at all the data — mean and standard error
+
+**▶ Run this:**
+
+``` r
+# ── Part 1.3 · Mean and SE of all the raw needles ───────────────────────
+raw_mean_se_plot <- pine_df %>%
+  ggplot(aes(side, needle_length_mm)) +
+  stat_summary(fun = mean, geom = "point") +
+  stat_summary(fun.data = mean_se, geom = "errorbar", width = 0.2) +
+  theme_regular(base_size = 10)
+
+raw_mean_se_plot
+```
+
+✏️ **Your turn:** Do these two error bars overlap? Just from this picture, would you expect a t-test to find a difference?
+
+```         
+____________________________________________________________________
+
+____________________________________________________________________
+```
+
+> ⚠️ **Watch out — those error bars are a lie.** They are computed as SD / √n with **n = 32** per side. But we did not measure 32 independent things. We measured **4 trees**, eight needles each. The 32 is fake, so the precision is fake. Hold this picture in your head — we fix it next and then plot it again.
+
+## 1.4 · Average out the pseudoreplication
+
+The 8 needles from one side of one tree are **pseudoreplicates** — they are not 8 independent measurements, they are 8 looks at the same tree side. Average them so each tree side is **one** data point.
+
+**▶ Run this:**
+
+``` r
+# ── Part 1.4 · Average out pseudoreplication ────────────────────────────
 p_df <- pine_df %>%
   group_by(team, side) %>%
   summarise(needle_length_mm = mean(needle_length_mm, na.rm = TRUE),
             .groups = "drop")
-
-shady_df <- p_df %>% filter(side == "shady")
-sunny_df <- p_df %>% filter(side == "sunny")
 
 p_df
 ```
 
 > ⚠️ **Watch out!** 64 rows became 8. That is not data loss — it is the correct sample size. We measured 8 needles per side, but only **4 trees**.
 
-::: callout-tip
-**🚀 If you finish early:** Write a `group_by()` + `summarize()` pipeline that gets `n`, `mean_length`, `sd_length`, and `se_length` for `p_df`, grouped by `side` — the same summary the lecture built as `stats_df`.
-:::
-
-------------------------------------------------------------------------
-
-# Part 2 · Hypothesis Testing Framework
-
-Every t-test starts the same way: state H₀ and Hₐ, and pick α *before* you look at the result.
-
-✏️ **Your turn:** For the question "Do needle lengths differ between the sunny and shady sides?", write out:
+✏️ **Your turn:** What is our true sample unit here — needles? branches? trees? tree sides? Why does that matter for the rest of this worksheet?
 
 ```         
-H0 = ________________________________________________________
-Ha = ________________________________________________________
-alpha = ________
+____________________________________________________________________
+
+____________________________________________________________________
+
+____________________________________________________________________
 ```
 
-✏️ **Your turn:** In your own words, what does a p-value actually tell you? (Hint: it is a statement about the data *given* H₀ — not a statement about whether H₀ is true.)
-
-```         
-________________________________________________________
-```
-
-::: callout-tip
-**🚀 If you finish early:** A two-sample t-test on 14 degrees of freedom produces an observed t-statistic of 2.31. Use `2 * (1 - pt(2.31, df = 14))` to compute the two-tailed p-value by hand, then compare it to the p-value table from lecture (p \< 0.05 = moderate-to-strong evidence). Is H₀ rejected at α = 0.05?
-
-``` r
-# ── Part 2.1 · Hypothesis Testing Framework ─────────────────────────────
-# Write your code in the R script:
-```
-:::
-
-------------------------------------------------------------------------
-
-# Part 3 · One-Sample t-Test
-
-A one-sample t-test compares a sample mean to a specific hypothesized value. Let's test whether the mean needle length on the shady side is 15mm.
-
-✏️ **Your turn:** Before testing, write the hypotheses:
-
-```         
-H0: mu = _____ (the mean needle length on the shady side is _____ mm)
-Ha: mu ≠ _____ (the mean needle length on the shady side is not _____ mm)
-```
-
-**Check assumptions first — normality:**
+## 1.5 · Summary statistics, the long way
 
 **▶ Run this:**
 
 ``` r
-# ── Part 3.1 · One-Sample t-Test ────────────────────────────────────────
-# The test below is about the SHADY side, so check normality of that group
-# -- not the two sides pooled together.
-qqPlot(shady_df$needle_length_mm,
-       main = "QQ Plot — shady side needle length",
-       ylab = "Sample Quantiles")
+# ── Part 1.5 · Summary stats the long way ───────────────────────────────
+stats_df <- p_df %>%
+  group_by(side) %>%
+  summarize(
+    n    = sum(!is.na(needle_length_mm)),
+    mean = mean(needle_length_mm, na.rm = TRUE),
+    sd   = sd(needle_length_mm, na.rm = TRUE),
+    se   = sd / sqrt(n),
+    .groups = "drop"
+  )
+
+stats_df
+```
+
+## 1.6 · Summary statistics, the short way
+
+The exact same numbers, from the function you `source()`d in Part 1.1:
+
+**▶ Run this:**
+
+``` r
+# ── Part 1.6 · Summary stats with summary_stats() ───────────────────────
+summary_stats(p_df$needle_length_mm)                 # all 8 trees together
+
+p_df %>% group_by(side) %>% reframe(summary_stats(needle_length_mm))
+```
+
+> 💡 **Why `reframe()`?** `summarize()` wants **one value** per group. `summary_stats()` hands back a whole **row** — six columns at once — so `reframe()` is the verb that allows it. The `group_by()` in front is the same one you already know.
+
+✏️ **Your turn:** Write down `n`, `mean`, `sd` and `se` for each side, and check them against `stats_df`.
+
+```         
+shady:  n = ______   mean = ______   sd = ______   se = ______
+
+sunny:  n = ______   mean = ______   sd = ______   se = ______
+
+Do they match stats_df?  ______________________________________
+```
+
+✏️ **Your turn:** `summary_stats()` also gives you `ci_lower` and `ci_upper` — a 95% confidence interval. Look at the `n` column. How many degrees of freedom did it use to build that interval, and why that number?
+
+```         
+____________________________________________________________________
+
+____________________________________________________________________
+```
+
+## 1.7 · The same two plots, after averaging
+
+Exactly the same two plots as Parts 1.2 and 1.3 — the only thing that changed is `pine_df` became `p_df`.
+
+**▶ Run this:**
+
+``` r
+# ── Part 1.7 · Boxplot and mean SE of the tree means ────────────────────
+box_plot <- p_df %>%
+  ggplot(aes(side, needle_length_mm)) +
+  geom_boxplot() +
+  geom_point() +
+  theme_regular(base_size = 10)
+
+box_plot
+
+mean_se_plot <- p_df %>%
+  ggplot(aes(side, needle_length_mm)) +
+  stat_summary(fun = mean, geom = "point") +
+  stat_summary(fun.data = mean_se, geom = "errorbar", width = 0.2) +
+  theme_regular(base_size = 10)
+
+mean_se_plot
+```
+
+> 💡 **No jitter needed now.** Four points per side, so plain `geom_point()` is enough.
+
+✏️ **Your turn:** Fill this in from your Part 1.3 and Part 1.6 output. This is the most important table in the worksheet.
+
+```         
+                    raw needles        tree means
+
+n per side          __________         __________
+
+shady mean          __________         __________
+
+sunny mean          __________         __________
+
+shady se            __________         __________
+
+sunny se            __________         __________
+```
+
+✏️ **Your turn:** What happened to the **means** when you averaged? What happened to the **standard errors**?
+
+```         
+____________________________________________________________________
+
+____________________________________________________________________
+```
+
+✏️ **Your turn:** Compare `raw_mean_se_plot` to `mean_se_plot` side by side on your screen. Which one *looks* like stronger evidence? Which one is honest? Explain in one sentence why the raw version was not actually more precise.
+
+```         
+____________________________________________________________________
+
+____________________________________________________________________
+
+____________________________________________________________________
+```
+
+## 1.8 · One line per tree
+
+**▶ Run this:**
+
+``` r
+# ── Part 1.8 · One line per tree ────────────────────────────────────────
+slope_plot <- p_df %>%
+  ggplot(aes(side, needle_length_mm, group = team)) +
+  geom_line() +
+  geom_point() +
+  theme_regular(base_size = 10)
+
+slope_plot
+```
+
+✏️ **Your turn:** The boxes in Part 1.7 overlapped a lot. Now look at the lines. Do they all slope the same way? Write down what you see — this is the whole point of Section 4.
+
+```         
+____________________________________________________________________
+
+____________________________________________________________________
+```
+
+------------------------------------------------------------------------
+
+::: callout-important
+## Degrees of freedom — read this before Sections 2, 3 and 4
+
+**df = the number of values free to vary once you have estimated a mean.** You lose one df for every mean you estimate. Our data is **4 trees, one shady side and one sunny side each** — so n is always *trees*, never needles.
+
+| Test | What n counts | df formula | Our df |
+|:-------------------|:--------------|:-----------------|:------:|
+| One-sample (Section 2) | trees in the one group | n − 1 | **3** |
+| Two-sample (Section 3) | trees in both groups | n₁ + n₂ − 2 | **6** |
+| Welch's (Section 3) | both groups, penalised | Welch–Satterthwaite | **≈ 5.66** |
+| Paired (Section 4) | **differences** | n~pairs~ − 1 | **3** |
+
+Check the `df =` line in every bit of `t.test()` output below against this table. If it does not match, you ran a different test than you thought you did.
+:::
+
+------------------------------------------------------------------------
+
+# Section 2 · One-Sample t-Test
+
+A one-sample t-test compares **one group's mean to a fixed number** — not to another group. Here: is the mean needle length on the **shady** side different from the 15 mm reported for this species?
+
+## 2.1 · Just the shady side
+
+**▶ Run this:**
+
+``` r
+# ── Part 2.1 · Just the shady side ──────────────────────────────────────
+shady_df <- p_df %>% filter(side == "shady")
+
+shady_df
+```
+
+## 2.2 · Question, prediction, hypotheses
+
+✏️ **Your turn:**
+
+```         
+Question (the biology, in plain English):
+
+____________________________________________________________________
+
+
+Prediction (what you expect, and WHY — the biology):
+
+____________________________________________________________________
+
+____________________________________________________________________
+
+
+H0 (null hypothesis):
+
+____________________________________________________________________
+
+
+Ha (alternative hypothesis):
+
+____________________________________________________________________
+
+
+alpha = ____________
+```
+
+✏️ **Your turn:** How many trees are in this test, and how many means did you estimate? So what is the df?
+
+```         
+n = ________    means estimated = ________    df = ________
+```
+
+## 2.3 · Check normality
+
+**▶ Run this:**
+
+``` r
+# ── Part 2.3 · Normality of the shady side ──────────────────────────────
+qqnorm(shady_df$needle_length_mm)
+qqline(shady_df$needle_length_mm)
 
 shapiro.test(shady_df$needle_length_mm)
 ```
 
-✏️ **Your turn:** For the Shapiro-Wilk test, what is the null hypothesis? Do we want a significant or a non-significant result here?
+✏️ **Your turn:** Why do we check the **shady side on its own** rather than `p_df$needle_length_mm` (both sides pooled)? What would pooling two groups with different means do to the shape of the distribution?
 
-`________________________`
+```         
+____________________________________________________________________
 
-✏️ **Your turn:** Why do we check the shady side on its own rather than `p_df$needle_length_mm` (both sides pooled)? What would pooling two groups with different means do to the shape of the distribution?
+____________________________________________________________________
+```
 
-`________________________`
-
-**Check assumptions — outliers:**
+## 2.4 · Run the two-tailed test
 
 **▶ Run this:**
 
 ``` r
-# ── Part 3.2 · One-Sample t-Test ────────────────────────────────────────
-p_df %>%
-  ggplot(aes(x = side, y = needle_length_mm, fill = side)) +
-  geom_boxplot() +
-  labs(x = "side", y = "Length (mm)", fill = "side")
+# ── Part 2.4 · One-sample t-test, two-tailed ────────────────────────────
+one_sample_model <- t.test(shady_df$needle_length_mm, mu = 15)
+
+one_sample_model
 ```
 
-**Run the one-sample t-test:**
+✏️ **Your turn:** Copy the numbers out, and check the df against what you predicted in Part 2.2.
+
+```         
+t = ________    df = ________    p-value = ________
+
+sample mean = ________ mm       95% CI: ________ to ________
+
+Does the df match your answer above?  ______________________________
+```
+
+✏️ **Your turn:** Does 15 mm fall inside or outside that confidence interval? How does that relate to your p-value?
+
+```         
+____________________________________________________________________
+
+____________________________________________________________________
+```
+
+## 2.5 · The one-tailed variation
+
+Your prediction in Part 2.2 probably had a **direction** — shady needles are *shorter* than 15 mm. If you committed to that direction **before** collecting data, you can put all 5% of α into one tail.
+
+✏️ **Your turn:** Write the one-tailed hypotheses.
+
+```         
+H0: mu ______ 15
+
+Ha: mu ______ 15
+```
+
+**▶ Run this** — `alternative` is the only thing that changes:
+
+``` r
+# ── Part 2.5 · One-sample t-test, one-tailed ────────────────────────────
+one_tailed_model <- t.test(shady_df$needle_length_mm, mu = 15, alternative = "less")
+
+one_tailed_model
+```
+
+✏️ **Your turn:** Fill in the comparison from your own output.
+
+```         
+                 t            df        p-value
+
+Two-tailed       ________     ______    ________
+
+One-tailed       ________     ______    ________
+```
+
+✏️ **Your turn:** What happened to t? To df? To the p-value? (Look hard at the relationship between the two p-values.)
+
+```         
+____________________________________________________________________
+
+____________________________________________________________________
+```
+
+✏️ **Your turn:** Look at the confidence interval in the one-tailed output. What is the lower bound, and why does that make sense?
+
+```         
+____________________________________________________________________
+
+____________________________________________________________________
+```
+
+## 2.6 · Why the one-tailed p is smaller
+
+**▶ Run this** — the critical values behind that change, at df = 3:
+
+``` r
+# ── Part 2.6 · Critical values, one vs two tailed ───────────────────────
+qt(0.975, df = 3)   # two-tailed, 2.5% in each tail
+qt(0.95,  df = 3)   # one-tailed, 5% in one tail
+```
+
+✏️ **Your turn:** Which cutoff is closer to zero? So which test is easier to get a significant result from, and why?
+
+```         
+____________________________________________________________________
+
+____________________________________________________________________
+```
+
+## 2.7 · Point it the wrong way on purpose
 
 **▶ Run this:**
 
 ``` r
-# ── Part 3.3 · One-Sample t-Test ────────────────────────────────────────
-shady_mean <- mean(shady_df$needle_length_mm, na.rm = TRUE)
-cat("Mean:", round(shady_mean, 1), "mm\n")
-
-t_test_result <- t.test(shady_df$needle_length_mm, mu = 15)
-t_test_result
+# ── Part 2.7 · The wrong tail ───────────────────────────────────────────
+t.test(shady_df$needle_length_mm, mu = 15, alternative = "greater")
 ```
 
-✏️ **Your turn:** Interpret the test result:
-
-1.  What was the null hypothesis?
-2.  What was the alternative hypothesis?
-3.  What does the p-value tell us?
-4.  Should we reject or fail to reject the null hypothesis at α = 0.05?
-5.  What is the practical interpretation of this result for botanists?
+✏️ **Your turn:** Same data, same t. What is the p-value now? What does that tell you about *when* you are allowed to choose the tail?
 
 ```         
-________________________________________________________
+p-value = ________
+
+____________________________________________________________________
+
+____________________________________________________________________
 ```
 
-✏️ **Your turn:** Write a properly formatted results sentence: "A one-sample t-test at α = 0.05 showed that the mean needle length (shady side) (M = ..., SD = ...) \[was/was not\] significantly different from the expected 15mm, t(...) = ..., p = ..."
-
-```         
-________________________________________________________
-```
+> ⚠️ **Watch out!** Choosing the tail **after** looking at your means is not a one-tailed test. It is a two-tailed test with the p-value secretly halved, and it is one of the most common ways people accidentally cheat. Pick the direction from the biology, before you collect data, or use two-tailed.
 
 ::: callout-tip
-**🚀 If you finish early — calculate the 95% confidence interval by hand:**
+**🚀 If you finish early:** A one-tailed test is defensible when a result in the opposite direction would lead to the **same action** as no result at all — a drug that harms patients and a drug that does nothing are both "do not approve." For our pine needles, is "sunny is longer" *and* "shady is longer" both interesting biology? So which should we use?
 
-$$95\% \text{ CI} = \bar{x} \pm t_{\alpha/2, n-1} \times \frac{s}{\sqrt{n}}$$
+```         
+____________________________________________________________________
+```
+:::
 
-``` r
-# ── Part 3.4 · One-Sample t-Test ────────────────────────────────────────
-shady_mean <- mean(shady_df$needle_length_mm, na.rm = TRUE)
-shady_se   <- sd(shady_df$needle_length_mm, na.rm = TRUE) / sum(!is.na(shady_df$needle_length_mm))^.5
-shady_n    <- sum(!is.na(shady_df$needle_length_mm))
+## 2.8 · Interpretation
 
-t_critical <- qt(0.975, df = shady_n - 1)
-shady_ci_lower <- shady_mean - t_critical * shady_se
-shady_ci_upper <- shady_mean + t_critical * shady_se
+✏️ **Your turn:**
 
-cat("95% CI for shady mean length:", round(shady_ci_lower, 1), "to", round(shady_ci_upper, 1), "mm\n")
+```         
+Do you reject or fail to reject H0 at alpha = 0.05?
+
+____________________________________________________________________
+
+
+In biological terms, what does this say about shady-side needles?
+
+____________________________________________________________________
+
+____________________________________________________________________
 ```
 
-Does 15mm fall inside or outside this interval? How does that relate to your t-test conclusion above?
-:::
+✏️ **Your turn:** Write the result the way it would appear in a paper.
+
+```         
+"A two-tailed, one-sample t-test at alpha = 0.05 showed ___________
+
+____________________________________________________________________
+
+____________________________________________________________________
+
+t(______) = ________, p = ________."
+```
 
 ------------------------------------------------------------------------
 
-# Part 4 · Two-Sample t-Test
+# Section 3 · Two-Sample t-Test
 
-A two-sample t-test compares means from two independent groups — here, needle length on the sunny vs. shady sides.
+A two-sample t-test compares the means of **two independent groups** — here, needle length on the sunny side versus the shady side.
 
-✏️ **Your turn:** Write the hypotheses for this comparison:
+## 3.1 · Question, prediction, hypotheses
 
-```         
-H0 = ________________________________________________________
-Ha = ________________________________________________________
-```
+Write all five down **before** you run anything.
 
-**Summary statistics and a first look:**
-
-**▶ Run this:**
-
-``` r
-# ── Part 4.1 · Two-Sample t-Test ────────────────────────────────────────
-group_summary <- p_df %>%
-  group_by(side) %>%
-  summarize(
-    mean_length = mean(needle_length_mm, na.rm = TRUE),
-    sd_length   = sd(needle_length_mm, na.rm = TRUE),
-    n           = sum(!is.na(needle_length_mm)),
-    se_length   = sd_length / sqrt(n),
-    .groups = "drop"
-  )
-group_summary
-
-group_summary %>%
-  summarize(difference = mean_length[side == "shady"] - mean_length[side == "sunny"])
-```
-
-**▶ Run this** — plot the mean ± SE directly:
-
-``` r
-# ── Part 4.2 · Two-Sample t-Test ────────────────────────────────────────
-ggplot(p_df, aes(x = side, y = needle_length_mm, color = side)) +
-  stat_summary(fun = mean, geom = "point") +
-  stat_summary(fun.data = mean_se, geom = "errorbar", width = 0.2) +
-  labs(x = "side", y = "Mean Length (mm)") +
-  theme_classic()
-```
-
-**Check assumptions — normality by group:**
-
-**▶ Run this:**
-
-``` r
-# ── Part 4.3 · Two-Sample t-Test ────────────────────────────────────────
-normality_results <- p_df %>%
-  group_by(side) %>%
-  summarize(
-    shapiro_stat    = shapiro.test(needle_length_mm)$statistic,
-    shapiro_p_value = shapiro.test(needle_length_mm)$p.value,
-    normal_distribution = if_else(shapiro_p_value > 0.05, "Normal", "Non-normal"))
-normality_results
-```
-
-**Check assumptions — equal variances:**
-
-**▶ Run this:**
-
-``` r
-# ── Part 4.4 · Two-Sample t-Test ────────────────────────────────────────
-levene_result <- leveneTest(needle_length_mm ~ factor(side), data = p_df)
-levene_result
-```
-
-✏️ **Your turn:** What is the null hypothesis of Levene's test? Do we want it to be significant or non-significant? Based on your result, should you use the standard t-test or Welch's t-test?
-
-`________________________`
-
-**Run both versions of the two-sample t-test:**
-
-**▶ Run this:**
-
-``` r
-# ── Part 4.5 · Two-Sample t-Test ────────────────────────────────────────
-# Standard t-test (equal variances assumed)
-t_test_result <- t.test(needle_length_mm ~ side, data = p_df, var.equal = TRUE)
-print("Standard two-sample t-test:")
-print(t_test_result)
-
-# Welch's t-test (unequal variances allowed)
-welch_test_result <- t.test(needle_length_mm ~ side, data = p_df, var.equal = FALSE)
-print("Welch's two-sample t-test:")
-print(welch_test_result)
-```
-
-✏️ **Your turn:** Compare the two results — the t-statistic, degrees of freedom, and p-value. Are your conclusions the same either way?
-
-`________________________`
-
-✏️ **Your turn:** Write a properly formatted results sentence: "A two-tailed, two-sample t-test at α = 0.05 showed \[a significant/no significant\] difference in needle length between sunny (M = ..., SD = ...) and shady (M = ..., SD = ...) sides, t(...) = ..., p = ..."
+✏️ **Your turn:**
 
 ```         
-________________________________________________________
+Question (the biology, in plain English):
+
+____________________________________________________________________
+
+
+Prediction (what you expect to see, and WHY — the biology):
+
+____________________________________________________________________
+
+____________________________________________________________________
+
+
+H0 (null hypothesis):
+
+____________________________________________________________________
+
+
+Ha (alternative hypothesis):
+
+____________________________________________________________________
+
+
+alpha = ____________
+```
+
+✏️ **Your turn:** Your prediction probably had a *direction* ("sunny needles are longer"). Is your Hₐ directional too, or is it just "they differ"? Which one does `t.test()` run by default?
+
+```         
+____________________________________________________________________
+
+____________________________________________________________________
+```
+
+## 3.2 · Check normality within each group
+
+**▶ Run this:**
+
+``` r
+# ── Part 3.2 · Normality by group ───────────────────────────────────────
+p_df %>%
+  group_by(side) %>%
+  summarize(
+    shapiro_p = shapiro.test(needle_length_mm)$p.value,
+    .groups = "drop")
+```
+
+✏️ **Your turn:** What is the null hypothesis of the Shapiro-Wilk test? Do you *want* a significant or a non-significant result here?
+
+```         
+H0 of Shapiro-Wilk: ________________________________________________
+
+I want p to be:     ________________________________________________
+
+My result:  shady p = ____________   sunny p = ____________
+```
+
+> ⚠️ **Watch out!** With n = 4, Shapiro-Wilk has almost no power — it will pass nearly anything. A high p-value here is not evidence that the data are normal; it is evidence that we do not have enough data to tell. Run it, report it, but lean on the design and the biology.
+
+## 3.3 · Check equal variances
+
+**▶ Run this:**
+
+``` r
+# ── Part 3.3 · Equal variances ──────────────────────────────────────────
+leveneTest(needle_length_mm ~ factor(side), data = p_df)
+```
+
+✏️ **Your turn:** What is the null hypothesis of Levene's test? Based on your p-value, should you use the standard (Student's) t-test or Welch's?
+
+```         
+H0 of Levene's test: _______________________________________________
+
+My p-value: ____________
+
+Test I will use, and why: __________________________________________
+
+____________________________________________________________________
+```
+
+## 3.4 · Run both versions
+
+**▶ Run this:**
+
+``` r
+# ── Part 3.4 · Two-sample t-test ────────────────────────────────────────
+two_sample_model <- t.test(needle_length_mm ~ side, data = p_df, var.equal = TRUE)
+
+two_sample_model
+
+welch_model <- t.test(needle_length_mm ~ side, data = p_df, var.equal = FALSE)
+
+welch_model
+```
+
+✏️ **Your turn:** Copy the numbers out of the output by hand.
+
+```         
+                      t          df         p-value
+
+Standard (Student's)  ________   ________   ________
+
+Welch's               ________   ________   ________
+```
+
+✏️ **Your turn:** Welch's df is not a whole number, and it is smaller than the standard df. Why? What did Welch's buy you in exchange?
+
+```         
+____________________________________________________________________
+
+____________________________________________________________________
+```
+
+## 3.5 · Interpretation
+
+✏️ **Your turn:** Answer in full sentences.
+
+```         
+Do you reject or fail to reject H0 at alpha = 0.05?
+
+____________________________________________________________________
+
+
+What does the p-value actually mean here? (Careful — it is a statement
+about the data GIVEN H0, not about whether H0 is true.)
+
+____________________________________________________________________
+
+____________________________________________________________________
+
+
+In biological terms, what does this result say about pine needles?
+
+____________________________________________________________________
+
+____________________________________________________________________
+```
+
+✏️ **Your turn:** Write the result the way it would appear in a paper. The number in parentheses after **t** is the degrees of freedom — always report it.
+
+```         
+"A two-tailed, two-sample t-test at alpha = 0.05 showed __________
+
+____________________________________________________________________
+
+____________________________________________________________________
+
+t(______) = ________, p = ________."
 ```
 
 ::: callout-tip
-**🚀 If you finish early — calculate the two-sample t-statistic by hand** and confirm it matches `t.test()`:
+**🚀 If you finish early — compute the t-statistic by hand** and confirm it matches `t.test()`:
 
 $$t = \frac{\bar{x}_1 - \bar{x}_2}{S_p\sqrt{\frac{1}{n_1} + \frac{1}{n_2}}}$$
 
 ``` r
-# ── Part 4.6 · Two-Sample t-Test ────────────────────────────────────────
-n1 <- sum(!is.na(shady_df$needle_length_mm)); n2 <- sum(!is.na(sunny_df$needle_length_mm))
-s1 <- sd(shady_df$needle_length_mm); s2 <- sd(sunny_df$needle_length_mm)
+# ── Part 3.6 · Two-sample t by hand ─────────────────────────────────────
+sunny_df <- p_df %>% filter(side == "sunny")   # shady_df is from Part 2.1
+
+n1 <- length(shady_df$needle_length_mm)
+n2 <- length(sunny_df$needle_length_mm)
+s1 <- sd(shady_df$needle_length_mm)
+s2 <- sd(sunny_df$needle_length_mm)
 
 sp <- sqrt(((n1 - 1) * s1^2 + (n2 - 1) * s2^2) / (n1 + n2 - 2))
-t_by_hand <- (mean(shady_df$needle_length_mm) - mean(sunny_df$needle_length_mm)) /
-  (sp * sqrt(1/n1 + 1/n2))
 
-t_by_hand
+(mean(shady_df$needle_length_mm) - mean(sunny_df$needle_length_mm)) /
+  (sp * sqrt(1/n1 + 1/n2))
 ```
 
-Does `t_by_hand` match the `t` value from your standard `t.test()` output above?
+Look at the denominator of `sp`: `n1 + n2 - 2`. That **is** the degrees of freedom. df is not a rule to memorise — it is whatever you divided by.
 :::
 
 ------------------------------------------------------------------------
 
-# Part 5 · Paired t-Test
+# Section 4 · Paired t-Test
 
-A paired t-test compares two measurements taken from the *same* subject — here, the sunny and shady side of the *same* tree. It uses the differences between pairs as the data, and is generally more powerful than a two-sample test because it removes tree-to-tree variation from the noise.
+A paired t-test compares two measurements taken from the **same** subject — here, the sunny side and the shady side of the *same* tree. It uses the **differences** between pairs as the data.
+
+## 4.1 · Question, prediction, hypotheses
+
+Notice that H₀ and Hₐ are now about **one number**: the mean difference.
+
+✏️ **Your turn:**
+
+```         
+Question (the biology, in plain English):
+
+____________________________________________________________________
+
+
+Prediction (what you expect, and WHY):
+
+____________________________________________________________________
+
+____________________________________________________________________
+
+
+H0 (in terms of the mean difference between the two sides of a tree):
+
+____________________________________________________________________
+
+
+Ha:
+
+____________________________________________________________________
+
+
+alpha = ____________
+```
+
+## 4.2 · Reshape and run the test
+
+`t.test()` needs the two sides side by side, one row per tree.
 
 **▶ Run this:**
 
 ``` r
-# ── Part 5.1 · Paired t-Test ────────────────────────────────────────────
+# ── Part 4.2 · Paired t-test ────────────────────────────────────────────
 p_wide_df <- p_df %>%
-  pivot_wider(
-    names_from = "side",
-    values_from = needle_length_mm
-  )
+  pivot_wider(names_from = side, values_from = needle_length_mm)
 
-# shady first, then sunny — the same order the two-sample test used
-paired_t_test_result <- t.test(p_wide_df$shady, p_wide_df$sunny, paired = TRUE)
-paired_t_test_result
+p_wide_df
+
+paired_model <- t.test(p_wide_df$shady, p_wide_df$sunny, paired = TRUE)
+
+paired_model
 ```
 
-✏️ **Your turn:** What does pairing control for here that the two-sample test in Part 4 does not?
+> ⚠️ **Watch out — order matters for the sign.** `t.test(shady, sunny, paired = TRUE)` computes **shady − sunny**. Swap the two and `t` flips sign. The p-value is identical, but the direction you report is backwards. Always write down which way you subtracted.
 
-`________________________`
+✏️ **Your turn:** Copy the numbers out, and note the df.
 
-::: callout-tip
-**🚀 If you finish early — compare the paired and two-sample p-values side by side:**
+```         
+t = ________    df = ________    p-value = ________
+
+mean difference = ________ mm     (this is ________ minus ________)
+```
+
+## 4.3 · Same data, two different answers
+
+**▶ Run this:**
 
 ``` r
-# ── Part 5.2 · Paired t-Test ────────────────────────────────────────────
-cat("Two-sample p-value:", t_test_result$p.value, "\n")
-cat("Paired p-value:     ", paired_t_test_result$p.value, "\n")
+# ── Part 4.3 · Compare the two tests ────────────────────────────────────
+two_sample_model$p.value
+
+paired_model$p.value
 ```
 
-Which p-value is smaller? Does that match the lecture's claim that a paired design is "generally more powerful because it controls for individual variation"?
+✏️ **Your turn:** Fill in the table from your own output.
+
+```         
+Test           t            df        p-value
+
+Two-sample     ________     ______    ________
+
+Paired         ________     ______    ________
+```
+
+✏️ **Your turn:** Both tests used the **same 8 numbers** and both estimated the **same difference in means**. So why are the p-values so different? (Think about where tree-to-tree variation ends up in each test.)
+
+```         
+____________________________________________________________________
+
+____________________________________________________________________
+
+____________________________________________________________________
+```
+
+✏️ **Your turn:** The paired test has **half** the degrees of freedom — 3 instead of 6. Fewer df makes significance *harder* to reach, not easier. So how did it still do better?
+
+```         
+____________________________________________________________________
+
+____________________________________________________________________
+```
+
+## 4.4 · A paired test *is* a one-sample test
+
+Treat the **shady side as each tree's own control** and compute one difference per tree.
+
+**▶ Run this:**
+
+``` r
+# ── Part 4.4 · Paired = one-sample on the differences ───────────────────
+diff_df <- p_wide_df %>%
+  mutate(difference = sunny - shady)
+
+diff_df
+
+diff_model <- t.test(diff_df$difference, mu = 0)
+
+diff_model
+```
+
+✏️ **Your turn:** Compare `diff_model` to `paired_model`. Write down the t, the df and the p-value for each. What do you notice?
+
+```         
+paired_model:  t = ________   df = ______   p = ________
+
+diff_model:    t = ________   df = ______   p = ________
+
+What I notice: _____________________________________________________
+```
+
+✏️ **Your turn:** So what is `paired = TRUE` actually doing for you?
+
+```         
+____________________________________________________________________
+```
+
+✏️ **Your turn:** **This is the answer to the degrees of freedom question.** The two-sample test on these same measurements had df = 6. This one has df = 3. Explain why, in terms of how many numbers `diff_model` is actually working with.
+
+```         
+____________________________________________________________________
+
+____________________________________________________________________
+```
+
+## 4.5 · Interpretation
+
+✏️ **Your turn:**
+
+```         
+Do you reject or fail to reject H0 at alpha = 0.05?
+
+____________________________________________________________________
+
+
+Which test — two-sample or paired — is the CORRECT one for how we
+collected this data, and why?
+
+____________________________________________________________________
+
+____________________________________________________________________
+
+
+In biological terms, what does the paired result say about pine needles?
+
+____________________________________________________________________
+
+____________________________________________________________________
+```
+
+✏️ **Your turn:** Write the result the way it would appear in a paper.
+
+```         
+"A two-tailed, paired t-test at alpha = 0.05 showed _______________
+
+____________________________________________________________________
+
+____________________________________________________________________
+
+t(______) = ________, p = ________."
+```
+
+::: callout-tip
+**🚀 If you finish early:** The shady side "controls for" everything about that particular tree — its genetics, its soil, its water, its team's measuring technique. Subtracting removes all of it at once. Which assumption from Section 3 does this design let you stop worrying about? And which variable's normality should you now be checking?
+
+```         
+____________________________________________________________________
+```
 :::
 
 ------------------------------------------------------------------------
 
-# Part 6 · Communicating Results and Reflection
-
-In scientific writing, statistical results are reported clearly and consistently. Standard formats:
-
-- **One-sample:** "A one-sample t-test showed that the mean needle length on the shady side (M = \[mean\], SD = \[sd\]) was \[significantly/not significantly\] different from 15mm, t(\[df\]) = \[t-value\], p = \[p-value\]."
-- **Two-sample:** "A two-sample t-test revealed that pine needle lengths on the sunny side (M = \[mean1\], SD = \[sd1\]) were \[significantly/not significantly\] \[longer/shorter\] than on the shady side (M = \[mean2\], SD = \[sd2\]), t(\[df\]) = \[t-value\], p = \[p-value\]."
-
-✏️ **Your turn:** Write all three results statements — one-sample, two-sample (or Welch's), and paired — using your own numbers from Parts 3–5.
-
-```         
-________________________________________________________
-________________________________________________________
-________________________________________________________
-```
-
 # Reflection Questions
 
-1.  How does the t-distribution differ from the normal distribution, and why does this matter for small samples?
-2.  What assumptions must be met to use a t-test, and what alternatives exist if these assumptions are violated?
+1.  How does the t-distribution differ from the normal distribution, and why does that matter when you only have 4 trees?
+2.  What assumptions must be met to use a t-test, and what alternatives exist if they are violated?
 3.  What is the difference between statistical significance and practical importance?
-4.  How would the confidence interval change if we used a 99% confidence level instead of 95%?
-5.  How would you explain the concept of a p-value to someone with no statistical background?
+4.  How would your confidence interval change at 99% instead of 95%?
+5.  How would you explain a p-value to someone with no statistical background?
 
 # Review and checkpoint
 
 At this point you can:
 
-- [ ] State H₀, Hₐ, and α *before* running a test
-- [ ] Check normality with a QQ plot and the Shapiro-Wilk test
-- [ ] Check equal variances with Levene's test
-- [ ] Run and interpret a one-sample t-test, including its confidence interval
-- [ ] Choose between a standard and Welch's two-sample t-test based on Levene's test
-- [ ] Run and interpret a paired t-test, and explain why it's often more powerful
-- [ ] Write a properly formatted results sentence for each test type
+- [ ] `source()` a tools script and use `theme_regular()` and `summary_stats()`
+- [ ] Average away pseudoreplication before you analyse anything
+- [ ] Write the question, the prediction, H₀, Hₐ and α *before* running a test
+- [ ] Make a boxplot with the data in front of it, and a mean ± SE plot
+- [ ] Show what averaging away pseudoreplication does to the means and to the standard errors
+- [ ] Check normality with Shapiro-Wilk and equal variances with Levene's test
+- [ ] Run and interpret a one-sample t-test, two-tailed and one-tailed
+- [ ] Say when a one-tailed test is honest, and when it is cheating
+- [ ] Choose between the standard and Welch's two-sample t-test, and say why
+- [ ] Run and interpret a paired t-test, and explain why it is often more powerful
+- [ ] Show that a paired t-test is a one-sample t-test on the differences against 0
+- [ ] Say where the df comes from for a one-sample, two-sample, Welch's, and paired t-test
+- [ ] Write a properly formatted results sentence, with `t(df)`, for each test
 
 ::: callout-note
 **📤 What to turn in before next class**
 
 Upload both of these to the course management system:
 
-1.  Your code — the `scripts/` folder (or just `06_t_tests.R`)
+1.  Your code — the `scripts/` folder (or just `05_T_tests.R`)
 2.  This worksheet, with your written answers
 :::
 
 ------------------------------------------------------------------------
 
-# Part 7 · Take-Home Extension — Mouse Body Mass and the Island Rule
+# Take-Home Extension — Mouse Body Mass and the Island Rule
 
 *Due Monday, September 28 — before the Power & Error class.*
 
-Everything below uses the exact same tests you just ran in Parts 3 and 4 — a one-sample and a two-sample t-test — on a new dataset and a new question. This time you decide which version of each test to run and defend that choice yourself; nobody walks you through it step by step.
+This uses the same machinery you just ran, on a new dataset and a new question. This time **you** decide which test to run and defend that choice; nobody walks you through it.
 
 ## Background
 
-The **Island Rule** predicts that when mainland species colonize islands, small-bodied species — like rodents — tend to evolve larger body size, released from mainland predation and competition pressure. Below are body mass measurements for deer mice trapped on Sidney Island (an island population) and near Vancouver, BC (a mainland population).
+The **Island Rule** predicts that when mainland species colonize islands, small-bodied species — like rodents — tend to evolve larger body size, released from mainland predation and competition. Below are body mass measurements for deer mice trapped on Sidney Island (island) and near Vancouver, BC (mainland).
 
 **▶ Run this:**
 
 ``` r
-# ── Part 7.1 · Take-Home Extension ──────────────────────────────────────
+# ── Part 5.1 · Take-home extension ──────────────────────────────────────
 mice_df <- read_csv("data/mice_weights.csv")
-head(mice_df)
+
+mice_df %>% group_by(location) %>% reframe(summary_stats(mass_g))
 ```
 
-## Task A · One-Sample Question
+## Task A · A one-sample question
 
 **Question:** Do island mice (Sidney Island) differ from a "typical" continental deer mouse body mass of 19 g?
 
-✏️ **Your turn:** Write your hypotheses, decide which test is appropriate and justify your choice, then write and run the code, and interpret the result.
+> 💡 This is Section 2 again, with a different `mu` and a different dataset.
 
-```
-H0 =
-________________________________________________________
-Ha =
-________________________________________________________
-Test I will use and why:
-________________________________________________________
+✏️ **Your turn:**
+
+```         
+Question:     ______________________________________________________
+
+Prediction:   ______________________________________________________
+
+              ______________________________________________________
+
+H0 =          ______________________________________________________
+
+Ha =          ______________________________________________________
+
+Test I will use, and why: __________________________________________
+
+              ______________________________________________________
 ```
 
 ``` r
-# ── Part 7.2 · Take-Home Extension ──────────────────────────────────────
+# ── Part 5.2 · Task A ───────────────────────────────────────────────────
 # Write your code in the R script:
 ```
 
-```
+```         
+Result:  t(______) = ________, p = ________
+
 Interpretation:
-________________________________________________________
-________________________________________________________
+
+____________________________________________________________________
+
+____________________________________________________________________
 ```
 
-## Task B · Two-Sample Question
+## Task B · A two-sample question
 
 **Question:** Does mouse body mass differ between the island (Sidney Island) and mainland (Vancouver) populations?
 
-✏️ **Your turn:** Same process — hypotheses, test choice and justification, code, and interpretation. (Hint: in Part 4 you used Levene's test to decide between the standard and Welch's two-sample t-test — do that check again here, on your own, before picking one.)
+> 💡 In Section 3 you used Levene's test to choose between the standard and Welch's two-sample t-test. Do that check again here, on your own, before you pick one.
 
-```
-H0 =
-________________________________________________________
-Ha =
-________________________________________________________
-Test I will use and why:
-________________________________________________________
+✏️ **Your turn:**
+
+```         
+Question:     ______________________________________________________
+
+Prediction:   ______________________________________________________
+
+              ______________________________________________________
+
+H0 =          ______________________________________________________
+
+Ha =          ______________________________________________________
+
+Levene's p =  ____________
+
+Test I will use, and why: __________________________________________
+
+              ______________________________________________________
 ```
 
 ``` r
-# ── Part 7.3 · Take-Home Extension ──────────────────────────────────────
+# ── Part 5.3 · Task B ───────────────────────────────────────────────────
 # Write your code in the R script:
 ```
 
-```
+```         
+Result:  t(______) = ________, p = ________
+
 Interpretation:
-________________________________________________________
-________________________________________________________
+
+____________________________________________________________________
+
+____________________________________________________________________
+```
+
+✏️ **Your turn:** Could you have run a **paired** t-test on these mice? Why or why not?
+
+```         
+____________________________________________________________________
+
+____________________________________________________________________
 ```
 
 ## Final Figure
 
-Produce one publication-quality figure summarizing island vs. mainland body mass — proper axis labels, no default `ggplot` grey background — and export it with `ggsave()`.
+Produce one figure summarizing island versus mainland body mass. This is the one place in this worksheet where you *should* dress it up — proper axis labels, no default grey background — and export it with `ggsave()`.
 
 ``` r
-# ── Part 7.4 · Take-Home Extension ──────────────────────────────────────
+# ── Part 5.4 · Final figure ─────────────────────────────────────────────
 # Write your code in the R script:
 ```
 
 ::: callout-note
 **📤 What to turn in — due Sept 28**
 
-Your write-up should include, for both Task A and Task B:
+For both Task A and Task B:
 
 - [ ] The question
+- [ ] Your prediction, and the biology behind it
 - [ ] Your hypotheses
-- [ ] Which test you used, and your justification for choosing it
+- [ ] Which test you used, and your justification
 - [ ] The code and its output
 - [ ] Your interpretation of the result
 - [ ] A final figure showing the result
@@ -524,7 +1091,7 @@ Your write-up should include, for both Task A and Task B:
 When code breaks — and it will, that is normal:
 
 1.  **Read the error message out loud.** R usually names the line and the problem.
-2.  **Check the usual suspects:** did you run `library(tidyverse)`, `library(car)`, and `library(readxl)`? Spelling? A missing `)` or `|>`/`%>%` at the *start* of a line?
+2.  **Check the usual suspects:** did you run `library(tidyverse)`, `library(janitor)`, `library(car)`, and `source("themes_functions/r_themes_and_functions.R")`? Spelling? A missing `)` or `%>%` at the *start* of a line?
 3.  `?function_name` opens the built-in help page.
 4.  **Bring the exact error** (copy-paste it) to class or office hours.
 
