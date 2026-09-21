@@ -3,7 +3,7 @@ metadata-files:
   - ../../_templates/_lectures.yml
 title: "Lecture: Non-Parametric T-Tests"
 subtitle: "Rank-based tests"
-description: "Assumptions of parametric tests, data transformations, Welch's t-test, rank-based tests (Mann-Whitney), and permutation tests when assumptions fail — on the lake trout dataset."
+description: "Assumptions of parametric tests, data transformations, a Welch's t-test refresher, rank-based tests (Mann-Whitney, Wilcoxon signed-rank), and permutation tests when assumptions fail — on lake trout mass."
 categories: [Mean comparison, Nonparametric]
 order: 7
 week: 4
@@ -66,7 +66,7 @@ What we will cover today:
 ::::
 
 :::: {.column width="40%"}
-Let's work with the lake trout data, as the weights are pretty cool and the assumptions may or may not hold. This easily translates to any of the other data frames you might want to use.
+Let's work with the lake trout data. **Everything today uses `mass_g`** — the weights are the interesting variable, and their assumptions are badly broken, which is exactly what we want. This translates to any other data frame you might use.
 
 ![Illustration of a lake trout in profile, showing its mottled brown-and-cream coloring and forked tail, the species whose weight and length data are used throughout this lecture.](images/lake_trout.jpg){width="3.12in" height="1.38in"}
 ::::
@@ -79,55 +79,39 @@ Let's work with the lake trout data, as the weights are pretty cool and the assu
 ::::::: columns
 :::: {.column width="60%"}
 ```{r nonparametric-t-tests-01}
-# Load libraries
-library(car)          # For diagnostic tests
+#| message: false
+#| warning: false
+library(tidyverse)
+library(janitor)
+library(car)          # leveneTest()
 library(patchwork)
-library(tidyverse)    # For data manipulation and visualization
+library(perm)         # permutation tests
+
+source("themes_functions/r_themes_and_functions.R")
+
+lt_df <- read_csv("data/lake_trout.csv")
 ```
 
 ```{r nonparametric-t-tests-02}
-#| message: false
-#| warning: false
-#| fig-height: 3
-#| fig-width: 3
-#| paged-print: false
-lt_df <- read_csv("data/lake_trout.csv")
-head(lt_df)
+lt_df %>% group_by(lake) %>% reframe(summary_stats(mass_g))
 ```
-::::
 
-:::: {.column width="40%"}
-::: callout-tip
-**🖐 Notice**
-
-Six lakes' worth of trout: `sampling_site`, `species`, `length_mm`, `mass_g`, `lake`.
-:::
-::::
-:::::::
-
-## Calculating the Mode
-
-::::::: columns
-:::: {.column width="60%"}
-```{r nonparametric-t-tests-03}
-# I had accidentally asked you to do mode in HW2 without
-# telling you how... here is one approach
-lt_df %>%
-  filter(!is.na(mass_g)) %>%
-  group_by(lake, mass_g) %>%
-  summarise(count = n(), .groups = "drop_last") %>%
-  arrange(desc(count)) %>%
-  slice(1) %>%
-  select(-count) %>%
-  rename(mode_mass = mass_g)
-```
+[📥 Lake trout data](data/lake_trout.csv){.btn .btn-primary download="lake_trout.csv"} [📥 Tools script](themes_functions/r_themes_and_functions.R){.btn .btn-primary download="r_themes_and_functions.R"} [📥 Script skeleton](data/07_nonparametric_t_tests.R){.btn .btn-primary download="07_nonparametric_t_tests.R"}
 ::::
 
 :::: {.column width="40%"}
 ::: callout-note
-**📖 New pattern**
+**✅ Same two tools as last week**
 
-R has no built-in `mode()` function for statistical mode — this `group_by()` + `count` + `slice(1)` pattern is the standard workaround.
+`source()` gives you `theme_regular()` and `summary_stats()` again. Nothing new to learn — just put the file in `themes_functions/` and carry on.
+:::
+
+::: callout-tip
+**🖐 Notice the design**
+
+Six lakes of trout: `sampling_site`, `species`, `length_mm`, `mass_g`, `lake`.
+
+**Everything today uses `mass_g`.** Look hard at the `n` and `sd` columns for **NE 12** and **Island Lake** — 322 fish against 10, and very different spreads. That imbalance is the whole lecture.
 :::
 ::::
 :::::::
@@ -206,7 +190,7 @@ Let's test normality for one lake — **`NE 12`** — as if we were going to run
 ::::
 
 :::: {.column width="40%"}
-```{r nonparametric-t-tests-04}
+```{r nonparametric-t-tests-03}
 #| echo: false
 #| message: false
 #| warning: false
@@ -220,33 +204,27 @@ ne12_data <- lt_df %>%
 
 ne12_histo_plot <- ggplot(ne12_data, aes(x = mass_g)) +
   geom_histogram(binwidth = 200, fill = "darkblue", color = "white") +
-  labs(title = "Histogram", x = "Mass (g)", y = "Count") +
-  theme_minimal(base_size = 7) +
-  theme(plot.title = element_text(hjust = 0.5))
+  labs(title = "Histogram") +
+  theme_regular(base_size = 7)
 
 ne12_dot_plot <- ggplot(ne12_data, aes(x = mass_g, y = "")) +
   geom_dotplot(binwidth = 60, stackdir = "center", fill = "darkblue", dotsize = 0.5) +
-  labs(title = "Dotplot", x = "Mass (g)", y = "") +
-  theme_minimal(base_size = 7) +
-  theme(plot.title = element_text(hjust = 0.5),
-        axis.text.y = element_blank(),
-        axis.ticks.y = element_blank())
+  labs(title = "Dotplot", y = "") +
+  theme_regular(base_size = 7) +
+  theme(axis.text.y = element_blank(), axis.ticks.y = element_blank())
 
 ne12_box_plot <- ggplot(ne12_data, aes(y = mass_g)) +
   geom_boxplot(fill = "darkblue") +
-  labs(title = "Boxplot", y = "Mass (g)", x = "") +
-  theme_minimal(base_size = 7) +
-  theme(plot.title = element_text(hjust = 0.5),
-        axis.text.x = element_blank(),
-        axis.ticks.x = element_blank()) +
+  labs(title = "Boxplot", x = "") +
+  theme_regular(base_size = 7) +
+  theme(axis.text.x = element_blank(), axis.ticks.x = element_blank()) +
   coord_flip()
 
 ne12_qq_plot <- ggplot(ne12_data, aes(sample = mass_g)) +
   stat_qq(color = "darkblue") +
   stat_qq_line() +
-  labs(title = "QQ Plot", x = "Theoretical Quantiles", y = "Sample Quantiles") +
-  theme_minimal(base_size = 7) +
-  theme(plot.title = element_text(hjust = 0.5))
+  labs(title = "QQ Plot") +
+  theme_regular(base_size = 7)
 
 combined_stats_plot <- (ne12_histo_plot + ne12_dot_plot) / (ne12_box_plot + ne12_qq_plot) +
   plot_annotation(
@@ -264,21 +242,24 @@ combined_stats_plot
 
 ::::::: columns
 :::: {.column width="60%"}
-"Null hypothesis is that data is normally distributed."
+**H₀ is that the data ARE normally distributed** — so a *small* p-value rejects normality.
 
-- Normality: samples from a normally distributed population
 - Graphical tests: histograms, dotplots, boxplots, **QQ-plots**
-- "Formal" tests: **Shapiro-Wilk test** — sometimes not useful
+- "Formal" tests: **Shapiro-Wilk** — sometimes not useful
+
+::: callout-warning
+**⚠️ p prints as `< 2.2e-16`**
+
+That is R telling you the p-value is smaller than it will bother to print. Not a borderline call — NE 12 mass is **strongly** non-normal, exactly as the histogram and QQ-plot showed. This is the case the rest of the lecture is for.
+:::
 ::::
 
 :::: {.column width="40%"}
-```{r nonparametric-t-tests-05}
-#| echo: false
+```{r nonparametric-t-tests-04}
 #| message: false
 #| warning: false
 #| paged-print: false
-shapiro_test <- shapiro.test(ne12_data$length_mm)
-shapiro_test
+shapiro.test(ne12_data$mass_g)
 ```
 ::::
 :::::::
@@ -289,23 +270,37 @@ shapiro_test
 :::: {.column width="60%"}
 **Equal variance:** samples are from populations with a similar degree of variability.
 
-- Graphical tests: boxplots
-- "Formal" tests: F-ratio test
-- When sample sizes are equal, parametric tests are most robust to violations of normality — less so for equal variance
+Equal variance is about **two groups**, so here we bring in the comparison we will use for the rest of the lecture: **NE 12 vs. Island Lake**.
+
+- Graphical test: boxplots
+- Formal test: **Levene's test** — H₀ is "the variances are equal," so you *want* p \> 0.05
 ::::
 
 :::: {.column width="40%"}
-```{r nonparametric-t-tests-06}
-#| echo: false
+```{r nonparametric-t-tests-05}
 #| message: false
 #| warning: false
 #| fig-width: 3.2
-#| fig-height: 2.8
-#| fig-alt: "Two stacked boxplots for Lake NE 12 trout: length in millimeters on top, mass in grams on the bottom, used to visually check the equal-variance assumption."
-length_plot <- ne12_data %>% ggplot(aes(x = lake, y = length_mm)) + geom_boxplot()
-mass_plot   <- ne12_data %>% ggplot(aes(x = lake, y = mass_g))   + geom_boxplot()
-length_plot + mass_plot + plot_layout(ncol = 1)
+#| fig-height: 2.4
+#| fig-alt: "Boxplot of trout mass for Lake NE 12 and Island Lake, showing Island Lake fish are far heavier and far more variable."
+isl_ne12_df <- lt_df %>%
+  filter(lake %in% c("NE 12", "Island Lake")) %>%
+  filter(!is.na(mass_g))
+
+isl_ne12_df %>%
+  ggplot(aes(lake, mass_g)) +
+  geom_boxplot() +
+  theme_regular(base_size = 10)
 ```
+
+```{r nonparametric-t-tests-06}
+#| message: false
+#| warning: false
+#| paged-print: false
+leveneTest(mass_g ~ factor(lake), data = isl_ne12_df)
+```
+
+**p is far below 0.05 — the variances are not equal.**
 ::::
 :::::::
 
@@ -379,19 +374,16 @@ ne12_histo_plot + ne12_box_plot + ne12_qq_plot + plot_layout(ncol = 1)
 #| fig-width: 3.4
 #| fig-height: 2.8
 #| fig-alt: "Side-by-side boxplot and QQ-plot of trout mass for Lake NE 12 and Island Lake, colored by lake, used to compare the two groups' distributions and assess normality."
-isl_ne12_df <- lt_df %>% filter(lake %in% c("NE 12", "Island Lake"))
-
 ne12_island_box_plot <- isl_ne12_df %>%
-  ggplot(aes(x = lake, y = mass_g, color = lake)) +
+  ggplot(aes(lake, mass_g)) +
   geom_boxplot() +
-  theme_minimal(base_size = 9)
+  theme_regular(base_size = 9)
 
 ne12_island_qq_plot <- isl_ne12_df %>%
   ggplot(aes(sample = mass_g, color = lake)) +
   stat_qq() +
   stat_qq_line() +
-  labs(x = "Theoretical Quantiles", y = "Sample Quantiles") +
-  theme_minimal(base_size = 9)
+  theme_regular(base_size = 9)
 
 ne12_island_box_plot + ne12_island_qq_plot + plot_layout(guides = "collect")
 ```
@@ -402,11 +394,27 @@ ne12_island_box_plot + ne12_island_qq_plot + plot_layout(guides = "collect")
 
 ::::::: columns
 :::: {.column width="60%"}
-In some cases, data can be mathematically "transformed" to meet the assumptions of parametric tests. This can be done in R and usually involves:
+In some cases, data can be mathematically "transformed" to meet the assumptions of parametric tests. This usually involves:
 
 - log₁₀ transformations
 - square root transformations
 - and many others
+
+```{r nonparametric-t-tests-10}
+#| message: false
+#| warning: false
+#| fig-width: 3.4
+#| fig-height: 2.4
+#| fig-alt: "Side-by-side boxplots comparing raw trout mass to log10-transformed trout mass for Lake NE 12 and Island Lake, showing the log transformation narrowing the gap in spread between the two lakes."
+log_box_plot <- isl_ne12_df %>%
+  ggplot(aes(lake, log10(mass_g))) +
+  geom_boxplot() +
+  theme_regular(base_size = 9)
+
+ne12_island_box_plot + log_box_plot
+```
+
+The log scale pulls the two spreads much closer together — but it does **not** fix them completely. Levene's test on `log10(mass_g)` is still significant.
 ::::
 
 :::: {.column width="40%"}
@@ -416,72 +424,52 @@ In some cases, data can be mathematically "transformed" to meet the assumptions 
 ::::
 :::::::
 
-## Part 4 · Welch's T-Test {.divider}
+## Part 4 · Welch's T-Test — a One-Slide Refresher {.divider}
 
-## Robust Tests — Welch's T-Test
-
-::::::: columns
-:::: {.column width="60%"}
-**Welch's t-test:**
-
-- a common "robust" test for the means of two populations
-- robust to violation of the equal-variance assumption; deals better with unequal sample sizes
-- still a **parametric** test (assumes normal distribution)
-- calculates a t statistic, but recalculates degrees of freedom based on sample sizes and s
-::::
-
-:::: {.column width="40%"}
-```{r nonparametric-t-tests-10}
-#| echo: false
-#| message: false
-#| warning: false
-#| fig-width: 3.4
-#| fig-height: 2.8
-#| fig-alt: "Side-by-side boxplots comparing raw trout mass to log10-transformed trout mass for Lake NE 12 and Island Lake, showing the log transformation narrowing the gap in spread between the two lakes."
-log_ne12_island_box_plot <- isl_ne12_df %>%
-  ggplot(aes(x = lake, y = log10(mass_g), color = lake)) +
-  geom_boxplot() +
-  theme_minimal(base_size = 9)
-
-ne12_island_box_plot + log_ne12_island_box_plot + plot_layout(guides = "collect")
-```
-::::
-:::::::
-
-## Comparing Standard T-Test vs. Welch's T-Test
+## Welch's t-Test — why it exists, in one number
 
 ::::::: columns
-:::: {.column width="60%"}
-Let's compare a parametric t-test to a Welch's t-test:
+:::: {.column width="55%"}
+You met Welch's last week: **same t-statistic idea, separate variance estimates, fractional degrees of freedom.** Nothing new to learn. What is new is *this dataset*, which shows you why it matters.
 
-- Standard: **`t.test(y1, y2, var.equal = TRUE, paired = FALSE)`**
-- Welch's: **`t.test(y1, y2, var.equal = FALSE, paired = FALSE)`**
-::::
-
-:::: {.column width="40%"}
 ```{r nonparametric-t-tests-11}
-#| echo: false
 #| message: false
 #| warning: false
 #| paged-print: false
-t_test_length_result <- t.test(
-  mass_g ~ lake,
-  data = isl_ne12_df,
-  var.equal = TRUE
-)
-
-welch_test_length_result <- t.test(
-  mass_g ~ lake,
-  data = isl_ne12_df,
-  var.equal = FALSE
-)
-
-print("Standard t-test results for mass_g:")
-print(t_test_length_result)
-
-print("Welch's t-test results for mass_g:")
-print(welch_test_length_result)
+# Student's -- assumes equal variances
+t.test(mass_g ~ lake, data = isl_ne12_df, var.equal = TRUE)
 ```
+
+```{r nonparametric-t-tests-12}
+#| message: false
+#| warning: false
+#| paged-print: false
+# Welch's -- does not
+t.test(mass_g ~ lake, data = isl_ne12_df, var.equal = FALSE)
+```
+::::
+
+:::: {.column width="45%"}
+::: callout-important
+**⚠️ Same data. Same means. Sixty orders of magnitude apart.**
+
+| | t | df | p |
+|:--|--:|--:|--:|
+| Student's | 14.18 | 330 | **5.7 × 10⁻³⁶** |
+| Welch's | 5.14 | **9.06** | **0.0006** |
+
+(R only prints `< 2.2e-16` for the first one — that is the smallest number it will show you. The true value is 5.7 × 10⁻³⁶.)
+
+Look at the **df**. Student's pooled 322 Island-sized fish with 10 NE 12-sized ones and claimed **330 degrees of freedom**. Welch's looked at the same data and said: you really only have about **9**.
+
+Both still reject H₀ — but Student's was never entitled to that much confidence. With n = 322 vs 10 and Levene's p ≈ 6 × 10⁻⁷, the pooled variance is meaningless.
+:::
+
+::: callout-tip
+**🖐 The rule**
+
+Unequal n **and** unequal variance is exactly the combination Welch's was built for. When in doubt, `var.equal = FALSE` is the safer default — it costs you almost nothing when variances really are equal.
+:::
 ::::
 :::::::
 
@@ -514,15 +502,10 @@ Whitlock & Schluter, Ch. 13, covers the Mann-Whitney U test and Wilcoxon signed-
 
 ::::::: columns
 :::: {.column width="60%"}
-```{r nonparametric-t-tests-12}
-#| echo: false
-wilcox_test_result <- wilcox.test(
-  mass_g ~ lake,
-  data = isl_ne12_df,
-  alternative = "two.sided",  # Can be "less", "greater", or "two.sided"
-)
+```{r nonparametric-t-tests-13}
+#| warning: false
+wilcox_test_result <- wilcox.test(mass_g ~ lake, data = isl_ne12_df)
 
-print("Mann-Whitney U test results mass_g:")
 wilcox_test_result
 ```
 ::::
@@ -544,7 +527,7 @@ The test statistic is `W`, not `t` — a signal you're reading rank-based test o
 :::: {.column width="60%"}
 Last week we tested our own needle data two ways. Let's run the rank-based versions of **exactly the same two comparisons** and see what changes.
 
-```{r nonparametric-t-tests-13}
+```{r nonparametric-t-tests-14}
 #| message: false
 pine_df <- read_csv("data/pine_data.csv")
 
@@ -560,7 +543,7 @@ p_wide_df <- p_df %>%
 p_wide_df
 ```
 
-[📥 Download the data](data/pine_data.csv){.btn .btn-primary download="pine_data.csv"}
+[📥 Pine needle data](data/pine_data.csv){.btn .btn-primary download="pine_data.csv"}
 ::::
 
 :::: {.column width="40%"}
@@ -576,13 +559,13 @@ p_wide_df
 
 ::::::: columns
 :::: {.column width="60%"}
-```{r nonparametric-t-tests-14}
+```{r nonparametric-t-tests-15}
 #| warning: false
 # Unpaired: Mann-Whitney U  (the t-test's two-sample partner)
 wilcox.test(needle_length_mm ~ side, data = p_df)
 ```
 
-```{r nonparametric-t-tests-15}
+```{r nonparametric-t-tests-16}
 #| warning: false
 # Paired: Wilcoxon signed-rank  (the paired t-test's partner)
 wilcox.test(p_wide_df$shady, p_wide_df$sunny, paired = TRUE)
@@ -626,7 +609,7 @@ With 4 pairs there are only 2⁴ = **16** possible arrangements of plus and minu
 
 So with four trees, a Wilcoxon signed-rank test **can never return a p-value below 0.125**, no matter how enormous the effect.
 
-```{r nonparametric-t-tests-16}
+```{r nonparametric-t-tests-17}
 2 / 2^4     # smallest possible two-sided p, 4 pairs
 ```
 
@@ -679,7 +662,7 @@ How many pairs would you need before a signed-rank test could reach p \< 0.05?
 ::::
 
 :::: {.column width="40%"}
-```{r nonparametric-t-tests-17}
+```{r nonparametric-t-tests-18}
 #| echo: false
 #| message: false
 #| warning: false
@@ -695,7 +678,7 @@ ne12_island_box_plot
 
 ::::::: columns
 :::: {.column width="60%"}
-- Randomly reshuffle observations between groups (keeping n₍NE 12₎ = 323 and n₍Island₎ = 10), calculate Δ
+- Randomly reshuffle observations between groups (keeping n₍NE 12₎ = 322 and n₍Island₎ = 10), calculate Δ
 - Repeat > 1,000 times
 - Record the proportion of the differences in means as extreme as (or more extreme than) observed
 - This is equivalent to a p-value, and can be used in the "traditional" hypothesis-testing framework
@@ -716,30 +699,27 @@ ne12_island_box_plot
 :::: {.column width="60%"}
 In R, using the `perm` package. Assumptions: both groups have a similar distribution; equal variance.
 
-```{r nonparametric-t-tests-18}
+```{r nonparametric-t-tests-19}
 library(perm)
 
-# Balance the design: take 25 NE 12 fish, keep all of Island Lake
+# Balance the design: take 10 NE 12 fish, keep all of Island Lake
 set.seed(123)
 perm_df <- bind_rows(
   isl_ne12_df %>%
     filter(lake == "NE 12") %>%
-    slice_sample(n = 25),
+    slice_sample(n = 10),
   isl_ne12_df %>%
     filter(lake == "Island Lake")
 )
 
 # The difference the test is about
-perm_df %>%
-  group_by(lake) %>%
-  summarize(n       = sum(!is.na(length_mm)),
-            mean_mm = round(mean(length_mm, na.rm = TRUE), 2))
+perm_df %>% group_by(lake) %>% reframe(summary_stats(mass_g))
 ```
 ::::
 
 :::: {.column width="40%"}
-```{r nonparametric-t-tests-19}
-permTS(length_mm ~ lake,
+```{r nonparametric-t-tests-20}
+permTS(mass_g ~ lake,
        data = perm_df,
        alternative = "two.sided",
        method = "exact.mc",
@@ -813,16 +793,12 @@ Weaknesses:
 ::: {.column width="50%"}
 **2. Welch's t-test**
 
-Strengths:
+Covered in full in the **T-Tests** lecture; the one-slide refresher in Part 4 is all we needed today.
 
-- Robust to violations of the equal-variance assumption
-- Handles unequal sample sizes well
-- Still parametric (assumes normality)
-
-Weaknesses:
-
-- Slightly less powerful than the standard t-test when variances are equal
-- Still assumes a normal distribution
+- Robust to unequal variances **and** unequal n — which is exactly our NE 12 vs. Island Lake case
+- Still **parametric**: it fixes the variance assumption, not the normality one
+- Costs almost nothing when variances really are equal, so it is a safe default
+- On these data it moved df from **330 to 9.06** — that is the whole story
 :::
 ::::::
 

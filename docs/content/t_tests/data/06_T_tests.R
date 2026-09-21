@@ -1,5 +1,5 @@
 # =====================================================================
-# 05 · T-TESTS: ONE, TWO, PAIRED — SCRIPT SKELETON
+# 06 · T-TESTS: ONE, TWO, PAIRED — SCRIPT SKELETON
 # Ecological Statistics
 # =====================================================================
 
