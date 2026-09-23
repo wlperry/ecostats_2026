@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="author" content="Bill Perry">
-<meta name="description" content="Assumptions of parametric tests, data transformations, a Welch’s t-test refresher, rank-based tests (Mann-Whitney, Wilcoxon signed-rank), and permutation tests when assumptions fail — on lake trout mass.">
+<meta name="description" content="Rank-based tests on our own pine needle data — where the assumptions hold and the tests cost us power — then lake trout mass, where the assumptions genuinely fail and robust, rank-based, and permutation tests earn their keep.">
 
 <title>Lecture: Non-Parametric T-Tests – UMD Biostatistics</title>
 <style>
@@ -116,10 +116,39 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   }
 }</script>
 
+  <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
+  <script defer="" src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-chtml.js" type="text/javascript"></script>
+
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN" && texText && texText.data) {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
 
 <link rel="stylesheet" href="../../css/main.css">
 <meta property="og:title" content="Lecture: Non-Parametric T-Tests – UMD Biostatistics">
-<meta property="og:description" content="Assumptions of parametric tests, data transformations, a Welch’s t-test refresher, rank-based tests (Mann-Whitney, Wilcoxon signed-rank), and permutation tests when assumptions fail — on lake trout mass.">
+<meta property="og:description" content="Rank-based tests on our own pine needle data — where the assumptions hold and the tests cost us power — then lake trout mass, where the assumptions genuinely fail and robust, rank-based, and permutation tests earn their keep.">
 <meta property="og:image" content="https://wlperry.github.io/ecostats_2026/content/nonparametric_t_tests/images/pine_needles.jpg">
 <meta property="og:site_name" content="UMD Biostatistics">
 </head>
@@ -417,7 +446,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 <div>
   <div class="description">
-    Assumptions of parametric tests, data transformations, a Welch’s t-test refresher, rank-based tests (Mann-Whitney, Wilcoxon signed-rank), and permutation tests when assumptions fail — on lake trout mass.
+    Rank-based tests on our own pine needle data — where the assumptions hold and the tests cost us power — then lake trout mass, where the assumptions genuinely fail and robust, rank-based, and permutation tests earn their keep.
   </div>
 </div>
 
@@ -468,7 +497,21 @@ Note
 </div>
 <div class="callout-body-container callout-body">
 <p><strong>✅ Key idea from last lecture</strong></p>
-<p>A t-test’s p-value is only trustworthy if its assumptions hold. Today is about what to do when they don’t.</p>
+<p>A t-test’s p-value is only trustworthy if its assumptions hold. Today is about how to tell whether they do — and what to do when they don’t.</p>
+</div>
+</div>
+<div class="callout callout-style-default callout-warning callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Warning
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><strong>⚠️ The trap we’re walking into first</strong></p>
+<p>It is tempting to treat non-parametric tests as the “safe” option you can always fall back on. We are going to start by showing why that instinct is wrong.</p>
 </div>
 </div>
 </div><div class="column" style="width:40%;">
@@ -485,32 +528,46 @@ Note
 <h2 class="anchored" data-anchor-id="todays-overview">Today’s Overview</h2>
 <div class="columns">
 <div class="column" style="width:60%;">
-<p>What we will cover today:</p>
-<ul>
-<li>What are the assumptions again, and how do you assess them?</li>
-<li>What to do when assumptions fail:
-<ul>
-<li>Robust tests</li>
-<li>Rank-based tests</li>
-<li>Permutation tests</li>
-</ul></li>
-</ul>
+<p>Today runs in two halves, and the order matters:</p>
+<ol type="1">
+<li><strong>Our own pine needles first.</strong> We check the assumptions on the data <em>you</em> collected, find that they hold, measure <strong>how big</strong> the effect actually was with Cohen’s d, and then run the non-parametric tests anyway — to see exactly what they cost.</li>
+<li><strong>Then the lake trout.</strong> A dataset where the assumptions are genuinely, badly broken — which is where robust tests, rank-based tests, and permutation tests earn their keep.</li>
+</ol>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Note
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><strong>✅ The question behind today</strong></p>
+<p>Not <em>“which test is safest?”</em> but <em>“which test does this data deserve?”</em></p>
+</div>
+</div>
 </div><div class="column" style="width:40%;">
-<p>Let’s work with the lake trout data. <strong>Everything today uses <code>mass_g</code></strong> — the weights are the interesting variable, and their assumptions are badly broken, which is exactly what we want. This translates to any other data frame you might use.</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="images/pine_needles.jpg" style="width:3.12in;height:2.08in" class="figure-img"></p>
+<figcaption>Photo comparing needle length and bundle count across six pine species (Pinus ponderosa, nigra, resinosa, strobus, sylvestris, banksiana).</figcaption>
+</figure>
+</div>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
 <p><img src="images/lake_trout.jpg" style="width:3.12in;height:1.38in" class="figure-img"></p>
-<figcaption>Illustration of a lake trout in profile, showing its mottled brown-and-cream coloring and forked tail, the species whose weight and length data are used throughout this lecture.</figcaption>
+<figcaption>Illustration of a lake trout in profile, showing its mottled brown-and-cream coloring and forked tail, the species whose weight and length data are used in the second half of this lecture.</figcaption>
 </figure>
 </div>
 </div>
 </div>
 </section>
-<section id="part-1-setting-up-our-analysis" class="level2 divider">
-<h2 class="divider anchored" data-anchor-id="part-1-setting-up-our-analysis">Part 1 · Setting Up Our Analysis</h2>
+<section id="part-1-start-with-our-own-data" class="level2 divider">
+<h2 class="divider anchored" data-anchor-id="part-1-start-with-our-own-data">Part 1 · Start With Our Own Data</h2>
 </section>
-<section id="setting-up-our-analysis" class="level2">
-<h2 class="anchored" data-anchor-id="setting-up-our-analysis">Setting Up Our Analysis</h2>
+<section id="our-pine-needles-where-we-left-them" class="level2">
+<h2 class="anchored" data-anchor-id="our-pine-needles-where-we-left-them">Our pine needles, where we left them</h2>
 <div class="columns">
 <div class="column" style="width:60%;">
 <div class="cell">
@@ -519,26 +576,35 @@ Note
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(car)          <span class="co"># leveneTest()</span></span>
 <span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(patchwork)</span>
 <span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(perm)         <span class="co"># permutation tests</span></span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="fu">source</span>(<span class="st">"themes_functions/r_themes_and_functions.R"</span>)</span>
-<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>lt_df <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="st">"data/lake_trout.csv"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(effectsize)   <span class="co"># cohens_d()</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="fu">source</span>(<span class="st">"themes_functions/r_themes_and_functions.R"</span>)</span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>pine_df <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="st">"data/pine_data.csv"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>lt_df <span class="sc">%&gt;%</span> <span class="fu">group_by</span>(lake) <span class="sc">%&gt;%</span> <span class="fu">reframe</span>(<span class="fu">summary_stats</span>(mass_g))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># same two-stage summary as last week: one value per tree per side</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>p_df <span class="ot">&lt;-</span> pine_df <span class="sc">%&gt;%</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(team, side) <span class="sc">%&gt;%</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">needle_length_mm =</span> <span class="fu">mean</span>(needle_length_mm, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>            <span class="at">.groups =</span> <span class="st">"drop"</span>)</span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>p_wide_df <span class="ot">&lt;-</span> p_df <span class="sc">%&gt;%</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_wider</span>(<span class="at">names_from =</span> side, <span class="at">values_from =</span> needle_length_mm)</span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>p_wide_df</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code># A tibble: 6 × 7
-  lake            n  mean    sd    se ci_lower ci_upper
-  &lt;chr&gt;       &lt;int&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt;    &lt;dbl&gt;    &lt;dbl&gt;
-1 I8             91  857.  727.  76.2     705.    1008.
-2 Island Lake    10 3165  1617. 511.     2008.    4322.
-3 N 01          674  659.  395.  15.2     629.     689.
-4 NE 12         322  534.  520.  29.0     477.     591.
-5 NE 14         139  848.  508.  43.1     763.     933.
-6 Toolik        249  518.  373.  23.6     471.     564.</code></pre>
+<pre><code># A tibble: 4 × 3
+  team       shady sunny
+  &lt;chr&gt;      &lt;dbl&gt; &lt;dbl&gt;
+1 botany      16.1  17.3
+2 grace_jace  15.4  15.5
+3 one         13.2  14.2
+4 waterbugs   11.7  13.8</code></pre>
 </div>
 </div>
-<p><a href="data/lake_trout.csv" class="btn btn-primary" download="lake_trout.csv">📥 Lake trout data</a> <a href="themes_functions/r_themes_and_functions.R" class="btn btn-primary" download="r_themes_and_functions.R">📥 Tools script</a> <a href="data/07_nonparametric_t_tests.R" class="btn btn-primary" download="07_nonparametric_t_tests.R">📥 Script skeleton</a></p>
+<p><a href="data/pine_data.csv" class="btn btn-primary" download="pine_data.csv">📥 Pine needle data</a> <a href="data/lake_trout.csv" class="btn btn-primary" download="lake_trout.csv">📥 Lake trout data</a> <a href="data/sage_brush_crickets_feeding_mating.csv" class="btn btn-primary" download="sage_brush_crickets_feeding_mating.csv">📥 Sagebrush cricket data</a></p>
+<p><a href="themes_functions/r_themes_and_functions.R" class="btn btn-primary" download="r_themes_and_functions.R">📥 Tools script</a> <a href="data/07_nonparametric_t_tests.R" class="btn btn-primary" download="07_nonparametric_t_tests.R">📥 Script skeleton</a></p>
 </div><div class="column" style="width:40%;">
 <div class="callout callout-style-default callout-note callout-titled">
 <div class="callout-header d-flex align-content-center">
@@ -550,8 +616,129 @@ Note
 </div>
 </div>
 <div class="callout-body-container callout-body">
+<p><strong>✅ Reminder</strong></p>
+<p>4 teams, 4 trees, both sides of each tree. The data are <strong>paired</strong> by design.</p>
+<p>Last week these four trees gave us:</p>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th style="text-align: left;">Comparison</th>
+<th style="text-align: right;">p</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">Unpaired two-sample t</td>
+<td style="text-align: right;">0.425</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>Paired t</strong></td>
+<td style="text-align: right;"><strong>0.072</strong></td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Note
+</div>
+</div>
+<div class="callout-body-container callout-body">
 <p><strong>✅ Same two tools as last week</strong></p>
-<p><code>source()</code> gives you <code>theme_regular()</code> and <code>summary_stats()</code> again. Nothing new to learn — just put the file in <code>themes_functions/</code> and carry on.</p>
+<p><code>source()</code> gives you <code>theme_regular()</code> and <code>summary_stats()</code> again. Nothing new to learn.</p>
+</div>
+</div>
+</div>
+</div>
+</section>
+<section id="do-our-assumptions-actually-hold" class="level2">
+<h2 class="anchored" data-anchor-id="do-our-assumptions-actually-hold">Do our assumptions actually hold?</h2>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Note
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><strong>🔮 Predict first:</strong> Before we run anything — do you expect needle length to be normally distributed with equal variance on the two sides of a tree? Commit to an answer.</p>
+</div>
+</div>
+<div class="columns">
+<div class="column" style="width:60%;">
+<p>Before reaching for anything non-parametric, we have to establish that we <em>need</em> it. Same two checks as last week.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co"># normality, one side at a time -- all 32 needles per side</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="fu">shapiro.test</span>(pine_df<span class="sc">$</span>needle_length_mm[pine_df<span class="sc">$</span>side <span class="sc">==</span> <span class="st">"sunny"</span>])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>
+    Shapiro-Wilk normality test
+
+data:  pine_df$needle_length_mm[pine_df$side == "sunny"]
+W = 0.96105, p-value = 0.2934</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="fu">shapiro.test</span>(pine_df<span class="sc">$</span>needle_length_mm[pine_df<span class="sc">$</span>side <span class="sc">==</span> <span class="st">"shady"</span>])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>
+    Shapiro-Wilk normality test
+
+data:  pine_df$needle_length_mm[pine_df$side == "shady"]
+W = 0.98213, p-value = 0.8586</code></pre>
+</div>
+</div>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="co"># equal variance</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="fu">leveneTest</span>(needle_length_mm <span class="sc">~</span> <span class="fu">factor</span>(side), <span class="at">data =</span> pine_df)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Levene's Test for Homogeneity of Variance (center = median)
+      Df F value Pr(&gt;F)
+group  1   2e-04 0.9887
+      62               </code></pre>
+</div>
+</div>
+</div><div class="column" style="width:40%;">
+<div class="callout callout-style-default callout-important callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Important
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><strong>⚠️ Everything passes</strong></p>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th style="text-align: left;">Check</th>
+<th style="text-align: right;">p</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">Shapiro-Wilk, sunny</td>
+<td style="text-align: right;">0.29</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Shapiro-Wilk, shady</td>
+<td style="text-align: right;">0.86</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Levene’s</td>
+<td style="text-align: right;">0.99</td>
+</tr>
+</tbody>
+</table>
+<p>Remember the direction of these tests: <strong>H₀ is that the assumption holds.</strong> A large p means we have no evidence against it.</p>
+<p>There is <strong>nothing wrong with this data.</strong> The paired t-test we ran last week was entitled to every bit of its p = 0.072.</p>
 </div>
 </div>
 <div class="callout callout-style-default callout-tip callout-titled">
@@ -564,16 +751,420 @@ Tip
 </div>
 </div>
 <div class="callout-body-container callout-body">
-<p><strong>🖐 Notice the design</strong></p>
-<p>Six lakes of trout: <code>sampling_site</code>, <code>species</code>, <code>length_mm</code>, <code>mass_g</code>, <code>lake</code>.</p>
-<p><strong>Everything today uses <code>mass_g</code>.</strong> Look hard at the <code>n</code> and <code>sd</code> columns for <strong>NE 12</strong> and <strong>Island Lake</strong> — 322 fish against 10, and very different spreads. That imbalance is the whole lecture.</p>
+<p><strong>🖐 So why are we here?</strong></p>
+<p>Because “my data are fine” is a conclusion you have to <em>earn</em>, not assume — and because plenty of students would have reached for a rank test anyway, thinking it was the cautious choice. Let’s find out what that caution would have cost.</p>
 </div>
 </div>
 </div>
 </div>
 </section>
-<section id="part-2-assumptions-of-parametric-tests" class="level2 divider">
-<h2 class="divider anchored" data-anchor-id="part-2-assumptions-of-parametric-tests">Part 2 · Assumptions of Parametric Tests</h2>
+<section id="effect-size-how-big-not-just-whether" class="level2">
+<h2 class="anchored" data-anchor-id="effect-size-how-big-not-just-whether">Effect Size — How Big, Not Just Whether</h2>
+<div class="columns">
+<div class="column" style="width:60%;">
+<p>Our paired t-test gave <strong>p = 0.072</strong>. The usual reflex is to call that “not significant” and stop.</p>
+<p>But <code>p</code> never told us the one thing a reader actually wants to know: <strong>how much shorter are shady needles?</strong> A p-value answers <em>“could this be noise?”</em> — not <em>“does this matter?”</em></p>
+<p><strong>Cohen’s d</strong> answers the second question. It is the difference between the groups expressed in <strong>standard deviations</strong>, so it has no units and can be compared across studies:</p>
+<p><span class="math display">\[d = \frac{\bar{x}_1 - \bar{x}_2}{s}\]</span></p>
+<p>For a <strong>paired</strong> design the difference is the paired difference, and <code>s</code> is the standard deviation <em>of those differences</em>:</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>diffs <span class="ot">&lt;-</span> p_wide_df<span class="sc">$</span>shady <span class="sc">-</span> p_wide_df<span class="sc">$</span>sunny</span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a><span class="fu">mean</span>(diffs) <span class="sc">/</span> <span class="fu">sd</span>(diffs)     <span class="co"># Cohen's d, by hand</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] -1.361371</code></pre>
+</div>
+</div>
+</div><div class="column" style="width:40%;">
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Note
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><strong>✅ Read the formula out loud</strong></p>
+<p>“The shady side averaged <strong>1.36 standard deviations</strong> below the sunny side.”</p>
+<p>That sentence stands on its own. It does not depend on how many trees we sampled, and it would mean the same thing to someone measuring a different pine species in a different forest.</p>
+</div>
+</div>
+<div class="callout callout-style-default callout-tip callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Tip
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><strong>🖐 Cohen’s rough conventions</strong></p>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th style="text-align: right;">|d|</th>
+<th style="text-align: left;">Label</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: right;">0.2</td>
+<td style="text-align: left;">small</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">0.5</td>
+<td style="text-align: left;">medium</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">0.8</td>
+<td style="text-align: left;">large</td>
+</tr>
+</tbody>
+</table>
+<p>Ours is <strong>1.36</strong>. These are rules of thumb, not laws — what counts as “large” is a question about pine trees, not about statistics.</p>
+</div>
+</div>
+</div>
+</div>
+</section>
+<section id="why-we-report-it-what-d-tells-us-that-p-could-not" class="level2">
+<h2 class="anchored" data-anchor-id="why-we-report-it-what-d-tells-us-that-p-could-not">Why We Report It — What d Tells Us That p Could Not</h2>
+<div class="columns">
+<div class="column" style="width:60%;">
+<p>Here is the relationship that explains everything:</p>
+<p><span class="math display">\[t = d \times \sqrt{n}\]</span></p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="fl">2.7227</span> <span class="sc">/</span> <span class="fu">sqrt</span>(<span class="dv">4</span>)      <span class="co"># our t statistic, over root n</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] 1.36135</code></pre>
+</div>
+</div>
+<p><strong>The t-statistic is the effect size multiplied by the square root of your sample size.</strong> So a p-value confounds two completely different things: <em>how big the effect is</em>, and <em>how hard you looked</em>.</p>
+<ul>
+<li>A <strong>huge</strong> effect with n = 4 → large p.&nbsp;That is us.</li>
+<li>A <strong>trivial</strong> effect with n = 10,000 → tiny p, and no biological meaning at all.</li>
+</ul>
+<p>Effect size separates them. That is why journals, and every reporting guideline written in the last twenty years, ask for it alongside the p-value.</p>
+</div><div class="column" style="width:40%;">
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb14"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(effectsize)</span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a><span class="fu">cohens_d</span>(p_wide_df<span class="sc">$</span>shady,</span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>         p_wide_df<span class="sc">$</span>sunny,</span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>         <span class="at">paired =</span> <span class="cn">TRUE</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Cohen's d |        95% CI
+-------------------------
+-1.36     | [-2.74, 0.10]</code></pre>
+</div>
+</div>
+<div class="callout callout-style-default callout-important callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Important
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><strong>⚠️ Look at that confidence interval: [-2.74, 0.10]</strong></p>
+<p><em>This</em> is the honest summary of our four trees: the effect is <strong>probably large and probably negative</strong>, but with n = 4 we cannot rule out zero.</p>
+<p>Notice that the CI crossing zero is the same fact as p &gt; 0.05 — but it says it far more usefully. “No significant difference” sounds like <em>we found nothing</em>. “d = -1.36, CI [-2.74, 0.10]” says <em>we found a large effect we could not pin down</em>, which is a completely different message to a reader, and the correct one.</p>
+</div>
+</div>
+<div class="callout callout-style-default callout-tip callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Tip
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><strong>🖐 Where this goes next</strong></p>
+<p>Effect size is the input to a <strong>power analysis</strong> — given d, how many trees would we have needed? That is next week’s lecture.</p>
+</div>
+</div>
+</div>
+</div>
+</section>
+<section id="ranks-in-one-slide" class="level2">
+<h2 class="anchored" data-anchor-id="ranks-in-one-slide">Ranks, in one slide</h2>
+<div class="columns">
+<div class="column" style="width:60%;">
+<p>Every non-parametric test today works the same way: <strong>throw away the measurements, keep only their order.</strong></p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb16"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a>p_df <span class="sc">%&gt;%</span></span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">rank =</span> <span class="fu">rank</span>(needle_length_mm)) <span class="sc">%&gt;%</span></span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(rank)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code># A tibble: 8 × 4
+  team       side  needle_length_mm  rank
+  &lt;chr&gt;      &lt;chr&gt;            &lt;dbl&gt; &lt;dbl&gt;
+1 waterbugs  shady             11.7     1
+2 one        shady             13.2     2
+3 waterbugs  sunny             13.8     3
+4 one        sunny             14.2     4
+5 grace_jace shady             15.4     5
+6 grace_jace sunny             15.5     6
+7 botany     shady             16.1     7
+8 botany     sunny             17.3     8</code></pre>
+</div>
+</div>
+</div><div class="column" style="width:40%;">
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Note
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><strong>✅ What just happened</strong></p>
+<p>The shortest tree-side average became rank 1, the longest rank 8. A needle that was 4 mm longer than its neighbour and one that was 0.1 mm longer are now <strong>exactly one rank apart</strong>.</p>
+<p>That is the whole trade. You become immune to outliers and to any weird distribution — and in exchange you give up the magnitudes.</p>
+<p>A rank-based test then asks: <em>are the ranks of one group systematically higher than the other’s?</em></p>
+</div>
+</div>
+<div class="callout callout-style-default callout-tip callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Tip
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><strong>🖐 Watch for the statistic</strong></p>
+<p>Rank tests report <strong><code>W</code></strong> (Mann-Whitney) or <strong><code>V</code></strong> (signed-rank), never <code>t</code>. If you see a <code>W</code>, you are reading rank-based output.</p>
+</div>
+</div>
+</div>
+</div>
+</section>
+<section id="running-both-rank-based-tests" class="level2">
+<h2 class="anchored" data-anchor-id="running-both-rank-based-tests">Running both rank-based tests</h2>
+<div class="columns">
+<div class="column" style="width:60%;">
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb18"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Unpaired: Mann-Whitney U  (the t-test's two-sample partner)</span></span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a><span class="fu">wilcox.test</span>(needle_length_mm <span class="sc">~</span> side, <span class="at">data =</span> p_df)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>
+    Wilcoxon rank sum exact test
+
+data:  needle_length_mm by side
+W = 5, p-value = 0.4857
+alternative hypothesis: true location shift is not equal to 0</code></pre>
+</div>
+</div>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb20"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Paired: Wilcoxon signed-rank  (the paired t-test's partner)</span></span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a><span class="fu">wilcox.test</span>(p_wide_df<span class="sc">$</span>shady, p_wide_df<span class="sc">$</span>sunny, <span class="at">paired =</span> <span class="cn">TRUE</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>
+    Wilcoxon signed rank exact test
+
+data:  p_wide_df$shady and p_wide_df$sunny
+V = 0, p-value = 0.125
+alternative hypothesis: true location shift is not equal to 0</code></pre>
+</div>
+</div>
+</div><div class="column" style="width:40%;">
+<div class="callout callout-style-default callout-tip callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Tip
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><strong>🖐 Notice <code>V = 0</code></strong></p>
+<p>The signed-rank statistic is <strong>zero</strong> — meaning <em>every single tree</em> moved in the same direction. There is no arrangement of these four trees that would look more consistent.</p>
+<p>Notice too that R says <strong>“exact test”</strong> for both. With no tied values it enumerates every possible arrangement rather than approximating. Hold on to that word — the next slide explains why it matters.</p>
+</div>
+</div>
+</div>
+</div>
+</section>
+<section id="same-answer-less-power" class="level2">
+<h2 class="anchored" data-anchor-id="same-answer-less-power">Same answer, less power</h2>
+<div class="columns">
+<div class="column" style="width:60%;">
+<table class="caption-top table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Comparison</th>
+<th>Parametric</th>
+<th>Non-parametric</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Unpaired (2 groups)</td>
+<td>t-test <strong>p = 0.425</strong></td>
+<td>Mann-Whitney <strong>p = 0.486</strong></td>
+</tr>
+<tr class="even">
+<td>Paired (4 trees)</td>
+<td>paired t <strong>p = 0.072</strong></td>
+<td>signed-rank <strong>p = 0.125</strong></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Both methods tell the same story:</strong></p>
+<ul>
+<li>the unpaired comparison finds nothing</li>
+<li>the paired comparison is far more sensitive</li>
+<li>the direction is identical — shady needles shorter</li>
+</ul>
+<p><strong>But the rank test costs you.</strong> In both rows the non-parametric p-value is larger. That is the price of throwing away the actual measurements and keeping only their order — and we paid it on data that never needed it.</p>
+</div><div class="column" style="width:40%;">
+<div class="callout callout-style-default callout-important callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Important
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><strong>⚠️ At n = 4, the signed-rank test hits a wall</strong></p>
+<p>With 4 pairs there are only 2⁴ = <strong>16</strong> possible arrangements of plus and minus signs. The most extreme possible result — all four the same way, which is exactly what we got — has a two-sided p of 2/16 = <strong>0.125</strong>.</p>
+<p>So with four trees, a Wilcoxon signed-rank test <strong>can never return a p-value below 0.125</strong>, no matter how enormous the effect.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb22"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="dv">2</span> <span class="sc">/</span> <span class="dv">2</span><span class="sc">^</span><span class="dv">4</span>     <span class="co"># smallest possible two-sided p, 4 pairs</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] 0.125</code></pre>
+</div>
+</div>
+<p>The test did not fail to find our effect. It was <strong>arithmetically incapable</strong> of declaring it significant.</p>
+</div>
+</div>
+</div>
+</div>
+</section>
+<section id="what-that-means-in-practice" class="level2">
+<h2 class="anchored" data-anchor-id="what-that-means-in-practice">What that means in practice</h2>
+<div class="columns">
+<div class="column" style="width:60%;">
+<ul>
+<li>Non-parametric tests are the right call when normality is genuinely broken and cannot be fixed</li>
+<li>But they are <strong>not free</strong>, and they are <strong>not a safe default</strong></li>
+<li>At small n they can be so blunt that no result could ever reach significance — check the floor <strong>before</strong> you run one</li>
+</ul>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Note
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><strong>✅ Key idea</strong></p>
+<p>Choose the test that matches your data’s distribution, not the one that feels safest. For our four trees, the <em>parametric</em> paired t-test — whose assumptions we just checked and could not reject — is the more honest and more informative choice.</p>
+</div>
+</div>
+</div><div class="column" style="width:40%;">
+<div class="callout callout-style-default callout-tip callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Tip
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><strong>🖐 Try it yourself</strong></p>
+<p>How many pairs would you need before a signed-rank test could reach p &lt; 0.05?</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb24"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a><span class="dv">2</span> <span class="sc">/</span> <span class="dv">2</span><span class="sc">^</span><span class="dv">5</span>    <span class="co"># 5 pairs</span></span>
+<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a><span class="dv">2</span> <span class="sc">/</span> <span class="dv">2</span><span class="sc">^</span><span class="dv">6</span>    <span class="co"># 6 pairs</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</div>
+<div class="callout callout-style-default callout-warning callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Warning
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><strong>⚠️ Where we go next</strong></p>
+<p>We have now seen what these tests cost. What we have <strong>not</strong> seen is what they buy you — because nothing about the pine data was broken.</p>
+<p>For that we need a dataset that is a genuine mess.</p>
+</div>
+</div>
+</div>
+</div>
+</section>
+<section id="part-2-a-dataset-where-the-assumptions-really-do-fail" class="level2 divider">
+<h2 class="divider anchored" data-anchor-id="part-2-a-dataset-where-the-assumptions-really-do-fail">Part 2 · A Dataset Where the Assumptions Really Do Fail</h2>
+</section>
+<section id="meet-the-lake-trout" class="level2">
+<h2 class="anchored" data-anchor-id="meet-the-lake-trout">Meet the lake trout</h2>
+<div class="columns">
+<div class="column" style="width:60%;">
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb25"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a>lt_df <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="st">"data/lake_trout.csv"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb26"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a>lt_df <span class="sc">%&gt;%</span> <span class="fu">group_by</span>(lake) <span class="sc">%&gt;%</span> <span class="fu">reframe</span>(<span class="fu">summary_stats</span>(mass_g))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code># A tibble: 6 × 7
+  lake            n  mean    sd    se ci_lower ci_upper
+  &lt;chr&gt;       &lt;int&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt;    &lt;dbl&gt;    &lt;dbl&gt;
+1 I8             91  857.  727.  76.2     705.    1008.
+2 Island Lake    10 3165  1617. 511.     2008.    4322.
+3 N 01          674  659.  395.  15.2     629.     689.
+4 NE 12         322  534.  520.  29.0     477.     591.
+5 NE 14         139  848.  508.  43.1     763.     933.
+6 Toolik        249  518.  373.  23.6     471.     564.</code></pre>
+</div>
+</div>
+<p><a href="data/lake_trout.csv" class="btn btn-primary" download="lake_trout.csv">📥 Lake trout data</a></p>
+</div><div class="column" style="width:40%;">
+<div class="callout callout-style-default callout-tip callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Tip
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><strong>🖐 Notice the design</strong></p>
+<p>Six lakes of trout: <code>sampling_site</code>, <code>species</code>, <code>length_mm</code>, <code>mass_g</code>, <code>lake</code>.</p>
+<p><strong>Everything from here on uses <code>mass_g</code>.</strong> Look hard at the <code>n</code> and <code>sd</code> columns for <strong>NE 12</strong> and <strong>Island Lake</strong> — 322 fish against 10, and very different spreads.</p>
+<p>That imbalance is the rest of the lecture. Where the pine data was clean, this is everything that can go wrong at once.</p>
+</div>
+</div>
+</div>
+</div>
+</section>
+<section id="part-3-assumptions-of-parametric-tests" class="level2 divider">
+<h2 class="divider anchored" data-anchor-id="part-3-assumptions-of-parametric-tests">Part 3 · Assumptions of Parametric Tests</h2>
 </section>
 <section id="parametric-vs.-non-parametric-tests" class="level2">
 <h2 class="anchored" data-anchor-id="parametric-vs.-non-parametric-tests">Parametric vs.&nbsp;Non-Parametric Tests</h2>
@@ -715,7 +1306,7 @@ Warning
 </div>
 </div><div class="column" style="width:40%;">
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="fu">shapiro.test</span>(ne12_data<span class="sc">$</span>mass_g)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb28"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a><span class="fu">shapiro.test</span>(ne12_data<span class="sc">$</span>mass_g)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>
     Shapiro-Wilk normality test
@@ -739,14 +1330,14 @@ W = 0.85148, p-value &lt; 2.2e-16</code></pre>
 </ul>
 </div><div class="column" style="width:40%;">
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>isl_ne12_df <span class="ot">&lt;-</span> lt_df <span class="sc">%&gt;%</span></span>
-<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(lake <span class="sc">%in%</span> <span class="fu">c</span>(<span class="st">"NE 12"</span>, <span class="st">"Island Lake"</span>)) <span class="sc">%&gt;%</span></span>
-<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="sc">!</span><span class="fu">is.na</span>(mass_g))</span>
-<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>isl_ne12_df <span class="sc">%&gt;%</span></span>
-<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(lake, mass_g)) <span class="sc">+</span></span>
-<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_boxplot</span>() <span class="sc">+</span></span>
-<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_regular</span>(<span class="at">base_size =</span> <span class="dv">10</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb30"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a>isl_ne12_df <span class="ot">&lt;-</span> lt_df <span class="sc">%&gt;%</span></span>
+<span id="cb30-2"><a href="#cb30-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(lake <span class="sc">%in%</span> <span class="fu">c</span>(<span class="st">"NE 12"</span>, <span class="st">"Island Lake"</span>)) <span class="sc">%&gt;%</span></span>
+<span id="cb30-3"><a href="#cb30-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="sc">!</span><span class="fu">is.na</span>(mass_g))</span>
+<span id="cb30-4"><a href="#cb30-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb30-5"><a href="#cb30-5" aria-hidden="true" tabindex="-1"></a>isl_ne12_df <span class="sc">%&gt;%</span></span>
+<span id="cb30-6"><a href="#cb30-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(lake, mass_g)) <span class="sc">+</span></span>
+<span id="cb30-7"><a href="#cb30-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_boxplot</span>() <span class="sc">+</span></span>
+<span id="cb30-8"><a href="#cb30-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_regular</span>(<span class="at">base_size =</span> <span class="dv">10</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output-display">
 <div>
 <figure class="figure">
@@ -756,7 +1347,7 @@ W = 0.85148, p-value &lt; 2.2e-16</code></pre>
 </div>
 </div>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="fu">leveneTest</span>(mass_g <span class="sc">~</span> <span class="fu">factor</span>(lake), <span class="at">data =</span> isl_ne12_df)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb31"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a><span class="fu">leveneTest</span>(mass_g <span class="sc">~</span> <span class="fu">factor</span>(lake), <span class="at">data =</span> isl_ne12_df)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>Levene's Test for Homogeneity of Variance (center = median)
        Df F value    Pr(&gt;F)    
@@ -806,8 +1397,8 @@ Warning
 </div>
 </div>
 </section>
-<section id="part-3-when-assumptions-fail" class="level2 divider">
-<h2 class="divider anchored" data-anchor-id="part-3-when-assumptions-fail">Part 3 · When Assumptions Fail</h2>
+<section id="part-4-when-assumptions-fail" class="level2 divider">
+<h2 class="divider anchored" data-anchor-id="part-4-when-assumptions-fail">Part 4 · When Assumptions Fail</h2>
 </section>
 <section id="alternative-tests-when-assumptions-fail" class="level2">
 <h2 class="anchored" data-anchor-id="alternative-tests-when-assumptions-fail">Alternative Tests When Assumptions Fail</h2>
@@ -866,12 +1457,12 @@ Warning
 <li>and many others</li>
 </ul>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>log_box_plot <span class="ot">&lt;-</span> isl_ne12_df <span class="sc">%&gt;%</span></span>
-<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(lake, <span class="fu">log10</span>(mass_g))) <span class="sc">+</span></span>
-<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_boxplot</span>() <span class="sc">+</span></span>
-<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_regular</span>(<span class="at">base_size =</span> <span class="dv">9</span>)</span>
-<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>ne12_island_box_plot <span class="sc">+</span> log_box_plot</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb33"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb33-1"><a href="#cb33-1" aria-hidden="true" tabindex="-1"></a>log_box_plot <span class="ot">&lt;-</span> isl_ne12_df <span class="sc">%&gt;%</span></span>
+<span id="cb33-2"><a href="#cb33-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(lake, <span class="fu">log10</span>(mass_g))) <span class="sc">+</span></span>
+<span id="cb33-3"><a href="#cb33-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_boxplot</span>() <span class="sc">+</span></span>
+<span id="cb33-4"><a href="#cb33-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_regular</span>(<span class="at">base_size =</span> <span class="dv">9</span>)</span>
+<span id="cb33-5"><a href="#cb33-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb33-6"><a href="#cb33-6" aria-hidden="true" tabindex="-1"></a>ne12_island_box_plot <span class="sc">+</span> log_box_plot</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output-display">
 <div>
 <figure class="figure">
@@ -892,8 +1483,130 @@ Warning
 </div>
 </div>
 </section>
-<section id="part-4-welchs-t-test-a-one-slide-refresher" class="level2 divider">
-<h2 class="divider anchored" data-anchor-id="part-4-welchs-t-test-a-one-slide-refresher">Part 4 · Welch’s T-Test — a One-Slide Refresher</h2>
+<section id="data-transformations-why-log" class="level2">
+<h2 class="anchored" data-anchor-id="data-transformations-why-log">Data Transformations — Why Log?</h2>
+<div class="columns">
+<div class="column" style="width:55%;">
+<p>Log isn’t a trick you try at random — it fixes a specific shape of problem:</p>
+<ul>
+<li>Right-skewed data (a long tail of large values) → <code>log10(x)</code></li>
+<li>Effects that are <strong>multiplicative</strong> rather than additive (doubling a value, not adding a fixed amount) → <code>log10(x)</code></li>
+<li>Ratio-scale ecological measurements — mass, concentration, population size, area — are almost always multiplicative</li>
+</ul>
+</div><div class="column" style="width:45%;">
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Note
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><strong>✅ The mechanism, in one line</strong></p>
+<p>A trout that is twice as heavy as another isn’t “500 g more” — it’s “2×.” Log turns that multiplicative relationship into an additive one, which is what a t-test’s equal-spread assumption expects. It compresses the right tail: 100 g → 1000 g and 1000 g → 10,000 g become the <em>same</em> distance, one log unit.</p>
+</div>
+</div>
+</div>
+</div>
+</section>
+<section id="data-transformations-beyond-log" class="level2">
+<h2 class="anchored" data-anchor-id="data-transformations-beyond-log">Data Transformations — Beyond Log</h2>
+<div class="columns">
+<div class="column" style="width:55%;">
+<p>Log is the one you will reach for most in ecology, but match the transform to the shape of the problem:</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 50%">
+<col style="width: 50%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Transformation</th>
+<th>Use when…</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>log10(x)</code></td>
+<td>right-skewed, multiplicative, ratio-scale data (mass, concentration, abundance)</td>
+</tr>
+<tr class="even">
+<td><code>sqrt(x)</code></td>
+<td>count data, moderate right skew (Poisson-like variance)</td>
+</tr>
+<tr class="odd">
+<td><code>asin(sqrt(x))</code></td>
+<td>proportions or percentages bounded 0–1</td>
+</tr>
+<tr class="even">
+<td><code>1/x</code></td>
+<td>rates, or extreme right skew that log doesn’t fix</td>
+</tr>
+<tr class="odd">
+<td>Box-Cox</td>
+<td>no obvious transform works — let the data pick the power</td>
+</tr>
+</tbody>
+</table>
+<p><strong>None of these are guaranteed to work.</strong> You check afterward, every time — that’s Part 5 of the worksheet, and it’s the whole point of the take-home.</p>
+</div><div class="column" style="width:45%;">
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb34"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a>sqrt_box_plot <span class="ot">&lt;-</span> isl_ne12_df <span class="sc">%&gt;%</span></span>
+<span id="cb34-2"><a href="#cb34-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(lake, <span class="fu">sqrt</span>(mass_g))) <span class="sc">+</span></span>
+<span id="cb34-3"><a href="#cb34-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_boxplot</span>() <span class="sc">+</span></span>
+<span id="cb34-4"><a href="#cb34-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_regular</span>(<span class="at">base_size =</span> <span class="dv">9</span>)</span>
+<span id="cb34-5"><a href="#cb34-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb34-6"><a href="#cb34-6" aria-hidden="true" tabindex="-1"></a>log_box_plot <span class="sc">+</span> sqrt_box_plot</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="nonparametric_t_tests_lecture_files/figure-html/nonparametric-t-tests-28-1.png" class="img-fluid figure-img" alt="Side-by-side boxplots comparing log10-transformed and square-root-transformed trout mass for Lake NE 12 and Island Lake." width="326"></p>
+</figure>
+</div>
+</div>
+</div>
+<p><code>sqrt()</code> narrows the spread less than <code>log10()</code> did here — this skew behaves more like a multiplicative effect than a count.</p>
+</div>
+</div>
+</section>
+<section id="a-transformation-can-fix-one-problem-not-the-other" class="level2">
+<h2 class="anchored" data-anchor-id="a-transformation-can-fix-one-problem-not-the-other">A Transformation Can Fix One Problem, Not the Other</h2>
+<div class="columns">
+<div class="column" style="width:55%;">
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb35"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb35-1"><a href="#cb35-1" aria-hidden="true" tabindex="-1"></a><span class="fu">leveneTest</span>(<span class="fu">log10</span>(mass_g) <span class="sc">~</span> <span class="fu">factor</span>(lake), <span class="at">data =</span> isl_ne12_df)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Levene's Test for Homogeneity of Variance (center = median)
+       Df F value    Pr(&gt;F)    
+group   1   11.77 0.0006784 ***
+      330                      
+---
+Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</code></pre>
+</div>
+</div>
+<p>Compare that to the Levene’s result on raw <code>mass_g</code> a few slides back — both fail. <strong>Normality improved with the log transform. Equal variance did not.</strong> Checking a transformation is not one pass/fail box — you re-test <em>every</em> assumption, separately, on the transformed variable.</p>
+</div><div class="column" style="width:45%;">
+<div class="callout callout-style-default callout-important callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Important
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><strong>⚠️ This is the take-home’s whole trap</strong></p>
+<p>The sagebrush cricket data works the same way: a transformation can help one assumption without rescuing the other. There is no single “correct” test hiding in the data — there’s a <strong>best-justified</strong> one. Check every assumption on the raw data, then again on any transformed version, before you decide.</p>
+</div>
+</div>
+</div>
+</div>
+</section>
+<section id="part-5-welchs-t-test-a-one-slide-refresher" class="level2 divider">
+<h2 class="divider anchored" data-anchor-id="part-5-welchs-t-test-a-one-slide-refresher">Part 5 · Welch’s T-Test — a One-Slide Refresher</h2>
 </section>
 <section id="welchs-t-test-why-it-exists-in-one-number" class="level2">
 <h2 class="anchored" data-anchor-id="welchs-t-test-why-it-exists-in-one-number">Welch’s t-Test — why it exists, in one number</h2>
@@ -901,8 +1614,8 @@ Warning
 <div class="column" style="width:55%;">
 <p>You met Welch’s last week: <strong>same t-statistic idea, separate variance estimates, fractional degrees of freedom.</strong> Nothing new to learn. What is new is <em>this dataset</em>, which shows you why it matters.</p>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Student's -- assumes equal variances</span></span>
-<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="fu">t.test</span>(mass_g <span class="sc">~</span> lake, <span class="at">data =</span> isl_ne12_df, <span class="at">var.equal =</span> <span class="cn">TRUE</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb37"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb37-1"><a href="#cb37-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Student's -- assumes equal variances</span></span>
+<span id="cb37-2"><a href="#cb37-2" aria-hidden="true" tabindex="-1"></a><span class="fu">t.test</span>(mass_g <span class="sc">~</span> lake, <span class="at">data =</span> isl_ne12_df, <span class="at">var.equal =</span> <span class="cn">TRUE</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>
     Two Sample t-test
@@ -918,8 +1631,8 @@ mean in group Island Lake       mean in group NE 12
 </div>
 </div>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Welch's -- does not</span></span>
-<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a><span class="fu">t.test</span>(mass_g <span class="sc">~</span> lake, <span class="at">data =</span> isl_ne12_df, <span class="at">var.equal =</span> <span class="cn">FALSE</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb39"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb39-1"><a href="#cb39-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Welch's -- does not</span></span>
+<span id="cb39-2"><a href="#cb39-2" aria-hidden="true" tabindex="-1"></a><span class="fu">t.test</span>(mass_g <span class="sc">~</span> lake, <span class="at">data =</span> isl_ne12_df, <span class="at">var.equal =</span> <span class="cn">FALSE</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>
     Welch Two Sample t-test
@@ -992,14 +1705,14 @@ Tip
 </div>
 </div>
 </section>
-<section id="part-5-rank-based-tests" class="level2 divider">
-<h2 class="divider anchored" data-anchor-id="part-5-rank-based-tests">Part 5 · Rank-Based Tests</h2>
+<section id="part-6-rank-based-tests" class="level2 divider">
+<h2 class="divider anchored" data-anchor-id="part-6-rank-based-tests">Part 6 · Rank-Based Tests</h2>
 </section>
-<section id="rank-based-tests" class="level2">
-<h2 class="anchored" data-anchor-id="rank-based-tests">Rank-Based Tests</h2>
+<section id="rank-based-tests-now-on-data-that-needs-them" class="level2">
+<h2 class="anchored" data-anchor-id="rank-based-tests-now-on-data-that-needs-them">Rank-Based Tests — now on data that needs them</h2>
 <div class="columns">
 <div class="column" style="width:60%;">
-<p>Rank-based tests: no assumptions about distribution (non-parametric).</p>
+<p>Same two tests you ran on the pine needles in Part 1 — ranks instead of measurements, no assumption about the distribution.</p>
 <ul>
 <li>Ranks of data: observations are assigned ranks; sums (and signs, for paired tests) of ranks for groups are compared</li>
 <li><strong>Mann-Whitney U test</strong> — common alternative to the independent-samples t-test</li>
@@ -1008,6 +1721,21 @@ Tip
 <li>Less power than parametric tests</li>
 <li>Best when normality can’t be met by transformation (weird distribution) or there are large outliers</li>
 </ul>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Note
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><strong>✅ The difference from Part 1</strong></p>
+<p>On the pine needles the rank test was a <strong>cost</strong> — we gave up power on data that was already well behaved.</p>
+<p>Here, NE 12 mass is non-normal at p &lt; 2.2 × 10⁻¹⁶ and full of outliers. There is nothing to give up. <strong>This</strong> is the case the test was built for.</p>
+</div>
+</div>
 </div><div class="column" style="width:40%;">
 <div class="callout callout-style-default callout-note callout-titled">
 <div class="callout-header d-flex align-content-center">
@@ -1031,9 +1759,9 @@ Note
 <div class="columns">
 <div class="column" style="width:60%;">
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb14"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>wilcox_test_result <span class="ot">&lt;-</span> <span class="fu">wilcox.test</span>(mass_g <span class="sc">~</span> lake, <span class="at">data =</span> isl_ne12_df)</span>
-<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>wilcox_test_result</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb41"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb41-1"><a href="#cb41-1" aria-hidden="true" tabindex="-1"></a>wilcox_test_result <span class="ot">&lt;-</span> <span class="fu">wilcox.test</span>(mass_g <span class="sc">~</span> lake, <span class="at">data =</span> isl_ne12_df)</span>
+<span id="cb41-2"><a href="#cb41-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-3"><a href="#cb41-3" aria-hidden="true" tabindex="-1"></a>wilcox_test_result</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>
     Wilcoxon rank sum test with continuity correction
@@ -1054,218 +1782,16 @@ Tip
 </div>
 </div>
 <div class="callout-body-container callout-body">
-<p><strong>🖐 Notice</strong></p>
-<p>The test statistic is <code>W</code>, not <code>t</code> — a signal you’re reading rank-based test output, not a t-test.</p>
+<p><strong>🖐 <code>W</code> again, and no “exact” this time</strong></p>
+<p>The statistic is <code>W</code>, not <code>t</code> — rank-based output, as in Part 1.</p>
+<p>But notice what R <em>doesn’t</em> say: with 332 fish and plenty of tied masses it cannot enumerate every arrangement, so this is the <strong>normal approximation</strong>, not an exact test. At this sample size that is fine — the floor problem that crippled our four trees does not exist here.</p>
 </div>
 </div>
 </div>
 </div>
 </section>
-<section id="part-5b-back-to-our-pine-needles" class="level2 divider">
-<h2 class="divider anchored" data-anchor-id="part-5b-back-to-our-pine-needles">Part 5b · Back to Our Pine Needles</h2>
-</section>
-<section id="the-same-question-the-non-parametric-way" class="level2">
-<h2 class="anchored" data-anchor-id="the-same-question-the-non-parametric-way">The same question, the non-parametric way</h2>
-<div class="columns">
-<div class="column" style="width:60%;">
-<p>Last week we tested our own needle data two ways. Let’s run the rank-based versions of <strong>exactly the same two comparisons</strong> and see what changes.</p>
-<div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb16"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a>pine_df <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="st">"data/pine_data.csv"</span>)</span>
-<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a><span class="co"># same two-stage summary as last week: one value per tree per side</span></span>
-<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>p_df <span class="ot">&lt;-</span> pine_df <span class="sc">%&gt;%</span></span>
-<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(team, side) <span class="sc">%&gt;%</span></span>
-<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">needle_length_mm =</span> <span class="fu">mean</span>(needle_length_mm, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
-<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a>            <span class="at">.groups =</span> <span class="st">"drop"</span>)</span>
-<span id="cb16-8"><a href="#cb16-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb16-9"><a href="#cb16-9" aria-hidden="true" tabindex="-1"></a>p_wide_df <span class="ot">&lt;-</span> p_df <span class="sc">%&gt;%</span></span>
-<span id="cb16-10"><a href="#cb16-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_wider</span>(<span class="at">names_from =</span> side, <span class="at">values_from =</span> needle_length_mm)</span>
-<span id="cb16-11"><a href="#cb16-11" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb16-12"><a href="#cb16-12" aria-hidden="true" tabindex="-1"></a>p_wide_df</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="cell-output cell-output-stdout">
-<pre><code># A tibble: 4 × 3
-  team       shady sunny
-  &lt;chr&gt;      &lt;dbl&gt; &lt;dbl&gt;
-1 botany      16.1  17.3
-2 grace_jace  15.4  15.5
-3 one         13.2  14.2
-4 waterbugs   11.7  13.8</code></pre>
-</div>
-</div>
-<p><a href="data/pine_data.csv" class="btn btn-primary" download="pine_data.csv">📥 Pine needle data</a></p>
-</div><div class="column" style="width:40%;">
-<div class="callout callout-style-default callout-note callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-Note
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p><strong>✅ Reminder</strong></p>
-<p>4 teams, 4 trees, both sides of each tree. The data are <strong>paired</strong> by design.</p>
-</div>
-</div>
-</div>
-</div>
-</section>
-<section id="running-both-rank-based-tests" class="level2">
-<h2 class="anchored" data-anchor-id="running-both-rank-based-tests">Running both rank-based tests</h2>
-<div class="columns">
-<div class="column" style="width:60%;">
-<div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb18"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Unpaired: Mann-Whitney U  (the t-test's two-sample partner)</span></span>
-<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a><span class="fu">wilcox.test</span>(needle_length_mm <span class="sc">~</span> side, <span class="at">data =</span> p_df)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="cell-output cell-output-stdout">
-<pre><code>
-    Wilcoxon rank sum exact test
-
-data:  needle_length_mm by side
-W = 5, p-value = 0.4857
-alternative hypothesis: true location shift is not equal to 0</code></pre>
-</div>
-</div>
-<div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb20"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Paired: Wilcoxon signed-rank  (the paired t-test's partner)</span></span>
-<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a><span class="fu">wilcox.test</span>(p_wide_df<span class="sc">$</span>shady, p_wide_df<span class="sc">$</span>sunny, <span class="at">paired =</span> <span class="cn">TRUE</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="cell-output cell-output-stdout">
-<pre><code>
-    Wilcoxon signed rank exact test
-
-data:  p_wide_df$shady and p_wide_df$sunny
-V = 0, p-value = 0.125
-alternative hypothesis: true location shift is not equal to 0</code></pre>
-</div>
-</div>
-</div><div class="column" style="width:40%;">
-<div class="callout callout-style-default callout-tip callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-Tip
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p><strong>🖐 Notice <code>V = 0</code></strong></p>
-<p>The signed-rank statistic is <strong>zero</strong> — meaning <em>every single tree</em> moved in the same direction. There is no arrangement of these four trees that would look more consistent.</p>
-<p>Notice too that R says <strong>“exact test”</strong> for both. With no tied values it enumerates every possible arrangement rather than approximating. Hold on to that word — the next slide explains why it matters.</p>
-</div>
-</div>
-</div>
-</div>
-</section>
-<section id="same-answer-less-power" class="level2">
-<h2 class="anchored" data-anchor-id="same-answer-less-power">Same answer, less power</h2>
-<div class="columns">
-<div class="column" style="width:60%;">
-<table class="caption-top table">
-<colgroup>
-<col style="width: 33%">
-<col style="width: 33%">
-<col style="width: 33%">
-</colgroup>
-<thead>
-<tr class="header">
-<th>Comparison</th>
-<th>Parametric</th>
-<th>Non-parametric</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td>Unpaired (2 groups)</td>
-<td>t-test <strong>p = 0.425</strong></td>
-<td>Mann-Whitney <strong>p = 0.486</strong></td>
-</tr>
-<tr class="even">
-<td>Paired (4 trees)</td>
-<td>paired t <strong>p = 0.072</strong></td>
-<td>signed-rank <strong>p = 0.125</strong></td>
-</tr>
-</tbody>
-</table>
-<p><strong>Both methods tell the same story:</strong></p>
-<ul>
-<li>the unpaired comparison finds nothing</li>
-<li>the paired comparison is far more sensitive</li>
-<li>the direction is identical — shady needles shorter</li>
-</ul>
-<p><strong>But the rank test costs you.</strong> In both rows the non-parametric p-value is larger. That is the price of throwing away the actual measurements and keeping only their order.</p>
-</div><div class="column" style="width:40%;">
-<div class="callout callout-style-default callout-important callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-Important
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p><strong>⚠️ At n = 4, the signed-rank test hits a wall</strong></p>
-<p>With 4 pairs there are only 2⁴ = <strong>16</strong> possible arrangements of plus and minus signs. The most extreme possible result — all four the same way, which is exactly what we got — has a two-sided p of 2/16 = <strong>0.125</strong>.</p>
-<p>So with four trees, a Wilcoxon signed-rank test <strong>can never return a p-value below 0.125</strong>, no matter how enormous the effect.</p>
-<div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb22"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="dv">2</span> <span class="sc">/</span> <span class="dv">2</span><span class="sc">^</span><span class="dv">4</span>     <span class="co"># smallest possible two-sided p, 4 pairs</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="cell-output cell-output-stdout">
-<pre><code>[1] 0.125</code></pre>
-</div>
-</div>
-<p>The test did not fail to find our effect. It was <strong>arithmetically incapable</strong> of declaring it significant.</p>
-</div>
-</div>
-</div>
-</div>
-</section>
-<section id="what-that-means-in-practice" class="level2">
-<h2 class="anchored" data-anchor-id="what-that-means-in-practice">What that means in practice</h2>
-<div class="columns">
-<div class="column" style="width:60%;">
-<ul>
-<li>Non-parametric tests are the right call when normality is genuinely broken and cannot be fixed</li>
-<li>But they are <strong>not free</strong>, and they are <strong>not a safe default</strong></li>
-<li>At small n they can be so blunt that no result could ever reach significance — check the floor <strong>before</strong> you run one</li>
-</ul>
-<div class="callout callout-style-default callout-note callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-Note
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p><strong>✅ Key idea</strong></p>
-<p>Choose the test that matches your data’s distribution, not the one that feels safest. For our four trees, the <em>parametric</em> paired t-test — whose assumptions we checked and could not reject — is the more honest and more informative choice.</p>
-</div>
-</div>
-</div><div class="column" style="width:40%;">
-<div class="callout callout-style-default callout-tip callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-Tip
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p><strong>🖐 Try it yourself</strong></p>
-<p>How many pairs would you need before a signed-rank test could reach p &lt; 0.05?</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb24"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a><span class="dv">2</span> <span class="sc">/</span> <span class="dv">2</span><span class="sc">^</span><span class="dv">5</span>    <span class="co"># 5 pairs</span></span>
-<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a><span class="dv">2</span> <span class="sc">/</span> <span class="dv">2</span><span class="sc">^</span><span class="dv">6</span>    <span class="co"># 6 pairs</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-</div>
-</div>
-</div>
-</div>
-</section>
-<section id="part-6-permutation-tests" class="level2 divider">
-<h2 class="divider anchored" data-anchor-id="part-6-permutation-tests">Part 6 · Permutation Tests</h2>
+<section id="part-7-permutation-tests" class="level2 divider">
+<h2 class="divider anchored" data-anchor-id="part-7-permutation-tests">Part 7 · Permutation Tests</h2>
 </section>
 <section id="permutation-tests-concept" class="level2">
 <h2 class="anchored" data-anchor-id="permutation-tests-concept">Permutation Tests — Concept</h2>
@@ -1326,20 +1852,20 @@ Tip
 <div class="column" style="width:60%;">
 <p>In R, using the <code>perm</code> package. Assumptions: both groups have a similar distribution; equal variance.</p>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb25"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(perm)</span>
-<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a><span class="co"># Balance the design: take 10 NE 12 fish, keep all of Island Lake</span></span>
-<span id="cb25-4"><a href="#cb25-4" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">123</span>)</span>
-<span id="cb25-5"><a href="#cb25-5" aria-hidden="true" tabindex="-1"></a>perm_df <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(</span>
-<span id="cb25-6"><a href="#cb25-6" aria-hidden="true" tabindex="-1"></a>  isl_ne12_df <span class="sc">%&gt;%</span></span>
-<span id="cb25-7"><a href="#cb25-7" aria-hidden="true" tabindex="-1"></a>    <span class="fu">filter</span>(lake <span class="sc">==</span> <span class="st">"NE 12"</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb25-8"><a href="#cb25-8" aria-hidden="true" tabindex="-1"></a>    <span class="fu">slice_sample</span>(<span class="at">n =</span> <span class="dv">10</span>),</span>
-<span id="cb25-9"><a href="#cb25-9" aria-hidden="true" tabindex="-1"></a>  isl_ne12_df <span class="sc">%&gt;%</span></span>
-<span id="cb25-10"><a href="#cb25-10" aria-hidden="true" tabindex="-1"></a>    <span class="fu">filter</span>(lake <span class="sc">==</span> <span class="st">"Island Lake"</span>)</span>
-<span id="cb25-11"><a href="#cb25-11" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb25-12"><a href="#cb25-12" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb25-13"><a href="#cb25-13" aria-hidden="true" tabindex="-1"></a><span class="co"># The difference the test is about</span></span>
-<span id="cb25-14"><a href="#cb25-14" aria-hidden="true" tabindex="-1"></a>perm_df <span class="sc">%&gt;%</span> <span class="fu">group_by</span>(lake) <span class="sc">%&gt;%</span> <span class="fu">reframe</span>(<span class="fu">summary_stats</span>(mass_g))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb43"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb43-1"><a href="#cb43-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(perm)</span>
+<span id="cb43-2"><a href="#cb43-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb43-3"><a href="#cb43-3" aria-hidden="true" tabindex="-1"></a><span class="co"># Balance the design: take 10 NE 12 fish, keep all of Island Lake</span></span>
+<span id="cb43-4"><a href="#cb43-4" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">123</span>)</span>
+<span id="cb43-5"><a href="#cb43-5" aria-hidden="true" tabindex="-1"></a>perm_df <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(</span>
+<span id="cb43-6"><a href="#cb43-6" aria-hidden="true" tabindex="-1"></a>  isl_ne12_df <span class="sc">%&gt;%</span></span>
+<span id="cb43-7"><a href="#cb43-7" aria-hidden="true" tabindex="-1"></a>    <span class="fu">filter</span>(lake <span class="sc">==</span> <span class="st">"NE 12"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb43-8"><a href="#cb43-8" aria-hidden="true" tabindex="-1"></a>    <span class="fu">slice_sample</span>(<span class="at">n =</span> <span class="dv">10</span>),</span>
+<span id="cb43-9"><a href="#cb43-9" aria-hidden="true" tabindex="-1"></a>  isl_ne12_df <span class="sc">%&gt;%</span></span>
+<span id="cb43-10"><a href="#cb43-10" aria-hidden="true" tabindex="-1"></a>    <span class="fu">filter</span>(lake <span class="sc">==</span> <span class="st">"Island Lake"</span>)</span>
+<span id="cb43-11"><a href="#cb43-11" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb43-12"><a href="#cb43-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb43-13"><a href="#cb43-13" aria-hidden="true" tabindex="-1"></a><span class="co"># The difference the test is about</span></span>
+<span id="cb43-14"><a href="#cb43-14" aria-hidden="true" tabindex="-1"></a>perm_df <span class="sc">%&gt;%</span> <span class="fu">group_by</span>(lake) <span class="sc">%&gt;%</span> <span class="fu">reframe</span>(<span class="fu">summary_stats</span>(mass_g))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code># A tibble: 2 × 7
   lake            n  mean    sd    se ci_lower ci_upper
@@ -1350,11 +1876,11 @@ Tip
 </div>
 </div><div class="column" style="width:40%;">
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb27"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a><span class="fu">permTS</span>(mass_g <span class="sc">~</span> lake,</span>
-<span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a>       <span class="at">data =</span> perm_df,</span>
-<span id="cb27-3"><a href="#cb27-3" aria-hidden="true" tabindex="-1"></a>       <span class="at">alternative =</span> <span class="st">"two.sided"</span>,</span>
-<span id="cb27-4"><a href="#cb27-4" aria-hidden="true" tabindex="-1"></a>       <span class="at">method =</span> <span class="st">"exact.mc"</span>,</span>
-<span id="cb27-5"><a href="#cb27-5" aria-hidden="true" tabindex="-1"></a>       <span class="at">control =</span> <span class="fu">permControl</span>(<span class="at">nmc =</span> <span class="dv">10000</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb45"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb45-1"><a href="#cb45-1" aria-hidden="true" tabindex="-1"></a><span class="fu">permTS</span>(mass_g <span class="sc">~</span> lake,</span>
+<span id="cb45-2"><a href="#cb45-2" aria-hidden="true" tabindex="-1"></a>       <span class="at">data =</span> perm_df,</span>
+<span id="cb45-3"><a href="#cb45-3" aria-hidden="true" tabindex="-1"></a>       <span class="at">alternative =</span> <span class="st">"two.sided"</span>,</span>
+<span id="cb45-4"><a href="#cb45-4" aria-hidden="true" tabindex="-1"></a>       <span class="at">method =</span> <span class="st">"exact.mc"</span>,</span>
+<span id="cb45-5"><a href="#cb45-5" aria-hidden="true" tabindex="-1"></a>       <span class="at">control =</span> <span class="fu">permControl</span>(<span class="at">nmc =</span> <span class="dv">10000</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>
     Exact Permutation Test Estimated by Monte Carlo
@@ -1374,8 +1900,8 @@ p-value estimated from 10000 Monte Carlo replications
 </div>
 </div>
 </section>
-<section id="part-7-summary" class="level2 divider">
-<h2 class="divider anchored" data-anchor-id="part-7-summary">Part 7 · Summary</h2>
+<section id="part-8-summary" class="level2 divider">
+<h2 class="divider anchored" data-anchor-id="part-8-summary">Part 8 · Summary</h2>
 </section>
 <section id="summary-testing-assumptions" class="level2">
 <h2 class="anchored" data-anchor-id="summary-testing-assumptions">Summary — Testing Assumptions</h2>
@@ -1404,6 +1930,52 @@ Note
 <li>Key to do <em>every time</em></li>
 <li>Should be acknowledged in the manuscript</li>
 </ul>
+</div>
+</div>
+</div>
+</div>
+</section>
+<section id="summary-effect-size" class="level2">
+<h2 class="anchored" data-anchor-id="summary-effect-size">Summary — Effect Size</h2>
+<div class="columns">
+<div class="column" style="width:60%;">
+<p><strong>Always report an effect size next to your p-value.</strong></p>
+<ul>
+<li><strong>Cohen’s d</strong> = the difference between groups, in standard deviations — unitless, and comparable across studies</li>
+<li><strong>t = d × √n</strong>, so a p-value confounds <em>how big the effect is</em> with <em>how hard you looked</em></li>
+<li>A <strong>confidence interval on d</strong> says what a bare “n.s.” never can: whether you found nothing, or found something you could not pin down</li>
+<li>Effect size is also the input to a power analysis — next week</li>
+</ul>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Note
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><strong>✅ On our four trees</strong></p>
+<p>Paired <strong>d = −1.36</strong>, CI [−2.74, 0.10], p = 0.072. A large effect, imprecisely measured. Reporting only “p = 0.072, n.s.” would have thrown that away.</p>
+</div>
+</div>
+</div><div class="column" style="width:40%;">
+<div class="callout callout-style-default callout-tip callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Tip
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><strong>🖐 In a results sentence</strong></p>
+<blockquote class="blockquote">
+<p>Needles on the shady side were 1.09 mm shorter than on the sunny side (paired <em>t</em>₃ = −2.72, <em>p</em> = 0.072, <em>d</em> = −1.36, 95% CI [−2.74, 0.10]).</p>
+</blockquote>
+<p>Every number there does work the others cannot.</p>
 </div>
 </div>
 </div>
@@ -1455,7 +2027,7 @@ Tip
 </ul>
 </div><div class="column" style="width:50%;">
 <p><strong>2. Welch’s t-test</strong></p>
-<p>Covered in full in the <strong>T-Tests</strong> lecture; the one-slide refresher in Part 4 is all we needed today.</p>
+<p>Covered in full in the <strong>T-Tests</strong> lecture; the one-slide refresher in Part 5 is all we needed today.</p>
 <ul>
 <li>Robust to unequal variances <strong>and</strong> unequal n — which is exactly our NE 12 vs.&nbsp;Island Lake case</li>
 <li>Still <strong>parametric</strong>: it fixes the variance assumption, not the normality one</li>
@@ -1481,7 +2053,7 @@ Tip
 <li>Less statistical power than parametric tests</li>
 <li>Still assumes similar distributions and approximately equal variance</li>
 <li>Tests median differences rather than mean differences</li>
-<li><strong>At small n there is a hard floor on the p-value</strong> — with 4 pairs a signed-rank test cannot go below 0.125 (see Part 5b)</li>
+<li><strong>At small n there is a hard floor on the p-value</strong> — with 4 pairs a signed-rank test cannot go below 0.125 (see Part 1)</li>
 </ul>
 </div><div class="column" style="width:50%;">
 <p><strong>4. Permutation tests</strong></p>
@@ -1521,6 +2093,36 @@ Note
 <div class="callout-body-container callout-body">
 <p><strong>✅ Key idea</strong></p>
 <p>Standard t-test → Welch’s → Mann-Whitney/Permutation isn’t a strict ladder of “better” tests — each answers a slightly different question (means vs.&nbsp;medians) under different assumptions. Pick based on what your data actually looks like.</p>
+</div>
+</div>
+</div>
+</div>
+</section>
+<section id="looking-ahead-the-take-home" class="level2">
+<h2 class="anchored" data-anchor-id="looking-ahead-the-take-home">Looking Ahead — The Take-Home</h2>
+<div class="columns">
+<div class="column" style="width:60%;">
+<p>Part 8 of the worksheet (sagebrush crickets, due before Study Design &amp; Sampling) hands you a new dataset and asks <strong>you</strong> to run the whole decision process from today:</p>
+<ol type="1">
+<li>Check normality and equal variance on the raw data</li>
+<li>Try a transformation if the raw data doesn’t pass</li>
+<li>Check normality and equal variance <strong>again</strong>, on the transformed data — don’t assume it worked</li>
+<li>Pick a test, justify the pick, and report it properly</li>
+</ol>
+<p>There is no lecture slide that tells you the answer this time.</p>
+</div><div class="column" style="width:40%;">
+<div class="callout callout-style-default callout-tip callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Tip
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><strong>🖐 Remember from today</strong></p>
+<p><code>log10()</code> fixed normality for the lake trout but <strong>not</strong> equal variance. Expect the crickets to behave similarly — a transformation earning partial credit is a completely normal outcome, not a sign you did something wrong.</p>
 </div>
 </div>
 </div>

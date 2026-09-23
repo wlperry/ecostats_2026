@@ -268,7 +268,7 @@ There is **no new notation** inside it. It takes a column of numbers, calls it `
 :::::
 :::::::
 
-## The Same Two Plots, After Averaging
+## The Same Two Plots, After Averaging — Boxplot
 
 ::::: columns
 ::: {.column width="55%"}
@@ -283,19 +283,6 @@ box_plot <- p_df %>%
   theme_regular(base_size = 10)
 
 box_plot
-```
-
-```{r t-tests-08}
-#| fig-width: 3.2
-#| fig-height: 2.8
-#| fig-alt: "Point and error bar plot of mean needle length plus or minus one standard error for the shady and sunny sides, computed from the four tree-side means per side, showing error bars about twice as long as the raw-data version."
-mean_se_plot <- p_df %>%
-  ggplot(aes(side, needle_length_mm)) +
-  stat_summary(fun = mean, geom = "point") +
-  stat_summary(fun.data = mean_se, geom = "errorbar", width = 0.2) +
-  theme_regular(base_size = 10)
-
-mean_se_plot
 ```
 :::
 
@@ -315,7 +302,28 @@ Averaging changed the **means not at all** and **doubled the standard errors**.
 
 That is the whole cost of pseudoreplication, in one table. The raw plot was not more precise — it was just wrong about how much we knew.
 :::
+:::::
+:::::
 
+## The Same Two Plots, After Averaging — Mean ± SE
+
+::::: columns
+::: {.column width="55%"}
+```{r t-tests-08}
+#| fig-width: 3.2
+#| fig-height: 2.8
+#| fig-alt: "Point and error bar plot of mean needle length plus or minus one standard error for the shady and sunny sides, computed from the four tree-side means per side, showing error bars about twice as long as the raw-data version."
+mean_se_plot <- p_df %>%
+  ggplot(aes(side, needle_length_mm)) +
+  stat_summary(fun = mean, geom = "point") +
+  stat_summary(fun.data = mean_se, geom = "errorbar", width = 0.2) +
+  theme_regular(base_size = 10)
+
+mean_se_plot
+```
+:::
+
+::::: {.column width="45%"}
 ::: callout-tip
 **🖐 No jitter needed now**
 
@@ -614,7 +622,23 @@ Whitlock & Schluter, Ch. 11, covers the one-sample t-test as the simplest hypoth
 # whose normality we check -- not the two sides pooled.
 qqPlot(shady_df$needle_length_mm)
 ```
+:::
 
+::::: {.column width="45%"}
+::: callout-tip
+**🖐 Notice**
+
+Points that hug the line support normality; points that curve away — especially in the tails — are a warning sign.
+
+`qqPlot()` from **car** adds a shaded confidence envelope automatically.
+:::
+:::::
+:::::::
+
+## Checking Normality — QQ Plot, Base R
+
+::::::: columns
+::: {.column width="55%"}
 ```{r t-tests-13}
 #| fig-width: 3
 #| fig-height: 2.8
@@ -627,11 +651,9 @@ qqline(shady_df$needle_length_mm)
 
 ::::: {.column width="45%"}
 ::: callout-tip
-**🖐 Notice**
+**🖐 Same idea, no package**
 
-Points that hug the line support normality; points that curve away — especially in the tails — are a warning sign.
-
-`qqPlot()` from **car** adds a shaded confidence envelope; base R's `qqnorm()` + `qqline()` gives you the same picture without it. Either is fine.
+`qqnorm()` + `qqline()` gives you the same picture as `qqPlot()`, just without the shaded envelope. Either is fine.
 :::
 
 ::: callout-warning
@@ -776,15 +798,6 @@ qt(0.95,  df = 3)   # one-tailed, 5% in one tail
 ```
 
 The one-tailed cutoff (**2.353**) is *closer to zero* than the two-tailed cutoff (**3.182**). That is the extra power — a smaller t will do.
-
-But run it the other way and watch what happens:
-
-```{r t-tests-19}
-t.test(shady_df$needle_length_mm, mu = 15,
-       alternative = "greater")
-```
-
-Same data, same t = −0.87, and now **p = 0.776**.
 :::
 
 ::::: {.column width="45%"}
@@ -795,7 +808,24 @@ You must pick the direction **before you see the data**, on biological grounds, 
 
 Choosing the tail after looking at your means is not a one-tailed test. It is a two-tailed test with the p-value secretly halved.
 :::
+:::::
+:::::::
 
+## One-Tailed, the Wrong Direction
+
+::::::: columns
+::: {.column width="55%"}
+But run the same one-tailed test the other way and watch what happens:
+
+```{r t-tests-19}
+t.test(shady_df$needle_length_mm, mu = 15,
+       alternative = "greater")
+```
+
+Same data, same t = −0.87, and now **p = 0.776**.
+:::
+
+::::: {.column width="45%"}
 ::: callout-tip
 **🖐 When is one-tailed defensible?**
 
@@ -1180,16 +1210,6 @@ Why?
 
 - The **two-sample** test throws the pairing away. Tree-to-tree variation (some teams' trees just have longer needles) lands in the *noise*, swamping the signal.
 - The **paired** test looks only at the shady − sunny difference *within each tree*, so tree-to-tree variation cancels out entirely.
-
-::: callout-important
-**And notice it did that on half the degrees of freedom**
-
-3 instead of 6 — because it is working with 4 differences, not 8 values. A smaller df makes significance *harder* to reach. It still won by a mile, because the noise it removed mattered far more than the df it gave up.
-:::
-
-::: callout-note
-**These data are paired by design** — each team measured both sides of the *same* tree. The two-sample test is not just less powerful, it is answering a question our design never asked.
-:::
 :::::
 
 ::: {.column width="45%"}
@@ -1201,6 +1221,24 @@ slope_plot
 ```
 
 Each line is one tree. All four shift the same way — that consistency is exactly what the paired test measures and the two-sample test cannot see.
+:::
+:::::::
+
+## Same Data, Two Different Answers — Why the Design Matters
+
+::::::: columns
+::: {.column width="50%"}
+::: callout-important
+**And notice it did that on half the degrees of freedom**
+
+3 instead of 6 — because it is working with 4 differences, not 8 values. A smaller df makes significance *harder* to reach. It still won by a mile, because the noise it removed mattered far more than the df it gave up.
+:::
+:::
+
+::: {.column width="50%"}
+::: callout-note
+**These data are paired by design** — each team measured both sides of the *same* tree. The two-sample test is not just less powerful, it is answering a question our design never asked.
+:::
 :::
 :::::::
 
@@ -1216,7 +1254,23 @@ diff_df <- p_wide_df %>%
 
 diff_df
 ```
+:::
 
+::::: {.column width="45%"}
+::: callout-tip
+**🖐 Each tree is its own control**
+
+The shady side accounts for everything about that particular tree — its genetics, its soil, its water, its team's measuring technique. Subtracting removes all of it at once, and what is left is the effect of *sun*.
+
+This is the same logic as a before/after design, and it is the seed of the blocked designs you will meet in ANOVA.
+:::
+:::::
+:::::::
+
+## ✅ A Paired Test *Is* a One-Sample Test — Same Numbers
+
+::::::: columns
+::: {.column width="55%"}
 Now throw away the pairing language entirely and run a plain **one-sample t-test on those 4 differences, against μ = 0**:
 
 ```{r t-tests-30}
@@ -1233,14 +1287,6 @@ diff_model
 `t.test(sunny, shady, paired = TRUE)` and `t.test(sunny - shady, mu = 0)` are **the same test**. `paired = TRUE` is nothing more than a convenience that does the subtraction for you.
 
 That is why the paired df is **n~pairs~ − 1 = 3** and not n₁ + n₂ − 2 = 6: once you subtract, you genuinely only have **four numbers**. A one-sample test on four numbers has 3 df. Always.
-:::
-
-::: callout-tip
-**🖐 Each tree is its own control**
-
-The shady side accounts for everything about that particular tree — its genetics, its soil, its water, its team's measuring technique. Subtracting removes all of it at once, and what is left is the effect of *sun*.
-
-This is the same logic as a before/after design, and it is the seed of the blocked designs you will meet in ANOVA.
 :::
 :::::
 :::::::

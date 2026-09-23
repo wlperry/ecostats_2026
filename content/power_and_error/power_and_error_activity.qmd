@@ -3,7 +3,7 @@ order: 8
 week: 5
 title: "Activity: Power and Type I & II Error"
 subtitle: "Power and error rates"
-description: "Hands-on activity: p-values and errors, statistical power, and a publication-quality mean ± SE plot with custom colors, on the class pine needle dataset."
+description: "Hands-on activity: p-values and errors, Cohen's d for paired and unpaired designs, statistical power and required sample size, and a publication-quality mean ± SE plot with custom colors, on the class pine needle dataset."
 author: "Bill Perry"
 metadata-files:
   - ../../_templates/activities.yml
@@ -54,6 +54,7 @@ screen against this table before you write any other code.
 # ── Part 1.1 · Setup ────────────────────────────────────────────────────
 library(patchwork)
 library(car)          # For diagnostic tests
+library(effectsize)   # cohens_d()
 library(tidyverse)    # For data manipulation and visualization
 
 pine_df <- read_csv("data/pine_data.csv")
@@ -138,7 +139,7 @@ ggplot(p_df, aes(x = needle_length_mm, fill = side)) +
   facet_wrap("side", ncol = 1)
 ```
 
-**▶ Run this** — the effect size (difference in means):
+**▶ Run this** — the raw difference in means:
 
 ``` r
 # ── Part 3.3 · Exploratory Data Analysis and Effect Size ────────────────
@@ -150,11 +151,47 @@ pine_summary_df %>%
 
 `________________________`
 
+A raw difference in millimetres only means something to someone who already knows how variable pine needles are. **Cohen's d** fixes that by dividing the difference by the standard deviation, so the result is unitless and comparable across studies. You met it in the Non-Parametric worksheet — here is where it starts doing real work.
+
+**▶ Run this** — effect size, both ways:
+
+``` r
+# ── Part 3.4 · Cohen's d, unpaired and paired ───────────────────────────
+p_wide_df <- p_df %>%
+  pivot_wider(names_from = side, values_from = needle_length_mm)
+
+# UNPAIRED: difference in means over the POOLED sd
+cohens_d(needle_length_mm ~ side, data = p_df)
+
+# PAIRED: mean of the differences over the sd OF THE DIFFERENCES
+diffs <- p_wide_df$shady - p_wide_df$sunny
+
+mean(diffs) / sd(diffs)
+
+cohens_d(p_wide_df$shady, p_wide_df$sunny, paired = TRUE)
+```
+
+✏️ **Your turn:** Record both, and note how far apart they are.
+
+```         
+unpaired d = ______        paired d = ______
+```
+
+✏️ **Your turn:** Same four trees, same needles, same measurements — so why is the paired effect size more than twice the unpaired one? (Hint: look at what each one divides by.)
+
+`________________________`
+
+::: callout-important
+**⚠️ Hold on to the paired number**
+
+`d = -1.36` is the same value you calculated in the Non-Parametric worksheet. Everything in Part 5 runs off it.
+:::
+
 ::: callout-tip
 **🚀 If you finish early:** Recompute `pine_summary_df`, but group by `team` (the field team, one tree each) instead of `side`. Do all teams show a similar mean and spread, or does one team look different?
 
 ``` r
-# ── Part 3.4 · Exploratory Data Analysis and Effect Size ────────────────
+# ── Part 3.5 · Exploratory Data Analysis and Effect Size ────────────────
 # Write your code in the R script:
 ```
 :::
@@ -200,55 +237,80 @@ Decision: ________________________
 
 Statistical power is the probability of detecting a true effect — rejecting H₀ when it is actually false. A power analysis is typically done to determine the required sample size before a study, to evaluate whether a completed study's sample size was adequate, or to find the minimum detectable effect size for a given sample. **80% power is generally considered acceptable.**
 
-$$s_p = \sqrt{\frac{(n_1 - 1)s_1^2 + (n_2 - 1)s_2^2}{n_1 + n_2 - 2}}$$
+`power.t.test()` takes the effect size you just calculated. Feed it `delta = d` and `sd = 1` — because `d` is *already* expressed in standard deviations, the standard deviation is 1 by definition.
 
-**▶ Run this** — power to detect a 1mm difference:
+**▶ Run this** — power for the **unpaired** design:
 
 ``` r
-# ── Part 5.1 · Statistical Power ────────────────────────────────────────
-side_diff <- 1
+# ── Part 5.1 · Power, unpaired ──────────────────────────────────────────
+d_unpaired <- abs(mean(shady_df$needle_length_mm) -
+                  mean(sunny_df$needle_length_mm)) /
+              sqrt((var(shady_df$needle_length_mm) * 3 +
+                    var(sunny_df$needle_length_mm) * 3) / 6)
 
-sunny_n <- nrow(sunny_df)
-shady_n <- nrow(shady_df)
-
-sun_sd_pooled <- sqrt((var(sunny_df$needle_length_mm) * (sunny_n - 1) +
-                      var(shady_df$needle_length_mm) * (shady_n - 1)) /
-                      (sunny_n + shady_n - 2))
-
-sun_effect_size <- side_diff / sun_sd_pooled
-sun_deg_free <- sunny_n + shady_n - 2
-sun_alpha <- 0.05
-
-sun_power <- power.t.test(n = min(sunny_n, shady_n),
-                         delta = side_diff,        # Raw difference, not effect size
-                         sd = sun_sd_pooled,        # Use pooled SD
-                         sig.level = sun_alpha,
-                         type = "two.sample",
-                         alternative = "two.sided")
-
-print("Sample sizes:")
-print(paste("Sunny:", sunny_n, "Shady:", shady_n))
-print(paste("Pooled SD:", round(sun_sd_pooled, 3)))
-print(paste("Effect size (Cohen's d):", round(sun_effect_size, 3)))
-print("Power analysis results:")
-print(sun_power)
+power.t.test(n = 4, delta = d_unpaired, sd = 1,
+             sig.level = 0.05, type = "two.sample")
 ```
 
-✏️ **Your turn:** Is the power above 80%? If our study is underpowered, what are two things we could change to increase power?
+✏️ **Your turn:** What is the power? If the difference we measured is completely real, how often would a study like ours **miss** it?
+
+```         
+power = ______        we would miss it ______ times out of 10
+```
+
+**▶ Run this** — how many trees would that design have needed?
+
+``` r
+# ── Part 5.2 · Trees needed, unpaired ───────────────────────────────────
+power.t.test(delta = d_unpaired, sd = 1,
+             power = 0.80, sig.level = 0.05,
+             type = "two.sample")$n
+```
+
+✏️ **Your turn:** Round that up. How many trees per side? How many did we actually collect?
 
 `________________________`
 
-::: callout-tip
-**🚀 If you finish early:** `power.t.test()` can also solve for **sample size** instead of power — leave `n` out and add `power = 0.80` instead. How many needles per side would you need to reliably (80% power) detect a 1mm difference?
+**▶ Run this** — now the **paired** design, using the `d` you saved in Part 3.4:
 
 ``` r
-# ── Part 5.2 · Statistical Power ────────────────────────────────────────
-power.t.test(delta = side_diff,
-             sd = sun_sd_pooled,
-             sig.level = sun_alpha,
-             power = 0.80,
-             type = "two.sample",
-             alternative = "two.sided")
+# ── Part 5.3 · Power, paired ────────────────────────────────────────────
+d_paired <- abs(mean(diffs) / sd(diffs))
+
+power.t.test(n = 4, delta = d_paired, sd = 1,
+             sig.level = 0.05, type = "paired")$power
+
+power.t.test(delta = d_paired, sd = 1,
+             power = 0.80, sig.level = 0.05,
+             type = "paired")$n
+```
+
+✏️ **Your turn:** Fill in the table.
+
+```         
+Design       Power at n = 4      Trees for 80% power
+unpaired     ______              ______ per side
+paired       ______              ______ total
+```
+
+✏️ **Your turn:** Same trees. Same needles. Same measurements. Explain in one sentence where the extra power came from.
+
+`________________________`
+
+::: callout-important
+**⚠️ This is the most useful thing in this worksheet**
+
+A non-significant result from an underpowered study does **not** mean there is no effect — it means the study could never have found one. Our unpaired analysis had roughly a 1-in-9 chance of detecting its own result.
+
+Note also what the paired answer tells you: **7 trees.** That is a completely achievable field season. The pairing was worth more than 6× the sampling effort.
+:::
+
+::: callout-tip
+**🚀 If you finish early:** Go back to the Non-Parametric worksheet and look at the signed-rank floor — with 4 pairs, the smallest possible two-sided p was 0.125. With **7** pairs, `2 / 2^7` is 0.0156. Sample size fixed two different problems at once.
+
+``` r
+# ── Part 5.4 · Statistical Power ────────────────────────────────────────
+2 / 2^7
 ```
 :::
 
@@ -353,8 +415,9 @@ In this activity, we've:
 1. Formulated hypotheses about pine needle length
 2. Reviewed Type I and Type II error and statistical power
 3. Conducted a two-sample t-test
-4. Calculated statistical power for our observed effect size
-5. Built a publication-quality mean ± SE plot with a custom theme and custom colors
+4. Calculated Cohen's d for the same data two ways — unpaired and paired
+5. Calculated statistical power for our observed effect size, and the sample size each design would have needed
+6. Built a publication-quality mean ± SE plot with a custom theme and custom colors
 
 **Key takeaways:**
 
@@ -378,6 +441,7 @@ At this point you can:
 - [ ] State H₀, Hₐ, and α *before* running a test
 - [ ] Explain the difference between a Type I and a Type II error
 - [ ] Run and interpret a two-sample t-test
+- [ ] Calculate Cohen's d for a paired and an unpaired design, and explain why they differ
 - [ ] Calculate statistical power (and required sample size) with `power.t.test()`
 - [ ] Build a mean ± SE plot with a reusable custom theme and `scale_color_manual()`
 

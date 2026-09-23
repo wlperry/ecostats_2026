@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="author" content="Bill Perry">
-<meta name="description" content="Hands-on activity: testing assumptions, data transformations, Welch’s t-test, Mann-Whitney, and permutation tests on the lake trout dataset.">
+<meta name="description" content="Hands-on activity: effect size and rank-based tests on our own pine needle data, where the assumptions hold and the tests cost power, then assumption checking, transformations, Welch’s t-test, Mann-Whitney, and permutation tests on the lake trout dataset.">
 
 <title>Activity: Non-Parametric T-Tests – UMD Biostatistics</title>
 <style>
@@ -120,7 +120,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <link rel="stylesheet" href="../../css/main.css">
 <link rel="stylesheet" href="../../css/main.css">
 <meta property="og:title" content="Activity: Non-Parametric T-Tests – UMD Biostatistics">
-<meta property="og:description" content="Hands-on activity: testing assumptions, data transformations, Welch’s t-test, Mann-Whitney, and permutation tests on the lake trout dataset.">
+<meta property="og:description" content="Hands-on activity: effect size and rank-based tests on our own pine needle data, where the assumptions hold and the tests cost power, then assumption checking, transformations, Welch’s t-test, Mann-Whitney, and permutation tests on the lake trout dataset.">
 <meta property="og:site_name" content="UMD Biostatistics">
 </head>
 
@@ -413,7 +413,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 <div>
   <div class="description">
-    Hands-on activity: testing assumptions, data transformations, Welch’s t-test, Mann-Whitney, and permutation tests on the lake trout dataset.
+    Hands-on activity: effect size and rank-based tests on our own pine needle data, where the assumptions hold and the tests cost power, then assumption checking, transformations, Welch’s t-test, Mann-Whitney, and permutation tests on the lake trout dataset.
   </div>
 </div>
 
@@ -438,456 +438,21 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 <section id="worksheet-non-parametric-t-tests" class="level1">
 <h1>Worksheet: Non-Parametric T-Tests</h1>
-<p><a href="data/lake_trout.csv" class="btn btn-primary" download="lake_trout.csv">📥 Lake trout data</a> <a href="data/pine_data.csv" class="btn btn-primary" download="pine_data.csv">📥 Pine needle data</a> <a href="themes_functions/r_themes_and_functions.R" class="btn btn-primary" download="r_themes_and_functions.R">📥 Tools script (.R)</a> <a href="data/07_nonparametric_t_tests.R" class="btn btn-primary" download="07_nonparametric_t_tests.R">📥 Script skeleton (.R)</a></p>
+<p><a href="data/pine_data.csv" class="btn btn-primary" download="pine_data.csv">📥 Pine needle data</a> <a href="data/lake_trout.csv" class="btn btn-primary" download="lake_trout.csv">📥 Lake trout data</a> <a href="data/sage_brush_crickets_feeding_mating.csv" class="btn btn-primary" download="sage_brush_crickets_feeding_mating.csv">📥 Sagebrush cricket data</a></p>
+<p><a href="themes_functions/r_themes_and_functions.R" class="btn btn-primary" download="r_themes_and_functions.R">📥 Tools script (.R)</a> <a href="data/07_nonparametric_t_tests.R" class="btn btn-primary" download="07_nonparametric_t_tests.R">📥 Script skeleton (.R)</a></p>
 <blockquote class="blockquote">
 <h2 id="how-to-use-this-worksheet" class="anchored" data-anchor-id="worksheet-non-parametric-t-tests">How to use this worksheet</h2>
 <p>Work through each part in order, at your own pace. Type every line of code yourself into the <strong>script skeleton</strong> — do not copy-paste from this worksheet. Blocks marked <strong>▶ Run this</strong> are code you should type and execute. Blocks marked <strong>✏️ Your turn</strong> ask you to write, modify, or answer something. Boxes marked <strong>🚀 If you finish early</strong> are optional bonus material that goes a bit further than what we covered in lecture.</p>
 <p><strong>Every grey <code>r</code> box below is code you type into an R script — not into the Console.</strong> Before you start: download the <strong>script skeleton</strong> from the button above and save it as <code>07_nonparametric_t_tests.R</code> in your project’s <code>scripts/</code> folder. The blocks you have typed a dozen times are filled in; everything else is blank, and that blank space is the lesson.</p>
 <p><strong>Type the <code># ── Part …</code> header comment at the top of each block, too.</strong> Those comment lines are not decoration — they are how your script stays navigable, how you find your way back to a block that broke, and how I find your work when I read your script. A block with no header comment is a block I cannot place. In RStudio they also show up in the document outline (the <code>≡</code> button at the bottom-left of the editor) so you can jump straight to any part.</p>
-<p>This worksheet analyses lake trout <strong>mass</strong> from Island Lake and NE 12: testing assumptions for parametric tests, transforming data when assumptions aren’t met, running several different tests (standard t-test, log-transformed t-test, Welch’s t-test, Mann-Whitney Wilcoxon, permutation test), and interpreting and reporting the results properly. <strong>Everything here uses <code>mass_g</code>.</strong></p>
+<p>This worksheet runs in two halves. <strong>Part 1</strong> returns to the pine needles you collected: you check the assumptions, find that they hold, measure the <strong>effect size</strong> with Cohen’s d, and run the rank-based tests anyway to see what they cost. <strong>Parts 2-7</strong> move to lake trout <strong>mass</strong> from Island Lake and NE 12, where the assumptions genuinely fail — testing assumptions, transforming data, and running several different tests (standard t-test, log-transformed t-test, Welch’s t-test, Mann-Whitney Wilcoxon, permutation test), then interpreting and reporting the results properly. <strong>Everything after Part 1 uses <code>mass_g</code>.</strong></p>
 </blockquote>
-<hr>
+<section id="section" class="level2">
+<h2 class="anchored" data-anchor-id="section">————————————————————————</h2>
 </section>
-<section id="part-1-setup-and-the-single-sample-question" class="level1">
-<h1>Part 1 · Setup and the Single-Sample Question</h1>
-<p>Last time we covered assumptions of parametric tests, α and β errors, power, and mean ± SE plots. Let’s start by exploring only lake NE 12, as if doing a single-sample t-test, then compare NE 12 to Island Lake.</p>
-<p>We want to test if the mass of lake trout in NE 12 differs from a mean of 500g.</p>
-<p>✏️ <strong>Your turn:</strong> Write out the hypotheses:</p>
-<pre><code>H0: mu = _____ (the mean mass of lake trout in NE 12 is _____ g)
-H1: mu ≠ _____ (the mean mass of lake trout in NE 12 is not _____ g)</code></pre>
-<p><strong>▶ Run this in your Script:</strong></p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 1.1 · Setup and the Single-Sample Question ─────────────────────</span></span>
-<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tidyverse)</span>
-<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(janitor)     <span class="co"># round_half_up(), used inside summary_stats()</span></span>
-<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(car)         <span class="co"># leveneTest()</span></span>
-<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(patchwork)   <span class="co"># combining plots</span></span>
-<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(perm)        <span class="co"># permutation tests</span></span>
-<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a><span class="fu">source</span>(<span class="st">"themes_functions/r_themes_and_functions.R"</span>)</span>
-<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>lt_df <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="st">"data/lake_trout.csv"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>✏️ <strong>Your turn:</strong> How many lakes are in this dataset?</p>
-<p><code>________________________</code></p>
-<p><strong>▶ Run this</strong> — calculate the mode (R has no built-in <code>mode()</code> for this):</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 1.2 · Setup and the Single-Sample Question ─────────────────────</span></span>
-<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>lt_df <span class="sc">%&gt;%</span></span>
-<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="sc">!</span><span class="fu">is.na</span>(mass_g)) <span class="sc">%&gt;%</span></span>
-<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(lake, mass_g) <span class="sc">%&gt;%</span></span>
-<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">count =</span> <span class="fu">n</span>(), <span class="at">.groups =</span> <span class="st">"drop_last"</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(<span class="fu">desc</span>(count)) <span class="sc">%&gt;%</span></span>
-<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">slice</span>(<span class="dv">1</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(<span class="sc">-</span>count) <span class="sc">%&gt;%</span></span>
-<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename</span>(<span class="at">mode_mass =</span> mass_g)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>▶ Run this</strong> — create a data frame with just NE 12:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 1.3 · Setup and the Single-Sample Question ─────────────────────</span></span>
-<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>ne12_df <span class="ot">&lt;-</span> lt_df <span class="sc">%&gt;%</span></span>
-<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(lake <span class="sc">==</span> <span class="st">"NE 12"</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="sc">!</span><span class="fu">is.na</span>(mass_g))  <span class="co"># Remove any NA values</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="callout callout-style-default callout-tip callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-Tip
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p><strong>🚀 If you finish early:</strong> Compute <code>n</code>, <code>mean</code>, <code>sd</code> and <code>se</code> for <code>mass_g</code> across <em>all</em> lakes at once — <code>lt_df %&gt;% group_by(lake) %&gt;% reframe(summary_stats(mass_g))</code>.</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 1.4 · Setup and the Single-Sample Question ─────────────────────</span></span>
-<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Write your code in the R script:</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-</div>
-</div>
-<hr>
 </section>
-<section id="part-2-testing-assumptions-on-ne-12" class="level1">
-<h1>Part 2 · Testing Assumptions on NE 12</h1>
-<p>Before conducting our t-test, we need to verify our data meets the necessary assumptions. Methods to test normality: visual (QQ plots, histograms) and statistical (Shapiro-Wilk test).</p>
-<p><strong>▶ Run this</strong> — histogram:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 2.1 · Testing Assumptions on NE 12 ─────────────────────────────</span></span>
-<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>ne12_histo_plot <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(ne12_df, <span class="fu">aes</span>(<span class="at">x =</span> mass_g)) <span class="sc">+</span></span>
-<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_histogram</span>(<span class="at">binwidth =</span> <span class="dv">200</span>) <span class="sc">+</span></span>
-<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"mass (g)"</span>, <span class="at">y =</span> <span class="st">"Frequency"</span>)</span>
-<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>ne12_histo_plot</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>▶ Run this</strong> — dotplot, boxplot, and QQ plot:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 2.2 · Testing Assumptions on NE 12 ─────────────────────────────</span></span>
-<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>ne12_dot_plot <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(ne12_df, <span class="fu">aes</span>(<span class="at">x =</span> mass_g, <span class="at">y =</span> <span class="st">""</span>)) <span class="sc">+</span></span>
-<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_dotplot</span>(<span class="at">binwidth =</span> <span class="dv">60</span>, <span class="at">stackdir =</span> <span class="st">"center"</span>, <span class="at">fill =</span> <span class="st">"darkblue"</span>, <span class="at">dotsize =</span> <span class="fl">0.5</span>) <span class="sc">+</span></span>
-<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Dotplot"</span>, <span class="at">x =</span> <span class="st">"Mass (g)"</span>, <span class="at">y =</span> <span class="st">""</span>)</span>
-<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>ne12_dot_plot</span>
-<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>ne12_box_plot <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(ne12_df, <span class="fu">aes</span>(<span class="at">y =</span> mass_g)) <span class="sc">+</span></span>
-<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_boxplot</span>(<span class="at">fill =</span> <span class="st">"darkblue"</span>) <span class="sc">+</span></span>
-<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">y =</span> <span class="st">"Mass (g)"</span>, <span class="at">x =</span> <span class="st">""</span>) <span class="sc">+</span></span>
-<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">coord_flip</span>()</span>
-<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a>ne12_box_plot</span>
-<span id="cb7-12"><a href="#cb7-12" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-13"><a href="#cb7-13" aria-hidden="true" tabindex="-1"></a>ne12_qq_plot <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(ne12_df, <span class="fu">aes</span>(<span class="at">sample =</span> mass_g)) <span class="sc">+</span></span>
-<span id="cb7-14"><a href="#cb7-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">stat_qq</span>(<span class="at">color =</span> <span class="st">"darkblue"</span>) <span class="sc">+</span></span>
-<span id="cb7-15"><a href="#cb7-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">stat_qq_line</span>() <span class="sc">+</span></span>
-<span id="cb7-16"><a href="#cb7-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"QQ Plot"</span>, <span class="at">x =</span> <span class="st">"Theoretical Quantiles"</span>, <span class="at">y =</span> <span class="st">"Sample Quantiles"</span>) <span class="sc">+</span></span>
-<span id="cb7-17"><a href="#cb7-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_regular</span>(<span class="at">base_size =</span> <span class="dv">10</span>) <span class="sc">+</span></span>
-<span id="cb7-18"><a href="#cb7-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme</span>(<span class="at">plot.title =</span> <span class="fu">element_text</span>(<span class="at">hjust =</span> <span class="fl">0.5</span>))</span>
-<span id="cb7-19"><a href="#cb7-19" aria-hidden="true" tabindex="-1"></a>ne12_qq_plot</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>▶ Run this</strong> — combine all four with patchwork:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 2.3 · Testing Assumptions on NE 12 ─────────────────────────────</span></span>
-<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>combined_stats_plot <span class="ot">&lt;-</span> (ne12_histo_plot <span class="sc">+</span> ne12_dot_plot) <span class="sc">/</span> (ne12_box_plot <span class="sc">+</span> ne12_qq_plot) <span class="sc">+</span></span>
-<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">plot_annotation</span>(</span>
-<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">theme =</span> <span class="fu">theme</span>(<span class="at">plot.title =</span> <span class="fu">element_text</span>(<span class="at">hjust =</span> <span class="fl">0.5</span>),</span>
-<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>                  <span class="at">plot.subtitle =</span> <span class="fu">element_text</span>(<span class="at">hjust =</span> <span class="fl">0.5</span>))</span>
-<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>  )</span>
-<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>combined_stats_plot</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>▶ Run this</strong> — the formal test (note: really you want to do this on residuals, but here we test the raw values directly):</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 2.4 · Testing Assumptions on NE 12 ─────────────────────────────</span></span>
-<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>shapiro_test <span class="ot">&lt;-</span> <span class="fu">shapiro.test</span>(ne12_df<span class="sc">$</span>mass_g)</span>
-<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>shapiro_test</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>✏️ <strong>Your turn:</strong> Does the QQ plot agree with the Shapiro-Wilk result? Is NE 12’s mass normally distributed?</p>
-<p><code>________________________</code></p>
-<div class="callout callout-style-default callout-tip callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-Tip
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p><strong>🚀 If you finish early:</strong> Run the same histogram, QQ plot and Shapiro-Wilk on a <strong>different lake</strong> — try <code>Toolik</code> or <code>N 01</code>. Is any lake’s mass close to normal?</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 2.5 · Testing Assumptions on NE 12 ─────────────────────────────</span></span>
-<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Write your code in the R script:</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-</div>
-</div>
-<hr>
-</section>
-<section id="part-3-comparing-two-lakes-ne-12-vs.-island-lake" class="level1">
-<h1>Part 3 · Comparing Two Lakes — NE 12 vs.&nbsp;Island Lake</h1>
-<p>Now that we’ve shown NE 12’s mass fails (or passes) normality, let’s explore a comparison of NE 12 and Island Lake <code>mass_g</code>.</p>
-<p><strong>▶ Run this</strong> — build the two-lake data frame:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 3.1 · Comparing Two Lakes ──────────────────────────────────────</span></span>
-<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>in_df <span class="ot">&lt;-</span> lt_df <span class="sc">%&gt;%</span></span>
-<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(lake <span class="sc">%in%</span> <span class="fu">c</span>(<span class="st">"NE 12"</span>, <span class="st">"Island Lake"</span>)) <span class="sc">%&gt;%</span></span>
-<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="sc">!</span><span class="fu">is.na</span>(mass_g))</span>
-<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a><span class="fu">head</span>(in_df)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>▶ Run this</strong> — summary stats by lake:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 3.2 · Comparing Two Lakes ──────────────────────────────────────</span></span>
-<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>summary_by_lake <span class="ot">&lt;-</span> in_df <span class="sc">%&gt;%</span> <span class="fu">group_by</span>(lake) <span class="sc">%&gt;%</span> <span class="fu">reframe</span>(<span class="fu">summary_stats</span>(mass_g))</span>
-<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>summary_by_lake</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>▶ Run this</strong> — histograms by lake:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb13"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 3.3 · Comparing Two Lakes ──────────────────────────────────────</span></span>
-<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>hist_plot <span class="ot">&lt;-</span> in_df <span class="sc">%&gt;%</span></span>
-<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> mass_g, <span class="at">fill =</span> lake)) <span class="sc">+</span></span>
-<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_histogram</span>(<span class="at">bins =</span> <span class="dv">20</span>, <span class="at">alpha =</span> <span class="fl">0.7</span>) <span class="sc">+</span></span>
-<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Mass (g)"</span>, <span class="at">y =</span> <span class="st">"Count"</span>) <span class="sc">+</span></span>
-<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_regular</span>(<span class="at">base_size =</span> <span class="dv">10</span>) <span class="sc">+</span></span>
-<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">facet_wrap</span>(<span class="sc">~</span>lake, <span class="at">scales =</span> <span class="st">"free_y"</span>)</span>
-<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a>hist_plot</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>▶ Run this</strong> — QQ plots by lake (in a QQ plot, points that follow the line indicate normally distributed data; deviations suggest non-normality):</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb14"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 3.4 · Comparing Two Lakes ──────────────────────────────────────</span></span>
-<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>qq_plot <span class="ot">&lt;-</span> in_df <span class="sc">%&gt;%</span></span>
-<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">sample =</span> mass_g, <span class="at">color =</span> lake)) <span class="sc">+</span></span>
-<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">stat_qq</span>() <span class="sc">+</span></span>
-<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">stat_qq_line</span>() <span class="sc">+</span></span>
-<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"QQ Plot for Normality Check"</span>,</span>
-<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a>       <span class="at">x =</span> <span class="st">"Theoretical Quantiles"</span>, <span class="at">y =</span> <span class="st">"Sample Quantiles"</span>) <span class="sc">+</span></span>
-<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_regular</span>(<span class="at">base_size =</span> <span class="dv">10</span>) <span class="sc">+</span></span>
-<span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">facet_wrap</span>(<span class="sc">~</span>lake)</span>
-<span id="cb14-10"><a href="#cb14-10" aria-hidden="true" tabindex="-1"></a>qq_plot</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>▶ Run this</strong> — the formal test, done for each lake separately (note: Island Lake can look non-normal in the QQ plot but come out close to normal in the Shapiro-Wilk test):</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb15"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 3.5 · Comparing Two Lakes ──────────────────────────────────────</span></span>
-<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>normality_results <span class="ot">&lt;-</span> in_df <span class="sc">%&gt;%</span></span>
-<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(lake) <span class="sc">%&gt;%</span></span>
-<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarize</span>(</span>
-<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">shapiro_stat =</span> <span class="fu">shapiro.test</span>(mass_g)<span class="sc">$</span>statistic,</span>
-<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a>    <span class="at">shapiro_p_value =</span> <span class="fu">shapiro.test</span>(mass_g)<span class="sc">$</span>p.value,</span>
-<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">normal_distribution =</span> <span class="fu">if_else</span>(shapiro_p_value <span class="sc">&gt;</span> <span class="fl">0.05</span>, <span class="st">"Normal"</span>, <span class="st">"Non-normal"</span>)</span>
-<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a>  )</span>
-<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a>normality_results</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>▶ Run this</strong> — Levene’s test for equal variances (H₀: variances are equal across groups; we want this <strong>non-significant</strong>):</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb16"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 3.6 · Comparing Two Lakes ──────────────────────────────────────</span></span>
-<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>levene_result <span class="ot">&lt;-</span> <span class="fu">leveneTest</span>(mass_g <span class="sc">~</span> lake, <span class="at">data =</span> in_df)</span>
-<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>levene_result</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>✏️ <strong>Your turn:</strong> Based on your normality and Levene’s test results, do these two lakes meet the assumptions for a standard t-test?</p>
-<p><code>________________________</code></p>
-<div class="callout callout-style-default callout-tip callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-Tip
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p><strong>🚀 If you finish early:</strong> Rerun Levene’s test on a <strong>different pair of lakes</strong> — say <code>Toolik</code> and <code>N 01</code>, which have far more similar sample sizes. Same conclusion?</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb17"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 3.7 · Comparing Two Lakes ──────────────────────────────────────</span></span>
-<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Write your code in the R script:</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-</div>
-</div>
-<hr>
-</section>
-<section id="part-4-data-transformations" class="level1">
-<h1>Part 4 · Data Transformations</h1>
-<p>A log₁₀ transformation commonly helps right-skewed data like this pass the normality assumption.</p>
-<p><strong>▶ Run this:</strong></p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb18"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 4.1 · Data Transformations ─────────────────────────────────────</span></span>
-<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>in_df <span class="ot">&lt;-</span> in_df <span class="sc">%&gt;%</span></span>
-<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">log_mass =</span> <span class="fu">log10</span>(mass_g))</span>
-<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a><span class="fu">head</span>(in_df)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>▶ Run this</strong> — check if it worked, with a histogram:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb19"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 4.2 · Data Transformations ─────────────────────────────────────</span></span>
-<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>log_hist_plot <span class="ot">&lt;-</span> in_df <span class="sc">%&gt;%</span></span>
-<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> log_mass, <span class="at">fill =</span> lake)) <span class="sc">+</span></span>
-<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_histogram</span>(<span class="at">bins =</span> <span class="dv">20</span>, <span class="at">alpha =</span> <span class="fl">0.7</span>) <span class="sc">+</span></span>
-<span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Distribution of Log-Transformed Lake Trout Mass"</span>,</span>
-<span id="cb19-6"><a href="#cb19-6" aria-hidden="true" tabindex="-1"></a>       <span class="at">x =</span> <span class="st">"Log10 Mass"</span>, <span class="at">y =</span> <span class="st">"Count"</span>) <span class="sc">+</span></span>
-<span id="cb19-7"><a href="#cb19-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_regular</span>(<span class="at">base_size =</span> <span class="dv">10</span>) <span class="sc">+</span></span>
-<span id="cb19-8"><a href="#cb19-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">facet_wrap</span>(<span class="sc">~</span>lake, <span class="at">scales =</span> <span class="st">"free_y"</span>)</span>
-<span id="cb19-9"><a href="#cb19-9" aria-hidden="true" tabindex="-1"></a>log_hist_plot</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>▶ Run this</strong> — a QQ plot of the transformed data (we’ll skip Shapiro-Wilk for a moment):</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb20"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 4.3 · Data Transformations ─────────────────────────────────────</span></span>
-<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a>log_qq_plot <span class="ot">&lt;-</span> in_df <span class="sc">%&gt;%</span></span>
-<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">sample =</span> log_mass, <span class="at">color =</span> lake)) <span class="sc">+</span></span>
-<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">stat_qq</span>() <span class="sc">+</span></span>
-<span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">stat_qq_line</span>() <span class="sc">+</span></span>
-<span id="cb20-6"><a href="#cb20-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"QQ Plot for Log-Transformed Data"</span>,</span>
-<span id="cb20-7"><a href="#cb20-7" aria-hidden="true" tabindex="-1"></a>       <span class="at">x =</span> <span class="st">"Theoretical Quantiles"</span>, <span class="at">y =</span> <span class="st">"Sample Quantiles"</span>) <span class="sc">+</span></span>
-<span id="cb20-8"><a href="#cb20-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_regular</span>(<span class="at">base_size =</span> <span class="dv">10</span>) <span class="sc">+</span></span>
-<span id="cb20-9"><a href="#cb20-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">facet_wrap</span>(<span class="sc">~</span>lake)</span>
-<span id="cb20-10"><a href="#cb20-10" aria-hidden="true" tabindex="-1"></a>log_qq_plot</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>▶ Run this</strong> — now the formal tests on the transformed data:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb21"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 4.4 · Data Transformations ─────────────────────────────────────</span></span>
-<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a>log_normality_results <span class="ot">&lt;-</span> in_df <span class="sc">%&gt;%</span></span>
-<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(lake) <span class="sc">%&gt;%</span></span>
-<span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarize</span>(</span>
-<span id="cb21-5"><a href="#cb21-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">shapiro_stat =</span> <span class="fu">shapiro.test</span>(<span class="fu">log10</span>(mass_g))<span class="sc">$</span>statistic,</span>
-<span id="cb21-6"><a href="#cb21-6" aria-hidden="true" tabindex="-1"></a>    <span class="at">shapiro_p_value =</span> <span class="fu">shapiro.test</span>(<span class="fu">log10</span>(mass_g))<span class="sc">$</span>p.value,</span>
-<span id="cb21-7"><a href="#cb21-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">normal_distribution =</span> <span class="fu">if_else</span>(shapiro_p_value <span class="sc">&gt;</span> <span class="fl">0.05</span>, <span class="st">"Normal"</span>, <span class="st">"Non-normal"</span>)</span>
-<span id="cb21-8"><a href="#cb21-8" aria-hidden="true" tabindex="-1"></a>  )</span>
-<span id="cb21-9"><a href="#cb21-9" aria-hidden="true" tabindex="-1"></a>log_normality_results</span>
-<span id="cb21-10"><a href="#cb21-10" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb21-11"><a href="#cb21-11" aria-hidden="true" tabindex="-1"></a>levene_log_result <span class="ot">&lt;-</span> <span class="fu">leveneTest</span>(log_mass <span class="sc">~</span> lake, <span class="at">data =</span> in_df)</span>
-<span id="cb21-12"><a href="#cb21-12" aria-hidden="true" tabindex="-1"></a>levene_log_result</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>✏️ <strong>Your turn:</strong> Did the log transformation fix normality, equal variance, both, or neither?</p>
-<p><code>________________________</code></p>
-<div class="callout callout-style-default callout-tip callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-Tip
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p><strong>🚀 If you finish early:</strong> Try a square-root transformation (<code>sqrt(mass_g)</code>) instead of log₁₀. Build a histogram and rerun the Shapiro-Wilk test — does it do better or worse than the log transform?</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb22"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 4.5 · Data Transformations ─────────────────────────────────────</span></span>
-<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Write your code in the R script:</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-</div>
-</div>
-<hr>
-</section>
-<section id="part-5-running-the-tests" class="level1">
-<h1>Part 5 · Running the Tests</h1>
-<p>Even if the transformation doesn’t fully fix things, let’s run the full set of tests so we can compare them side by side.</p>
-<p><strong>▶ Run this</strong> — standard two-sample t-test on the raw data:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb23"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 5.1 · Running the Tests ────────────────────────────────────────</span></span>
-<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a>t_test_result <span class="ot">&lt;-</span> <span class="fu">t.test</span>(</span>
-<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a>  mass_g <span class="sc">~</span> lake,</span>
-<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">data =</span> in_df,</span>
-<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">var.equal =</span> <span class="cn">TRUE</span>,</span>
-<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">alternative =</span> <span class="st">"two.sided"</span></span>
-<span id="cb23-7"><a href="#cb23-7" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb23-8"><a href="#cb23-8" aria-hidden="true" tabindex="-1"></a>t_test_result</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>▶ Run this</strong> — the same t-test on the log-transformed data:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb24"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 5.2 · Running the Tests ────────────────────────────────────────</span></span>
-<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a>log_t_test_result <span class="ot">&lt;-</span> <span class="fu">t.test</span>(</span>
-<span id="cb24-3"><a href="#cb24-3" aria-hidden="true" tabindex="-1"></a>  log_mass <span class="sc">~</span> lake,</span>
-<span id="cb24-4"><a href="#cb24-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">data =</span> in_df,</span>
-<span id="cb24-5"><a href="#cb24-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">var.equal =</span> <span class="cn">TRUE</span>,</span>
-<span id="cb24-6"><a href="#cb24-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">alternative =</span> <span class="st">"two.sided"</span></span>
-<span id="cb24-7"><a href="#cb24-7" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb24-8"><a href="#cb24-8" aria-hidden="true" tabindex="-1"></a>log_t_test_result</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="callout callout-style-default callout-note callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-Note
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p><strong>When analyzing log-transformed data:</strong></p>
-<ol type="1">
-<li>The mean of log-transformed data, back-transformed, gives the <em>geometric mean</em> (not the arithmetic mean).</li>
-<li>The back-transformed confidence intervals represent the CI for the geometric mean, and must be calculated carefully.</li>
-<li>Report results like: “The geometric mean mass of lake trout in NE 12 was X g (95% CI: Y–Z).”</li>
-<li>You can’t just take <code>10^SE</code> to get the standard error — instead, back-transform <code>mean - se</code> and <code>mean + se</code> separately.</li>
-</ol>
-</div>
-</div>
-<p><strong>▶ Run this</strong> — back-transform to the geometric mean:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb25"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 5.3 · Running the Tests ────────────────────────────────────────</span></span>
-<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a>back_transformed <span class="ot">&lt;-</span> in_df <span class="sc">%&gt;%</span></span>
-<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(lake) <span class="sc">%&gt;%</span></span>
-<span id="cb25-4"><a href="#cb25-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(</span>
-<span id="cb25-5"><a href="#cb25-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">n =</span> <span class="fu">n</span>(),</span>
-<span id="cb25-6"><a href="#cb25-6" aria-hidden="true" tabindex="-1"></a>    <span class="at">mean_log =</span> <span class="fu">mean</span>(log_mass),</span>
-<span id="cb25-7"><a href="#cb25-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">sd_log =</span> <span class="fu">sd</span>(log_mass),</span>
-<span id="cb25-8"><a href="#cb25-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">se_log =</span> sd_log <span class="sc">/</span> <span class="fu">sqrt</span>(n),</span>
-<span id="cb25-9"><a href="#cb25-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">geometric_mean =</span> <span class="dv">10</span><span class="sc">^</span>mean_log,</span>
-<span id="cb25-10"><a href="#cb25-10" aria-hidden="true" tabindex="-1"></a>    <span class="at">lower_se =</span> <span class="dv">10</span><span class="sc">^</span>(mean_log <span class="sc">-</span> se_log),</span>
-<span id="cb25-11"><a href="#cb25-11" aria-hidden="true" tabindex="-1"></a>    <span class="at">upper_se =</span> <span class="dv">10</span><span class="sc">^</span>(mean_log <span class="sc">+</span> se_log),</span>
-<span id="cb25-12"><a href="#cb25-12" aria-hidden="true" tabindex="-1"></a>    <span class="at">arithmetic_mean =</span> <span class="fu">mean</span>(mass_g)</span>
-<span id="cb25-13"><a href="#cb25-13" aria-hidden="true" tabindex="-1"></a>  )</span>
-<span id="cb25-14"><a href="#cb25-14" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb25-15"><a href="#cb25-15" aria-hidden="true" tabindex="-1"></a>back_transformed <span class="sc">%&gt;%</span></span>
-<span id="cb25-16"><a href="#cb25-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(lake, mean_log, geometric_mean, arithmetic_mean)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>▶ Run this</strong> — plot the back-transformed geometric means (note the error bars are not symmetrical!):</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb26"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 5.4 · Running the Tests ────────────────────────────────────────</span></span>
-<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a>geo_mean_plot <span class="ot">&lt;-</span> back_transformed <span class="sc">%&gt;%</span></span>
-<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> lake, <span class="at">y =</span> geometric_mean, <span class="at">fill =</span> lake)) <span class="sc">+</span></span>
-<span id="cb26-4"><a href="#cb26-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_bar</span>(<span class="at">stat =</span> <span class="st">"identity"</span>, <span class="at">width =</span> <span class="fl">0.5</span>, <span class="at">alpha =</span> <span class="fl">0.7</span>) <span class="sc">+</span></span>
-<span id="cb26-5"><a href="#cb26-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_errorbar</span>(<span class="fu">aes</span>(<span class="at">ymin =</span> lower_se, <span class="at">ymax =</span> upper_se), <span class="at">width =</span> <span class="fl">0.2</span>, <span class="at">linewidth =</span> <span class="dv">1</span>) <span class="sc">+</span></span>
-<span id="cb26-6"><a href="#cb26-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Geometric Mean Lake Trout Mass with Standard Error"</span>,</span>
-<span id="cb26-7"><a href="#cb26-7" aria-hidden="true" tabindex="-1"></a>       <span class="at">subtitle =</span> <span class="st">"Back-transformed from log10 scale"</span>,</span>
-<span id="cb26-8"><a href="#cb26-8" aria-hidden="true" tabindex="-1"></a>       <span class="at">x =</span> <span class="st">"Lake"</span>, <span class="at">y =</span> <span class="st">"Geometric Mean Mass (g)"</span>) <span class="sc">+</span></span>
-<span id="cb26-9"><a href="#cb26-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_regular</span>(<span class="at">base_size =</span> <span class="dv">10</span>) <span class="sc">+</span></span>
-<span id="cb26-10"><a href="#cb26-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme</span>(<span class="at">legend.position =</span> <span class="st">"none"</span>)</span>
-<span id="cb26-11"><a href="#cb26-11" aria-hidden="true" tabindex="-1"></a>geo_mean_plot</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>▶ Run this</strong> — Welch’s t-test (doesn’t assume equal variances):</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb27"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 5.5 · Running the Tests ────────────────────────────────────────</span></span>
-<span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a>welch_test_result <span class="ot">&lt;-</span> <span class="fu">t.test</span>(</span>
-<span id="cb27-3"><a href="#cb27-3" aria-hidden="true" tabindex="-1"></a>  mass_g <span class="sc">~</span> lake,</span>
-<span id="cb27-4"><a href="#cb27-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">data =</span> in_df,</span>
-<span id="cb27-5"><a href="#cb27-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">var.equal =</span> <span class="cn">FALSE</span>,</span>
-<span id="cb27-6"><a href="#cb27-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">alternative =</span> <span class="st">"two.sided"</span></span>
-<span id="cb27-7"><a href="#cb27-7" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb27-8"><a href="#cb27-8" aria-hidden="true" tabindex="-1"></a>welch_test_result</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<blockquote class="blockquote">
-<p>💡 Welch’s t-test is preferred when group variances are unequal (per Levene’s test), sample sizes differ between groups, or you just want a more robust default.</p>
-</blockquote>
-<p><strong>▶ Run this</strong> — the Mann-Whitney Wilcoxon test (non-parametric):</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb28"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 5.6 · Running the Tests ────────────────────────────────────────</span></span>
-<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a>wilcox_test_result <span class="ot">&lt;-</span> <span class="fu">wilcox.test</span>(</span>
-<span id="cb28-3"><a href="#cb28-3" aria-hidden="true" tabindex="-1"></a>  mass_g <span class="sc">~</span> lake,</span>
-<span id="cb28-4"><a href="#cb28-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">data =</span> in_df,</span>
-<span id="cb28-5"><a href="#cb28-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">alternative =</span> <span class="st">"two.sided"</span></span>
-<span id="cb28-6"><a href="#cb28-6" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb28-7"><a href="#cb28-7" aria-hidden="true" tabindex="-1"></a>wilcox_test_result</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<blockquote class="blockquote">
-<p>💡 Mann-Whitney is preferred when data isn’t normal even after transformation, you’re comparing medians rather than means, or outliers might distort a t-test — it compares ranks, not raw values.</p>
-</blockquote>
-<p><strong>▶ Run this</strong> — a permutation test (balance the sample sizes first):</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb29"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 5.7 · Running the Tests ────────────────────────────────────────</span></span>
-<span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">123</span>)  <span class="co"># For reproducibility</span></span>
-<span id="cb29-3"><a href="#cb29-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb29-4"><a href="#cb29-4" aria-hidden="true" tabindex="-1"></a>island_size <span class="ot">&lt;-</span> <span class="fu">sum</span>(in_df<span class="sc">$</span>lake <span class="sc">==</span> <span class="st">"Island Lake"</span>)</span>
-<span id="cb29-5"><a href="#cb29-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb29-6"><a href="#cb29-6" aria-hidden="true" tabindex="-1"></a>ne12_sample <span class="ot">&lt;-</span> in_df <span class="sc">%&gt;%</span></span>
-<span id="cb29-7"><a href="#cb29-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(lake <span class="sc">==</span> <span class="st">"NE 12"</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb29-8"><a href="#cb29-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">slice_sample</span>(<span class="at">n =</span> island_size)</span>
-<span id="cb29-9"><a href="#cb29-9" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb29-10"><a href="#cb29-10" aria-hidden="true" tabindex="-1"></a>balanced_df <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(</span>
-<span id="cb29-11"><a href="#cb29-11" aria-hidden="true" tabindex="-1"></a>  ne12_sample,</span>
-<span id="cb29-12"><a href="#cb29-12" aria-hidden="true" tabindex="-1"></a>  in_df <span class="sc">%&gt;%</span> <span class="fu">filter</span>(lake <span class="sc">==</span> <span class="st">"Island Lake"</span>)</span>
-<span id="cb29-13"><a href="#cb29-13" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb29-14"><a href="#cb29-14" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb29-15"><a href="#cb29-15" aria-hidden="true" tabindex="-1"></a>perm_test_result <span class="ot">&lt;-</span> <span class="fu">permTS</span>(</span>
-<span id="cb29-16"><a href="#cb29-16" aria-hidden="true" tabindex="-1"></a>  mass_g <span class="sc">~</span> lake,</span>
-<span id="cb29-17"><a href="#cb29-17" aria-hidden="true" tabindex="-1"></a>  <span class="at">data =</span> balanced_df,</span>
-<span id="cb29-18"><a href="#cb29-18" aria-hidden="true" tabindex="-1"></a>  <span class="at">alternative =</span> <span class="st">"two.sided"</span>,</span>
-<span id="cb29-19"><a href="#cb29-19" aria-hidden="true" tabindex="-1"></a>  <span class="at">method =</span> <span class="st">"exact.mc"</span>,</span>
-<span id="cb29-20"><a href="#cb29-20" aria-hidden="true" tabindex="-1"></a>  <span class="at">control =</span> <span class="fu">permControl</span>(<span class="at">nmc =</span> <span class="dv">10000</span>)</span>
-<span id="cb29-21"><a href="#cb29-21" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb29-22"><a href="#cb29-22" aria-hidden="true" tabindex="-1"></a>perm_test_result</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<blockquote class="blockquote">
-<p>💡 Permutation tests are useful for small samples, data that doesn’t meet parametric assumptions, or when you want a test that makes minimal distributional assumptions — and they can test statistics other than the mean.</p>
-</blockquote>
-<div class="callout callout-style-default callout-tip callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-Tip
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p><strong>🚀 If you finish early:</strong> Rerun the permutation test with <code>nmc = 1000</code> instead of <code>10000</code>. Does the p-value change meaningfully? What’s the tradeoff of using fewer Monte Carlo replications?</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb30"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 5.8 · Running the Tests ────────────────────────────────────────</span></span>
-<span id="cb30-2"><a href="#cb30-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Write your code in the R script:</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-</div>
-</div>
-<hr>
-</section>
-<section id="part-6-comparing-all-results" class="level1">
-<h1>Part 6 · Comparing All Results</h1>
-<p><strong>▶ Run this</strong> — build a comparison table:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb31"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 6.1 · Comparing All Results ────────────────────────────────────</span></span>
-<span id="cb31-2"><a href="#cb31-2" aria-hidden="true" tabindex="-1"></a>test_results <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
-<span id="cb31-3"><a href="#cb31-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">Test =</span> <span class="fu">c</span>(<span class="st">"Standard t-test"</span>,</span>
-<span id="cb31-4"><a href="#cb31-4" aria-hidden="true" tabindex="-1"></a>           <span class="st">"Log-transformed t-test"</span>,</span>
-<span id="cb31-5"><a href="#cb31-5" aria-hidden="true" tabindex="-1"></a>           <span class="st">"Welch's t-test"</span>,</span>
-<span id="cb31-6"><a href="#cb31-6" aria-hidden="true" tabindex="-1"></a>           <span class="st">"Mann-Whitney Wilcoxon test"</span>),</span>
-<span id="cb31-7"><a href="#cb31-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">Statistic =</span> <span class="fu">c</span>(<span class="fu">paste</span>(<span class="st">"t ="</span>, <span class="fu">round</span>(t_test_result<span class="sc">$</span>statistic, <span class="dv">2</span>)),</span>
-<span id="cb31-8"><a href="#cb31-8" aria-hidden="true" tabindex="-1"></a>               <span class="fu">paste</span>(<span class="st">"t ="</span>, <span class="fu">round</span>(log_t_test_result<span class="sc">$</span>statistic, <span class="dv">2</span>)),</span>
-<span id="cb31-9"><a href="#cb31-9" aria-hidden="true" tabindex="-1"></a>               <span class="fu">paste</span>(<span class="st">"t ="</span>, <span class="fu">round</span>(welch_test_result<span class="sc">$</span>statistic, <span class="dv">2</span>)),</span>
-<span id="cb31-10"><a href="#cb31-10" aria-hidden="true" tabindex="-1"></a>               <span class="fu">paste</span>(<span class="st">"W ="</span>, wilcox_test_result<span class="sc">$</span>statistic)),</span>
-<span id="cb31-11"><a href="#cb31-11" aria-hidden="true" tabindex="-1"></a>  <span class="at">p_value =</span> <span class="fu">c</span>(t_test_result<span class="sc">$</span>p.value,</span>
-<span id="cb31-12"><a href="#cb31-12" aria-hidden="true" tabindex="-1"></a>             log_t_test_result<span class="sc">$</span>p.value,</span>
-<span id="cb31-13"><a href="#cb31-13" aria-hidden="true" tabindex="-1"></a>             welch_test_result<span class="sc">$</span>p.value,</span>
-<span id="cb31-14"><a href="#cb31-14" aria-hidden="true" tabindex="-1"></a>             wilcox_test_result<span class="sc">$</span>p.value),</span>
-<span id="cb31-15"><a href="#cb31-15" aria-hidden="true" tabindex="-1"></a>  <span class="at">Significant =</span> <span class="fu">c</span>(t_test_result<span class="sc">$</span>p.value <span class="sc">&lt;</span> <span class="fl">0.05</span>,</span>
-<span id="cb31-16"><a href="#cb31-16" aria-hidden="true" tabindex="-1"></a>                 log_t_test_result<span class="sc">$</span>p.value <span class="sc">&lt;</span> <span class="fl">0.05</span>,</span>
-<span id="cb31-17"><a href="#cb31-17" aria-hidden="true" tabindex="-1"></a>                 welch_test_result<span class="sc">$</span>p.value <span class="sc">&lt;</span> <span class="fl">0.05</span>,</span>
-<span id="cb31-18"><a href="#cb31-18" aria-hidden="true" tabindex="-1"></a>                 wilcox_test_result<span class="sc">$</span>p.value <span class="sc">&lt;</span> <span class="fl">0.05</span>)</span>
-<span id="cb31-19"><a href="#cb31-19" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb31-20"><a href="#cb31-20" aria-hidden="true" tabindex="-1"></a>test_results</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>▶ Run this</strong> — visualize the raw comparison:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb32"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 6.2 · Comparing All Results ────────────────────────────────────</span></span>
-<span id="cb32-2"><a href="#cb32-2" aria-hidden="true" tabindex="-1"></a>combined_plot <span class="ot">&lt;-</span> in_df <span class="sc">%&gt;%</span></span>
-<span id="cb32-3"><a href="#cb32-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> lake, <span class="at">y =</span> mass_g, <span class="at">fill =</span> lake)) <span class="sc">+</span></span>
-<span id="cb32-4"><a href="#cb32-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_boxplot</span>(<span class="at">alpha =</span> <span class="fl">0.7</span>, <span class="at">outlier.shape =</span> <span class="cn">NA</span>) <span class="sc">+</span></span>
-<span id="cb32-5"><a href="#cb32-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_jitter</span>(<span class="at">width =</span> <span class="fl">0.2</span>, <span class="at">alpha =</span> <span class="fl">0.5</span>, <span class="at">size =</span> <span class="dv">2</span>) <span class="sc">+</span></span>
-<span id="cb32-6"><a href="#cb32-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Lake"</span>, <span class="at">y =</span> <span class="st">"Mass (g)"</span>) <span class="sc">+</span></span>
-<span id="cb32-7"><a href="#cb32-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_regular</span>(<span class="at">base_size =</span> <span class="dv">10</span>) <span class="sc">+</span></span>
-<span id="cb32-8"><a href="#cb32-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme</span>(<span class="at">legend.position =</span> <span class="st">"none"</span>)</span>
-<span id="cb32-9"><a href="#cb32-9" aria-hidden="true" tabindex="-1"></a>combined_plot</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>✏️ <strong>Your turn:</strong> Do all four tests agree on whether the difference is significant? If any disagree, what does that tell you about how sensitive the conclusion is to test choice?</p>
-<p><code>________________________</code></p>
-<p>When reporting results, include:</p>
-<ul>
-<li><strong>Standard t-test:</strong> “Lake trout from NE 12 had significantly different mass (M = [mean], SD = [SD]) compared to Island Lake (M = [mean], SD = [SD]), t([df]) = [t-value], p = [p-value].”</li>
-<li><strong>Log-transformed t-test:</strong> “After log transformation to meet normality assumptions, lake trout from NE 12 had significantly different mass (geometric mean = [value], 95% CI [lower–upper]) compared to Island Lake (geometric mean = [value], 95% CI [lower–upper]), t([df]) = [t-value], p = [p-value].”</li>
-<li><strong>Welch’s t-test:</strong> “Assuming unequal variances, lake trout from NE 12 had significantly different mass (M = [mean], SD = [SD]) compared to Island Lake (M = [mean], SD = [SD]), Welch’s t([df]) = [t-value], p = [p-value].”</li>
-<li><strong>Mann-Whitney Wilcoxon test:</strong> “Lake trout mass differed significantly between NE 12 (Mdn = [median]) and Island Lake (Mdn = [median]), W = [W-value], p = [p-value].”</li>
-<li><strong>Permutation test:</strong> “Permutation testing (10,000 iterations) revealed significant differences in lake trout mass between NE 12 and Island Lake, p = [p-value].”</li>
-</ul>
-<p>✏️ <strong>Your turn:</strong> Write the standard t-test and Mann-Whitney reporting sentences using your own numbers from Parts 5–6.</p>
-<pre><code>________________________________________________________
-________________________________________________________</code></pre>
-<div class="callout callout-style-default callout-tip callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-Tip
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p><strong>🚀 If you finish early:</strong> Add the permutation test’s p-value as a fifth row to <code>test_results</code>. (Hint: <code>perm_test_result$p.value</code>.)</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb34"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 6.3 · Comparing All Results ────────────────────────────────────</span></span>
-<span id="cb34-2"><a href="#cb34-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Write your code in the R script:</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-</div>
-</div>
-<hr>
-</section>
-<section id="part-7-our-pine-needles-the-non-parametric-way" class="level1">
-<h1>Part 7 · Our Pine Needles, the Non-Parametric Way</h1>
+<section id="part-1-our-pine-needles-start-with-data-you-trust" class="level1">
+<h1>Part 1 · Our Pine Needles — Start With Data You Trust</h1>
 <div class="callout callout-style-default callout-important callout-titled">
 <div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
@@ -936,25 +501,106 @@ Tip
 <p>After you read the file in, click <code>pine_df</code> in the <strong>Variables</strong> pane in Positron and check the names against this table before you write any other code.</p>
 </div>
 </div>
-<p>Last week you ran a paired t-test on our four trees and got <strong>p = 0.072</strong>. Let’s run the rank-based version of the same comparison.</p>
+<p>Last week you ran a paired t-test on our four trees and got <strong>p = 0.072</strong>. Before we reach for anything non-parametric, we have to establish that we actually <em>need</em> it — so we start by checking the assumptions on the data you collected yourselves.</p>
 <p><strong>▶ Run this:</strong></p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb35"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb35-1"><a href="#cb35-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 7.1 · Our pine needles ───────────────────────────────────────</span></span>
-<span id="cb35-2"><a href="#cb35-2" aria-hidden="true" tabindex="-1"></a>pine_df <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="st">"data/pine_data.csv"</span>)</span>
-<span id="cb35-3"><a href="#cb35-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb35-4"><a href="#cb35-4" aria-hidden="true" tabindex="-1"></a><span class="co"># same two-stage summary as the t-test lecture</span></span>
-<span id="cb35-5"><a href="#cb35-5" aria-hidden="true" tabindex="-1"></a>p_df <span class="ot">&lt;-</span> pine_df <span class="sc">%&gt;%</span></span>
-<span id="cb35-6"><a href="#cb35-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(team, side) <span class="sc">%&gt;%</span></span>
-<span id="cb35-7"><a href="#cb35-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">needle_length_mm =</span> <span class="fu">mean</span>(needle_length_mm, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
-<span id="cb35-8"><a href="#cb35-8" aria-hidden="true" tabindex="-1"></a>            <span class="at">.groups =</span> <span class="st">"drop"</span>)</span>
-<span id="cb35-9"><a href="#cb35-9" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb35-10"><a href="#cb35-10" aria-hidden="true" tabindex="-1"></a>p_wide_df <span class="ot">&lt;-</span> p_df <span class="sc">%&gt;%</span></span>
-<span id="cb35-11"><a href="#cb35-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_wider</span>(<span class="at">names_from =</span> side, <span class="at">values_from =</span> needle_length_mm)</span>
-<span id="cb35-12"><a href="#cb35-12" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb35-13"><a href="#cb35-13" aria-hidden="true" tabindex="-1"></a><span class="co"># unpaired: Mann-Whitney U</span></span>
-<span id="cb35-14"><a href="#cb35-14" aria-hidden="true" tabindex="-1"></a><span class="fu">wilcox.test</span>(needle_length_mm <span class="sc">~</span> side, <span class="at">data =</span> p_df)</span>
-<span id="cb35-15"><a href="#cb35-15" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb35-16"><a href="#cb35-16" aria-hidden="true" tabindex="-1"></a><span class="co"># paired: Wilcoxon signed-rank</span></span>
-<span id="cb35-17"><a href="#cb35-17" aria-hidden="true" tabindex="-1"></a><span class="fu">wilcox.test</span>(p_wide_df<span class="sc">$</span>shady, p_wide_df<span class="sc">$</span>sunny, <span class="at">paired =</span> <span class="cn">TRUE</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 1.1 · Setup and our pine needles ─────────────────────────────</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tidyverse)</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(janitor)     <span class="co"># round_half_up(), used inside summary_stats()</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(car)         <span class="co"># leveneTest()</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(patchwork)   <span class="co"># combining plots</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(perm)        <span class="co"># permutation tests</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(effectsize)  <span class="co"># cohens_d()</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="fu">source</span>(<span class="st">"themes_functions/r_themes_and_functions.R"</span>)</span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>pine_df <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="st">"data/pine_data.csv"</span>)</span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a><span class="co"># same two-stage summary as the t-test lecture</span></span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>p_df <span class="ot">&lt;-</span> pine_df <span class="sc">%&gt;%</span></span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(team, side) <span class="sc">%&gt;%</span></span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">needle_length_mm =</span> <span class="fu">mean</span>(needle_length_mm, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>            <span class="at">.groups =</span> <span class="st">"drop"</span>)</span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a>p_wide_df <span class="ot">&lt;-</span> p_df <span class="sc">%&gt;%</span></span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_wider</span>(<span class="at">names_from =</span> side, <span class="at">values_from =</span> needle_length_mm)</span>
+<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a>p_wide_df</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>▶ Run this — do the assumptions actually hold?</strong></p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 1.2 · Checking the assumptions first ─────────────────────────</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="co"># normality, one side at a time -- all 32 needles per side</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="fu">shapiro.test</span>(pine_df<span class="sc">$</span>needle_length_mm[pine_df<span class="sc">$</span>side <span class="sc">==</span> <span class="st">"sunny"</span>])</span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="fu">shapiro.test</span>(pine_df<span class="sc">$</span>needle_length_mm[pine_df<span class="sc">$</span>side <span class="sc">==</span> <span class="st">"shady"</span>])</span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="co"># equal variance</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="fu">leveneTest</span>(needle_length_mm <span class="sc">~</span> <span class="fu">factor</span>(side), <span class="at">data =</span> pine_df)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>✏️ <strong>Your turn:</strong> Record the three p-values, and remember which way these tests point — <strong>H₀ is that the assumption holds.</strong></p>
+<pre><code>Shapiro-Wilk, sunny:   p = ______
+Shapiro-Wilk, shady:   p = ______
+Levene's test:         p = ______</code></pre>
+<p>✏️ <strong>Your turn:</strong> Based on those three numbers, is there any assumption of the paired t-test you ran last week that you can reject?</p>
+<p><code>________________________</code></p>
+<p>✏️ <strong>Your turn:</strong> So — do these data <em>need</em> a non-parametric test?</p>
+<p><code>________________________</code></p>
+<section id="effect-size-a-demonstration" class="level2">
+<h2 class="anchored" data-anchor-id="effect-size-a-demonstration">Effect size — a demonstration</h2>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Note
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><strong>👀 Read this one, don’t sweat it</strong></p>
+<p>This section is here so you have <em>seen</em> effect size before we need it in the power lecture. Run the two blocks, read the output, answer the two short questions. There is nothing to get stuck on.</p>
+</div>
+</div>
+<p>Your paired t-test last week gave <strong>p = 0.072</strong> — “not significant.” But <code>p</code> never said <em>how much</em> shorter the shady needles were. <strong>Cohen’s d</strong> does: it is the difference between groups measured in standard deviations, so it carries no units and can be compared across studies.</p>
+<p>For a paired design, <code>d</code> is the mean of the paired differences divided by the standard deviation of those differences.</p>
+<p><strong>▶ Run this:</strong></p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 1.3 · Effect size (demonstration) ────────────────────────────</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>diffs <span class="ot">&lt;-</span> p_wide_df<span class="sc">$</span>shady <span class="sc">-</span> p_wide_df<span class="sc">$</span>sunny</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="fu">mean</span>(diffs) <span class="sc">/</span> <span class="fu">sd</span>(diffs)     <span class="co"># Cohen's d, by hand</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a><span class="co"># and with a confidence interval</span></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a><span class="fu">cohens_d</span>(p_wide_df<span class="sc">$</span>shady, p_wide_df<span class="sc">$</span>sunny, <span class="at">paired =</span> <span class="cn">TRUE</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>✏️ <strong>Your turn:</strong> Write the value of <code>d</code> and its confidence interval here, then say in one plain sentence what the <code>d</code> value means.</p>
+<pre><code>d  = ______        95% CI = [ ______ , ______ ]
+
+In words: the shady side averaged ______ standard deviations
+          ____________ the sunny side.</code></pre>
+<p><strong>▶ Run this — why it matters:</strong></p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 1.4 · Effect size (demonstration) ────────────────────────────</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="fl">2.7227</span> <span class="sc">/</span> <span class="fu">sqrt</span>(<span class="dv">4</span>)      <span class="co"># our paired t statistic, divided by the square root of n</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>Compare that number to your <code>d</code>. They are the same, because <strong>t = d × √n</strong> — the t-statistic is the effect size multiplied by the square root of your sample size.</p>
+<p>✏️ <strong>Your turn:</strong> If a p-value depends on <strong>both</strong> the size of the effect <strong>and</strong> how many samples you took, why is reporting <code>d</code> alongside <code>p</code> more informative than reporting <code>p</code> on its own?</p>
+<p><code>________________________</code></p>
+<div class="callout callout-style-default callout-important callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Important
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><strong>⚠️ The sentence worth remembering</strong></p>
+<p>“No significant difference” sounds like <em>we found nothing</em>. Our four trees actually gave a <strong>large</strong> effect (d = −1.36) that we simply could not pin down (the CI runs from −2.74 to 0.10). Those are very different messages, and only the second one is honest.</p>
+</div>
+</div>
+<hr>
+<p>Now back to the rank tests. Run them even though the assumptions held — the point of this part is to find out what that choice would have cost you.</p>
+<p><strong>▶ Run this:</strong></p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 1.5 · The two rank-based tests ───────────────────────────────</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="co"># unpaired: Mann-Whitney U</span></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a><span class="fu">wilcox.test</span>(needle_length_mm <span class="sc">~</span> side, <span class="at">data =</span> p_df)</span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a><span class="co"># paired: Wilcoxon signed-rank</span></span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a><span class="fu">wilcox.test</span>(p_wide_df<span class="sc">$</span>shady, p_wide_df<span class="sc">$</span>sunny, <span class="at">paired =</span> <span class="cn">TRUE</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>✏️ <strong>Your turn:</strong> Fill in the comparison table.</p>
 <pre><code>                        parametric        non-parametric
 unpaired:               p = 0.425         p = ______
@@ -964,8 +610,8 @@ paired:                 p = 0.072         p = ______</code></pre>
 <p>✏️ <strong>Your turn:</strong> Look at the signed-rank statistic, <code>V</code>. What value did you get, and what does it say about how consistent the four trees were?</p>
 <p><code>________________________</code></p>
 <p><strong>▶ Run this — the floor:</strong></p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb37"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb37-1"><a href="#cb37-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 7.2 · Our pine needles ───────────────────────────────────────</span></span>
-<span id="cb37-2"><a href="#cb37-2" aria-hidden="true" tabindex="-1"></a><span class="dv">2</span> <span class="sc">/</span> <span class="dv">2</span><span class="sc">^</span><span class="dv">4</span>     <span class="co"># smallest two-sided p a signed-rank test can give with 4 pairs</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 1.6 · The floor ──────────────────────────────────────────────</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="dv">2</span> <span class="sc">/</span> <span class="dv">2</span><span class="sc">^</span><span class="dv">4</span>     <span class="co"># smallest two-sided p a signed-rank test can give with 4 pairs</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>✏️ <strong>Your turn:</strong> Compare that number to the p-value you got from the signed-rank test. What does that tell you about whether the test <em>could</em> have found our effect significant, even in principle?</p>
 <p><code>________________________</code></p>
 <p>✏️ <strong>Your turn:</strong> Based on all of this, which test would you report for the pine needle data, and why?</p>
@@ -983,37 +629,552 @@ Tip
 <p><strong>🚀 If you finish early:</strong> How many pairs would you need before a signed-rank test could possibly reach p &lt; 0.05? Try <code>2 / 2^5</code>, <code>2 / 2^6</code>, and so on until you find it.</p>
 </div>
 </div>
+</section>
+<section id="section-1" class="level2">
+<h2 class="anchored" data-anchor-id="section-1">————————————————————————</h2>
+</section>
+</section>
+<section id="part-2-a-dataset-where-the-assumptions-really-do-fail" class="level1">
+<h1>Part 2 · A Dataset Where the Assumptions Really Do Fail</h1>
+<p>Part 1 showed you what non-parametric tests <strong>cost</strong>. It could not show you what they <strong>buy</strong> you, because nothing about the pine data was broken.</p>
+<p>The lake trout data is a genuine mess: six lakes, wildly unequal sample sizes, and mass distributions that fail every check we just ran. Everything from here on uses <code>mass_g</code>.</p>
+<p>Let’s start by exploring only lake NE 12, as if doing a single-sample t-test, then compare NE 12 to Island Lake.</p>
+<p>We want to test if the mass of lake trout in NE 12 differs from a mean of 500g.</p>
+<p>✏️ <strong>Your turn:</strong> Write out the hypotheses:</p>
+<pre><code>H0: mu = _____ (the mean mass of lake trout in NE 12 is _____ g)
+H1: mu ≠ _____ (the mean mass of lake trout in NE 12 is not _____ g)</code></pre>
+<p><strong>▶ Run this in your Script:</strong></p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 2.1 · Reading in the lake trout ────────────────────────────────</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a><span class="co"># libraries and source() are already loaded from Part 1.1</span></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>lt_df <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="st">"data/lake_trout.csv"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>✏️ <strong>Your turn:</strong> How many lakes are in this dataset?</p>
+<p><code>________________________</code></p>
+<p><strong>▶ Run this</strong> — calculate the mode (R has no built-in <code>mode()</code> for this):</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 2.2 · Setup and the Single-Sample Question ─────────────────────</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>lt_df <span class="sc">%&gt;%</span></span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="sc">!</span><span class="fu">is.na</span>(mass_g)) <span class="sc">%&gt;%</span></span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(lake, mass_g) <span class="sc">%&gt;%</span></span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">count =</span> <span class="fu">n</span>(), <span class="at">.groups =</span> <span class="st">"drop_last"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(<span class="fu">desc</span>(count)) <span class="sc">%&gt;%</span></span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">slice</span>(<span class="dv">1</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(<span class="sc">-</span>count) <span class="sc">%&gt;%</span></span>
+<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename</span>(<span class="at">mode_mass =</span> mass_g)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>▶ Run this</strong> — create a data frame with just NE 12:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb13"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 2.3 · Setup and the Single-Sample Question ─────────────────────</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>ne12_df <span class="ot">&lt;-</span> lt_df <span class="sc">%&gt;%</span></span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(lake <span class="sc">==</span> <span class="st">"NE 12"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="sc">!</span><span class="fu">is.na</span>(mass_g))  <span class="co"># Remove any NA values</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="callout callout-style-default callout-tip callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Tip
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><strong>🚀 If you finish early:</strong> Compute <code>n</code>, <code>mean</code>, <code>sd</code> and <code>se</code> for <code>mass_g</code> across <em>all</em> lakes at once — <code>lt_df %&gt;% group_by(lake) %&gt;% reframe(summary_stats(mass_g))</code>.</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb14"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 2.4 · Setup and the Single-Sample Question ─────────────────────</span></span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Write your code in the R script:</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</div>
 <hr>
 </section>
-<section id="part-8-take-home-extension-crayfish-claw-strength" class="level1">
-<h1>Part 8 · Take-Home Extension — Crayfish Claw Strength</h1>
+<section id="part-3-testing-assumptions-on-ne-12" class="level1">
+<h1>Part 3 · Testing Assumptions on NE 12</h1>
+<p>Before conducting our t-test, we need to verify our data meets the necessary assumptions. Methods to test normality: visual (QQ plots, histograms) and statistical (Shapiro-Wilk test).</p>
+<p><strong>▶ Run this</strong> — histogram:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb15"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 3.1 · Testing Assumptions on NE 12 ─────────────────────────────</span></span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>ne12_histo_plot <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(ne12_df, <span class="fu">aes</span>(<span class="at">x =</span> mass_g)) <span class="sc">+</span></span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_histogram</span>(<span class="at">binwidth =</span> <span class="dv">200</span>) <span class="sc">+</span></span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"mass (g)"</span>, <span class="at">y =</span> <span class="st">"Frequency"</span>)</span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>ne12_histo_plot</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>▶ Run this</strong> — dotplot, boxplot, and QQ plot:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb16"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 3.2 · Testing Assumptions on NE 12 ─────────────────────────────</span></span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>ne12_dot_plot <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(ne12_df, <span class="fu">aes</span>(<span class="at">x =</span> mass_g, <span class="at">y =</span> <span class="st">""</span>)) <span class="sc">+</span></span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_dotplot</span>(<span class="at">binwidth =</span> <span class="dv">60</span>, <span class="at">stackdir =</span> <span class="st">"center"</span>, <span class="at">fill =</span> <span class="st">"darkblue"</span>, <span class="at">dotsize =</span> <span class="fl">0.5</span>) <span class="sc">+</span></span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Dotplot"</span>, <span class="at">x =</span> <span class="st">"Mass (g)"</span>, <span class="at">y =</span> <span class="st">""</span>)</span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>ne12_dot_plot</span>
+<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a>ne12_box_plot <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(ne12_df, <span class="fu">aes</span>(<span class="at">y =</span> mass_g)) <span class="sc">+</span></span>
+<span id="cb16-8"><a href="#cb16-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_boxplot</span>(<span class="at">fill =</span> <span class="st">"darkblue"</span>) <span class="sc">+</span></span>
+<span id="cb16-9"><a href="#cb16-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">y =</span> <span class="st">"Mass (g)"</span>, <span class="at">x =</span> <span class="st">""</span>) <span class="sc">+</span></span>
+<span id="cb16-10"><a href="#cb16-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">coord_flip</span>()</span>
+<span id="cb16-11"><a href="#cb16-11" aria-hidden="true" tabindex="-1"></a>ne12_box_plot</span>
+<span id="cb16-12"><a href="#cb16-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-13"><a href="#cb16-13" aria-hidden="true" tabindex="-1"></a>ne12_qq_plot <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(ne12_df, <span class="fu">aes</span>(<span class="at">sample =</span> mass_g)) <span class="sc">+</span></span>
+<span id="cb16-14"><a href="#cb16-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">stat_qq</span>(<span class="at">color =</span> <span class="st">"darkblue"</span>) <span class="sc">+</span></span>
+<span id="cb16-15"><a href="#cb16-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">stat_qq_line</span>() <span class="sc">+</span></span>
+<span id="cb16-16"><a href="#cb16-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"QQ Plot"</span>, <span class="at">x =</span> <span class="st">"Theoretical Quantiles"</span>, <span class="at">y =</span> <span class="st">"Sample Quantiles"</span>) <span class="sc">+</span></span>
+<span id="cb16-17"><a href="#cb16-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_regular</span>(<span class="at">base_size =</span> <span class="dv">10</span>) <span class="sc">+</span></span>
+<span id="cb16-18"><a href="#cb16-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme</span>(<span class="at">plot.title =</span> <span class="fu">element_text</span>(<span class="at">hjust =</span> <span class="fl">0.5</span>))</span>
+<span id="cb16-19"><a href="#cb16-19" aria-hidden="true" tabindex="-1"></a>ne12_qq_plot</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>▶ Run this</strong> — combine all four with patchwork:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb17"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 3.3 · Testing Assumptions on NE 12 ─────────────────────────────</span></span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>combined_stats_plot <span class="ot">&lt;-</span> (ne12_histo_plot <span class="sc">+</span> ne12_dot_plot) <span class="sc">/</span> (ne12_box_plot <span class="sc">+</span> ne12_qq_plot) <span class="sc">+</span></span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">plot_annotation</span>(</span>
+<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">theme =</span> <span class="fu">theme</span>(<span class="at">plot.title =</span> <span class="fu">element_text</span>(<span class="at">hjust =</span> <span class="fl">0.5</span>),</span>
+<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a>                  <span class="at">plot.subtitle =</span> <span class="fu">element_text</span>(<span class="at">hjust =</span> <span class="fl">0.5</span>))</span>
+<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb17-7"><a href="#cb17-7" aria-hidden="true" tabindex="-1"></a>combined_stats_plot</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>▶ Run this</strong> — the formal test (note: really you want to do this on residuals, but here we test the raw values directly):</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb18"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 3.4 · Testing Assumptions on NE 12 ─────────────────────────────</span></span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>shapiro_test <span class="ot">&lt;-</span> <span class="fu">shapiro.test</span>(ne12_df<span class="sc">$</span>mass_g)</span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>shapiro_test</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>✏️ <strong>Your turn:</strong> Does the QQ plot agree with the Shapiro-Wilk result? Is NE 12’s mass normally distributed?</p>
+<p><code>________________________</code></p>
+<div class="callout callout-style-default callout-tip callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Tip
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><strong>🚀 If you finish early:</strong> Run the same histogram, QQ plot and Shapiro-Wilk on a <strong>different lake</strong> — try <code>Toolik</code> or <code>N 01</code>. Is any lake’s mass close to normal?</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb19"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 3.5 · Testing Assumptions on NE 12 ─────────────────────────────</span></span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Write your code in the R script:</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</div>
+<hr>
+</section>
+<section id="part-4-comparing-two-lakes-ne-12-vs.-island-lake" class="level1">
+<h1>Part 4 · Comparing Two Lakes — NE 12 vs.&nbsp;Island Lake</h1>
+<p>Now that we’ve shown NE 12’s mass fails (or passes) normality, let’s explore a comparison of NE 12 and Island Lake <code>mass_g</code>.</p>
+<p><strong>▶ Run this</strong> — build the two-lake data frame:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb20"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 4.1 · Comparing Two Lakes ──────────────────────────────────────</span></span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a>in_df <span class="ot">&lt;-</span> lt_df <span class="sc">%&gt;%</span></span>
+<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(lake <span class="sc">%in%</span> <span class="fu">c</span>(<span class="st">"NE 12"</span>, <span class="st">"Island Lake"</span>)) <span class="sc">%&gt;%</span></span>
+<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="sc">!</span><span class="fu">is.na</span>(mass_g))</span>
+<span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a><span class="fu">head</span>(in_df)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>▶ Run this</strong> — summary stats by lake:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb21"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 4.2 · Comparing Two Lakes ──────────────────────────────────────</span></span>
+<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a>summary_by_lake <span class="ot">&lt;-</span> in_df <span class="sc">%&gt;%</span> <span class="fu">group_by</span>(lake) <span class="sc">%&gt;%</span> <span class="fu">reframe</span>(<span class="fu">summary_stats</span>(mass_g))</span>
+<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a>summary_by_lake</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>▶ Run this</strong> — histograms by lake:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb22"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 4.3 · Comparing Two Lakes ──────────────────────────────────────</span></span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>hist_plot <span class="ot">&lt;-</span> in_df <span class="sc">%&gt;%</span></span>
+<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> mass_g, <span class="at">fill =</span> lake)) <span class="sc">+</span></span>
+<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_histogram</span>(<span class="at">bins =</span> <span class="dv">20</span>, <span class="at">alpha =</span> <span class="fl">0.7</span>) <span class="sc">+</span></span>
+<span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Mass (g)"</span>, <span class="at">y =</span> <span class="st">"Count"</span>) <span class="sc">+</span></span>
+<span id="cb22-6"><a href="#cb22-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_regular</span>(<span class="at">base_size =</span> <span class="dv">10</span>) <span class="sc">+</span></span>
+<span id="cb22-7"><a href="#cb22-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">facet_wrap</span>(<span class="sc">~</span>lake, <span class="at">scales =</span> <span class="st">"free_y"</span>)</span>
+<span id="cb22-8"><a href="#cb22-8" aria-hidden="true" tabindex="-1"></a>hist_plot</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>▶ Run this</strong> — QQ plots by lake (in a QQ plot, points that follow the line indicate normally distributed data; deviations suggest non-normality):</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb23"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 4.4 · Comparing Two Lakes ──────────────────────────────────────</span></span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a>qq_plot <span class="ot">&lt;-</span> in_df <span class="sc">%&gt;%</span></span>
+<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">sample =</span> mass_g, <span class="at">color =</span> lake)) <span class="sc">+</span></span>
+<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">stat_qq</span>() <span class="sc">+</span></span>
+<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">stat_qq_line</span>() <span class="sc">+</span></span>
+<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"QQ Plot for Normality Check"</span>,</span>
+<span id="cb23-7"><a href="#cb23-7" aria-hidden="true" tabindex="-1"></a>       <span class="at">x =</span> <span class="st">"Theoretical Quantiles"</span>, <span class="at">y =</span> <span class="st">"Sample Quantiles"</span>) <span class="sc">+</span></span>
+<span id="cb23-8"><a href="#cb23-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_regular</span>(<span class="at">base_size =</span> <span class="dv">10</span>) <span class="sc">+</span></span>
+<span id="cb23-9"><a href="#cb23-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">facet_wrap</span>(<span class="sc">~</span>lake)</span>
+<span id="cb23-10"><a href="#cb23-10" aria-hidden="true" tabindex="-1"></a>qq_plot</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>▶ Run this</strong> — the formal test, done for each lake separately (note: Island Lake can look non-normal in the QQ plot but come out close to normal in the Shapiro-Wilk test):</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb24"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 4.5 · Comparing Two Lakes ──────────────────────────────────────</span></span>
+<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a>normality_results <span class="ot">&lt;-</span> in_df <span class="sc">%&gt;%</span></span>
+<span id="cb24-3"><a href="#cb24-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(lake) <span class="sc">%&gt;%</span></span>
+<span id="cb24-4"><a href="#cb24-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarize</span>(</span>
+<span id="cb24-5"><a href="#cb24-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">shapiro_stat =</span> <span class="fu">shapiro.test</span>(mass_g)<span class="sc">$</span>statistic,</span>
+<span id="cb24-6"><a href="#cb24-6" aria-hidden="true" tabindex="-1"></a>    <span class="at">shapiro_p_value =</span> <span class="fu">shapiro.test</span>(mass_g)<span class="sc">$</span>p.value,</span>
+<span id="cb24-7"><a href="#cb24-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">normal_distribution =</span> <span class="fu">if_else</span>(shapiro_p_value <span class="sc">&gt;</span> <span class="fl">0.05</span>, <span class="st">"Normal"</span>, <span class="st">"Non-normal"</span>)</span>
+<span id="cb24-8"><a href="#cb24-8" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb24-9"><a href="#cb24-9" aria-hidden="true" tabindex="-1"></a>normality_results</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>▶ Run this</strong> — Levene’s test for equal variances (H₀: variances are equal across groups; we want this <strong>non-significant</strong>):</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb25"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 4.6 · Comparing Two Lakes ──────────────────────────────────────</span></span>
+<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a>levene_result <span class="ot">&lt;-</span> <span class="fu">leveneTest</span>(mass_g <span class="sc">~</span> lake, <span class="at">data =</span> in_df)</span>
+<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a>levene_result</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>✏️ <strong>Your turn:</strong> Based on your normality and Levene’s test results, do these two lakes meet the assumptions for a standard t-test?</p>
+<p><code>________________________</code></p>
+<div class="callout callout-style-default callout-tip callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Tip
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><strong>🚀 If you finish early:</strong> Rerun Levene’s test on a <strong>different pair of lakes</strong> — say <code>Toolik</code> and <code>N 01</code>, which have far more similar sample sizes. Same conclusion?</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb26"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 4.7 · Comparing Two Lakes ──────────────────────────────────────</span></span>
+<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Write your code in the R script:</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</div>
+<hr>
+</section>
+<section id="part-5-data-transformations" class="level1">
+<h1>Part 5 · Data Transformations</h1>
+<p>A log₁₀ transformation commonly helps right-skewed data like this pass the normality assumption.</p>
+<p><strong>▶ Run this:</strong></p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb27"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 5.1 · Data Transformations ─────────────────────────────────────</span></span>
+<span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a>in_df <span class="ot">&lt;-</span> in_df <span class="sc">%&gt;%</span></span>
+<span id="cb27-3"><a href="#cb27-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">log_mass =</span> <span class="fu">log10</span>(mass_g))</span>
+<span id="cb27-4"><a href="#cb27-4" aria-hidden="true" tabindex="-1"></a><span class="fu">head</span>(in_df)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>▶ Run this</strong> — check if it worked, with a histogram:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb28"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 5.2 · Data Transformations ─────────────────────────────────────</span></span>
+<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a>log_hist_plot <span class="ot">&lt;-</span> in_df <span class="sc">%&gt;%</span></span>
+<span id="cb28-3"><a href="#cb28-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> log_mass, <span class="at">fill =</span> lake)) <span class="sc">+</span></span>
+<span id="cb28-4"><a href="#cb28-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_histogram</span>(<span class="at">bins =</span> <span class="dv">20</span>, <span class="at">alpha =</span> <span class="fl">0.7</span>) <span class="sc">+</span></span>
+<span id="cb28-5"><a href="#cb28-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Distribution of Log-Transformed Lake Trout Mass"</span>,</span>
+<span id="cb28-6"><a href="#cb28-6" aria-hidden="true" tabindex="-1"></a>       <span class="at">x =</span> <span class="st">"Log10 Mass"</span>, <span class="at">y =</span> <span class="st">"Count"</span>) <span class="sc">+</span></span>
+<span id="cb28-7"><a href="#cb28-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_regular</span>(<span class="at">base_size =</span> <span class="dv">10</span>) <span class="sc">+</span></span>
+<span id="cb28-8"><a href="#cb28-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">facet_wrap</span>(<span class="sc">~</span>lake, <span class="at">scales =</span> <span class="st">"free_y"</span>)</span>
+<span id="cb28-9"><a href="#cb28-9" aria-hidden="true" tabindex="-1"></a>log_hist_plot</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>▶ Run this</strong> — a QQ plot of the transformed data (we’ll skip Shapiro-Wilk for a moment):</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb29"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 5.3 · Data Transformations ─────────────────────────────────────</span></span>
+<span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a>log_qq_plot <span class="ot">&lt;-</span> in_df <span class="sc">%&gt;%</span></span>
+<span id="cb29-3"><a href="#cb29-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">sample =</span> log_mass, <span class="at">color =</span> lake)) <span class="sc">+</span></span>
+<span id="cb29-4"><a href="#cb29-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">stat_qq</span>() <span class="sc">+</span></span>
+<span id="cb29-5"><a href="#cb29-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">stat_qq_line</span>() <span class="sc">+</span></span>
+<span id="cb29-6"><a href="#cb29-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"QQ Plot for Log-Transformed Data"</span>,</span>
+<span id="cb29-7"><a href="#cb29-7" aria-hidden="true" tabindex="-1"></a>       <span class="at">x =</span> <span class="st">"Theoretical Quantiles"</span>, <span class="at">y =</span> <span class="st">"Sample Quantiles"</span>) <span class="sc">+</span></span>
+<span id="cb29-8"><a href="#cb29-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_regular</span>(<span class="at">base_size =</span> <span class="dv">10</span>) <span class="sc">+</span></span>
+<span id="cb29-9"><a href="#cb29-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">facet_wrap</span>(<span class="sc">~</span>lake)</span>
+<span id="cb29-10"><a href="#cb29-10" aria-hidden="true" tabindex="-1"></a>log_qq_plot</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>▶ Run this</strong> — now the formal tests on the transformed data:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb30"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 5.4 · Data Transformations ─────────────────────────────────────</span></span>
+<span id="cb30-2"><a href="#cb30-2" aria-hidden="true" tabindex="-1"></a>log_normality_results <span class="ot">&lt;-</span> in_df <span class="sc">%&gt;%</span></span>
+<span id="cb30-3"><a href="#cb30-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(lake) <span class="sc">%&gt;%</span></span>
+<span id="cb30-4"><a href="#cb30-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarize</span>(</span>
+<span id="cb30-5"><a href="#cb30-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">shapiro_stat =</span> <span class="fu">shapiro.test</span>(<span class="fu">log10</span>(mass_g))<span class="sc">$</span>statistic,</span>
+<span id="cb30-6"><a href="#cb30-6" aria-hidden="true" tabindex="-1"></a>    <span class="at">shapiro_p_value =</span> <span class="fu">shapiro.test</span>(<span class="fu">log10</span>(mass_g))<span class="sc">$</span>p.value,</span>
+<span id="cb30-7"><a href="#cb30-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">normal_distribution =</span> <span class="fu">if_else</span>(shapiro_p_value <span class="sc">&gt;</span> <span class="fl">0.05</span>, <span class="st">"Normal"</span>, <span class="st">"Non-normal"</span>)</span>
+<span id="cb30-8"><a href="#cb30-8" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb30-9"><a href="#cb30-9" aria-hidden="true" tabindex="-1"></a>log_normality_results</span>
+<span id="cb30-10"><a href="#cb30-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb30-11"><a href="#cb30-11" aria-hidden="true" tabindex="-1"></a>levene_log_result <span class="ot">&lt;-</span> <span class="fu">leveneTest</span>(log_mass <span class="sc">~</span> lake, <span class="at">data =</span> in_df)</span>
+<span id="cb30-12"><a href="#cb30-12" aria-hidden="true" tabindex="-1"></a>levene_log_result</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>✏️ <strong>Your turn:</strong> Did the log transformation fix normality, equal variance, both, or neither?</p>
+<p><code>________________________</code></p>
+<div class="callout callout-style-default callout-tip callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Tip
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><strong>🚀 If you finish early:</strong> Try a square-root transformation (<code>sqrt(mass_g)</code>) instead of log₁₀. Build a histogram and rerun the Shapiro-Wilk test — does it do better or worse than the log transform?</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb31"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 5.5 · Data Transformations ─────────────────────────────────────</span></span>
+<span id="cb31-2"><a href="#cb31-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Write your code in the R script:</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</div>
+<hr>
+</section>
+<section id="part-6-running-the-tests" class="level1">
+<h1>Part 6 · Running the Tests</h1>
+<p>Even if the transformation doesn’t fully fix things, let’s run the full set of tests so we can compare them side by side.</p>
+<p><strong>▶ Run this</strong> — standard two-sample t-test on the raw data:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb32"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 6.1 · Running the Tests ────────────────────────────────────────</span></span>
+<span id="cb32-2"><a href="#cb32-2" aria-hidden="true" tabindex="-1"></a>t_test_result <span class="ot">&lt;-</span> <span class="fu">t.test</span>(</span>
+<span id="cb32-3"><a href="#cb32-3" aria-hidden="true" tabindex="-1"></a>  mass_g <span class="sc">~</span> lake,</span>
+<span id="cb32-4"><a href="#cb32-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">data =</span> in_df,</span>
+<span id="cb32-5"><a href="#cb32-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">var.equal =</span> <span class="cn">TRUE</span>,</span>
+<span id="cb32-6"><a href="#cb32-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">alternative =</span> <span class="st">"two.sided"</span></span>
+<span id="cb32-7"><a href="#cb32-7" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb32-8"><a href="#cb32-8" aria-hidden="true" tabindex="-1"></a>t_test_result</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>▶ Run this</strong> — the same t-test on the log-transformed data:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb33"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb33-1"><a href="#cb33-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 6.2 · Running the Tests ────────────────────────────────────────</span></span>
+<span id="cb33-2"><a href="#cb33-2" aria-hidden="true" tabindex="-1"></a>log_t_test_result <span class="ot">&lt;-</span> <span class="fu">t.test</span>(</span>
+<span id="cb33-3"><a href="#cb33-3" aria-hidden="true" tabindex="-1"></a>  log_mass <span class="sc">~</span> lake,</span>
+<span id="cb33-4"><a href="#cb33-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">data =</span> in_df,</span>
+<span id="cb33-5"><a href="#cb33-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">var.equal =</span> <span class="cn">TRUE</span>,</span>
+<span id="cb33-6"><a href="#cb33-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">alternative =</span> <span class="st">"two.sided"</span></span>
+<span id="cb33-7"><a href="#cb33-7" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb33-8"><a href="#cb33-8" aria-hidden="true" tabindex="-1"></a>log_t_test_result</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Note
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><strong>When analyzing log-transformed data:</strong></p>
+<ol type="1">
+<li>The mean of log-transformed data, back-transformed, gives the <em>geometric mean</em> (not the arithmetic mean).</li>
+<li>The back-transformed confidence intervals represent the CI for the geometric mean, and must be calculated carefully.</li>
+<li>Report results like: “The geometric mean mass of lake trout in NE 12 was X g (95% CI: Y–Z).”</li>
+<li>You can’t just take <code>10^SE</code> to get the standard error — instead, back-transform <code>mean - se</code> and <code>mean + se</code> separately.</li>
+</ol>
+</div>
+</div>
+<p><strong>▶ Run this</strong> — back-transform to the geometric mean:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb34"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 6.3 · Running the Tests ────────────────────────────────────────</span></span>
+<span id="cb34-2"><a href="#cb34-2" aria-hidden="true" tabindex="-1"></a>back_transformed <span class="ot">&lt;-</span> in_df <span class="sc">%&gt;%</span></span>
+<span id="cb34-3"><a href="#cb34-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(lake) <span class="sc">%&gt;%</span></span>
+<span id="cb34-4"><a href="#cb34-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(</span>
+<span id="cb34-5"><a href="#cb34-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">n =</span> <span class="fu">n</span>(),</span>
+<span id="cb34-6"><a href="#cb34-6" aria-hidden="true" tabindex="-1"></a>    <span class="at">mean_log =</span> <span class="fu">mean</span>(log_mass),</span>
+<span id="cb34-7"><a href="#cb34-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">sd_log =</span> <span class="fu">sd</span>(log_mass),</span>
+<span id="cb34-8"><a href="#cb34-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">se_log =</span> sd_log <span class="sc">/</span> <span class="fu">sqrt</span>(n),</span>
+<span id="cb34-9"><a href="#cb34-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">geometric_mean =</span> <span class="dv">10</span><span class="sc">^</span>mean_log,</span>
+<span id="cb34-10"><a href="#cb34-10" aria-hidden="true" tabindex="-1"></a>    <span class="at">lower_se =</span> <span class="dv">10</span><span class="sc">^</span>(mean_log <span class="sc">-</span> se_log),</span>
+<span id="cb34-11"><a href="#cb34-11" aria-hidden="true" tabindex="-1"></a>    <span class="at">upper_se =</span> <span class="dv">10</span><span class="sc">^</span>(mean_log <span class="sc">+</span> se_log),</span>
+<span id="cb34-12"><a href="#cb34-12" aria-hidden="true" tabindex="-1"></a>    <span class="at">arithmetic_mean =</span> <span class="fu">mean</span>(mass_g)</span>
+<span id="cb34-13"><a href="#cb34-13" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb34-14"><a href="#cb34-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb34-15"><a href="#cb34-15" aria-hidden="true" tabindex="-1"></a>back_transformed <span class="sc">%&gt;%</span></span>
+<span id="cb34-16"><a href="#cb34-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(lake, mean_log, geometric_mean, arithmetic_mean)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>▶ Run this</strong> — plot the back-transformed geometric means (note the error bars are not symmetrical!):</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb35"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb35-1"><a href="#cb35-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 6.4 · Running the Tests ────────────────────────────────────────</span></span>
+<span id="cb35-2"><a href="#cb35-2" aria-hidden="true" tabindex="-1"></a>geo_mean_plot <span class="ot">&lt;-</span> back_transformed <span class="sc">%&gt;%</span></span>
+<span id="cb35-3"><a href="#cb35-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> lake, <span class="at">y =</span> geometric_mean, <span class="at">fill =</span> lake)) <span class="sc">+</span></span>
+<span id="cb35-4"><a href="#cb35-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_bar</span>(<span class="at">stat =</span> <span class="st">"identity"</span>, <span class="at">width =</span> <span class="fl">0.5</span>, <span class="at">alpha =</span> <span class="fl">0.7</span>) <span class="sc">+</span></span>
+<span id="cb35-5"><a href="#cb35-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_errorbar</span>(<span class="fu">aes</span>(<span class="at">ymin =</span> lower_se, <span class="at">ymax =</span> upper_se), <span class="at">width =</span> <span class="fl">0.2</span>, <span class="at">linewidth =</span> <span class="dv">1</span>) <span class="sc">+</span></span>
+<span id="cb35-6"><a href="#cb35-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Geometric Mean Lake Trout Mass with Standard Error"</span>,</span>
+<span id="cb35-7"><a href="#cb35-7" aria-hidden="true" tabindex="-1"></a>       <span class="at">subtitle =</span> <span class="st">"Back-transformed from log10 scale"</span>,</span>
+<span id="cb35-8"><a href="#cb35-8" aria-hidden="true" tabindex="-1"></a>       <span class="at">x =</span> <span class="st">"Lake"</span>, <span class="at">y =</span> <span class="st">"Geometric Mean Mass (g)"</span>) <span class="sc">+</span></span>
+<span id="cb35-9"><a href="#cb35-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_regular</span>(<span class="at">base_size =</span> <span class="dv">10</span>) <span class="sc">+</span></span>
+<span id="cb35-10"><a href="#cb35-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme</span>(<span class="at">legend.position =</span> <span class="st">"none"</span>)</span>
+<span id="cb35-11"><a href="#cb35-11" aria-hidden="true" tabindex="-1"></a>geo_mean_plot</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>▶ Run this</strong> — Welch’s t-test (doesn’t assume equal variances):</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb36"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb36-1"><a href="#cb36-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 6.5 · Running the Tests ────────────────────────────────────────</span></span>
+<span id="cb36-2"><a href="#cb36-2" aria-hidden="true" tabindex="-1"></a>welch_test_result <span class="ot">&lt;-</span> <span class="fu">t.test</span>(</span>
+<span id="cb36-3"><a href="#cb36-3" aria-hidden="true" tabindex="-1"></a>  mass_g <span class="sc">~</span> lake,</span>
+<span id="cb36-4"><a href="#cb36-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">data =</span> in_df,</span>
+<span id="cb36-5"><a href="#cb36-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">var.equal =</span> <span class="cn">FALSE</span>,</span>
+<span id="cb36-6"><a href="#cb36-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">alternative =</span> <span class="st">"two.sided"</span></span>
+<span id="cb36-7"><a href="#cb36-7" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb36-8"><a href="#cb36-8" aria-hidden="true" tabindex="-1"></a>welch_test_result</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<blockquote class="blockquote">
+<p>💡 Welch’s t-test is preferred when group variances are unequal (per Levene’s test), sample sizes differ between groups, or you just want a more robust default.</p>
+</blockquote>
+<p><strong>▶ Run this</strong> — the Mann-Whitney Wilcoxon test (non-parametric):</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb37"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb37-1"><a href="#cb37-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 6.6 · Running the Tests ────────────────────────────────────────</span></span>
+<span id="cb37-2"><a href="#cb37-2" aria-hidden="true" tabindex="-1"></a>wilcox_test_result <span class="ot">&lt;-</span> <span class="fu">wilcox.test</span>(</span>
+<span id="cb37-3"><a href="#cb37-3" aria-hidden="true" tabindex="-1"></a>  mass_g <span class="sc">~</span> lake,</span>
+<span id="cb37-4"><a href="#cb37-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">data =</span> in_df,</span>
+<span id="cb37-5"><a href="#cb37-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">alternative =</span> <span class="st">"two.sided"</span></span>
+<span id="cb37-6"><a href="#cb37-6" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb37-7"><a href="#cb37-7" aria-hidden="true" tabindex="-1"></a>wilcox_test_result</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<blockquote class="blockquote">
+<p>💡 Mann-Whitney is preferred when data isn’t normal even after transformation, you’re comparing medians rather than means, or outliers might distort a t-test — it compares ranks, not raw values.</p>
+</blockquote>
+<p><strong>▶ Run this</strong> — a permutation test (balance the sample sizes first):</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb38"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb38-1"><a href="#cb38-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 6.7 · Running the Tests ────────────────────────────────────────</span></span>
+<span id="cb38-2"><a href="#cb38-2" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">123</span>)  <span class="co"># For reproducibility</span></span>
+<span id="cb38-3"><a href="#cb38-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb38-4"><a href="#cb38-4" aria-hidden="true" tabindex="-1"></a>island_size <span class="ot">&lt;-</span> <span class="fu">sum</span>(in_df<span class="sc">$</span>lake <span class="sc">==</span> <span class="st">"Island Lake"</span>)</span>
+<span id="cb38-5"><a href="#cb38-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb38-6"><a href="#cb38-6" aria-hidden="true" tabindex="-1"></a>ne12_sample <span class="ot">&lt;-</span> in_df <span class="sc">%&gt;%</span></span>
+<span id="cb38-7"><a href="#cb38-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(lake <span class="sc">==</span> <span class="st">"NE 12"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb38-8"><a href="#cb38-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">slice_sample</span>(<span class="at">n =</span> island_size)</span>
+<span id="cb38-9"><a href="#cb38-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb38-10"><a href="#cb38-10" aria-hidden="true" tabindex="-1"></a>balanced_df <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(</span>
+<span id="cb38-11"><a href="#cb38-11" aria-hidden="true" tabindex="-1"></a>  ne12_sample,</span>
+<span id="cb38-12"><a href="#cb38-12" aria-hidden="true" tabindex="-1"></a>  in_df <span class="sc">%&gt;%</span> <span class="fu">filter</span>(lake <span class="sc">==</span> <span class="st">"Island Lake"</span>)</span>
+<span id="cb38-13"><a href="#cb38-13" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb38-14"><a href="#cb38-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb38-15"><a href="#cb38-15" aria-hidden="true" tabindex="-1"></a>perm_test_result <span class="ot">&lt;-</span> <span class="fu">permTS</span>(</span>
+<span id="cb38-16"><a href="#cb38-16" aria-hidden="true" tabindex="-1"></a>  mass_g <span class="sc">~</span> lake,</span>
+<span id="cb38-17"><a href="#cb38-17" aria-hidden="true" tabindex="-1"></a>  <span class="at">data =</span> balanced_df,</span>
+<span id="cb38-18"><a href="#cb38-18" aria-hidden="true" tabindex="-1"></a>  <span class="at">alternative =</span> <span class="st">"two.sided"</span>,</span>
+<span id="cb38-19"><a href="#cb38-19" aria-hidden="true" tabindex="-1"></a>  <span class="at">method =</span> <span class="st">"exact.mc"</span>,</span>
+<span id="cb38-20"><a href="#cb38-20" aria-hidden="true" tabindex="-1"></a>  <span class="at">control =</span> <span class="fu">permControl</span>(<span class="at">nmc =</span> <span class="dv">10000</span>)</span>
+<span id="cb38-21"><a href="#cb38-21" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb38-22"><a href="#cb38-22" aria-hidden="true" tabindex="-1"></a>perm_test_result</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<blockquote class="blockquote">
+<p>💡 Permutation tests are useful for small samples, data that doesn’t meet parametric assumptions, or when you want a test that makes minimal distributional assumptions — and they can test statistics other than the mean.</p>
+</blockquote>
+<div class="callout callout-style-default callout-tip callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Tip
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><strong>🚀 If you finish early:</strong> Rerun the permutation test with <code>nmc = 1000</code> instead of <code>10000</code>. Does the p-value change meaningfully? What’s the tradeoff of using fewer Monte Carlo replications?</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb39"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb39-1"><a href="#cb39-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 6.8 · Running the Tests ────────────────────────────────────────</span></span>
+<span id="cb39-2"><a href="#cb39-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Write your code in the R script:</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</div>
+<hr>
+</section>
+<section id="part-7-comparing-all-results" class="level1">
+<h1>Part 7 · Comparing All Results</h1>
+<p><strong>▶ Run this</strong> — build a comparison table:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb40"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb40-1"><a href="#cb40-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 7.1 · Comparing All Results ────────────────────────────────────</span></span>
+<span id="cb40-2"><a href="#cb40-2" aria-hidden="true" tabindex="-1"></a>test_results <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb40-3"><a href="#cb40-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">Test =</span> <span class="fu">c</span>(<span class="st">"Standard t-test"</span>,</span>
+<span id="cb40-4"><a href="#cb40-4" aria-hidden="true" tabindex="-1"></a>           <span class="st">"Log-transformed t-test"</span>,</span>
+<span id="cb40-5"><a href="#cb40-5" aria-hidden="true" tabindex="-1"></a>           <span class="st">"Welch's t-test"</span>,</span>
+<span id="cb40-6"><a href="#cb40-6" aria-hidden="true" tabindex="-1"></a>           <span class="st">"Mann-Whitney Wilcoxon test"</span>),</span>
+<span id="cb40-7"><a href="#cb40-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">Statistic =</span> <span class="fu">c</span>(<span class="fu">paste</span>(<span class="st">"t ="</span>, <span class="fu">round</span>(t_test_result<span class="sc">$</span>statistic, <span class="dv">2</span>)),</span>
+<span id="cb40-8"><a href="#cb40-8" aria-hidden="true" tabindex="-1"></a>               <span class="fu">paste</span>(<span class="st">"t ="</span>, <span class="fu">round</span>(log_t_test_result<span class="sc">$</span>statistic, <span class="dv">2</span>)),</span>
+<span id="cb40-9"><a href="#cb40-9" aria-hidden="true" tabindex="-1"></a>               <span class="fu">paste</span>(<span class="st">"t ="</span>, <span class="fu">round</span>(welch_test_result<span class="sc">$</span>statistic, <span class="dv">2</span>)),</span>
+<span id="cb40-10"><a href="#cb40-10" aria-hidden="true" tabindex="-1"></a>               <span class="fu">paste</span>(<span class="st">"W ="</span>, wilcox_test_result<span class="sc">$</span>statistic)),</span>
+<span id="cb40-11"><a href="#cb40-11" aria-hidden="true" tabindex="-1"></a>  <span class="at">p_value =</span> <span class="fu">c</span>(t_test_result<span class="sc">$</span>p.value,</span>
+<span id="cb40-12"><a href="#cb40-12" aria-hidden="true" tabindex="-1"></a>             log_t_test_result<span class="sc">$</span>p.value,</span>
+<span id="cb40-13"><a href="#cb40-13" aria-hidden="true" tabindex="-1"></a>             welch_test_result<span class="sc">$</span>p.value,</span>
+<span id="cb40-14"><a href="#cb40-14" aria-hidden="true" tabindex="-1"></a>             wilcox_test_result<span class="sc">$</span>p.value),</span>
+<span id="cb40-15"><a href="#cb40-15" aria-hidden="true" tabindex="-1"></a>  <span class="at">Significant =</span> <span class="fu">c</span>(t_test_result<span class="sc">$</span>p.value <span class="sc">&lt;</span> <span class="fl">0.05</span>,</span>
+<span id="cb40-16"><a href="#cb40-16" aria-hidden="true" tabindex="-1"></a>                 log_t_test_result<span class="sc">$</span>p.value <span class="sc">&lt;</span> <span class="fl">0.05</span>,</span>
+<span id="cb40-17"><a href="#cb40-17" aria-hidden="true" tabindex="-1"></a>                 welch_test_result<span class="sc">$</span>p.value <span class="sc">&lt;</span> <span class="fl">0.05</span>,</span>
+<span id="cb40-18"><a href="#cb40-18" aria-hidden="true" tabindex="-1"></a>                 wilcox_test_result<span class="sc">$</span>p.value <span class="sc">&lt;</span> <span class="fl">0.05</span>)</span>
+<span id="cb40-19"><a href="#cb40-19" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb40-20"><a href="#cb40-20" aria-hidden="true" tabindex="-1"></a>test_results</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>▶ Run this</strong> — visualize the raw comparison:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb41"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb41-1"><a href="#cb41-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 7.2 · Comparing All Results ────────────────────────────────────</span></span>
+<span id="cb41-2"><a href="#cb41-2" aria-hidden="true" tabindex="-1"></a>combined_plot <span class="ot">&lt;-</span> in_df <span class="sc">%&gt;%</span></span>
+<span id="cb41-3"><a href="#cb41-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> lake, <span class="at">y =</span> mass_g, <span class="at">fill =</span> lake)) <span class="sc">+</span></span>
+<span id="cb41-4"><a href="#cb41-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_boxplot</span>(<span class="at">alpha =</span> <span class="fl">0.7</span>, <span class="at">outlier.shape =</span> <span class="cn">NA</span>) <span class="sc">+</span></span>
+<span id="cb41-5"><a href="#cb41-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_jitter</span>(<span class="at">width =</span> <span class="fl">0.2</span>, <span class="at">alpha =</span> <span class="fl">0.5</span>, <span class="at">size =</span> <span class="dv">2</span>) <span class="sc">+</span></span>
+<span id="cb41-6"><a href="#cb41-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Lake"</span>, <span class="at">y =</span> <span class="st">"Mass (g)"</span>) <span class="sc">+</span></span>
+<span id="cb41-7"><a href="#cb41-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_regular</span>(<span class="at">base_size =</span> <span class="dv">10</span>) <span class="sc">+</span></span>
+<span id="cb41-8"><a href="#cb41-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme</span>(<span class="at">legend.position =</span> <span class="st">"none"</span>)</span>
+<span id="cb41-9"><a href="#cb41-9" aria-hidden="true" tabindex="-1"></a>combined_plot</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>✏️ <strong>Your turn:</strong> Do all four tests agree on whether the difference is significant? If any disagree, what does that tell you about how sensitive the conclusion is to test choice?</p>
+<p><code>________________________</code></p>
+<p>When reporting results, include:</p>
+<ul>
+<li><strong>Standard t-test:</strong> “Lake trout from NE 12 had significantly different mass (M = [mean], SD = [SD]) compared to Island Lake (M = [mean], SD = [SD]), t([df]) = [t-value], p = [p-value].”</li>
+<li><strong>Log-transformed t-test:</strong> “After log transformation to meet normality assumptions, lake trout from NE 12 had significantly different mass (geometric mean = [value], 95% CI [lower–upper]) compared to Island Lake (geometric mean = [value], 95% CI [lower–upper]), t([df]) = [t-value], p = [p-value].”</li>
+<li><strong>Welch’s t-test:</strong> “Assuming unequal variances, lake trout from NE 12 had significantly different mass (M = [mean], SD = [SD]) compared to Island Lake (M = [mean], SD = [SD]), Welch’s t([df]) = [t-value], p = [p-value].”</li>
+<li><strong>Mann-Whitney Wilcoxon test:</strong> “Lake trout mass differed significantly between NE 12 (Mdn = [median]) and Island Lake (Mdn = [median]), W = [W-value], p = [p-value].”</li>
+<li><strong>Permutation test:</strong> “Permutation testing (10,000 iterations) revealed significant differences in lake trout mass between NE 12 and Island Lake, p = [p-value].”</li>
+</ul>
+<p>✏️ <strong>Your turn:</strong> Write the standard t-test and Mann-Whitney reporting sentences using your own numbers from Parts 5–6.</p>
+<pre><code>________________________________________________________
+________________________________________________________</code></pre>
+<div class="callout callout-style-default callout-tip callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Tip
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><strong>🚀 If you finish early:</strong> Add the permutation test’s p-value as a fifth row to <code>test_results</code>. (Hint: <code>perm_test_result$p.value</code>.)</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb43"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb43-1"><a href="#cb43-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 7.3 · Comparing All Results ────────────────────────────────────</span></span>
+<span id="cb43-2"><a href="#cb43-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Write your code in the R script:</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</div>
+<section id="section-2" class="level2">
+<h2 class="anchored" data-anchor-id="section-2">————————————————————————</h2>
+</section>
+</section>
+<section id="part-8-take-home-extension-sagebrush-crickets" class="level1">
+<h1>Part 8 · Take-Home Extension — Sagebrush Crickets</h1>
 <p><em>Due Wednesday, September 30 — before the Study Design &amp; Sampling class.</em></p>
+<p><a href="data/sage_brush_crickets_feeding_mating.csv" class="btn btn-primary" download="sage_brush_crickets_feeding_mating.csv">📥 Sagebrush cricket data</a></p>
 <p>This time the test itself is the question. You now know five ways to compare two groups — standard t-test, log-transformed t-test, Welch’s t-test, Mann-Whitney, and permutation test. Given a new dataset, you decide which one is appropriate and defend your choice.</p>
 <section id="background" class="level2">
 <h2 class="anchored" data-anchor-id="background">Background</h2>
-<p>Graham &amp; Angilletta (2022) asked whether claw strength in crayfish honestly signals fighting ability. They compared maximum claw strength between stream-dwelling crayfish (which fight often and may use claws to signal) and burrowing crayfish (docile, claws used mainly for digging).</p>
-<p><strong>▶ Run this</strong> — load the data and collapse to one claw-strength value per individual. Each crayfish has up to two claws measured (left and right) — you already know from the pine needle data why those can’t be treated as independent observations:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb38"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb38-1"><a href="#cb38-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 8.1 · Take-Home Extension ──────────────────────────────────────</span></span>
-<span id="cb38-2"><a href="#cb38-2" aria-hidden="true" tabindex="-1"></a>claw_df <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="st">"data/graham_and_angilletta_claw_data.csv"</span>)</span>
-<span id="cb38-3"><a href="#cb38-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb38-4"><a href="#cb38-4" aria-hidden="true" tabindex="-1"></a>crayfish_df <span class="ot">&lt;-</span> claw_df <span class="sc">%&gt;%</span></span>
-<span id="cb38-5"><a href="#cb38-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(crayfish.id, lifestyle) <span class="sc">%&gt;%</span></span>
-<span id="cb38-6"><a href="#cb38-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarize</span>(<span class="at">maxclawstr_N =</span> <span class="fu">mean</span>(maxclawstr.N, <span class="at">na.rm =</span> <span class="cn">TRUE</span>), <span class="at">.groups =</span> <span class="st">"drop"</span>)</span>
-<span id="cb38-7"><a href="#cb38-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb38-8"><a href="#cb38-8" aria-hidden="true" tabindex="-1"></a><span class="fu">head</span>(crayfish_df)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>Male sagebrush crickets (<em>Cyphoderris strepitans</em>) have an unusual mating system: during copulation the female eats the tips of the male’s hind wings and drinks his haemolymph. A male who has already mated has damaged wings, and is therefore visibly “starved” relative to a virgin male.</p>
+<p>The question is whether that costs him. Johnson et al.&nbsp;measured <strong>time to mating</strong> — how many hours a male waited before securing a mate — for males that had already mated (<strong>starved</strong>) and males that had not (<strong>fed</strong>).</p>
+<div class="callout callout-style-default callout-important callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Important
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><strong>⚠️ This is Example 13.5 in Whitlock &amp; Schluter</strong></p>
+<p>These are the data the textbook uses to introduce the Mann-Whitney U test in <strong>Chapter 13</strong>. That is deliberate: after you have made your own decision and written it up, you can read the chapter and see how the authors justified theirs.</p>
+<p><strong>Do the work first.</strong> The point of this assignment is your reasoning, not matching the book.</p>
+</div>
+</div>
+<div class="callout callout-style-default callout-important callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Important</span>Column names in <code>sage_brush_crickets_feeding_mating.csv</code>
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<table class="caption-top table">
+<colgroup>
+<col style="width: 32%">
+<col style="width: 67%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Column</th>
+<th>What it is</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>feeding_status</code></td>
+<td><code>"fed"</code> (virgin male) or <code>"starved"</code> (already mated)</td>
+</tr>
+<tr class="even">
+<td><code>time_to_mating_h</code></td>
+<td>hours the male waited before mating</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<p><strong>▶ Run this</strong> — read the data in and look at it:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb44"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb44-1"><a href="#cb44-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 8.1 · Take-Home Extension ──────────────────────────────────────</span></span>
+<span id="cb44-2"><a href="#cb44-2" aria-hidden="true" tabindex="-1"></a>cricket_df <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="st">"data/sage_brush_crickets_feeding_mating.csv"</span>)</span>
+<span id="cb44-3"><a href="#cb44-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb44-4"><a href="#cb44-4" aria-hidden="true" tabindex="-1"></a>cricket_df <span class="sc">%&gt;%</span> <span class="fu">group_by</span>(feeding_status) <span class="sc">%&gt;%</span> <span class="fu">reframe</span>(<span class="fu">summary_stats</span>(time_to_mating_h))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>✏️ <strong>Your turn:</strong> Look at the <code>n</code>, <code>mean</code>, and <code>sd</code> for each group before you do anything else. What do you notice about the two standard deviations relative to the two means?</p>
+<p><code>________________________</code></p>
 </section>
 <section id="your-task" class="level2">
 <h2 class="anchored" data-anchor-id="your-task">Your Task</h2>
-<p><strong>Question:</strong> Does maximum claw strength differ between stream-dwelling and burrowing crayfish?</p>
+<p><strong>Question:</strong> Does time to mating differ between starved and fed male sagebrush crickets?</p>
 <p>✏️ <strong>Your turn:</strong> State your hypotheses. Explore the data yourself — normality, variance, sample size, outliers, whatever you need to check — and decide which test from this unit is the right one for this data. Justify your choice, then run it, interpret the result, and write it up as a proper results sentence.</p>
+<div class="callout callout-style-default callout-warning callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Warning
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><strong>⚠️ This dataset will not let you off easily</strong></p>
+<p>Unlike the pine needles, the assumptions here are <strong>genuinely in trouble</strong> — and unlike the lake trout, the answer is not obvious. That is the whole point. Check every assumption, and notice that a log transformation fixes one problem without fixing the other. Your justification is the assignment.</p>
+</div>
+</div>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Note
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><strong>✅ You are graded on the reasoning, not on the p-value</strong></p>
+<p>A well-justified test that returns a <strong>non-significant</strong> result is a complete, full-credit answer. “We found no difference” is a finding. If your p-value is large, do <strong>not</strong> go hunting through the other four tests looking for a smaller one — that is p-hacking, and it is the one thing that will cost you marks here.</p>
+</div>
+</div>
 <pre><code>H0 =
 ________________________________________________________
 Ha =
 ________________________________________________________
 Test I will use and why:
 ________________________________________________________</code></pre>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb40"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb40-1"><a href="#cb40-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 8.2 · Take-Home Extension ──────────────────────────────────────</span></span>
-<span id="cb40-2"><a href="#cb40-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Write your code in the R script:</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb46"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb46-1"><a href="#cb46-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 8.2 · Take-Home Extension ──────────────────────────────────────</span></span>
+<span id="cb46-2"><a href="#cb46-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Write your code in the R script:</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <pre><code>Interpretation:
 ________________________________________________________
 ________________________________________________________
@@ -1023,9 +1184,9 @@ ________________________________________________________</code></pre>
 </section>
 <section id="final-figure" class="level2">
 <h2 class="anchored" data-anchor-id="final-figure">Final Figure</h2>
-<p>Produce one publication-quality figure comparing claw strength between the two lifestyles — proper axis labels, no default <code>ggplot</code> grey background — and export it with <code>ggsave()</code>.</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb42"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb42-1"><a href="#cb42-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 8.3 · Take-Home Extension ──────────────────────────────────────</span></span>
-<span id="cb42-2"><a href="#cb42-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Write your code in the R script:</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>Produce one publication-quality figure comparing time to mating between the two feeding statuses — proper axis labels with units, no default <code>ggplot</code> grey background — and export it with <code>ggsave()</code>.</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb48"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb48-1"><a href="#cb48-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 8.3 · Take-Home Extension ──────────────────────────────────────</span></span>
+<span id="cb48-2"><a href="#cb48-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Write your code in the R script:</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="callout callout-style-default callout-note callout-titled">
 <div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
@@ -1048,13 +1209,30 @@ Note
 </ul>
 </div>
 </div>
+<div class="callout callout-style-default callout-tip callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Tip
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><strong>🎓 Graduate students — optional extension</strong></p>
+<p>Once you have written yours up, read <strong>Whitlock &amp; Schluter Chapter 13, Example 13.5</strong> and compare. Did they reach for the same test you did? If not, what did they see in the data that you didn’t — or what did you see that they didn’t?</p>
+<p>Then go further: with n = 11 and 13, what effect size would this study have been able to detect? Sketch the connection to the power ideas we will take up shortly.</p>
+</div>
+</div>
 <hr>
 <hr>
 </section>
 </section>
 <section id="conclusion" class="level1">
 <h1>Conclusion</h1>
-<p>This analysis demonstrates several approaches to comparing mass between lake trout populations. The choice of statistical test depends on whether your data meets the assumptions of parametric tests. When assumptions are violated:</p>
+<p>Two datasets, two different answers to the same question — <em>which test does this data deserve?</em></p>
+<p>On the <strong>pine needles</strong> the assumptions held, and the rank-based tests cost us power for nothing. On the <strong>lake trout</strong> the assumptions failed badly, and those same tests were exactly the right tool. Non-parametric is not a safe default; it is a response to a specific problem.</p>
+<p>When assumptions <em>are</em> violated:</p>
 <ol type="1">
 <li>Try transforming the data (e.g., log transformation)</li>
 <li>Use Welch’s t-test if variances are unequal</li>
@@ -1087,6 +1265,7 @@ Note
 <p>At this point you can:</p>
 <ul class="task-list">
 <li><label><input type="checkbox">Test normality with histograms, QQ plots, and the Shapiro-Wilk test</label></li>
+<li><label><input type="checkbox">Explain what Cohen’s d measures, and why it belongs next to a p-value</label></li>
 <li><label><input type="checkbox">Test equal variance with Levene’s test</label></li>
 <li><label><input type="checkbox">Apply and evaluate a log transformation, including back-transforming to a geometric mean</label></li>
 <li><label><input type="checkbox">Run and interpret a standard t-test, Welch’s t-test, Mann-Whitney Wilcoxon test, and permutation test</label></li>
@@ -1110,20 +1289,6 @@ Note
 </ol>
 </div>
 </div>
-<hr>
-</section>
-<section id="getting-unstuck" class="level1">
-<h1>Getting unstuck</h1>
-<p>When code breaks — and it will, that is normal:</p>
-<ol type="1">
-<li><strong>Read the error message out loud.</strong> R usually names the line and the problem.</li>
-<li><strong>Check the usual suspects:</strong> did you run <code>library(tidyverse)</code>, <code>library(car)</code>, <code>library(patchwork)</code>, and <code>library(perm)</code>? Spelling? A missing <code>)</code> or <code>%&gt;%</code> at the <em>start</em> of a line?</li>
-<li><code>?function_name</code> opens the built-in help page.</li>
-<li><strong>Bring the exact error</strong> (copy-paste it) to class or office hours.</li>
-</ol>
-<blockquote class="blockquote">
-<p>💡 <strong>Key idea:</strong> Every working scientist googles error messages daily. Getting stuck is not failing — it is the job.</p>
-</blockquote>
 <hr>
 
 

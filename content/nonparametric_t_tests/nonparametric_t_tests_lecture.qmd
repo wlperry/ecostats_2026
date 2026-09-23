@@ -3,7 +3,7 @@ metadata-files:
   - ../../_templates/_lectures.yml
 title: "Lecture: Non-Parametric T-Tests"
 subtitle: "Rank-based tests"
-description: "Assumptions of parametric tests, data transformations, a Welch's t-test refresher, rank-based tests (Mann-Whitney, Wilcoxon signed-rank), and permutation tests when assumptions fail — on lake trout mass."
+description: "Rank-based tests on our own pine needle data — where the assumptions hold and the tests cost us power — then lake trout mass, where the assumptions genuinely fail and robust, rank-based, and permutation tests earn their keep."
 categories: [Mean comparison, Nonparametric]
 order: 7
 week: 4
@@ -43,7 +43,13 @@ A brief review:
 ::: callout-note
 **✅ Key idea from last lecture**
 
-A t-test's p-value is only trustworthy if its assumptions hold. Today is about what to do when they don't.
+A t-test's p-value is only trustworthy if its assumptions hold. Today is about how to tell whether they do — and what to do when they don't.
+:::
+
+::: callout-warning
+**⚠️ The trap we're walking into first**
+
+It is tempting to treat non-parametric tests as the "safe" option you can always fall back on. We are going to start by showing why that instinct is wrong.
 :::
 ::::
 
@@ -52,29 +58,33 @@ A t-test's p-value is only trustworthy if its assumptions hold. Today is about w
 ::::
 :::::::
 
+
 ## Today's Overview
 
 ::::::: columns
 :::: {.column width="60%"}
-What we will cover today:
+Today runs in two halves, and the order matters:
 
-- What are the assumptions again, and how do you assess them?
-- What to do when assumptions fail:
-  - Robust tests
-  - Rank-based tests
-  - Permutation tests
+1. **Our own pine needles first.** We check the assumptions on the data *you* collected, find that they hold, measure **how big** the effect actually was with Cohen's d, and then run the non-parametric tests anyway — to see exactly what they cost.
+2. **Then the lake trout.** A dataset where the assumptions are genuinely, badly broken — which is where robust tests, rank-based tests, and permutation tests earn their keep.
+
+::: callout-note
+**✅ The question behind today**
+
+Not *"which test is safest?"* but *"which test does this data deserve?"*
+:::
 ::::
 
 :::: {.column width="40%"}
-Let's work with the lake trout data. **Everything today uses `mass_g`** — the weights are the interesting variable, and their assumptions are badly broken, which is exactly what we want. This translates to any other data frame you might use.
+![Photo comparing needle length and bundle count across six pine species (Pinus ponderosa, nigra, resinosa, strobus, sylvestris, banksiana).](images/pine_needles.jpg){width="3.12in" height="2.08in"}
 
-![Illustration of a lake trout in profile, showing its mottled brown-and-cream coloring and forked tail, the species whose weight and length data are used throughout this lecture.](images/lake_trout.jpg){width="3.12in" height="1.38in"}
+![Illustration of a lake trout in profile, showing its mottled brown-and-cream coloring and forked tail, the species whose weight and length data are used in the second half of this lecture.](images/lake_trout.jpg){width="3.12in" height="1.38in"}
 ::::
 :::::::
 
-## Part 1 · Setting Up Our Analysis {.divider}
+## Part 1 · Start With Our Own Data {.divider}
 
-## Setting Up Our Analysis
+## Our pine needles, where we left them
 
 ::::::: columns
 :::: {.column width="60%"}
@@ -86,9 +96,337 @@ library(janitor)
 library(car)          # leveneTest()
 library(patchwork)
 library(perm)         # permutation tests
+library(effectsize)   # cohens_d()
 
 source("themes_functions/r_themes_and_functions.R")
 
+pine_df <- read_csv("data/pine_data.csv")
+```
+
+```{r nonparametric-t-tests-14}
+#| message: false
+# same two-stage summary as last week: one value per tree per side
+p_df <- pine_df %>%
+  group_by(team, side) %>%
+  summarise(needle_length_mm = mean(needle_length_mm, na.rm = TRUE),
+            .groups = "drop")
+
+p_wide_df <- p_df %>%
+  pivot_wider(names_from = side, values_from = needle_length_mm)
+
+p_wide_df
+```
+
+[📥 Pine needle data](data/pine_data.csv){.btn .btn-primary download="pine_data.csv"} [📥 Lake trout data](data/lake_trout.csv){.btn .btn-primary download="lake_trout.csv"} [📥 Sagebrush cricket data](data/sage_brush_crickets_feeding_mating.csv){.btn .btn-primary download="sage_brush_crickets_feeding_mating.csv"}
+
+[📥 Tools script](themes_functions/r_themes_and_functions.R){.btn .btn-primary download="r_themes_and_functions.R"} [📥 Script skeleton](data/07_nonparametric_t_tests.R){.btn .btn-primary download="07_nonparametric_t_tests.R"}
+::::
+
+:::: {.column width="40%"}
+::: callout-note
+**✅ Reminder**
+
+4 teams, 4 trees, both sides of each tree. The data are **paired** by design.
+
+Last week these four trees gave us:
+
+| Comparison | p |
+|:--|--:|
+| Unpaired two-sample t | 0.425 |
+| **Paired t** | **0.072** |
+:::
+
+::: callout-note
+**✅ Same two tools as last week**
+
+`source()` gives you `theme_regular()` and `summary_stats()` again. Nothing new to learn.
+:::
+::::
+:::::::
+
+## Do our assumptions actually hold?
+
+::: callout-note
+**🔮 Predict first:** Before we run anything — do you expect needle length to be normally distributed with equal variance on the two sides of a tree? Commit to an answer.
+:::
+
+::::::: columns
+:::: {.column width="60%"}
+Before reaching for anything non-parametric, we have to establish that we *need* it. Same two checks as last week.
+
+```{r nonparametric-t-tests-21}
+#| message: false
+#| warning: false
+#| paged-print: false
+# normality, one side at a time -- all 32 needles per side
+shapiro.test(pine_df$needle_length_mm[pine_df$side == "sunny"])
+shapiro.test(pine_df$needle_length_mm[pine_df$side == "shady"])
+```
+
+```{r nonparametric-t-tests-22}
+#| message: false
+#| warning: false
+#| paged-print: false
+# equal variance
+leveneTest(needle_length_mm ~ factor(side), data = pine_df)
+```
+::::
+
+:::: {.column width="40%"}
+::: callout-important
+**⚠️ Everything passes**
+
+| Check | p |
+|:--|--:|
+| Shapiro-Wilk, sunny | 0.29 |
+| Shapiro-Wilk, shady | 0.86 |
+| Levene's | 0.99 |
+
+Remember the direction of these tests: **H₀ is that the assumption holds.** A large p means we have no evidence against it.
+
+There is **nothing wrong with this data.** The paired t-test we ran last week was entitled to every bit of its p = 0.072.
+:::
+
+::: callout-tip
+**🖐 So why are we here?**
+
+Because "my data are fine" is a conclusion you have to *earn*, not assume — and because plenty of students would have reached for a rank test anyway, thinking it was the cautious choice. Let's find out what that caution would have cost.
+:::
+::::
+:::::::
+
+## Effect Size — How Big, Not Just Whether
+
+::::::: columns
+:::: {.column width="60%"}
+Our paired t-test gave **p = 0.072**. The usual reflex is to call that "not significant" and stop.
+
+But `p` never told us the one thing a reader actually wants to know: **how much shorter are shady needles?** A p-value answers *"could this be noise?"* — not *"does this matter?"*
+
+**Cohen's d** answers the second question. It is the difference between the groups expressed in **standard deviations**, so it has no units and can be compared across studies:
+
+$$d = \frac{\bar{x}_1 - \bar{x}_2}{s}$$
+
+For a **paired** design the difference is the paired difference, and `s` is the standard deviation *of those differences*:
+
+```{r nonparametric-t-tests-25}
+diffs <- p_wide_df$shady - p_wide_df$sunny
+
+mean(diffs) / sd(diffs)     # Cohen's d, by hand
+```
+::::
+
+:::: {.column width="40%"}
+::: callout-note
+**✅ Read the formula out loud**
+
+"The shady side averaged **1.36 standard deviations** below the sunny side."
+
+That sentence stands on its own. It does not depend on how many trees we sampled, and it would mean the same thing to someone measuring a different pine species in a different forest.
+:::
+
+::: callout-tip
+**🖐 Cohen's rough conventions**
+
+| \|d\| | Label |
+|--:|:--|
+| 0.2 | small |
+| 0.5 | medium |
+| 0.8 | large |
+
+Ours is **1.36**. These are rules of thumb, not laws — what counts as "large" is a question about pine trees, not about statistics.
+:::
+::::
+:::::::
+
+## Why We Report It — What d Tells Us That p Could Not
+
+::::::: columns
+:::: {.column width="60%"}
+Here is the relationship that explains everything:
+
+$$t = d \times \sqrt{n}$$
+
+```{r nonparametric-t-tests-26}
+2.7227 / sqrt(4)      # our t statistic, over root n
+```
+
+**The t-statistic is the effect size multiplied by the square root of your sample size.** So a p-value confounds two completely different things: *how big the effect is*, and *how hard you looked*.
+
+- A **huge** effect with n = 4 → large p. That is us.
+- A **trivial** effect with n = 10,000 → tiny p, and no biological meaning at all.
+
+Effect size separates them. That is why journals, and every reporting guideline written in the last twenty years, ask for it alongside the p-value.
+::::
+
+:::: {.column width="40%"}
+```{r nonparametric-t-tests-27}
+#| message: false
+library(effectsize)
+
+cohens_d(p_wide_df$shady,
+         p_wide_df$sunny,
+         paired = TRUE)
+```
+
+::: callout-important
+**⚠️ Look at that confidence interval: [-2.74, 0.10]**
+
+*This* is the honest summary of our four trees: the effect is **probably large and probably negative**, but with n = 4 we cannot rule out zero.
+
+Notice that the CI crossing zero is the same fact as p \> 0.05 — but it says it far more usefully. "No significant difference" sounds like *we found nothing*. "d = -1.36, CI [-2.74, 0.10]" says *we found a large effect we could not pin down*, which is a completely different message to a reader, and the correct one.
+:::
+
+::: callout-tip
+**🖐 Where this goes next**
+
+Effect size is the input to a **power analysis** — given d, how many trees would we have needed? That is next week's lecture.
+:::
+::::
+:::::::
+
+## Ranks, in one slide
+
+::::::: columns
+:::: {.column width="60%"}
+Every non-parametric test today works the same way: **throw away the measurements, keep only their order.**
+
+```{r nonparametric-t-tests-23}
+#| message: false
+p_df %>%
+  mutate(rank = rank(needle_length_mm)) %>%
+  arrange(rank)
+```
+::::
+
+:::: {.column width="40%"}
+::: callout-note
+**✅ What just happened**
+
+The shortest tree-side average became rank 1, the longest rank 8. A needle that was 4 mm longer than its neighbour and one that was 0.1 mm longer are now **exactly one rank apart**.
+
+That is the whole trade. You become immune to outliers and to any weird distribution — and in exchange you give up the magnitudes.
+
+A rank-based test then asks: *are the ranks of one group systematically higher than the other's?*
+:::
+
+::: callout-tip
+**🖐 Watch for the statistic**
+
+Rank tests report **`W`** (Mann-Whitney) or **`V`** (signed-rank), never `t`. If you see a `W`, you are reading rank-based output.
+:::
+::::
+:::::::
+
+## Running both rank-based tests
+
+::::::: columns
+:::: {.column width="60%"}
+```{r nonparametric-t-tests-15}
+#| warning: false
+# Unpaired: Mann-Whitney U  (the t-test's two-sample partner)
+wilcox.test(needle_length_mm ~ side, data = p_df)
+```
+
+```{r nonparametric-t-tests-16}
+#| warning: false
+# Paired: Wilcoxon signed-rank  (the paired t-test's partner)
+wilcox.test(p_wide_df$shady, p_wide_df$sunny, paired = TRUE)
+```
+::::
+
+:::: {.column width="40%"}
+::: callout-tip
+**🖐 Notice `V = 0`**
+
+The signed-rank statistic is **zero** — meaning *every single tree* moved in the same direction. There is no arrangement of these four trees that would look more consistent.
+
+Notice too that R says **"exact test"** for both. With no tied values it enumerates every possible arrangement rather than approximating. Hold on to that word — the next slide explains why it matters.
+:::
+::::
+:::::::
+
+## Same answer, less power
+
+::::::: columns
+:::: {.column width="60%"}
+| Comparison | Parametric | Non-parametric |
+|------------------|------------------|------------------|
+| Unpaired (2 groups) | t-test **p = 0.425** | Mann-Whitney **p = 0.486** |
+| Paired (4 trees) | paired t **p = 0.072** | signed-rank **p = 0.125** |
+
+**Both methods tell the same story:**
+
+- the unpaired comparison finds nothing
+- the paired comparison is far more sensitive
+- the direction is identical — shady needles shorter
+
+**But the rank test costs you.** In both rows the non-parametric p-value is larger. That is the price of throwing away the actual measurements and keeping only their order — and we paid it on data that never needed it.
+::::
+
+:::: {.column width="40%"}
+::: callout-important
+**⚠️ At n = 4, the signed-rank test hits a wall**
+
+With 4 pairs there are only 2⁴ = **16** possible arrangements of plus and minus signs. The most extreme possible result — all four the same way, which is exactly what we got — has a two-sided p of 2/16 = **0.125**.
+
+So with four trees, a Wilcoxon signed-rank test **can never return a p-value below 0.125**, no matter how enormous the effect.
+
+```{r nonparametric-t-tests-17}
+2 / 2^4     # smallest possible two-sided p, 4 pairs
+```
+
+The test did not fail to find our effect. It was **arithmetically incapable** of declaring it significant.
+:::
+::::
+:::::::
+
+## What that means in practice
+
+::::::: columns
+:::: {.column width="60%"}
+- Non-parametric tests are the right call when normality is genuinely broken and cannot be fixed
+- But they are **not free**, and they are **not a safe default**
+- At small n they can be so blunt that no result could ever reach significance — check the floor **before** you run one
+
+::: callout-note
+**✅ Key idea**
+
+Choose the test that matches your data's distribution, not the one that feels safest. For our four trees, the *parametric* paired t-test — whose assumptions we just checked and could not reject — is the more honest and more informative choice.
+:::
+::::
+
+:::: {.column width="40%"}
+::: callout-tip
+**🖐 Try it yourself**
+
+How many pairs would you need before a signed-rank test could reach p \< 0.05?
+
+``` r
+2 / 2^5    # 5 pairs
+2 / 2^6    # 6 pairs
+```
+:::
+
+::: callout-warning
+**⚠️ Where we go next**
+
+We have now seen what these tests cost. What we have **not** seen is what they buy you — because nothing about the pine data was broken.
+
+For that we need a dataset that is a genuine mess.
+:::
+::::
+:::::::
+
+## Part 2 · A Dataset Where the Assumptions Really Do Fail {.divider}
+
+## Meet the lake trout
+
+::::::: columns
+:::: {.column width="60%"}
+```{r nonparametric-t-tests-24}
+#| message: false
+#| warning: false
 lt_df <- read_csv("data/lake_trout.csv")
 ```
 
@@ -96,27 +434,23 @@ lt_df <- read_csv("data/lake_trout.csv")
 lt_df %>% group_by(lake) %>% reframe(summary_stats(mass_g))
 ```
 
-[📥 Lake trout data](data/lake_trout.csv){.btn .btn-primary download="lake_trout.csv"} [📥 Tools script](themes_functions/r_themes_and_functions.R){.btn .btn-primary download="r_themes_and_functions.R"} [📥 Script skeleton](data/07_nonparametric_t_tests.R){.btn .btn-primary download="07_nonparametric_t_tests.R"}
+[📥 Lake trout data](data/lake_trout.csv){.btn .btn-primary download="lake_trout.csv"}
 ::::
 
 :::: {.column width="40%"}
-::: callout-note
-**✅ Same two tools as last week**
-
-`source()` gives you `theme_regular()` and `summary_stats()` again. Nothing new to learn — just put the file in `themes_functions/` and carry on.
-:::
-
 ::: callout-tip
 **🖐 Notice the design**
 
 Six lakes of trout: `sampling_site`, `species`, `length_mm`, `mass_g`, `lake`.
 
-**Everything today uses `mass_g`.** Look hard at the `n` and `sd` columns for **NE 12** and **Island Lake** — 322 fish against 10, and very different spreads. That imbalance is the whole lecture.
+**Everything from here on uses `mass_g`.** Look hard at the `n` and `sd` columns for **NE 12** and **Island Lake** — 322 fish against 10, and very different spreads.
+
+That imbalance is the rest of the lecture. Where the pine data was clean, this is everything that can go wrong at once.
 :::
 ::::
 :::::::
 
-## Part 2 · Assumptions of Parametric Tests {.divider}
+## Part 3 · Assumptions of Parametric Tests {.divider}
 
 ## Parametric vs. Non-Parametric Tests
 
@@ -331,7 +665,7 @@ ne12_histo_plot + ne12_box_plot + plot_layout(ncol = 1)
 ::::
 :::::::
 
-## Part 3 · When Assumptions Fail {.divider}
+## Part 4 · When Assumptions Fail {.divider}
 
 ## Alternative Tests When Assumptions Fail
 
@@ -424,7 +758,86 @@ The log scale pulls the two spreads much closer together — but it does **not**
 ::::
 :::::::
 
-## Part 4 · Welch's T-Test — a One-Slide Refresher {.divider}
+## Data Transformations — Why Log?
+
+::::::: columns
+:::: {.column width="55%"}
+Log isn't a trick you try at random — it fixes a specific shape of problem:
+
+- Right-skewed data (a long tail of large values) → `log10(x)`
+- Effects that are **multiplicative** rather than additive (doubling a value, not adding a fixed amount) → `log10(x)`
+- Ratio-scale ecological measurements — mass, concentration, population size, area — are almost always multiplicative
+::::
+
+:::: {.column width="45%"}
+::: callout-note
+**✅ The mechanism, in one line**
+
+A trout that is twice as heavy as another isn't "500 g more" — it's "2×." Log turns that multiplicative relationship into an additive one, which is what a t-test's equal-spread assumption expects. It compresses the right tail: 100 g → 1000 g and 1000 g → 10,000 g become the *same* distance, one log unit.
+:::
+::::
+:::::::
+
+## Data Transformations — Beyond Log
+
+::::::: columns
+:::: {.column width="55%"}
+Log is the one you will reach for most in ecology, but match the transform to the shape of the problem:
+
+| Transformation | Use when... |
+|---|---|
+| `log10(x)` | right-skewed, multiplicative, ratio-scale data (mass, concentration, abundance) |
+| `sqrt(x)` | count data, moderate right skew (Poisson-like variance) |
+| `asin(sqrt(x))` | proportions or percentages bounded 0–1 |
+| `1/x` | rates, or extreme right skew that log doesn't fix |
+| Box-Cox | no obvious transform works — let the data pick the power |
+
+**None of these are guaranteed to work.** You check afterward, every time — that's Part 5 of the worksheet, and it's the whole point of the take-home.
+::::
+
+:::: {.column width="45%"}
+```{r nonparametric-t-tests-28}
+#| message: false
+#| warning: false
+#| fig-width: 3.4
+#| fig-height: 2.4
+#| fig-alt: "Side-by-side boxplots comparing log10-transformed and square-root-transformed trout mass for Lake NE 12 and Island Lake."
+sqrt_box_plot <- isl_ne12_df %>%
+  ggplot(aes(lake, sqrt(mass_g))) +
+  geom_boxplot() +
+  theme_regular(base_size = 9)
+
+log_box_plot + sqrt_box_plot
+```
+
+`sqrt()` narrows the spread less than `log10()` did here — this skew behaves more like a multiplicative effect than a count.
+::::
+:::::::
+
+## A Transformation Can Fix One Problem, Not the Other
+
+::::::: columns
+:::: {.column width="55%"}
+```{r nonparametric-t-tests-29}
+#| message: false
+#| warning: false
+#| paged-print: false
+leveneTest(log10(mass_g) ~ factor(lake), data = isl_ne12_df)
+```
+
+Compare that to the Levene's result on raw `mass_g` a few slides back — both fail. **Normality improved with the log transform. Equal variance did not.** Checking a transformation is not one pass/fail box — you re-test *every* assumption, separately, on the transformed variable.
+::::
+
+:::: {.column width="45%"}
+::: callout-important
+**⚠️ This is the take-home's whole trap**
+
+The sagebrush cricket data works the same way: a transformation can help one assumption without rescuing the other. There is no single "correct" test hiding in the data — there's a **best-justified** one. Check every assumption on the raw data, then again on any transformed version, before you decide.
+:::
+::::
+:::::::
+
+## Part 5 · Welch's T-Test — a One-Slide Refresher {.divider}
 
 ## Welch's t-Test — why it exists, in one number
 
@@ -473,13 +886,13 @@ Unequal n **and** unequal variance is exactly the combination Welch's was built 
 ::::
 :::::::
 
-## Part 5 · Rank-Based Tests {.divider}
+## Part 6 · Rank-Based Tests {.divider}
 
-## Rank-Based Tests
+## Rank-Based Tests — now on data that needs them
 
 ::::::: columns
 :::: {.column width="60%"}
-Rank-based tests: no assumptions about distribution (non-parametric).
+Same two tests you ran on the pine needles in Part 1 — ranks instead of measurements, no assumption about the distribution.
 
 - Ranks of data: observations are assigned ranks; sums (and signs, for paired tests) of ranks for groups are compared
 - **Mann-Whitney U test** — common alternative to the independent-samples t-test
@@ -487,6 +900,14 @@ Rank-based tests: no assumptions about distribution (non-parametric).
 - Assumptions: similar distributions for groups, equal variance
 - Less power than parametric tests
 - Best when normality can't be met by transformation (weird distribution) or there are large outliers
+
+::: callout-note
+**✅ The difference from Part 1**
+
+On the pine needles the rank test was a **cost** — we gave up power on data that was already well behaved.
+
+Here, NE 12 mass is non-normal at p \< 2.2 × 10⁻¹⁶ and full of outliers. There is nothing to give up. **This** is the case the test was built for.
+:::
 ::::
 
 :::: {.column width="40%"}
@@ -512,142 +933,16 @@ wilcox_test_result
 
 :::: {.column width="40%"}
 ::: callout-tip
-**🖐 Notice**
+**🖐 `W` again, and no "exact" this time**
 
-The test statistic is `W`, not `t` — a signal you're reading rank-based test output, not a t-test.
+The statistic is `W`, not `t` — rank-based output, as in Part 1.
+
+But notice what R *doesn't* say: with 332 fish and plenty of tied masses it cannot enumerate every arrangement, so this is the **normal approximation**, not an exact test. At this sample size that is fine — the floor problem that crippled our four trees does not exist here.
 :::
 ::::
 :::::::
 
-## Part 5b · Back to Our Pine Needles {.divider}
-
-## The same question, the non-parametric way
-
-::::::: columns
-:::: {.column width="60%"}
-Last week we tested our own needle data two ways. Let's run the rank-based versions of **exactly the same two comparisons** and see what changes.
-
-```{r nonparametric-t-tests-14}
-#| message: false
-pine_df <- read_csv("data/pine_data.csv")
-
-# same two-stage summary as last week: one value per tree per side
-p_df <- pine_df %>%
-  group_by(team, side) %>%
-  summarise(needle_length_mm = mean(needle_length_mm, na.rm = TRUE),
-            .groups = "drop")
-
-p_wide_df <- p_df %>%
-  pivot_wider(names_from = side, values_from = needle_length_mm)
-
-p_wide_df
-```
-
-[📥 Pine needle data](data/pine_data.csv){.btn .btn-primary download="pine_data.csv"}
-::::
-
-:::: {.column width="40%"}
-::: callout-note
-**✅ Reminder**
-
-4 teams, 4 trees, both sides of each tree. The data are **paired** by design.
-:::
-::::
-:::::::
-
-## Running both rank-based tests
-
-::::::: columns
-:::: {.column width="60%"}
-```{r nonparametric-t-tests-15}
-#| warning: false
-# Unpaired: Mann-Whitney U  (the t-test's two-sample partner)
-wilcox.test(needle_length_mm ~ side, data = p_df)
-```
-
-```{r nonparametric-t-tests-16}
-#| warning: false
-# Paired: Wilcoxon signed-rank  (the paired t-test's partner)
-wilcox.test(p_wide_df$shady, p_wide_df$sunny, paired = TRUE)
-```
-::::
-
-:::: {.column width="40%"}
-::: callout-tip
-**🖐 Notice `V = 0`**
-
-The signed-rank statistic is **zero** — meaning *every single tree* moved in the same direction. There is no arrangement of these four trees that would look more consistent.
-
-Notice too that R says **"exact test"** for both. With no tied values it enumerates every possible arrangement rather than approximating. Hold on to that word — the next slide explains why it matters.
-:::
-::::
-:::::::
-
-## Same answer, less power
-
-::::::: columns
-:::: {.column width="60%"}
-| Comparison | Parametric | Non-parametric |
-|------------------|------------------|------------------|
-| Unpaired (2 groups) | t-test **p = 0.425** | Mann-Whitney **p = 0.486** |
-| Paired (4 trees) | paired t **p = 0.072** | signed-rank **p = 0.125** |
-
-**Both methods tell the same story:**
-
-- the unpaired comparison finds nothing
-- the paired comparison is far more sensitive
-- the direction is identical — shady needles shorter
-
-**But the rank test costs you.** In both rows the non-parametric p-value is larger. That is the price of throwing away the actual measurements and keeping only their order.
-::::
-
-:::: {.column width="40%"}
-::: callout-important
-**⚠️ At n = 4, the signed-rank test hits a wall**
-
-With 4 pairs there are only 2⁴ = **16** possible arrangements of plus and minus signs. The most extreme possible result — all four the same way, which is exactly what we got — has a two-sided p of 2/16 = **0.125**.
-
-So with four trees, a Wilcoxon signed-rank test **can never return a p-value below 0.125**, no matter how enormous the effect.
-
-```{r nonparametric-t-tests-17}
-2 / 2^4     # smallest possible two-sided p, 4 pairs
-```
-
-The test did not fail to find our effect. It was **arithmetically incapable** of declaring it significant.
-:::
-::::
-:::::::
-
-## What that means in practice
-
-::::::: columns
-:::: {.column width="60%"}
-- Non-parametric tests are the right call when normality is genuinely broken and cannot be fixed
-- But they are **not free**, and they are **not a safe default**
-- At small n they can be so blunt that no result could ever reach significance — check the floor **before** you run one
-
-::: callout-note
-**✅ Key idea**
-
-Choose the test that matches your data's distribution, not the one that feels safest. For our four trees, the *parametric* paired t-test — whose assumptions we checked and could not reject — is the more honest and more informative choice.
-:::
-::::
-
-:::: {.column width="40%"}
-::: callout-tip
-**🖐 Try it yourself**
-
-How many pairs would you need before a signed-rank test could reach p \< 0.05?
-
-``` r
-2 / 2^5    # 5 pairs
-2 / 2^6    # 6 pairs
-```
-:::
-::::
-:::::::
-
-## Part 6 · Permutation Tests {.divider}
+## Part 7 · Permutation Tests {.divider}
 
 ## Permutation Tests — Concept
 
@@ -728,7 +1023,7 @@ permTS(mass_g ~ lake,
 ::::
 :::::::
 
-## Part 7 · Summary {.divider}
+## Part 8 · Summary {.divider}
 
 ## Summary — Testing Assumptions
 
@@ -748,6 +1043,35 @@ permTS(mass_g ~ lake,
 
 - Key to do *every time*
 - Should be acknowledged in the manuscript
+:::
+::::
+:::::::
+
+## Summary — Effect Size
+
+::::::: columns
+:::: {.column width="60%"}
+**Always report an effect size next to your p-value.**
+
+- **Cohen's d** = the difference between groups, in standard deviations — unitless, and comparable across studies
+- **t = d × √n**, so a p-value confounds *how big the effect is* with *how hard you looked*
+- A **confidence interval on d** says what a bare "n.s." never can: whether you found nothing, or found something you could not pin down
+- Effect size is also the input to a power analysis — next week
+
+::: callout-note
+**✅ On our four trees**
+
+Paired **d = −1.36**, CI [−2.74, 0.10], p = 0.072. A large effect, imprecisely measured. Reporting only "p = 0.072, n.s." would have thrown that away.
+:::
+::::
+
+:::: {.column width="40%"}
+::: callout-tip
+**🖐 In a results sentence**
+
+> Needles on the shady side were 1.09 mm shorter than on the sunny side (paired *t*₃ = −2.72, *p* = 0.072, *d* = −1.36, 95% CI [−2.74, 0.10]).
+
+Every number there does work the others cannot.
 :::
 ::::
 :::::::
@@ -793,7 +1117,7 @@ Weaknesses:
 ::: {.column width="50%"}
 **2. Welch's t-test**
 
-Covered in full in the **T-Tests** lecture; the one-slide refresher in Part 4 is all we needed today.
+Covered in full in the **T-Tests** lecture; the one-slide refresher in Part 5 is all we needed today.
 
 - Robust to unequal variances **and** unequal n — which is exactly our NE 12 vs. Island Lake case
 - Still **parametric**: it fixes the variance assumption, not the normality one
@@ -819,7 +1143,7 @@ Weaknesses:
 - Less statistical power than parametric tests
 - Still assumes similar distributions and approximately equal variance
 - Tests median differences rather than mean differences
-- **At small n there is a hard floor on the p-value** — with 4 pairs a signed-rank test cannot go below 0.125 (see Part 5b)
+- **At small n there is a hard floor on the p-value** — with 4 pairs a signed-rank test cannot go below 0.125 (see Part 1)
 :::
 
 ::: {.column width="50%"}
@@ -855,6 +1179,29 @@ Statistical tests have different strengths and assumptions. The choice should be
 **✅ Key idea**
 
 Standard t-test → Welch's → Mann-Whitney/Permutation isn't a strict ladder of "better" tests — each answers a slightly different question (means vs. medians) under different assumptions. Pick based on what your data actually looks like.
+:::
+::::
+:::::::
+
+## Looking Ahead — The Take-Home
+
+::::::: columns
+:::: {.column width="60%"}
+Part 8 of the worksheet (sagebrush crickets, due before Study Design & Sampling) hands you a new dataset and asks **you** to run the whole decision process from today:
+
+1. Check normality and equal variance on the raw data
+2. Try a transformation if the raw data doesn't pass
+3. Check normality and equal variance **again**, on the transformed data — don't assume it worked
+4. Pick a test, justify the pick, and report it properly
+
+There is no lecture slide that tells you the answer this time.
+::::
+
+:::: {.column width="40%"}
+::: callout-tip
+**🖐 Remember from today**
+
+`log10()` fixed normality for the lake trout but **not** equal variance. Expect the crickets to behave similarly — a transformation earning partial credit is a completely normal outcome, not a sign you did something wrong.
 :::
 ::::
 :::::::

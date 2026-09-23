@@ -3,7 +3,7 @@ order: 7
 week: 4
 title: "Activity: Non-Parametric T-Tests"
 subtitle: "Rank-based tests"
-description: "Hands-on activity: testing assumptions, data transformations, Welch's t-test, Mann-Whitney, and permutation tests on the lake trout dataset."
+description: "Hands-on activity: effect size and rank-based tests on our own pine needle data, where the assumptions hold and the tests cost power, then assumption checking, transformations, Welch's t-test, Mann-Whitney, and permutation tests on the lake trout dataset."
 author: "Bill Perry"
 metadata-files:
   - ../../_templates/activities.yml
@@ -14,7 +14,9 @@ format:
 
 # Worksheet: Non-Parametric T-Tests
 
-[📥 Lake trout data](data/lake_trout.csv){.btn .btn-primary download="lake_trout.csv"} [📥 Pine needle data](data/pine_data.csv){.btn .btn-primary download="pine_data.csv"} [📥 Tools script (.R)](themes_functions/r_themes_and_functions.R){.btn .btn-primary download="r_themes_and_functions.R"} [📥 Script skeleton (.R)](data/07_nonparametric_t_tests.R){.btn .btn-primary download="07_nonparametric_t_tests.R"}
+[📥 Pine needle data](data/pine_data.csv){.btn .btn-primary download="pine_data.csv"} [📥 Lake trout data](data/lake_trout.csv){.btn .btn-primary download="lake_trout.csv"} [📥 Sagebrush cricket data](data/sage_brush_crickets_feeding_mating.csv){.btn .btn-primary download="sage_brush_crickets_feeding_mating.csv"}
+
+[📥 Tools script (.R)](themes_functions/r_themes_and_functions.R){.btn .btn-primary download="r_themes_and_functions.R"} [📥 Script skeleton (.R)](data/07_nonparametric_t_tests.R){.btn .btn-primary download="07_nonparametric_t_tests.R"}
 
 > ## How to use this worksheet
 >
@@ -24,13 +26,202 @@ format:
 >
 > **Type the `# ── Part …` header comment at the top of each block, too.** Those comment lines are not decoration — they are how your script stays navigable, how you find your way back to a block that broke, and how I find your work when I read your script. A block with no header comment is a block I cannot place. In RStudio they also show up in the document outline (the `≡` button at the bottom-left of the editor) so you can jump straight to any part.
 >
-> This worksheet analyses lake trout **mass** from Island Lake and NE 12: testing assumptions for parametric tests, transforming data when assumptions aren't met, running several different tests (standard t-test, log-transformed t-test, Welch's t-test, Mann-Whitney Wilcoxon, permutation test), and interpreting and reporting the results properly. **Everything here uses `mass_g`.**
+> This worksheet runs in two halves. **Part 1** returns to the pine needles you collected: you check the assumptions, find that they hold, measure the **effect size** with Cohen's d, and run the rank-based tests anyway to see what they cost. **Parts 2-7** move to lake trout **mass** from Island Lake and NE 12, where the assumptions genuinely fail — testing assumptions, transforming data, and running several different tests (standard t-test, log-transformed t-test, Welch's t-test, Mann-Whitney Wilcoxon, permutation test), then interpreting and reporting the results properly. **Everything after Part 1 uses `mass_g`.**
+
+------------------------------------------------------------------------
+------------------------------------------------------------------------
+
+# Part 1 · Our Pine Needles — Start With Data You Trust
+
+::: callout-important
+## Column names in `pine_data.csv` / `pine_data.xlsx`
+
+Both files hold the **same six columns, with exactly these names**. Type them
+exactly as written — R is case-sensitive, and `Needle_Length` or `needle_length`
+will not work:
+
+| Column             | What it is                                     |
+|--------------------|------------------------------------------------|
+| `source_file`      | the raw team file the row came from             |
+| `team`             | field team — one team = **one tree**            |
+| `replicate`        | needle number within a tree side (1-8)          |
+| `side`             | sun exposure — `"shady"` or `"sunny"`           |
+| `needle_length_mm` | needle length, millimetres                      |
+| `needle_width_mm`  | needle width, millimetres                       |
+
+After you read the file in, click `pine_df` in the **Variables** pane in Positron
+and check the names against this table before you write any other code.
+:::
+
+Last week you ran a paired t-test on our four trees and got **p = 0.072**. Before we reach for anything non-parametric, we have to establish that we actually *need* it — so we start by checking the assumptions on the data you collected yourselves.
+
+**▶ Run this:**
+
+``` r
+# ── Part 1.1 · Setup and our pine needles ─────────────────────────────
+library(tidyverse)
+library(janitor)     # round_half_up(), used inside summary_stats()
+library(car)         # leveneTest()
+library(patchwork)   # combining plots
+library(perm)        # permutation tests
+library(effectsize)  # cohens_d()
+
+source("themes_functions/r_themes_and_functions.R")
+
+pine_df <- read_csv("data/pine_data.csv")
+
+# same two-stage summary as the t-test lecture
+p_df <- pine_df %>%
+  group_by(team, side) %>%
+  summarise(needle_length_mm = mean(needle_length_mm, na.rm = TRUE),
+            .groups = "drop")
+
+p_wide_df <- p_df %>%
+  pivot_wider(names_from = side, values_from = needle_length_mm)
+
+p_wide_df
+```
+
+**▶ Run this — do the assumptions actually hold?**
+
+``` r
+# ── Part 1.2 · Checking the assumptions first ─────────────────────────
+# normality, one side at a time -- all 32 needles per side
+shapiro.test(pine_df$needle_length_mm[pine_df$side == "sunny"])
+shapiro.test(pine_df$needle_length_mm[pine_df$side == "shady"])
+
+# equal variance
+leveneTest(needle_length_mm ~ factor(side), data = pine_df)
+```
+
+✏️ **Your turn:** Record the three p-values, and remember which way these tests point — **H₀ is that the assumption holds.**
+
+```         
+Shapiro-Wilk, sunny:   p = ______
+Shapiro-Wilk, shady:   p = ______
+Levene's test:         p = ______
+```
+
+✏️ **Your turn:** Based on those three numbers, is there any assumption of the paired t-test you ran last week that you can reject?
+
+`________________________`
+
+✏️ **Your turn:** So — do these data *need* a non-parametric test?
+
+`________________________`
+
+## Effect size — a demonstration
+
+::: callout-note
+**👀 Read this one, don't sweat it**
+
+This section is here so you have *seen* effect size before we need it in the power lecture. Run the two blocks, read the output, answer the two short questions. There is nothing to get stuck on.
+:::
+
+Your paired t-test last week gave **p = 0.072** — "not significant." But `p` never said *how much* shorter the shady needles were. **Cohen's d** does: it is the difference between groups measured in standard deviations, so it carries no units and can be compared across studies.
+
+For a paired design, `d` is the mean of the paired differences divided by the standard deviation of those differences.
+
+**▶ Run this:**
+
+``` r
+# ── Part 1.3 · Effect size (demonstration) ────────────────────────────
+diffs <- p_wide_df$shady - p_wide_df$sunny
+
+mean(diffs) / sd(diffs)     # Cohen's d, by hand
+
+# and with a confidence interval
+cohens_d(p_wide_df$shady, p_wide_df$sunny, paired = TRUE)
+```
+
+✏️ **Your turn:** Write the value of `d` and its confidence interval here, then say in one plain sentence what the `d` value means.
+
+```         
+d  = ______        95% CI = [ ______ , ______ ]
+
+In words: the shady side averaged ______ standard deviations
+          ____________ the sunny side.
+```
+
+**▶ Run this — why it matters:**
+
+``` r
+# ── Part 1.4 · Effect size (demonstration) ────────────────────────────
+2.7227 / sqrt(4)      # our paired t statistic, divided by the square root of n
+```
+
+Compare that number to your `d`. They are the same, because **t = d × √n** — the t-statistic is the effect size multiplied by the square root of your sample size.
+
+✏️ **Your turn:** If a p-value depends on **both** the size of the effect **and** how many samples you took, why is reporting `d` alongside `p` more informative than reporting `p` on its own?
+
+`________________________`
+
+::: callout-important
+**⚠️ The sentence worth remembering**
+
+"No significant difference" sounds like *we found nothing*. Our four trees actually gave a **large** effect (d = −1.36) that we simply could not pin down (the CI runs from −2.74 to 0.10). Those are very different messages, and only the second one is honest.
+:::
 
 ------------------------------------------------------------------------
 
-# Part 1 · Setup and the Single-Sample Question
+Now back to the rank tests. Run them even though the assumptions held — the point of this part is to find out what that choice would have cost you.
 
-Last time we covered assumptions of parametric tests, α and β errors, power, and mean ± SE plots. Let's start by exploring only lake NE 12, as if doing a single-sample t-test, then compare NE 12 to Island Lake.
+**▶ Run this:**
+
+``` r
+# ── Part 1.5 · The two rank-based tests ───────────────────────────────
+# unpaired: Mann-Whitney U
+wilcox.test(needle_length_mm ~ side, data = p_df)
+
+# paired: Wilcoxon signed-rank
+wilcox.test(p_wide_df$shady, p_wide_df$sunny, paired = TRUE)
+```
+
+✏️ **Your turn:** Fill in the comparison table.
+
+```         
+                        parametric        non-parametric
+unpaired:               p = 0.425         p = ______
+paired:                 p = 0.072         p = ______
+```
+
+✏️ **Your turn:** Did the two approaches lead you to the same *conclusion*? Did they give the same *p-value*?
+
+`________________________`
+
+✏️ **Your turn:** Look at the signed-rank statistic, `V`. What value did you get, and what does it say about how consistent the four trees were?
+
+`________________________`
+
+**▶ Run this — the floor:**
+
+``` r
+# ── Part 1.6 · The floor ──────────────────────────────────────────────
+2 / 2^4     # smallest two-sided p a signed-rank test can give with 4 pairs
+```
+
+✏️ **Your turn:** Compare that number to the p-value you got from the signed-rank test. What does that tell you about whether the test *could* have found our effect significant, even in principle?
+
+`________________________`
+
+✏️ **Your turn:** Based on all of this, which test would you report for the pine needle data, and why?
+
+`________________________`
+
+::: callout-tip
+**🚀 If you finish early:** How many pairs would you need before a signed-rank test could possibly reach p < 0.05? Try `2 / 2^5`, `2 / 2^6`, and so on until you find it.
+:::
+
+------------------------------------------------------------------------
+------------------------------------------------------------------------
+
+# Part 2 · A Dataset Where the Assumptions Really Do Fail
+
+Part 1 showed you what non-parametric tests **cost**. It could not show you what they **buy** you, because nothing about the pine data was broken.
+
+The lake trout data is a genuine mess: six lakes, wildly unequal sample sizes, and mass distributions that fail every check we just ran. Everything from here on uses `mass_g`.
+
+Let's start by exploring only lake NE 12, as if doing a single-sample t-test, then compare NE 12 to Island Lake.
 
 We want to test if the mass of lake trout in NE 12 differs from a mean of 500g.
 
@@ -44,15 +235,8 @@ H1: mu ≠ _____ (the mean mass of lake trout in NE 12 is not _____ g)
 **▶ Run this in your Script:**
 
 ``` r
-# ── Part 1.1 · Setup and the Single-Sample Question ─────────────────────
-library(tidyverse)
-library(janitor)     # round_half_up(), used inside summary_stats()
-library(car)         # leveneTest()
-library(patchwork)   # combining plots
-library(perm)        # permutation tests
-
-source("themes_functions/r_themes_and_functions.R")
-
+# ── Part 2.1 · Reading in the lake trout ────────────────────────────────
+# libraries and source() are already loaded from Part 1.1
 lt_df <- read_csv("data/lake_trout.csv")
 ```
 
@@ -63,7 +247,7 @@ lt_df <- read_csv("data/lake_trout.csv")
 **▶ Run this** — calculate the mode (R has no built-in `mode()` for this):
 
 ``` r
-# ── Part 1.2 · Setup and the Single-Sample Question ─────────────────────
+# ── Part 2.2 · Setup and the Single-Sample Question ─────────────────────
 lt_df %>%
   filter(!is.na(mass_g)) %>%
   group_by(lake, mass_g) %>%
@@ -77,7 +261,7 @@ lt_df %>%
 **▶ Run this** — create a data frame with just NE 12:
 
 ``` r
-# ── Part 1.3 · Setup and the Single-Sample Question ─────────────────────
+# ── Part 2.3 · Setup and the Single-Sample Question ─────────────────────
 ne12_df <- lt_df %>%
   filter(lake == "NE 12") %>%
   filter(!is.na(mass_g))  # Remove any NA values
@@ -87,21 +271,21 @@ ne12_df <- lt_df %>%
 **🚀 If you finish early:** Compute `n`, `mean`, `sd` and `se` for `mass_g` across *all* lakes at once — `lt_df %>% group_by(lake) %>% reframe(summary_stats(mass_g))`.
 
 ``` r
-# ── Part 1.4 · Setup and the Single-Sample Question ─────────────────────
+# ── Part 2.4 · Setup and the Single-Sample Question ─────────────────────
 # Write your code in the R script:
 ```
 :::
 
 ------------------------------------------------------------------------
 
-# Part 2 · Testing Assumptions on NE 12
+# Part 3 · Testing Assumptions on NE 12
 
 Before conducting our t-test, we need to verify our data meets the necessary assumptions. Methods to test normality: visual (QQ plots, histograms) and statistical (Shapiro-Wilk test).
 
 **▶ Run this** — histogram:
 
 ``` r
-# ── Part 2.1 · Testing Assumptions on NE 12 ─────────────────────────────
+# ── Part 3.1 · Testing Assumptions on NE 12 ─────────────────────────────
 ne12_histo_plot <- ggplot(ne12_df, aes(x = mass_g)) +
   geom_histogram(binwidth = 200) +
   labs(x = "mass (g)", y = "Frequency")
@@ -111,7 +295,7 @@ ne12_histo_plot
 **▶ Run this** — dotplot, boxplot, and QQ plot:
 
 ``` r
-# ── Part 2.2 · Testing Assumptions on NE 12 ─────────────────────────────
+# ── Part 3.2 · Testing Assumptions on NE 12 ─────────────────────────────
 ne12_dot_plot <- ggplot(ne12_df, aes(x = mass_g, y = "")) +
   geom_dotplot(binwidth = 60, stackdir = "center", fill = "darkblue", dotsize = 0.5) +
   labs(title = "Dotplot", x = "Mass (g)", y = "")
@@ -135,7 +319,7 @@ ne12_qq_plot
 **▶ Run this** — combine all four with patchwork:
 
 ``` r
-# ── Part 2.3 · Testing Assumptions on NE 12 ─────────────────────────────
+# ── Part 3.3 · Testing Assumptions on NE 12 ─────────────────────────────
 combined_stats_plot <- (ne12_histo_plot + ne12_dot_plot) / (ne12_box_plot + ne12_qq_plot) +
   plot_annotation(
     theme = theme(plot.title = element_text(hjust = 0.5),
@@ -147,7 +331,7 @@ combined_stats_plot
 **▶ Run this** — the formal test (note: really you want to do this on residuals, but here we test the raw values directly):
 
 ``` r
-# ── Part 2.4 · Testing Assumptions on NE 12 ─────────────────────────────
+# ── Part 3.4 · Testing Assumptions on NE 12 ─────────────────────────────
 shapiro_test <- shapiro.test(ne12_df$mass_g)
 shapiro_test
 ```
@@ -160,21 +344,21 @@ shapiro_test
 **🚀 If you finish early:** Run the same histogram, QQ plot and Shapiro-Wilk on a **different lake** — try `Toolik` or `N 01`. Is any lake's mass close to normal?
 
 ``` r
-# ── Part 2.5 · Testing Assumptions on NE 12 ─────────────────────────────
+# ── Part 3.5 · Testing Assumptions on NE 12 ─────────────────────────────
 # Write your code in the R script:
 ```
 :::
 
 ------------------------------------------------------------------------
 
-# Part 3 · Comparing Two Lakes — NE 12 vs. Island Lake
+# Part 4 · Comparing Two Lakes — NE 12 vs. Island Lake
 
 Now that we've shown NE 12's mass fails (or passes) normality, let's explore a comparison of NE 12 and Island Lake `mass_g`.
 
 **▶ Run this** — build the two-lake data frame:
 
 ``` r
-# ── Part 3.1 · Comparing Two Lakes ──────────────────────────────────────
+# ── Part 4.1 · Comparing Two Lakes ──────────────────────────────────────
 in_df <- lt_df %>%
   filter(lake %in% c("NE 12", "Island Lake")) %>%
   filter(!is.na(mass_g))
@@ -184,7 +368,7 @@ head(in_df)
 **▶ Run this** — summary stats by lake:
 
 ``` r
-# ── Part 3.2 · Comparing Two Lakes ──────────────────────────────────────
+# ── Part 4.2 · Comparing Two Lakes ──────────────────────────────────────
 summary_by_lake <- in_df %>% group_by(lake) %>% reframe(summary_stats(mass_g))
 
 summary_by_lake
@@ -193,7 +377,7 @@ summary_by_lake
 **▶ Run this** — histograms by lake:
 
 ``` r
-# ── Part 3.3 · Comparing Two Lakes ──────────────────────────────────────
+# ── Part 4.3 · Comparing Two Lakes ──────────────────────────────────────
 hist_plot <- in_df %>%
   ggplot(aes(x = mass_g, fill = lake)) +
   geom_histogram(bins = 20, alpha = 0.7) +
@@ -206,7 +390,7 @@ hist_plot
 **▶ Run this** — QQ plots by lake (in a QQ plot, points that follow the line indicate normally distributed data; deviations suggest non-normality):
 
 ``` r
-# ── Part 3.4 · Comparing Two Lakes ──────────────────────────────────────
+# ── Part 4.4 · Comparing Two Lakes ──────────────────────────────────────
 qq_plot <- in_df %>%
   ggplot(aes(sample = mass_g, color = lake)) +
   stat_qq() +
@@ -221,7 +405,7 @@ qq_plot
 **▶ Run this** — the formal test, done for each lake separately (note: Island Lake can look non-normal in the QQ plot but come out close to normal in the Shapiro-Wilk test):
 
 ``` r
-# ── Part 3.5 · Comparing Two Lakes ──────────────────────────────────────
+# ── Part 4.5 · Comparing Two Lakes ──────────────────────────────────────
 normality_results <- in_df %>%
   group_by(lake) %>%
   summarize(
@@ -235,7 +419,7 @@ normality_results
 **▶ Run this** — Levene's test for equal variances (H₀: variances are equal across groups; we want this **non-significant**):
 
 ``` r
-# ── Part 3.6 · Comparing Two Lakes ──────────────────────────────────────
+# ── Part 4.6 · Comparing Two Lakes ──────────────────────────────────────
 levene_result <- leveneTest(mass_g ~ lake, data = in_df)
 levene_result
 ```
@@ -248,21 +432,21 @@ levene_result
 **🚀 If you finish early:** Rerun Levene's test on a **different pair of lakes** — say `Toolik` and `N 01`, which have far more similar sample sizes. Same conclusion?
 
 ``` r
-# ── Part 3.7 · Comparing Two Lakes ──────────────────────────────────────
+# ── Part 4.7 · Comparing Two Lakes ──────────────────────────────────────
 # Write your code in the R script:
 ```
 :::
 
 ------------------------------------------------------------------------
 
-# Part 4 · Data Transformations
+# Part 5 · Data Transformations
 
 A log₁₀ transformation commonly helps right-skewed data like this pass the normality assumption.
 
 **▶ Run this:**
 
 ``` r
-# ── Part 4.1 · Data Transformations ─────────────────────────────────────
+# ── Part 5.1 · Data Transformations ─────────────────────────────────────
 in_df <- in_df %>%
   mutate(log_mass = log10(mass_g))
 head(in_df)
@@ -271,7 +455,7 @@ head(in_df)
 **▶ Run this** — check if it worked, with a histogram:
 
 ``` r
-# ── Part 4.2 · Data Transformations ─────────────────────────────────────
+# ── Part 5.2 · Data Transformations ─────────────────────────────────────
 log_hist_plot <- in_df %>%
   ggplot(aes(x = log_mass, fill = lake)) +
   geom_histogram(bins = 20, alpha = 0.7) +
@@ -285,7 +469,7 @@ log_hist_plot
 **▶ Run this** — a QQ plot of the transformed data (we'll skip Shapiro-Wilk for a moment):
 
 ``` r
-# ── Part 4.3 · Data Transformations ─────────────────────────────────────
+# ── Part 5.3 · Data Transformations ─────────────────────────────────────
 log_qq_plot <- in_df %>%
   ggplot(aes(sample = log_mass, color = lake)) +
   stat_qq() +
@@ -300,7 +484,7 @@ log_qq_plot
 **▶ Run this** — now the formal tests on the transformed data:
 
 ``` r
-# ── Part 4.4 · Data Transformations ─────────────────────────────────────
+# ── Part 5.4 · Data Transformations ─────────────────────────────────────
 log_normality_results <- in_df %>%
   group_by(lake) %>%
   summarize(
@@ -322,21 +506,21 @@ levene_log_result
 **🚀 If you finish early:** Try a square-root transformation (`sqrt(mass_g)`) instead of log₁₀. Build a histogram and rerun the Shapiro-Wilk test — does it do better or worse than the log transform?
 
 ``` r
-# ── Part 4.5 · Data Transformations ─────────────────────────────────────
+# ── Part 5.5 · Data Transformations ─────────────────────────────────────
 # Write your code in the R script:
 ```
 :::
 
 ------------------------------------------------------------------------
 
-# Part 5 · Running the Tests
+# Part 6 · Running the Tests
 
 Even if the transformation doesn't fully fix things, let's run the full set of tests so we can compare them side by side.
 
 **▶ Run this** — standard two-sample t-test on the raw data:
 
 ``` r
-# ── Part 5.1 · Running the Tests ────────────────────────────────────────
+# ── Part 6.1 · Running the Tests ────────────────────────────────────────
 t_test_result <- t.test(
   mass_g ~ lake,
   data = in_df,
@@ -349,7 +533,7 @@ t_test_result
 **▶ Run this** — the same t-test on the log-transformed data:
 
 ``` r
-# ── Part 5.2 · Running the Tests ────────────────────────────────────────
+# ── Part 6.2 · Running the Tests ────────────────────────────────────────
 log_t_test_result <- t.test(
   log_mass ~ lake,
   data = in_df,
@@ -371,7 +555,7 @@ log_t_test_result
 **▶ Run this** — back-transform to the geometric mean:
 
 ``` r
-# ── Part 5.3 · Running the Tests ────────────────────────────────────────
+# ── Part 6.3 · Running the Tests ────────────────────────────────────────
 back_transformed <- in_df %>%
   group_by(lake) %>%
   summarise(
@@ -392,7 +576,7 @@ back_transformed %>%
 **▶ Run this** — plot the back-transformed geometric means (note the error bars are not symmetrical!):
 
 ``` r
-# ── Part 5.4 · Running the Tests ────────────────────────────────────────
+# ── Part 6.4 · Running the Tests ────────────────────────────────────────
 geo_mean_plot <- back_transformed %>%
   ggplot(aes(x = lake, y = geometric_mean, fill = lake)) +
   geom_bar(stat = "identity", width = 0.5, alpha = 0.7) +
@@ -408,7 +592,7 @@ geo_mean_plot
 **▶ Run this** — Welch's t-test (doesn't assume equal variances):
 
 ``` r
-# ── Part 5.5 · Running the Tests ────────────────────────────────────────
+# ── Part 6.5 · Running the Tests ────────────────────────────────────────
 welch_test_result <- t.test(
   mass_g ~ lake,
   data = in_df,
@@ -423,7 +607,7 @@ welch_test_result
 **▶ Run this** — the Mann-Whitney Wilcoxon test (non-parametric):
 
 ``` r
-# ── Part 5.6 · Running the Tests ────────────────────────────────────────
+# ── Part 6.6 · Running the Tests ────────────────────────────────────────
 wilcox_test_result <- wilcox.test(
   mass_g ~ lake,
   data = in_df,
@@ -437,7 +621,7 @@ wilcox_test_result
 **▶ Run this** — a permutation test (balance the sample sizes first):
 
 ``` r
-# ── Part 5.7 · Running the Tests ────────────────────────────────────────
+# ── Part 6.7 · Running the Tests ────────────────────────────────────────
 set.seed(123)  # For reproducibility
 
 island_size <- sum(in_df$lake == "Island Lake")
@@ -467,19 +651,19 @@ perm_test_result
 **🚀 If you finish early:** Rerun the permutation test with `nmc = 1000` instead of `10000`. Does the p-value change meaningfully? What's the tradeoff of using fewer Monte Carlo replications?
 
 ``` r
-# ── Part 5.8 · Running the Tests ────────────────────────────────────────
+# ── Part 6.8 · Running the Tests ────────────────────────────────────────
 # Write your code in the R script:
 ```
 :::
 
 ------------------------------------------------------------------------
 
-# Part 6 · Comparing All Results
+# Part 7 · Comparing All Results
 
 **▶ Run this** — build a comparison table:
 
 ``` r
-# ── Part 6.1 · Comparing All Results ────────────────────────────────────
+# ── Part 7.1 · Comparing All Results ────────────────────────────────────
 test_results <- data.frame(
   Test = c("Standard t-test",
            "Log-transformed t-test",
@@ -504,7 +688,7 @@ test_results
 **▶ Run this** — visualize the raw comparison:
 
 ``` r
-# ── Part 6.2 · Comparing All Results ────────────────────────────────────
+# ── Part 7.2 · Comparing All Results ────────────────────────────────────
 combined_plot <- in_df %>%
   ggplot(aes(x = lake, y = mass_g, fill = lake)) +
   geom_boxplot(alpha = 0.7, outlier.shape = NA) +
@@ -538,124 +722,75 @@ ________________________________________________________
 **🚀 If you finish early:** Add the permutation test's p-value as a fifth row to `test_results`. (Hint: `perm_test_result$p.value`.)
 
 ``` r
-# ── Part 6.3 · Comparing All Results ────────────────────────────────────
+# ── Part 7.3 · Comparing All Results ────────────────────────────────────
 # Write your code in the R script:
 ```
 :::
 
 ------------------------------------------------------------------------
-
-# Part 7 · Our Pine Needles, the Non-Parametric Way
-
-::: callout-important
-## Column names in `pine_data.csv` / `pine_data.xlsx`
-
-Both files hold the **same six columns, with exactly these names**. Type them
-exactly as written — R is case-sensitive, and `Needle_Length` or `needle_length`
-will not work:
-
-| Column             | What it is                                     |
-|--------------------|------------------------------------------------|
-| `source_file`      | the raw team file the row came from             |
-| `team`             | field team — one team = **one tree**            |
-| `replicate`        | needle number within a tree side (1-8)          |
-| `side`             | sun exposure — `"shady"` or `"sunny"`           |
-| `needle_length_mm` | needle length, millimetres                      |
-| `needle_width_mm`  | needle width, millimetres                       |
-
-After you read the file in, click `pine_df` in the **Variables** pane in Positron
-and check the names against this table before you write any other code.
-:::
-
-Last week you ran a paired t-test on our four trees and got **p = 0.072**. Let's run the rank-based version of the same comparison.
-
-**▶ Run this:**
-
-``` r
-# ── Part 7.1 · Our pine needles ───────────────────────────────────────
-pine_df <- read_csv("data/pine_data.csv")
-
-# same two-stage summary as the t-test lecture
-p_df <- pine_df %>%
-  group_by(team, side) %>%
-  summarise(needle_length_mm = mean(needle_length_mm, na.rm = TRUE),
-            .groups = "drop")
-
-p_wide_df <- p_df %>%
-  pivot_wider(names_from = side, values_from = needle_length_mm)
-
-# unpaired: Mann-Whitney U
-wilcox.test(needle_length_mm ~ side, data = p_df)
-
-# paired: Wilcoxon signed-rank
-wilcox.test(p_wide_df$shady, p_wide_df$sunny, paired = TRUE)
-```
-
-✏️ **Your turn:** Fill in the comparison table.
-
-```         
-                        parametric        non-parametric
-unpaired:               p = 0.425         p = ______
-paired:                 p = 0.072         p = ______
-```
-
-✏️ **Your turn:** Did the two approaches lead you to the same *conclusion*? Did they give the same *p-value*?
-
-`________________________`
-
-✏️ **Your turn:** Look at the signed-rank statistic, `V`. What value did you get, and what does it say about how consistent the four trees were?
-
-`________________________`
-
-**▶ Run this — the floor:**
-
-``` r
-# ── Part 7.2 · Our pine needles ───────────────────────────────────────
-2 / 2^4     # smallest two-sided p a signed-rank test can give with 4 pairs
-```
-
-✏️ **Your turn:** Compare that number to the p-value you got from the signed-rank test. What does that tell you about whether the test *could* have found our effect significant, even in principle?
-
-`________________________`
-
-✏️ **Your turn:** Based on all of this, which test would you report for the pine needle data, and why?
-
-`________________________`
-
-::: callout-tip
-**🚀 If you finish early:** How many pairs would you need before a signed-rank test could possibly reach p < 0.05? Try `2 / 2^5`, `2 / 2^6`, and so on until you find it.
-:::
-
 ------------------------------------------------------------------------
 
-# Part 8 · Take-Home Extension — Crayfish Claw Strength
+# Part 8 · Take-Home Extension — Sagebrush Crickets
 
 *Due Wednesday, September 30 — before the Study Design & Sampling class.*
+
+[📥 Sagebrush cricket data](data/sage_brush_crickets_feeding_mating.csv){.btn .btn-primary download="sage_brush_crickets_feeding_mating.csv"}
 
 This time the test itself is the question. You now know five ways to compare two groups — standard t-test, log-transformed t-test, Welch's t-test, Mann-Whitney, and permutation test. Given a new dataset, you decide which one is appropriate and defend your choice.
 
 ## Background
 
-Graham & Angilletta (2022) asked whether claw strength in crayfish honestly signals fighting ability. They compared maximum claw strength between stream-dwelling crayfish (which fight often and may use claws to signal) and burrowing crayfish (docile, claws used mainly for digging).
+Male sagebrush crickets (*Cyphoderris strepitans*) have an unusual mating system: during copulation the female eats the tips of the male's hind wings and drinks his haemolymph. A male who has already mated has damaged wings, and is therefore visibly "starved" relative to a virgin male.
 
-**▶ Run this** — load the data and collapse to one claw-strength value per individual. Each crayfish has up to two claws measured (left and right) — you already know from the pine needle data why those can't be treated as independent observations:
+The question is whether that costs him. Johnson et al. measured **time to mating** — how many hours a male waited before securing a mate — for males that had already mated (**starved**) and males that had not (**fed**).
+
+::: callout-important
+**⚠️ This is Example 13.5 in Whitlock & Schluter**
+
+These are the data the textbook uses to introduce the Mann-Whitney U test in **Chapter 13**. That is deliberate: after you have made your own decision and written it up, you can read the chapter and see how the authors justified theirs.
+
+**Do the work first.** The point of this assignment is your reasoning, not matching the book.
+:::
+
+::: callout-important
+## Column names in `sage_brush_crickets_feeding_mating.csv`
+
+| Column | What it is |
+|--------------------|------------------------------------------|
+| `feeding_status` | `"fed"` (virgin male) or `"starved"` (already mated) |
+| `time_to_mating_h` | hours the male waited before mating |
+:::
+
+**▶ Run this** — read the data in and look at it:
 
 ``` r
 # ── Part 8.1 · Take-Home Extension ──────────────────────────────────────
-claw_df <- read_csv("data/graham_and_angilletta_claw_data.csv")
+cricket_df <- read_csv("data/sage_brush_crickets_feeding_mating.csv")
 
-crayfish_df <- claw_df %>%
-  group_by(crayfish.id, lifestyle) %>%
-  summarize(maxclawstr_N = mean(maxclawstr.N, na.rm = TRUE), .groups = "drop")
-
-head(crayfish_df)
+cricket_df %>% group_by(feeding_status) %>% reframe(summary_stats(time_to_mating_h))
 ```
+
+✏️ **Your turn:** Look at the `n`, `mean`, and `sd` for each group before you do anything else. What do you notice about the two standard deviations relative to the two means?
+
+`________________________`
 
 ## Your Task
 
-**Question:** Does maximum claw strength differ between stream-dwelling and burrowing crayfish?
+**Question:** Does time to mating differ between starved and fed male sagebrush crickets?
 
 ✏️ **Your turn:** State your hypotheses. Explore the data yourself — normality, variance, sample size, outliers, whatever you need to check — and decide which test from this unit is the right one for this data. Justify your choice, then run it, interpret the result, and write it up as a proper results sentence.
+
+::: callout-warning
+**⚠️ This dataset will not let you off easily**
+
+Unlike the pine needles, the assumptions here are **genuinely in trouble** — and unlike the lake trout, the answer is not obvious. That is the whole point. Check every assumption, and notice that a log transformation fixes one problem without fixing the other. Your justification is the assignment.
+:::
+
+::: callout-note
+**✅ You are graded on the reasoning, not on the p-value**
+
+A well-justified test that returns a **non-significant** result is a complete, full-credit answer. "We found no difference" is a finding. If your p-value is large, do **not** go hunting through the other four tests looking for a smaller one — that is p-hacking, and it is the one thing that will cost you marks here.
+:::
 
 ```
 H0 =
@@ -682,7 +817,7 @@ ________________________________________________________
 
 ## Final Figure
 
-Produce one publication-quality figure comparing claw strength between the two lifestyles — proper axis labels, no default `ggplot` grey background — and export it with `ggsave()`.
+Produce one publication-quality figure comparing time to mating between the two feeding statuses — proper axis labels with units, no default `ggplot` grey background — and export it with `ggsave()`.
 
 ``` r
 # ── Part 8.3 · Take-Home Extension ──────────────────────────────────────
@@ -702,13 +837,25 @@ Your write-up should include:
 - [ ] A final figure showing the result
 :::
 
+::: callout-tip
+**🎓 Graduate students — optional extension**
+
+Once you have written yours up, read **Whitlock & Schluter Chapter 13, Example 13.5** and compare. Did they reach for the same test you did? If not, what did they see in the data that you didn't — or what did you see that they didn't?
+
+Then go further: with n = 11 and 13, what effect size would this study have been able to detect? Sketch the connection to the power ideas we will take up shortly.
+:::
+
 ------------------------------------------------------------------------
 
 ------------------------------------------------------------------------
 
 # Conclusion
 
-This analysis demonstrates several approaches to comparing mass between lake trout populations. The choice of statistical test depends on whether your data meets the assumptions of parametric tests. When assumptions are violated:
+Two datasets, two different answers to the same question — *which test does this data deserve?*
+
+On the **pine needles** the assumptions held, and the rank-based tests cost us power for nothing. On the **lake trout** the assumptions failed badly, and those same tests were exactly the right tool. Non-parametric is not a safe default; it is a response to a specific problem.
+
+When assumptions *are* violated:
 
 1.  Try transforming the data (e.g., log transformation)
 2.  Use Welch's t-test if variances are unequal
@@ -731,6 +878,7 @@ All methods have strengths and limitations, and consistency of results across me
 At this point you can:
 
 - [ ] Test normality with histograms, QQ plots, and the Shapiro-Wilk test
+- [ ] Explain what Cohen's d measures, and why it belongs next to a p-value
 - [ ] Test equal variance with Levene's test
 - [ ] Apply and evaluate a log transformation, including back-transforming to a geometric mean
 - [ ] Run and interpret a standard t-test, Welch's t-test, Mann-Whitney Wilcoxon test, and permutation test
@@ -744,18 +892,5 @@ Upload both of these to the course management system:
 1.  Your code — the `scripts/` folder (or just `07_nonparametric_t_tests.R`)
 2.  This worksheet, with your written answers
 :::
-
-------------------------------------------------------------------------
-
-# Getting unstuck
-
-When code breaks — and it will, that is normal:
-
-1.  **Read the error message out loud.** R usually names the line and the problem.
-2.  **Check the usual suspects:** did you run `library(tidyverse)`, `library(car)`, `library(patchwork)`, and `library(perm)`? Spelling? A missing `)` or `%>%` at the *start* of a line?
-3.  `?function_name` opens the built-in help page.
-4.  **Bring the exact error** (copy-paste it) to class or office hours.
-
-> 💡 **Key idea:** Every working scientist googles error messages daily. Getting stuck is not failing — it is the job.
 
 ------------------------------------------------------------------------
