@@ -724,28 +724,16 @@ Pseudoreplication would not have made the study better. It would only have made 
 #| warning: false
 #| fig-width: 9
 #| fig-height: 4
-#| fig-alt: "Two side-by-side scatterplots comparing pseudoreplicated versus properly replicated analysis of body mass by location, mainland versus island, each point colored by site of origin. The left panel treats sixty individual mice as independent replicates with a narrow black error bar on the pooled mean. The right panel treats the six site means as the true replicates, with a much wider black error bar, showing the honest uncertainty."
-set.seed(42)
-pseudo_df <- tibble(
-  island_id = rep(1:6, each = 10),
-  location = rep(rep(c("Mainland", "Island"), each = 3), each = 10),
-  island_mean = rep(c(22, 24, 28, 26, 23, 27), each = 10),
-  body_mass = rnorm(
-    60,
-    mean = island_mean,
-    sd = ifelse(location == "Island", 6, 20)
-  )
-)
-
-pseudo_plot <- pseudo_df %>%
-  ggplot(aes(location, body_mass, colour = factor(island_id))) +
+#| fig-alt: "Two side-by-side scatterplots comparing pseudoreplicated versus properly replicated analysis of the same pine needle data, shady versus sunny side, each point colored by tree. The left panel treats all 32 needles per side as independent replicates, with a narrow black error bar on the mean. The right panel treats each tree's own mean as the true replicate (4 trees per side), with a visibly wider black error bar, showing the honest uncertainty."
+pseudo_plot <- pine_df %>%
+  ggplot(aes(side, needle_length_mm, colour = team)) +
   geom_point(
     position = position_jitter(width = 0.15),
     size = 2.4,
     alpha = 0.8
   ) +
   stat_summary(
-    aes(group = 1),
+    aes(group = side),
     fun = mean,
     geom = "point",
     shape = 18,
@@ -753,7 +741,7 @@ pseudo_plot <- pseudo_df %>%
     colour = "black"
   ) +
   stat_summary(
-    aes(group = 1),
+    aes(group = side),
     fun.data = mean_se,
     geom = "errorbar",
     width = 0.15,
@@ -761,35 +749,23 @@ pseudo_plot <- pseudo_df %>%
     linewidth = 1
   ) +
   labs(
-    title = "Pseudoreplicated (n = 60 mice)",
-    x = "Location",
-    y = "Body mass (g)",
-    colour = "Site"
+    title = "Pseudoreplicated\n(n = 32 needles/side)",
+    x = "Side",
+    y = "Needle length (mm)",
+    colour = "Tree"
   ) +
-  coord_cartesian(ylim = c(10, 40)) +
-  theme_regular(base_size = 12) +
-  theme(legend.position = "none", plot.margin = margin(5, 20, 5, 5))
-
-correct_df <- pseudo_df %>%
-  group_by(island_id, location) %>%
-  summarize(
-    mean_mass = mean(body_mass),
-    se_mass = sd(body_mass) / sqrt(n()),
-    .groups = "drop"
+  theme_regular(base_size = 11) +
+  theme(
+    legend.position = "none",
+    plot.title = element_text(size = rel(1), hjust = 0.5),
+    plot.margin = margin(5, 15, 5, 5)
   )
 
-correct_plot <- correct_df %>%
-  ggplot(aes(location, mean_mass, colour = factor(island_id))) +
+correct_plot <- p_df %>%
+  ggplot(aes(side, needle_length_mm, colour = team)) +
   geom_point(size = 3.5, position = position_dodge2(width = 0.5)) +
-  geom_errorbar(
-    aes(ymin = mean_mass - se_mass, ymax = mean_mass + se_mass),
-    width = 0.25,
-    alpha = 0.6,
-    position = position_dodge2(width = 0.5),
-    linewidth = 0.8
-  ) +
   stat_summary(
-    aes(group = 1),
+    aes(group = side),
     fun = mean,
     geom = "point",
     shape = 18,
@@ -797,7 +773,7 @@ correct_plot <- correct_df %>%
     colour = "black"
   ) +
   stat_summary(
-    aes(group = 1),
+    aes(group = side),
     fun.data = mean_se,
     geom = "errorbar",
     width = 0.15,
@@ -805,14 +781,17 @@ correct_plot <- correct_df %>%
     linewidth = 1
   ) +
   labs(
-    title = "True replication (n = 6 sites)",
-    x = "Location",
-    y = "Mean body mass per site (g)",
-    colour = "Site"
+    title = "True replication\n(n = 4 trees/side)",
+    x = "Side",
+    y = "Mean needle length per tree (mm)",
+    colour = "Tree"
   ) +
-  coord_cartesian(ylim = c(10, 40)) +
-  theme_regular(base_size = 12) +
-  theme(legend.position = "right", plot.margin = margin(5, 5, 5, 20))
+  theme_regular(base_size = 11) +
+  theme(
+    legend.position = "right",
+    plot.title = element_text(size = rel(1), hjust = 0.5),
+    plot.margin = margin(5, 5, 5, 15)
+  )
 
 pseudo_plot + correct_plot + plot_layout(widths = c(0.85, 1))
 ```
