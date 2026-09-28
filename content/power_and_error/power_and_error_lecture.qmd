@@ -59,11 +59,11 @@ A t-test gives you a p-value and a decision — reject or fail to reject H₀. T
 ::: callout-note
 **Today's objectives**
 
-1. Two ways to be wrong: Type I & Type II error
-2. Statistical power, and what changes it
-3. Power calculated two ways — **a priori** (before data collection) and **retrospectively**
-4. The `pwr` package, and why it beats a hand-rolled workaround for unequal group sizes
-5. Error bars and pseudoreplication, revisited
+1.  Two ways to be wrong: Type I & Type II error
+2.  Statistical power, and what changes it
+3.  Power calculated two ways — **a priori** (before data collection) and **retrospectively**
+4.  The `pwr` package, and why it beats a hand-rolled workaround for unequal group sizes
+5.  Error bars and pseudoreplication, revisited
 :::
 ::::
 :::::::
@@ -76,10 +76,10 @@ A t-test gives you a p-value and a decision — reject or fail to reject H₀. T
 :::: {.column width="55%"}
 Even a well-run study can reach the wrong conclusion. Crossing the *statistical decision* against the *unknown truth* gives exactly four outcomes:
 
-|                        | H₀ actually true (no real effect) | H₀ actually false (real effect) |
-|------------------------|------------------------------------|-----------------------------------|
-| **Reject H₀**          | Type I error — rate **α**          | Correct decision                  |
-| **Fail to reject H₀**  | Correct decision                   | Type II error — rate **β**        |
+|   | H₀ actually true (no real effect) | H₀ actually false (real effect) |
+|-------------------|---------------------------|---------------------------|
+| **Reject H₀** | Type I error — rate **α** | Correct decision |
+| **Fail to reject H₀** | Correct decision | Type II error — rate **β** |
 
 - **Type I error (α):** you found an effect that isn't real — a false positive
 - **Type II error (β):** you missed an effect that is real — a false negative
@@ -97,71 +97,106 @@ Gotelli & Ellison, *A Primer of Ecological Statistics*, Ch. 4 — Framing and Te
 ::: callout-tip
 **🖐 Which type of error, if any?**
 
-1. A study concludes sunny-side pine needles are longer, when really there is no difference.
-2. A study fails to detect a real horn-length difference between surviving and predated lizards, and concludes there is none.
-3. A study correctly detects that predated lizards have shorter horns.
+1.  A study concludes sunny-side pine needles are longer, when really there is no difference.
+2.  A study fails to detect a real horn-length difference between surviving and predated lizards, and concludes there is none.
+3.  A study correctly detects that predated lizards have shorter horns.
 :::
 ::::
 :::::::
 
 ## Seeing α and β
 
-::::::: columns
-:::: {.column width="45%"}
+::::: columns
+::: {.column width="45%"}
 - **Black curve** — distribution of the test statistic *if H₀ is true*
-- **Green curve** — distribution *if Hₐ is true*, shifted by the real effect
-- **Red area (α)** — null curve beyond the critical value: Type I error
-- **Blue area (β)** — alternative curve inside the acceptance region: Type II error
-- **Power** is the rest of the green curve — beyond the critical value
+- **Green curve** — distribution *if Hₐ is true*, shifted by an assumed effect size
+- **Red areas (α/2 each)** — both tails of the null curve beyond the critical values: Type I error, α total
+- **Blue area (β)** — alternative curve between the critical values: Type II error
+- **Power (1 − β)** — the rest of the green curve, beyond the critical value
 
-Moving the critical value trades one error for the other. For a fixed sample size, **you cannot shrink both at once.**
-::::
+You live on only **one** curve — you just don't know which. α comes from the black curve and β from the green one, so α + β need not equal 1.
 
-:::: {.column width="55%"}
+Moving the critical values trades one error for the other. For a fixed sample size, **you cannot shrink both at once.**
+:::
+
+::: {.column width="55%"}
 ```{r power-and-error-01}
 #| echo: false
 #| message: false
 #| warning: false
 #| fig-width: 5
 #| fig-height: 3.4
-#| fig-alt: "Overlapping density curves for a null distribution centered at 0 and an alternative distribution shifted to the right, with the Type I error region shaded red in the right tail of the null curve beyond a dashed critical value, and the Type II error region shaded blue under the alternative curve to the left of that same critical value."
-x <- seq(-4, 8, length.out = 1000)
-null_y <- dnorm(x, mean = 0, sd = 1)
-alt_y  <- dnorm(x, mean = 3.2, sd = 1)
-crit_val <- qnorm(0.95)
+#| fig-alt: "Overlapping density curves for a null distribution centered at 0 and an alternative distribution shifted to the right. Two dashed lines mark the two-tailed critical values. Both tails of the null curve beyond the critical values are shaded red and labelled alpha over 2 (Type I error). The part of the alternative curve between the critical values is shaded blue and labelled beta (Type II error). The unshaded part of the alternative curve beyond the upper critical value is labelled power."
+x <- seq(-4, 7, length.out = 1000)
+alt_mean <- 3.2
+crit_val <- qnorm(0.975)
 
-type_1_region <- tibble(x = seq(crit_val, 8, length.out = 200)) %>%
+type_1_upper <- tibble(x = seq(crit_val, 7, length.out = 200)) %>%
   mutate(y = dnorm(x, mean = 0, sd = 1))
-type_2_region <- tibble(x = seq(-4, crit_val, length.out = 200)) %>%
-  mutate(y = dnorm(x, mean = 3.2, sd = 1))
+type_1_lower <- tibble(x = seq(-4, -crit_val, length.out = 200)) %>%
+  mutate(y = dnorm(x, mean = 0, sd = 1))
+type_2_region <- tibble(x = seq(-crit_val, crit_val, length.out = 200)) %>%
+  mutate(y = dnorm(x, mean = alt_mean, sd = 1))
 
 ggplot() +
-  geom_line(data = tibble(x = x, y = null_y),
-            aes(x, y, colour = "H0 (null)"), linewidth = 0.9) +
-  geom_line(data = tibble(x = x, y = alt_y),
-            aes(x, y, colour = "Ha (alternative)"), linewidth = 0.9) +
-  geom_area(data = type_1_region, aes(x, y), fill = "firebrick", alpha = 0.5) +
+  geom_line(
+    data = tibble(x = x, y = dnorm(x, mean = 0, sd = 1)),
+    aes(x, y, colour = "H0 (null)"),
+    linewidth = 0.9
+  ) +
+  geom_line(
+    data = tibble(x = x, y = dnorm(x, mean = alt_mean, sd = 1)),
+    aes(x, y, colour = "Ha (alternative)"),
+    linewidth = 0.9
+  ) +
+  geom_area(data = type_1_upper, aes(x, y), fill = "firebrick", alpha = 0.5) +
+  geom_area(data = type_1_lower, aes(x, y), fill = "firebrick", alpha = 0.5) +
   geom_area(data = type_2_region, aes(x, y), fill = "steelblue", alpha = 0.5) +
-  geom_vline(xintercept = crit_val, linetype = "dashed") +
-  annotate("text", x = 2.3, y = 0.06, label = "alpha", parse = TRUE,
-           colour = "firebrick", size = 5) +
-  annotate("text", x = 1.3, y = 0.075, label = "beta", parse = TRUE,
-           colour = "steelblue", size = 5) +
-  scale_colour_manual(name = NULL, values = c("H0 (null)" = "black",
-                                              "Ha (alternative)" = "darkgreen")) +
+  geom_vline(xintercept = c(-crit_val, crit_val), linetype = "dashed") +
+  annotate(
+    "text",
+    x = c(-2.6, 2.6),
+    y = 0.05,
+    label = "alpha/2",
+    parse = TRUE,
+    colour = "firebrick",
+    size = 4.5
+  ) +
+  annotate(
+    "text",
+    x = 1.3,
+    y = 0.085,
+    label = "beta",
+    parse = TRUE,
+    colour = "steelblue",
+    size = 5
+  ) +
+  annotate(
+    "text",
+    x = 4.6,
+    y = 0.3,
+    label = "Power == 1 - beta",
+    parse = TRUE,
+    colour = "darkgreen",
+    size = 4.5
+  ) +
+  scale_colour_manual(
+    name = NULL,
+    values = c("H0 (null)" = "black", "Ha (alternative)" = "darkgreen")
+  ) +
   labs(x = "Test statistic", y = "Probability density") +
   theme_regular(base_size = 11) +
   theme(legend.position = "bottom")
 ```
-::::
-:::::::
+:::
+:::::
 
 ## Part 2 · Statistical Power {.divider}
 
 ## What Is Power, and What Moves It
 
-::::::: columns
-:::: {.column width="55%"}
+:::::: columns
+::: {.column width="55%"}
 **Statistical power** is the probability of detecting a true effect — of rejecting H₀ when it really is false. 80% power means an 80% chance of finding a real effect of a given size.
 
 Power increases with:
@@ -173,10 +208,10 @@ Power increases with:
 
 A power analysis is typically run for one of three purposes:
 
-1. **Before data collection**, to determine the sample size a study needs — by far the most useful
-2. **After a study**, to evaluate whether its sample size was adequate
-3. To find the minimum effect size a given sample could realistically detect
-::::
+1.  **Before data collection**, to determine the sample size a study needs — by far the most useful
+2.  **After a study**, to evaluate whether its sample size was adequate
+3.  To find the minimum effect size a given sample could realistically detect
+:::
 
 :::: {.column width="45%"}
 ::: callout-note
@@ -185,14 +220,14 @@ A power analysis is typically run for one of three purposes:
 **80% power is the usual convention** for an adequately powered study. Everything in this lecture asks: for a given effect, n, and α, what is 1 − β?
 :::
 ::::
-:::::::
+::::::
 
 ## Part 3 · Effect Size, Recap {.divider}
 
 ## Cohen's d, and Cohen's Own Benchmarks
 
-::::::: columns
-:::: {.column width="55%"}
+:::::: columns
+::: {.column width="55%"}
 You met **Cohen's d** in the Non-Parametric worksheet: the difference between means, divided by the pooled standard deviation. It is unitless, so it is comparable across studies — and it is exactly what `pwr` and `power.t.test()`-style functions want as input.
 
 ```{r power-and-error-02}
@@ -203,14 +238,14 @@ cohen.ES(test = "t", size = "large")$effect.size
 ```
 
 Jacob Cohen himself proposed these as rough, field-general benchmarks — not a substitute for a real pilot estimate when you have one.
-::::
+:::
 
 :::: {.column width="45%"}
-| Size | d |
+| Size   | d   |
 |--------|-----|
-| Small | 0.2 |
+| Small  | 0.2 |
 | Medium | 0.5 |
-| Large | 0.8 |
+| Large  | 0.8 |
 
 ::: callout-tip
 **🖐 Where does our data land?**
@@ -218,14 +253,14 @@ Jacob Cohen himself proposed these as rough, field-general benchmarks — not a 
 Keep these three numbers in mind — the next section computes real d's for two datasets, and you can judge for yourself which bucket each falls into.
 :::
 ::::
-:::::::
+::::::
 
 ## Part 4 · Seeing Power: Two Real Datasets {.divider}
 
 ## Low Power and High Power, Side by Side
 
-::::::: columns
-:::: {.column width="60%"}
+::::: columns
+::: {.column width="60%"}
 Two two-sample comparisons, two very different amounts of power:
 
 - **Pine needles** — our own class data, 4 trees per side
@@ -237,20 +272,24 @@ pine_df <- read_csv("data/pine_data.csv")
 
 p_df <- pine_df %>%
   group_by(team, side) %>%
-  summarise(needle_length_mm = mean(needle_length_mm, na.rm = TRUE),
-            .groups = "drop")
+  summarise(
+    needle_length_mm = mean(needle_length_mm, na.rm = TRUE),
+    .groups = "drop"
+  )
 
 lizard_df <- read_csv("data/horned_lizards.csv") %>%
   filter(!is.na(squamosal_horn_length_mm))
 
 p_df %>% group_by(side) %>% reframe(summary_stats(needle_length_mm))
-lizard_df %>% group_by(survival) %>% reframe(summary_stats(squamosal_horn_length_mm))
+lizard_df %>%
+  group_by(survival) %>%
+  reframe(summary_stats(squamosal_horn_length_mm))
 ```
 
-[📥 Download the pine data](data/pine_data.csv){.btn .btn-primary download="pine_data.csv"} [📥 Download the lizard data](data/horned_lizards.csv){.btn .btn-primary download="horned_lizards.csv"}
-::::
+[📥 Download the pine data](data/pine_data.csv){.btn .btn-primary download="pine_data.csv"} [📥 Download the lizard data](data/horned_lizards.csv){.btn .btn-primary download="horned_lizards.csv"} [📥 Script skeleton (.R)](data/08_power_and_error.R){.btn .btn-primary download="08_power_and_error.R"}
+:::
 
-:::: {.column width="40%"}
+::: {.column width="40%"}
 ```{r power-and-error-04}
 d_unpaired <- cohens_d(needle_length_mm ~ side, data = p_df)
 d_unpaired
@@ -263,8 +302,8 @@ d_paired
 d_lizard <- cohens_d(squamosal_horn_length_mm ~ survival, data = lizard_df)
 d_lizard
 ```
-::::
-:::::::
+:::
+:::::
 
 ## The Comparison
 
@@ -274,44 +313,129 @@ d_lizard
 #| warning: false
 #| fig-width: 8.5
 #| fig-height: 3.6
-#| fig-alt: "Two side-by-side panels, each showing a null distribution and an alternative distribution of the difference in means, drawn on the natural measurement scale using the actual standard error and degrees of freedom for that dataset. The pine panel shows heavily overlapping curves with only a sliver of the alternative curve past the critical value. The horned lizard panel shows widely separated, narrow curves with almost all of the alternative curve past the critical value."
+#| fig-alt: "Two side-by-side panels, each showing a null distribution and an alternative distribution of the difference in means, drawn on the natural measurement scale using the actual standard error and degrees of freedom for that dataset. The pine panel shows heavily overlapping curves with only a sliver of the alternative curve past the critical value. Both tails of each null curve beyond the two-tailed critical values are shaded red. The horned lizard panel shows widely separated, narrow curves with almost all of the alternative curve past the critical value."
+# ---- numbers reused in inline text later in the lecture ----
+n_pine <- nrow(p_wide_df)
+n_living <- sum(lizard_df$survival == "living")
+n_killed <- sum(lizard_df$survival == "killed")
+
+pw_unpaired <- pwr.t.test(
+  n = n_pine,
+  d = abs(d_unpaired$Cohens_d),
+  sig.level = 0.05,
+  type = "two.sample"
+)$power
+pw_paired <- pwr.t.test(
+  n = n_pine,
+  d = abs(d_paired$Cohens_d),
+  sig.level = 0.05,
+  type = "paired"
+)$power
+pw_lizard <- pwr.t2n.test(
+  n1 = n_living,
+  n2 = n_killed,
+  d = abs(d_lizard$Cohens_d),
+  sig.level = 0.05
+)$power
+n_unpaired_80 <- ceiling(pwr.t.test(
+  d = abs(d_unpaired$Cohens_d),
+  power = 0.80,
+  sig.level = 0.05,
+  type = "two.sample"
+)$n)
+n_paired_80 <- ceiling(pwr.t.test(
+  d = abs(d_paired$Cohens_d),
+  power = 0.80,
+  sig.level = 0.05,
+  type = "paired"
+)$n)
+pct <- function(p) paste0(round(100 * p), "%")
+
+# pooled SD, weighted by degrees of freedom
+pooled_sd <- function(y, g) {
+  grp <- split(y, g)
+  sqrt(
+    sum(sapply(grp, function(v) (length(v) - 1) * var(v))) /
+      (length(y) - length(grp))
+  )
+}
+
 build_power_panel <- function(diff, se, df, title, subtitle) {
   crit <- qt(0.975, df) * se
   x <- seq(-4 * se, diff + 4 * se, length.out = 1000)
   null_y <- dt(x / se, df) / se
-  alt_y  <- dt((x - diff) / se, df) / se
+  alt_y <- dt((x - diff) / se, df) / se
 
-  t1_x <- seq(crit, max(x), length.out = 200)
-  t2_x <- seq(min(x), crit, length.out = 200)
+  t1_upper_x <- seq(crit, max(x), length.out = 200)
+  t1_lower_x <- seq(min(x), -crit, length.out = 200)
+  t2_x <- seq(-crit, crit, length.out = 200)
 
   ggplot() +
     geom_line(data = tibble(x = x, y = null_y), aes(x, y), linewidth = 0.9) +
-    geom_line(data = tibble(x = x, y = alt_y), aes(x, y), colour = "darkgreen", linewidth = 0.9) +
-    geom_area(data = tibble(x = t1_x, y = dt(t1_x / se, df) / se),
-              aes(x, y), fill = "firebrick", alpha = 0.5) +
-    geom_area(data = tibble(x = t2_x, y = dt((t2_x - diff) / se, df) / se),
-              aes(x, y), fill = "steelblue", alpha = 0.5) +
-    geom_vline(xintercept = crit, linetype = "dashed") +
-    labs(title = title, subtitle = subtitle,
-         x = "Difference in group means", y = "Density") +
+    geom_line(
+      data = tibble(x = x, y = alt_y),
+      aes(x, y),
+      colour = "darkgreen",
+      linewidth = 0.9
+    ) +
+    geom_area(
+      data = tibble(x = t1_upper_x, y = dt(t1_upper_x / se, df) / se),
+      aes(x, y),
+      fill = "firebrick",
+      alpha = 0.5
+    ) +
+    geom_area(
+      data = tibble(x = t1_lower_x, y = dt(t1_lower_x / se, df) / se),
+      aes(x, y),
+      fill = "firebrick",
+      alpha = 0.5
+    ) +
+    geom_area(
+      data = tibble(x = t2_x, y = dt((t2_x - diff) / se, df) / se),
+      aes(x, y),
+      fill = "steelblue",
+      alpha = 0.5
+    ) +
+    geom_vline(xintercept = c(-crit, crit), linetype = "dashed") +
+    labs(
+      title = title,
+      subtitle = subtitle,
+      x = "Difference in group means",
+      y = "Density"
+    ) +
     theme_regular(base_size = 11)
 }
 
 pine_panel <- build_power_panel(
   diff = abs(mean(p_wide_df$shady) - mean(p_wide_df$sunny)),
-  se   = 1.807985 * sqrt(1 / 4 + 1 / 4),
-  df   = 6,
+  se = pooled_sd(p_df$needle_length_mm, p_df$side) *
+    sqrt(1 / n_pine + 1 / n_pine),
+  df = 2 * n_pine - 2,
   title = "Pine needles — low power",
-  subtitle = "n = 4/side, d = 0.60, power = 11%"
+  subtitle = sprintf(
+    "n = %d/side, d = %.2f, power = %s",
+    n_pine,
+    abs(d_unpaired$Cohens_d),
+    pct(pw_unpaired)
+  )
 )
 
 lizard_panel <- build_power_panel(
-  diff = abs(mean(lizard_df$squamosal_horn_length_mm[lizard_df$survival == "living"]) -
-             mean(lizard_df$squamosal_horn_length_mm[lizard_df$survival == "killed"])),
-  se   = 2.643476 * sqrt(1 / 154 + 1 / 30),
-  df   = 182,
+  diff = abs(
+    mean(lizard_df$squamosal_horn_length_mm[lizard_df$survival == "living"]) -
+      mean(lizard_df$squamosal_horn_length_mm[lizard_df$survival == "killed"])
+  ),
+  se = pooled_sd(lizard_df$squamosal_horn_length_mm, lizard_df$survival) *
+    sqrt(1 / n_living + 1 / n_killed),
+  df = n_living + n_killed - 2,
   title = "Horned lizards — high power",
-  subtitle = "n = 154 vs. 30, d = 0.87, power = 99%"
+  subtitle = sprintf(
+    "n = %d vs. %d, d = %.2f, power = %s",
+    n_living,
+    n_killed,
+    abs(d_lizard$Cohens_d),
+    pct(pw_lizard)
+  )
 )
 
 pine_panel + lizard_panel
@@ -332,11 +456,17 @@ Same statistical machinery, same kind of test, wildly different power — becaus
 The most useful power analysis happens **before you collect a single data point**: guess or borrow an effect size, then ask what sample size would give you 80% power.
 
 ```{r power-and-error-06}
-pwr.t.test(d = d_unpaired$Cohens_d, power = 0.80,
-           sig.level = 0.05, type = "two.sample")
+pwr.t.test(
+  d = d_unpaired$Cohens_d,
+  power = 0.80,
+  sig.level = 0.05,
+  type = "two.sample"
+)
 ```
 
-**44 trees per side.** We collected four.
+**`r n_unpaired_80` trees per side** (always round `n` up). We collected `r n_pine`.
+
+And that d came from just `r n_pine` trees — its 95% CI (shady − sunny) runs from `r round(d_unpaired$CI_low, 2)` to `r round(d_unpaired$CI_high, 2)`, which includes zero. An a priori n is only as good as the effect size you feed it; published values or a conservative guess are often safer than a tiny pilot.
 
 ::: callout-note
 **📖 Reference**
@@ -365,26 +495,28 @@ The horned lizards gave us a *large* effect (d ≈ 0.87). Suppose instead you ar
 pwr.t.test(d = 0.5, power = 0.80, sig.level = 0.05, type = "two.sample")
 ```
 
-How does that n compare to the 44 trees per side the pine study needed?
+How does that n compare to the `r n_unpaired_80` trees per side the pine study needed?
 :::
 
 ## Part 6 · The `pwr` Package, and Unequal Group Sizes {.divider}
 
 ## When Your Two Groups Aren't the Same Size
 
-::::::: columns
-:::: {.column width="55%"}
+:::::: columns
+::: {.column width="55%"}
 `pwr` generalizes power analysis beyond the two-sample t-test — `pwr.anova.test()`, `pwr.r.test()`, and `pwr.chisq.test()` cover ANOVA, correlation, and categorical data, all with the same interface, for later units.
 
 Right now, the feature we need is `pwr.t2n.test()` — it takes the **two actual group sizes** directly. No averaging, no workaround:
 
 ```{r power-and-error-08}
-pwr.t2n.test(n1 = sum(lizard_df$survival == "living"),
-             n2 = sum(lizard_df$survival == "killed"),
-             d = d_lizard$Cohens_d,
-             sig.level = 0.05)
+pwr.t2n.test(
+  n1 = sum(lizard_df$survival == "living"),
+  n2 = sum(lizard_df$survival == "killed"),
+  d = d_lizard$Cohens_d,
+  sig.level = 0.05
+)
 ```
-::::
+:::
 
 :::: {.column width="45%"}
 ::: callout-important
@@ -393,23 +525,27 @@ pwr.t2n.test(n1 = sum(lizard_df$survival == "living"),
 Before `pwr.t2n.test()`, an unbalanced design forced you to fake a single n — usually the **harmonic mean** of n₁ and n₂ — and feed that to a function built for equal groups. It is an approximation. `pwr.t2n.test()` uses both real sample sizes directly and is the better tool whenever n₁ ≠ n₂.
 :::
 ::::
-:::::::
+::::::
 
 ## Part 7 · Retrospective (Post-Hoc) Power {.divider}
 
 ## Computing Power From What You Actually Observed
 
-::::::: columns
-:::: {.column width="55%"}
+:::::: columns
+::: {.column width="55%"}
 The other direction: **after** a study, ask what power your actual n and observed effect size gave you.
 
 ```{r power-and-error-09}
-pwr.t.test(n = 4, d = d_unpaired$Cohens_d,
-           sig.level = 0.05, type = "two.sample")
+pwr.t.test(
+  n = 4,
+  d = d_unpaired$Cohens_d,
+  sig.level = 0.05,
+  type = "two.sample"
+)
 ```
 
-**11% power.** Even if the pine difference is completely real, an unpaired study with 4 trees per side would **miss it about 9 times out of 10.**
-::::
+**`r pct(pw_unpaired)` power.** Even if the pine difference is completely real, an unpaired study with `r n_pine` trees per side would **miss it about `r round(10 * (1 - pw_unpaired))` times out of 10.**
+:::
 
 :::: {.column width="45%"}
 ::: callout-warning
@@ -420,7 +556,7 @@ Computing power *from the effect size you observed* is a known trap. It is fine 
 It is **not** a valid way to explain away a non-significant result — observed power is just a re-expression of the p-value you already have. "Our result was non-significant, but we had low power" says the same thing twice.
 :::
 ::::
-:::::::
+::::::
 
 ## Practice 6 · Retrospective Power for the Paired Design
 
@@ -430,57 +566,60 @@ It is **not** a valid way to explain away a non-significant result — observed 
 You already calculated `d_paired` in Part 4 (the same four trees, paired instead of unpaired). Compute the retrospective power of the **paired** design at n = 4, the same way Part 7 just did for the unpaired one.
 
 ```{r power-and-error-10}
-pwr.t.test(n = 4, d = d_paired$Cohens_d,
-           sig.level = 0.05, type = "paired")
+pwr.t.test(n = 4, d = d_paired$Cohens_d, sig.level = 0.05, type = "paired")
 ```
 
-How much higher is it than the unpaired 11%?
+How much higher is it than the unpaired `r pct(pw_unpaired)`?
 :::
 
 ## Part 8 · Pairing Buys You Power {.divider}
 
 ## The Whole Economics of the Study
 
-::::::: columns
-:::: {.column width="55%"}
+:::::: columns
+::: {.column width="55%"}
 Pairing does not just give a smaller p-value — it changes what the study needed to begin with.
 
 ```{r power-and-error-11}
-pwr.t.test(d = d_paired$Cohens_d, power = 0.80,
-           sig.level = 0.05, type = "paired")
+pwr.t.test(
+  d = d_paired$Cohens_d,
+  power = 0.80,
+  sig.level = 0.05,
+  type = "paired"
+)
 ```
 
-**7 trees, total** — for 80% power, paired.
-::::
+**`r n_paired_80` trees, total** — for 80% power, paired.
+:::
 
 :::: {.column width="45%"}
-| Design | Power at n = 4 | Trees for 80% power |
-|-----------|-----------|-----------|
-| Unpaired | 11% | 44 per side |
-| Paired | 46% | 7 total |
+| Design   | Power at n = 4 | Trees for 80% power |
+|----------|----------------|---------------------|
+| Unpaired | `r pct(pw_unpaired)` | `r n_unpaired_80` per side (`r 2 * n_unpaired_80` trees) |
+| Paired   | `r pct(pw_paired)`   | `r n_paired_80` total |
 
 ::: callout-important
 **Same trees. Same needles. Same measurements.**
 
-Pairing takes this study from needing **44 trees per side** to needing **7 trees.** That is not a statistical trick — it is what respecting the design of your own experiment is worth.
+Pairing takes this study from needing **`r 2 * n_unpaired_80` trees** (`r n_unpaired_80` per side) to needing **`r n_paired_80` trees.** That is not a statistical trick — it is what respecting the design of your own experiment is worth.
 :::
 ::::
-:::::::
+::::::
 
 ## Part 9 · Error Bars, Revisited {.divider}
 
 ## SD, SE, and CI Answer Different Questions
 
-::::::: columns
-:::: {.column width="45%"}
+::::: columns
+::: {.column width="45%"}
 - **Standard deviation (SD)** — spread of the raw data
 - **Standard error (SE)** — precision of the *mean*, `SD / sqrt(n)`
 - **95% confidence interval (CI)** — plausible range for the true mean, built from SE and the t-distribution
 
 `summary_stats()` gives you all three from one call. A **large sample doesn't shrink SD** — it shrinks SE and the CI, because you're now estimating the mean more precisely, not describing less variable lizards.
-::::
+:::
 
-:::: {.column width="55%"}
+::: {.column width="55%"}
 ```{r power-and-error-12}
 #| echo: false
 #| message: false
@@ -491,8 +630,18 @@ Pairing takes this study from needing **44 trees per side** to needing **7 trees
 lizard_bars_df <- lizard_df %>%
   group_by(survival) %>%
   reframe(summary_stats(squamosal_horn_length_mm)) %>%
-  pivot_longer(cols = c(sd, se), names_to = "error_type", values_to = "half_width") %>%
-  mutate(error_type = recode(error_type, sd = "Standard deviation", se = "Standard error"))
+  pivot_longer(
+    cols = c(sd, se),
+    names_to = "error_type",
+    values_to = "half_width"
+  ) %>%
+  mutate(
+    error_type = recode(
+      error_type,
+      sd = "Standard deviation",
+      se = "Standard error"
+    )
+  )
 
 ci_df <- lizard_df %>%
   group_by(survival) %>%
@@ -500,30 +649,53 @@ ci_df <- lizard_df %>%
   mutate(error_type = "95% CI")
 
 ggplot() +
-  geom_pointrange(data = lizard_bars_df,
-                   aes(x = survival, y = mean, ymin = mean - half_width, ymax = mean + half_width,
-                       colour = error_type),
-                   position = position_dodge(width = 0.5), linewidth = 0.8, size = 0.6) +
-  geom_pointrange(data = ci_df,
-                   aes(x = survival, y = mean, ymin = ci_lower, ymax = ci_upper, colour = error_type),
-                   position = position_dodge(width = 0.5), linewidth = 0.8, size = 0.6) +
-  scale_colour_manual(name = "Error bar type",
-                      values = c("Standard deviation" = "gray40",
-                                "Standard error" = "darkorange",
-                                "95% CI" = "steelblue")) +
+  geom_pointrange(
+    data = lizard_bars_df,
+    aes(
+      x = survival,
+      y = mean,
+      ymin = mean - half_width,
+      ymax = mean + half_width,
+      colour = error_type
+    ),
+    position = position_dodge(width = 0.5),
+    linewidth = 0.8,
+    size = 0.6
+  ) +
+  geom_pointrange(
+    data = ci_df,
+    aes(
+      x = survival,
+      y = mean,
+      ymin = ci_lower,
+      ymax = ci_upper,
+      colour = error_type
+    ),
+    position = position_dodge(width = 0.5),
+    linewidth = 0.8,
+    size = 0.6
+  ) +
+  scale_colour_manual(
+    name = "Error bar type",
+    values = c(
+      "Standard deviation" = "gray40",
+      "Standard error" = "darkorange",
+      "95% CI" = "steelblue"
+    )
+  ) +
   labs(x = "Survival", y = "Mean squamosal horn length (mm)") +
   theme_regular(base_size = 12) +
   theme(legend.position = "bottom")
 ```
-::::
-:::::::
+:::
+:::::
 
 ## Part 10 · Pseudoreplication {.divider}
 
 ## Sampling and Pseudoreplication
 
-::::::: columns
-:::: {.column width="55%"}
+:::::: columns
+::: {.column width="55%"}
 **Pseudoreplication** occurs when measurements that are not independent are analyzed as if they were.
 
 - Measuring the same individual multiple times
@@ -531,18 +703,18 @@ ggplot() +
 - Using multiple data points from a single site
 
 It results in underestimated standard errors and inflated Type I error rates — it makes a study look more precise, and more significant, than it actually is.
-::::
+:::
 
 :::: {.column width="45%"}
 ::: callout-important
 **We have been doing this all along**
 
-Our pine needle data has 64 rows. Analyzed as 64 independent needles it would look like a large, well-powered study. Analyzed honestly — **4 trees** — it has 11% power unpaired, 46% paired.
+Our pine needle data has 64 rows. Analyzed as 64 independent needles it would look like a large, well-powered study. Analyzed honestly — **`r n_pine` trees** — it has `r pct(pw_unpaired)` power unpaired, `r pct(pw_paired)` paired.
 
 Pseudoreplication would not have made the study better. It would only have made us **believe** it was.
 :::
 ::::
-:::::::
+::::::
 
 ## Pseudoreplicated vs. True Replication
 
@@ -552,41 +724,92 @@ Pseudoreplication would not have made the study better. It would only have made 
 #| warning: false
 #| fig-width: 9
 #| fig-height: 4
-#| fig-alt: "Two side-by-side scatterplots comparing pseudoreplicated versus properly replicated analysis of body mass by location, mainland versus island, each point colored by island of origin. The left panel treats sixty individual mice as independent replicates with a narrow black error bar on the pooled mean. The right panel treats the six island means as the true replicates, with a much wider black error bar, showing the honest uncertainty."
+#| fig-alt: "Two side-by-side scatterplots comparing pseudoreplicated versus properly replicated analysis of body mass by location, mainland versus island, each point colored by site of origin. The left panel treats sixty individual mice as independent replicates with a narrow black error bar on the pooled mean. The right panel treats the six site means as the true replicates, with a much wider black error bar, showing the honest uncertainty."
 set.seed(42)
 pseudo_df <- tibble(
   island_id = rep(1:6, each = 10),
-  location  = rep(rep(c("Mainland", "Island"), each = 3), each = 10),
+  location = rep(rep(c("Mainland", "Island"), each = 3), each = 10),
   island_mean = rep(c(22, 24, 28, 26, 23, 27), each = 10),
-  body_mass = rnorm(60, mean = island_mean, sd = ifelse(location == "Island", 6, 20))
+  body_mass = rnorm(
+    60,
+    mean = island_mean,
+    sd = ifelse(location == "Island", 6, 20)
+  )
 )
 
 pseudo_plot <- pseudo_df %>%
   ggplot(aes(location, body_mass, colour = factor(island_id))) +
-  geom_point(position = position_jitter(width = 0.15), size = 2.4, alpha = 0.8) +
-  stat_summary(aes(group = 1), fun = mean, geom = "point", shape = 18, size = 5, colour = "black") +
-  stat_summary(aes(group = 1), fun.data = mean_se, geom = "errorbar", width = 0.15,
-               colour = "black", linewidth = 1) +
-  labs(title = "Pseudoreplicated (n = 60 mice)", x = "Location", y = "Body mass (g)",
-       colour = "Island") +
+  geom_point(
+    position = position_jitter(width = 0.15),
+    size = 2.4,
+    alpha = 0.8
+  ) +
+  stat_summary(
+    aes(group = 1),
+    fun = mean,
+    geom = "point",
+    shape = 18,
+    size = 5,
+    colour = "black"
+  ) +
+  stat_summary(
+    aes(group = 1),
+    fun.data = mean_se,
+    geom = "errorbar",
+    width = 0.15,
+    colour = "black",
+    linewidth = 1
+  ) +
+  labs(
+    title = "Pseudoreplicated (n = 60 mice)",
+    x = "Location",
+    y = "Body mass (g)",
+    colour = "Site"
+  ) +
   coord_cartesian(ylim = c(10, 40)) +
   theme_regular(base_size = 12) +
   theme(legend.position = "none", plot.margin = margin(5, 20, 5, 5))
 
 correct_df <- pseudo_df %>%
   group_by(island_id, location) %>%
-  summarize(mean_mass = mean(body_mass), se_mass = sd(body_mass) / sqrt(n()), .groups = "drop")
+  summarize(
+    mean_mass = mean(body_mass),
+    se_mass = sd(body_mass) / sqrt(n()),
+    .groups = "drop"
+  )
 
 correct_plot <- correct_df %>%
   ggplot(aes(location, mean_mass, colour = factor(island_id))) +
   geom_point(size = 3.5, position = position_dodge2(width = 0.5)) +
-  geom_errorbar(aes(ymin = mean_mass - se_mass, ymax = mean_mass + se_mass),
-                width = 0.25, alpha = 0.6, position = position_dodge2(width = 0.5), linewidth = 0.8) +
-  stat_summary(aes(group = 1), fun = mean, geom = "point", shape = 18, size = 5, colour = "black") +
-  stat_summary(aes(group = 1), fun.data = mean_se, geom = "errorbar", width = 0.15,
-               colour = "black", linewidth = 1) +
-  labs(title = "True replication (n = 6 islands)", x = "Location", y = "Mean body mass per island (g)",
-       colour = "Island") +
+  geom_errorbar(
+    aes(ymin = mean_mass - se_mass, ymax = mean_mass + se_mass),
+    width = 0.25,
+    alpha = 0.6,
+    position = position_dodge2(width = 0.5),
+    linewidth = 0.8
+  ) +
+  stat_summary(
+    aes(group = 1),
+    fun = mean,
+    geom = "point",
+    shape = 18,
+    size = 5,
+    colour = "black"
+  ) +
+  stat_summary(
+    aes(group = 1),
+    fun.data = mean_se,
+    geom = "errorbar",
+    width = 0.15,
+    colour = "black",
+    linewidth = 1
+  ) +
+  labs(
+    title = "True replication (n = 6 sites)",
+    x = "Location",
+    y = "Mean body mass per site (g)",
+    colour = "Site"
+  ) +
   coord_cartesian(ylim = c(10, 40)) +
   theme_regular(base_size = 12) +
   theme(legend.position = "right", plot.margin = margin(5, 5, 5, 20))
@@ -598,37 +821,37 @@ pseudo_plot + correct_plot + plot_layout(widths = c(0.85, 1))
 
 ## A Number That Was Always Meant to Be a Guideline
 
-::::::: columns
-:::: {.column width="55%"}
+::::: columns
+::: {.column width="55%"}
 > "If p is between 0.1 and 0.9 there is certainly no reason to suspect the hypothesis tested. If it is below 0.02 it is strongly indicated that the hypothesis fails to account for the whole of the facts. We shall not often be astray if we draw a conventional line at .05 …"
 
 — R.A. Fisher, on the p-value as an informal measure of discrepancy between data and H₀
 
 Fisher proposed 0.05 as a rough guideline, not a bright line. Modern critiques of "statistical significance" as a binary pass/fail argue power and effect size deserve at least as much attention as whether p cleared 0.05.
-::::
+:::
 
-:::: {.column width="45%"}
+::: {.column width="45%"}
 ![Screenshot of a Nature comment article titled 'Scientists rise up against statistical significance,' by Valentin Amrhein, Sander Greenland, Blake McShane and 800+ signatories, illustrated with a cartoon of two scientists shelving a book labeled 'Statistical Significance' in a dusty cabinet of retired scientific relics like phlogiston and spontaneous generation, symbolizing calls to retire strict significance thresholds.](images/clipboard-3329723408.png){width="3.3in" height="2.5in"}
-::::
-:::::::
+:::
+:::::
 
 ## Summary and Key Takeaways
 
-::::::: columns
-:::: {.column width="55%"}
+:::::: columns
+::: {.column width="55%"}
 **Key concepts covered:**
 
-1. **Type I (α)** and **Type II (β)** error — the two ways a decision can be wrong; power = 1 − β
-2. **Power** rises with larger n, larger effect size, lower variability, and higher α
-3. **A priori power** (before data collection) tells you the n a study needs — the most useful use of this whole toolkit
-4. **Retrospective power** tells you what your finished study could have detected — useful for planning the next one, not for excusing a null result
-::::
+1.  **Type I (α)** and **Type II (β)** error — the two ways a decision can be wrong; power = 1 − β
+2.  **Power** rises with larger n, larger effect size, lower variability, and higher α
+3.  **A priori power** (before data collection) tells you the n a study needs — the most useful use of this whole toolkit
+4.  **Retrospective power** tells you what your finished study could have detected — useful for planning the next one, not for excusing a null result
+:::
 
 :::: {.column width="45%"}
-5. The **`pwr`** package generalizes power analysis, and `pwr.t2n.test()` handles unequal group sizes directly
-6. **Pairing** a design can be worth far more than adding raw sample size
-7. **SD, SE, and CI** answer three different questions about the same data
-8. **Pseudoreplication** inflates apparent precision by treating non-independent measurements as independent replicates
+5.  The **`pwr`** package generalizes power analysis, and `pwr.t2n.test()` handles unequal group sizes directly
+6.  **Pairing** a design can be worth far more than adding raw sample size
+7.  **SD, SE, and CI** answer three different questions about the same data
+8.  **Pseudoreplication** inflates apparent precision by treating non-independent measurements as independent replicates
 
 ::: callout-note
 **📖 References**
@@ -636,4 +859,4 @@ Fisher proposed 0.05 as a rough guideline, not a bright line. Modern critiques o
 Gotelli & Ellison, Ch. 4 — Framing and Testing Hypotheses (errors and power); Whitlock & Schluter, Ch. 6 — Hypothesis Testing, and Ch. 14 — Designing Experiments (sample size and power planning).
 :::
 ::::
-:::::::
+::::::

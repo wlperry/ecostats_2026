@@ -3,7 +3,7 @@ order: 8
 week: 5
 title: "Activity: Power and Type I & II Error"
 subtitle: "Power and error rates"
-description: "Hands-on activity: p-values and errors, Cohen's d for paired and unpaired designs, statistical power and required sample size, and a publication-quality mean ± SE plot with custom colors, on the class pine needle dataset."
+description: "Hands-on activity: Type I/II error, Cohen's d, and statistical power calculated a priori and retrospectively with the pwr package, on the class pine needle data and the horned lizard predation dataset from Whitlock & Schluter, Ch. 12."
 author: "Bill Perry"
 metadata-files:
   - ../../_templates/activities.yml
@@ -14,397 +14,299 @@ format:
 
 # Worksheet: Power and Type I & II Error
 
-[📥 Download the data (.csv)](data/pine_data.csv){.btn .btn-primary download="pine_data.csv"} [📥 Download the data (.xlsx)](data/pine_data.xlsx){.btn .btn-primary download="pine_data.xlsx"}
+[📥 Pine needle data](data/pine_data.csv){.btn .btn-primary download="pine_data.csv"} [📥 Horned lizard data](data/horned_lizards.csv){.btn .btn-primary download="horned_lizards.csv"}
+
+[📥 Tools script (.R)](themes_functions/r_themes_and_functions.R){.btn .btn-primary download="r_themes_and_functions.R"} [📥 Script skeleton (.R)](data/08_power_and_error.R){.btn .btn-primary download="08_power_and_error.R"}
 
 > ## How to use this worksheet
 >
-> Work through each part in order, at your own pace. Type every line of code yourself into a **plain R script** — do not copy-paste. Blocks marked **▶ Run this** are code you should type and execute. Blocks marked **✏️ Your turn** ask you to write, modify, or answer something. Boxes marked **🚀 If you finish early** are optional bonus material that goes a bit further than what we covered in lecture.
+> Work through each part in order, at your own pace. Type every line of code yourself into the **script skeleton** — do not copy-paste from this worksheet. Blocks marked **▶ Run this** are code you should type and execute. Blocks marked **✏️ Your turn** ask you to write, modify, or answer something. Boxes marked **🚀 If you finish early** are optional bonus material that goes a bit further than what we covered in lecture.
 >
-> **Every grey `r` box below is code you type into an R script — not into the Console.** Before you start: **File → New File → R Script**, and save it as `07_power_and_error.R` in your project's `scripts/` folder. Then work down the worksheet, adding each block to the bottom of that one script, in order.
+> **Every grey `r` box below is code you type into an R script — not into the Console.** Before you start: download the **script skeleton** from the button above and save it as `08_power_and_error.R` in your project's `scripts/` folder. Then work down the worksheet, adding each block to the bottom of that one script, in order.
 >
-> **Type the `# ── Part …` header comment at the top of each block, too.** Those comment lines are not decoration — they are how your script stays navigable, how you find your way back to a block that broke, and how I find your work when I read your script. A block with no header comment is a block I cannot place. In RStudio they also show up in the document outline (the `≡` button at the bottom-left of the editor) so you can jump straight to any part.
+> **Type the `# ── Part …` header comment at the top of each block, too.** Those comment lines are how your script stays navigable, how you find your way back to a block that broke, and how I find your work when I read your script.
+>
+> This worksheet uses **two datasets**: our own pine needles (4 trees per side — low power) and the horned lizard dataset from Whitlock & Schluter Ch. 12 (154 living vs. 30 killed — high power). Same statistical tools, very different amount of power.
 
 ::: callout-important
-## Column names in `pine_data.csv` / `pine_data.xlsx`
+## Column names
 
-Both files hold the **same six columns, with exactly these names**. Type them
-exactly as written — R is case-sensitive, and `Needle_Length` or `needle_length`
-will not work:
+`pine_data.csv` has the same six columns you have used all term (`source_file`, `team`, `replicate`, `side`, `needle_length_mm`, `needle_width_mm`). `horned_lizards.csv` has two:
 
-| Column             | What it is                                     |
-|--------------------|------------------------------------------------|
-| `source_file`      | the raw team file the row came from             |
-| `team`             | field team — one team = **one tree**            |
-| `replicate`        | needle number within a tree side (1-8)          |
-| `side`             | sun exposure — `"shady"` or `"sunny"`           |
-| `needle_length_mm` | needle length, millimetres                      |
-| `needle_width_mm`  | needle width, millimetres                       |
-
-After you read the file in, run `names(pine_df)` and check the names on your
-screen against this table before you write any other code.
+| Column | What it is |
+|--------------------|------------------------------------------|
+| `squamosal_horn_length_mm` | horn length, millimetres (1 `NA`) |
+| `survival` | `"living"` or `"killed"` by shrike predation |
 :::
 
 ------------------------------------------------------------------------
 
-# Part 1 · Setup — Load and Explore
+# Part 1 · Setup
 
-**▶ Run this in your Script:**
+**▶ Run this:**
 
 ``` r
-# ── Part 1.1 · Setup ────────────────────────────────────────────────────
-library(patchwork)
-library(car)          # For diagnostic tests
-library(effectsize)   # cohens_d()
-library(tidyverse)    # For data manipulation and visualization
+# ── Part 1.1 · Setup ─────────────────────────────────────────────────
+library(tidyverse)
+library(effectsize)  # cohens_d()
+library(pwr)         # power analysis
+
+source("themes_functions/r_themes_and_functions.R")
 
 pine_df <- read_csv("data/pine_data.csv")
-head(pine_df)
 
-# the two-stage summary: one value per tree per side
 p_df <- pine_df %>%
   group_by(team, side) %>%
   summarise(needle_length_mm = mean(needle_length_mm, na.rm = TRUE),
             .groups = "drop")
 
-shady_df <- p_df %>% filter(side == "shady")
-sunny_df <- p_df %>% filter(side == "sunny")
-
-p_df
-```
-
-✏️ **Your turn:** Why do we average by `team` and `side` before doing anything else? How many rows did we start with, and how many are left?
-
-`________________________`
-
-------------------------------------------------------------------------
-
-# Part 2 · Hypothesis Testing Recap
-
-Before we test anything, review the framework from lecture: H₀, Hₐ, and α are all decided *before* you look at the data.
-
-✏️ **Your turn:** For the question "Do needle lengths differ between the sunny and shady sides?", write:
-
-```
-H0 = ________________________________________________________
-Ha = ________________________________________________________
-alpha = ________
-```
-
-✏️ **Your turn:** In one sentence, what's the difference between a Type I error and a Type II error?
-
-```
-________________________________________________________
-```
-
-::: callout-tip
-**🚀 If you finish early:** With df = 14 and a two-tailed α = 0.05, find the critical t-value with `qt(0.975, df = 14)`. Then use `pt()` to find the p-value for an observed t of 2.8 on the same df: `2 * (1 - pt(2.8, df = 14))`. Is 2.8 inside or outside the rejection region?
-
-``` r
-# ── Part 2.1 · Hypothesis Testing Recap ─────────────────────────────────
-# Write your code in the R script:
-```
-:::
-
-------------------------------------------------------------------------
-
-# Part 3 · Exploratory Data Analysis and Effect Size
-
-**▶ Run this:**
-
-``` r
-# ── Part 3.1 · Exploratory Data Analysis and Effect Size ────────────────
-pine_summary_df <- p_df %>%
-  group_by(side) %>%
-  summarize(
-    mean_mm = mean(needle_length_mm, na.rm = TRUE),
-    sd_mm   = sd(needle_length_mm, na.rm = TRUE),
-    n           = sum(!is.na(needle_length_mm)),
-    se_mm   = sd_mm / (n^0.5),
-    t_critical  = qt(0.975, df = n - 1),  # 95% CI uses 0.975 (two-tailed)
-    ci_lower    = mean_mm - t_critical * se_mm,
-    ci_upper    = mean_mm + t_critical * se_mm
-  )
-print(pine_summary_df)
-```
-
-**▶ Run this** — visualize the distribution:
-
-``` r
-# ── Part 3.2 · Exploratory Data Analysis and Effect Size ────────────────
-ggplot(p_df, aes(x = needle_length_mm, fill = side)) +
-  geom_histogram(binwidth = 2) +
-  labs(title = "Distribution of Pine Needle Lengths",
-       x = "Length (mm)", y = "Frequency") +
-  theme_minimal() +
-  facet_wrap("side", ncol = 1)
-```
-
-**▶ Run this** — the raw difference in means:
-
-``` r
-# ── Part 3.3 · Exploratory Data Analysis and Effect Size ────────────────
-pine_summary_df %>%
-  summarize(difference = mean_mm[side == "sunny"] - mean_mm[side == "shady"])
-```
-
-✏️ **Your turn:** Looking at the histogram, do the two distributions look like they overlap a lot, or are they clearly separated? Does that match the size of the `difference` you just calculated?
-
-`________________________`
-
-A raw difference in millimetres only means something to someone who already knows how variable pine needles are. **Cohen's d** fixes that by dividing the difference by the standard deviation, so the result is unitless and comparable across studies. You met it in the Non-Parametric worksheet — here is where it starts doing real work.
-
-**▶ Run this** — effect size, both ways:
-
-``` r
-# ── Part 3.4 · Cohen's d, unpaired and paired ───────────────────────────
 p_wide_df <- p_df %>%
   pivot_wider(names_from = side, values_from = needle_length_mm)
 
-# UNPAIRED: difference in means over the POOLED sd
-cohens_d(needle_length_mm ~ side, data = p_df)
+lizard_df <- read_csv("data/horned_lizards.csv") %>%
+  filter(!is.na(squamosal_horn_length_mm))
 
-# PAIRED: mean of the differences over the sd OF THE DIFFERENCES
-diffs <- p_wide_df$shady - p_wide_df$sunny
-
-mean(diffs) / sd(diffs)
-
-cohens_d(p_wide_df$shady, p_wide_df$sunny, paired = TRUE)
+p_df
+lizard_df
 ```
-
-✏️ **Your turn:** Record both, and note how far apart they are.
-
-```         
-unpaired d = ______        paired d = ______
-```
-
-✏️ **Your turn:** Same four trees, same needles, same measurements — so why is the paired effect size more than twice the unpaired one? (Hint: look at what each one divides by.)
-
-`________________________`
-
-::: callout-important
-**⚠️ Hold on to the paired number**
-
-`d = -1.36` is the same value you calculated in the Non-Parametric worksheet. Everything in Part 5 runs off it.
-:::
-
-::: callout-tip
-**🚀 If you finish early:** Recompute `pine_summary_df`, but group by `team` (the field team, one tree each) instead of `side`. Do all teams show a similar mean and spread, or does one team look different?
-
-``` r
-# ── Part 3.5 · Exploratory Data Analysis and Effect Size ────────────────
-# Write your code in the R script:
-```
-:::
 
 ------------------------------------------------------------------------
 
-# Part 4 · The Two-Sample t-Test
+# Part 2 · Two Ways to Be Wrong
 
-H₀: μ₁ = μ₂ (the mean needle lengths are equal)
+Crossing the *statistical decision* against the *unknown truth* gives four outcomes: correct rejection, correct non-rejection, a **Type I error (α)** — a false positive — and a **Type II error (β)** — a false negative. **Power = 1 − β.**
 
-Hₐ: μ₁ ≠ μ₂ (the mean needle lengths are different)
+✏️ **Your turn:** For each scenario, is it a Type I error, a Type II error, or a correct decision?
 
-Deciding between the standard t-test (equal variances) and Welch's t-test (unequal variances) depends on a Levene's test result — review the T-Tests worksheet if you need a refresher.
+```
+1. A study concludes sunny-side pine needles are longer, when really
+   there is no difference.
+   ________________________________________________________
+
+2. A study fails to detect a real horn-length difference between
+   surviving and predated lizards, and concludes there is none.
+   ________________________________________________________
+
+3. A study correctly detects that predated lizards have shorter horns.
+   ________________________________________________________
+```
+
+------------------------------------------------------------------------
+
+# Part 3 · What Is Power
+
+**Statistical power** is the probability of detecting a true effect — of rejecting H₀ when it really is false. **80% power** is the usual convention for an adequately powered study.
+
+✏️ **Your turn:** List the four things that increase power.
+
+```
+1. ________________________________________________________
+2. ________________________________________________________
+3. ________________________________________________________
+4. ________________________________________________________
+```
+
+------------------------------------------------------------------------
+
+# Part 4 · Effect Size — Cohen's d
+
+Cohen proposed rough benchmarks for small, medium, and large effects:
 
 **▶ Run this:**
 
 ``` r
-# ── Part 4.1 · The Two-Sample t-Test ────────────────────────────────────
-t_test_result <- t.test(needle_length_mm ~ side, data = p_df, var.equal = TRUE)
-print("Standard two-sample t-test:")
-print(t_test_result)
+# ── Part 4.1 · Cohen's benchmarks ────────────────────────────────────
+cohen.ES(test = "t", size = "small")$effect.size
+cohen.ES(test = "t", size = "medium")$effect.size
+cohen.ES(test = "t", size = "large")$effect.size
 ```
 
-✏️ **Your turn:** What is the t-statistic, degrees of freedom, and p-value? Do you reject or fail to reject H₀ at α = 0.05?
-
-```
-t = ________  df = ________  p = ________
-Decision: ________________________
-```
-
-::: callout-tip
-**🚀 If you finish early:** Rerun the test with `var.equal = FALSE` (Welch's t-test) and compare the p-value to the standard version above. How different are they?
+**▶ Run this** — the real Cohen's d for both datasets:
 
 ``` r
-# ── Part 4.2 · The Two-Sample t-Test ────────────────────────────────────
-# Write your code in the R script:
+# ── Part 4.2 · Cohen's d, pine and lizards ───────────────────────────
+d_unpaired <- cohens_d(needle_length_mm ~ side, data = p_df)
+d_unpaired
+
+d_paired <- cohens_d(p_wide_df$shady, p_wide_df$sunny, paired = TRUE)
+d_paired
+
+d_lizard <- cohens_d(squamosal_horn_length_mm ~ survival, data = lizard_df)
+d_lizard
 ```
+
+✏️ **Your turn:** Record all three, and which Cohen bucket (small/medium/large) each lands in.
+
+```
+unpaired pine d = ______  bucket: ______
+paired pine d   = ______  bucket: ______
+lizard d        = ______  bucket: ______
+```
+
+------------------------------------------------------------------------
+
+# Part 5 · A Priori Power — Planning Before You Collect Data
+
+The most useful power analysis happens **before** you collect data: guess or borrow an effect size, then ask what sample size gives 80% power.
+
+**▶ Run this:**
+
+``` r
+# ── Part 5.1 · A priori power, pine (unpaired) ───────────────────────
+pwr.t.test(
+  d = d_unpaired$Cohens_d,
+  power = 0.80,
+  sig.level = 0.05,
+  type = "two.sample"
+)
+```
+
+✏️ **Your turn:** How many trees per side does that call for (always round `n` up)? How many did we actually collect?
+
+`________________________`
+
+::: callout-tip
+**🖐 Practice 5 · A smaller effect**
+
+The lizards gave a *large* effect (d ≈ 0.87). Suppose instead you are planning a **new** study where you only expect a *medium* effect (d = 0.5). Assuming **equal** group sizes, how many lizards per group would you need for 80% power?
+
+**▶ Run this:**
+
+``` r
+# ── Part 5.2 · Practice 5 — a priori power, medium effect ────────────
+pwr.t.test(d = 0.5, power = 0.80, sig.level = 0.05, type = "two.sample")
+```
+
+✏️ **Your turn:** How does that n compare to the pine study's per-side n from Part 5.1?
+
+`________________________`
 :::
 
 ------------------------------------------------------------------------
 
-# Part 5 · Statistical Power
+# Part 6 · Unequal Group Sizes — `pwr.t2n.test()`
 
-Statistical power is the probability of detecting a true effect — rejecting H₀ when it is actually false. A power analysis is typically done to determine the required sample size before a study, to evaluate whether a completed study's sample size was adequate, or to find the minimum detectable effect size for a given sample. **80% power is generally considered acceptable.**
+The lizard groups are far from equal (154 living vs. 30 killed). `pwr.t2n.test()` takes the two **actual** group sizes directly — no averaging, no workaround.
 
-`power.t.test()` takes the effect size you just calculated. Feed it `delta = d` and `sd = 1` — because `d` is *already* expressed in standard deviations, the standard deviation is 1 by definition.
-
-**▶ Run this** — power for the **unpaired** design:
+**▶ Run this:**
 
 ``` r
-# ── Part 5.1 · Power, unpaired ──────────────────────────────────────────
-d_unpaired <- abs(mean(shady_df$needle_length_mm) -
-                  mean(sunny_df$needle_length_mm)) /
-              sqrt((var(shady_df$needle_length_mm) * 3 +
-                    var(sunny_df$needle_length_mm) * 3) / 6)
-
-power.t.test(n = 4, delta = d_unpaired, sd = 1,
-             sig.level = 0.05, type = "two.sample")
+# ── Part 6.1 · Power with unequal group sizes ────────────────────────
+pwr.t2n.test(
+  n1 = sum(lizard_df$survival == "living"),
+  n2 = sum(lizard_df$survival == "killed"),
+  d = d_lizard$Cohens_d,
+  sig.level = 0.05
+)
 ```
 
-✏️ **Your turn:** What is the power? If the difference we measured is completely real, how often would a study like ours **miss** it?
-
-```         
-power = ______        we would miss it ______ times out of 10
-```
-
-**▶ Run this** — how many trees would that design have needed?
-
-``` r
-# ── Part 5.2 · Trees needed, unpaired ───────────────────────────────────
-power.t.test(delta = d_unpaired, sd = 1,
-             power = 0.80, sig.level = 0.05,
-             type = "two.sample")$n
-```
-
-✏️ **Your turn:** Round that up. How many trees per side? How many did we actually collect?
+✏️ **Your turn:** What is the power? Compare it to the pine study's power at n = 4 (you'll compute that next, in Part 7).
 
 `________________________`
 
-**▶ Run this** — now the **paired** design, using the `d` you saved in Part 3.4:
+------------------------------------------------------------------------
+
+# Part 7 · Retrospective (Post-Hoc) Power
+
+The other direction: **after** a study, ask what power your actual n and observed effect size gave you.
+
+**▶ Run this:**
 
 ``` r
-# ── Part 5.3 · Power, paired ────────────────────────────────────────────
-d_paired <- abs(mean(diffs) / sd(diffs))
-
-power.t.test(n = 4, delta = d_paired, sd = 1,
-             sig.level = 0.05, type = "paired")$power
-
-power.t.test(delta = d_paired, sd = 1,
-             power = 0.80, sig.level = 0.05,
-             type = "paired")$n
+# ── Part 7.1 · Retrospective power, pine (unpaired) ──────────────────
+pwr.t.test(
+  n = 4,
+  d = d_unpaired$Cohens_d,
+  sig.level = 0.05,
+  type = "two.sample"
+)
 ```
 
-✏️ **Your turn:** Fill in the table.
+✏️ **Your turn:** What is the power? If the pine difference is completely real, how often out of 10 would a study like ours **miss** it?
 
-```         
+```
+power = ______        we would miss it ______ times out of 10
+```
+
+::: callout-warning
+**⚠️ A warning about "post-hoc power"**
+
+Computing power *from the effect size you observed* is a known trap — it is fine for planning the next study, but it is **not** a valid way to explain away a non-significant result. "Our result was non-significant, but we had low power" says the same thing twice.
+:::
+
+::: callout-tip
+**🖐 Practice 6 · Retrospective power, paired**
+
+You already calculated `d_paired` in Part 4.2 (the same four trees, paired instead of unpaired). Compute the retrospective power of the **paired** design at n = 4.
+
+**▶ Run this:**
+
+``` r
+# ── Part 7.2 · Practice 6 — retrospective power, paired ──────────────
+pwr.t.test(n = 4, d = d_paired$Cohens_d, sig.level = 0.05, type = "paired")
+```
+
+✏️ **Your turn:** How much higher is the paired power than the unpaired power from Part 7.1?
+
+`________________________`
+:::
+
+------------------------------------------------------------------------
+
+# Part 8 · Pairing Buys You Power
+
+**▶ Run this** — trees needed for 80% power, paired:
+
+``` r
+# ── Part 8.1 · Trees needed, paired ──────────────────────────────────
+pwr.t.test(
+  d = d_paired$Cohens_d,
+  power = 0.80,
+  sig.level = 0.05,
+  type = "paired"
+)
+```
+
+✏️ **Your turn:** Fill in the table using Parts 5.1, 7.1, 7.2, and 8.1.
+
+```
 Design       Power at n = 4      Trees for 80% power
 unpaired     ______              ______ per side
 paired       ______              ______ total
 ```
 
-✏️ **Your turn:** Same trees. Same needles. Same measurements. Explain in one sentence where the extra power came from.
+✏️ **Your turn:** Same trees. Same needles. Same measurements. Where did the extra power come from?
 
 `________________________`
 
-::: callout-important
-**⚠️ This is the most useful thing in this worksheet**
-
-A non-significant result from an underpowered study does **not** mean there is no effect — it means the study could never have found one. Our unpaired analysis had roughly a 1-in-9 chance of detecting its own result.
-
-Note also what the paired answer tells you: **7 trees.** That is a completely achievable field season. The pairing was worth more than 6× the sampling effort.
-:::
-
-::: callout-tip
-**🚀 If you finish early:** Go back to the Non-Parametric worksheet and look at the signed-rank floor — with 4 pairs, the smallest possible two-sided p was 0.125. With **7** pairs, `2 / 2^7` is 0.0156. Sample size fixed two different problems at once.
-
-``` r
-# ── Part 5.4 · Statistical Power ────────────────────────────────────────
-2 / 2^7
-```
-:::
-
 ------------------------------------------------------------------------
 
-# Part 6 · A Publication-Quality Plot
+# Part 9 · Error Bars — SD, SE, and CI
 
-Typically we present a plot with the mean and standard error to represent the data.
+`summary_stats()` gives you all three from one call: **SD** (spread of the raw data), **SE** (precision of the mean, `SD / sqrt(n)`), and the **95% CI** (plausible range for the true mean).
 
 **▶ Run this:**
 
 ``` r
-# ── Part 6.1 · A Publication-Quality Plot ───────────────────────────────
-pine_mean_se_plot <- p_df %>%
-  ggplot(aes(side, needle_length_mm, color = side)) +
-  stat_summary(fun = "mean", na.rm = TRUE, geom = "point", size = 3) +
-  stat_summary(fun.data = "mean_se", width = 0.2, geom = "errorbar")
-pine_mean_se_plot
+# ── Part 9.1 · SD, SE, and CI for the lizard data ────────────────────
+lizard_df %>%
+  group_by(survival) %>%
+  reframe(summary_stats(squamosal_horn_length_mm))
 ```
 
-**▶ Run this** — a custom theme you can reuse on any plot:
+✏️ **Your turn:** Which of the three (SD, SE, CI) is widest, and which is narrowest, for each group? A large sample doesn't shrink SD — what does it shrink, and why?
 
-``` r
-# ── Part 6.2 · A Publication-Quality Plot ───────────────────────────────
-theme_class <- function(base_size = 14, base_family = "Sans") {
-  theme(
-    panel.background = element_rect(fill = "transparent", colour = "transparent"),
-    plot.background  = element_rect(fill = "transparent", colour = NA),
-    panel.grid.major = element_line(linetype = "blank"),
-    panel.grid.minor = element_line(linetype = "blank"),
-    axis.text        = element_text(colour = "black"),
-    axis.title.x     = element_text(size = 18, face = "bold"),
-    axis.title.y     = element_text(size = 18, face = "bold"),
-    axis.text.x      = element_text(size = 16, face = "bold", angle = 0, vjust = .5, hjust = .5),
-    axis.text.y      = element_text(size = 16, face = "bold"),
-    axis.ticks       = element_line(colour = "black"),
-    axis.line.x      = element_line(color = "black", linewidth = 0.5, linetype = "solid"),
-    axis.line.y      = element_line(color = "black", linewidth = 0.5, linetype = "solid"),
-    legend.text      = element_text(colour = "black", size = 16, face = "bold"),
-    legend.title     = element_text(colour = "black", size = 18, face = "bold"),
-    legend.position  = "right",
-    legend.key        = element_rect(fill = "transparent", colour = "transparent"),
-    legend.background = element_rect(fill = "transparent", colour = "transparent"),
-    panel.border     = element_blank(),
-    plot.title       = element_text(hjust = 0, vjust = 2.12),
-    plot.caption     = element_text(hjust = 0, vjust = 1.12)
-  )
-}
-```
+`________________________`
 
-> ⚠️ **Watch out!** Run the whole `theme_class <- function(...) {...}` block at once (select it all and run) — running just the inside line by line will fail, since those lines only make sense as part of the function.
+------------------------------------------------------------------------
 
-**▶ Run this** — apply your theme to the plot (note `+`, not `<-`, so the original `pine_mean_se_plot` object is untouched):
+# Part 10 · Pseudoreplication
 
-``` r
-# ── Part 6.3 · A Publication-Quality Plot ───────────────────────────────
-pine_mean_se_plot +
-  theme_class()
-```
+**Pseudoreplication** occurs when measurements that are not independent are analyzed as if they were — for example, treating every pine needle as an independent replicate instead of every tree.
 
-**▶ Run this** — put it all together with proper labels, a fixed y-axis range, and custom colors:
+✏️ **Your turn:** Our pine needle data has 64 rows (needles), but only 4 trees per side. If we (wrongly) ran the power analysis in Part 7.1 on n = 32 needles per side instead of n = 4 trees, would the power come out higher or lower than the honest answer? Would that make the study *actually* better, or just make us *believe* it was?
 
-``` r
-# ── Part 6.4 · A Publication-Quality Plot ───────────────────────────────
-pine_mean_se_plot <- p_df %>%
-  ggplot(aes(side, needle_length_mm, color = side)) +
-  stat_summary(fun = "mean", na.rm = TRUE, geom = "point", size = 4) +
-  stat_summary(fun.data = "mean_se", geom = "errorbar", width = 0.1, linewidth = 0.35) +
-  labs(x = "Side of Tree", y = "Mean Length (mm ± 1 SE)") +
-  coord_cartesian(ylim = c(15, 20)) +
-  theme_class() +
-  scale_color_manual(
-    name = "Side of tree",
-    labels = c("shady" = "Shady Side", "sunny" = "Sunny Side"),
-    values = c("shady" = "darkgreen", "sunny" = "coral")
-  )
-pine_mean_se_plot
-```
-
-✏️ **Your turn:** Change the two hex-ish color names in `values =` to two colors of your own choosing (e.g., `"darkblue"`, `"darkorange"`). Re-run and confirm the plot updates.
-
-``` r
-# ── Part 6.5 · A Publication-Quality Plot ───────────────────────────────
-# Write your code in the R script:
-```
-
-::: callout-tip
-**🚀 If you finish early:** `pine_mean_se_plot` currently uses `color =`, which only affects points and error bars — not a filled shape. Build a boxplot version using `aes(side, needle_length_mm, fill = side)` + `geom_boxplot()` + `scale_fill_manual()` with the same `labels`/`values` pattern.
-
-``` r
-# ── Part 6.6 · A Publication-Quality Plot ───────────────────────────────
-# Write your code in the R script:
-```
-:::
+`________________________`
 
 ------------------------------------------------------------------------
 
@@ -412,59 +314,45 @@ pine_mean_se_plot
 
 In this activity, we've:
 
-1. Formulated hypotheses about pine needle length
-2. Reviewed Type I and Type II error and statistical power
-3. Conducted a two-sample t-test
-4. Calculated Cohen's d for the same data two ways — unpaired and paired
-5. Calculated statistical power for our observed effect size, and the sample size each design would have needed
-6. Built a publication-quality mean ± SE plot with a custom theme and custom colors
+1. Classified Type I and Type II error scenarios
+2. Calculated Cohen's d for pine (paired and unpaired) and horned lizards
+3. Run **a priori** power analysis to find the n a study needs, including for unequal group sizes with `pwr.t2n.test()`
+4. Run **retrospective** power analysis on our own pine needle study
+5. Compared unpaired vs. paired designs and seen what pairing buys in power
+6. Compared SD, SE, and CI as answers to three different questions
+7. Connected pseudoreplication to inflated apparent power
 
 **Key takeaways:**
 
-- Always check assumptions before conducting tests
-- Visualize your data to understand patterns
-- Report results comprehensively, including effect size and power when relevant
-- Consider alternatives when assumptions are violated
+- A priori power planning is the single most useful use of this toolkit
+- Retrospective power is for planning the next study, not excusing a null result
+- Report effect size and power alongside p-values, not instead of them
 
 # Reflection Questions
 
-1. How does sample size affect our confidence in estimating the population mean?
-2. Why is the t-distribution more appropriate than the normal distribution when working with small samples?
-3. When comparing two populations, what can we learn from confidence intervals that a t-test alone doesn't tell us?
-4. How would you explain the concept of statistical power to someone who has never taken a statistics course?
-5. What do we do if assumptions fail?
+1. Why is an a priori power analysis only as good as the effect size fed into it?
+2. Why does `pwr.t2n.test()` beat the old harmonic-mean workaround for unequal groups?
+3. Why can pairing buy more power than adding raw sample size?
+4. How would you explain "our study wasn't wrong, it just didn't have enough power" to someone who has never taken a statistics course?
 
 # Review and checkpoint
 
 At this point you can:
 
-- [ ] State H₀, Hₐ, and α *before* running a test
-- [ ] Explain the difference between a Type I and a Type II error
-- [ ] Run and interpret a two-sample t-test
-- [ ] Calculate Cohen's d for a paired and an unpaired design, and explain why they differ
-- [ ] Calculate statistical power (and required sample size) with `power.t.test()`
-- [ ] Build a mean ± SE plot with a reusable custom theme and `scale_color_manual()`
+- [ ] Classify a scenario as a Type I error, a Type II error, or a correct decision
+- [ ] Calculate Cohen's d for a paired and an unpaired design
+- [ ] Run an a priori power analysis with `pwr.t.test()` to find a required sample size
+- [ ] Run a power analysis for unequal group sizes with `pwr.t2n.test()`
+- [ ] Run a retrospective power analysis and explain why it should not excuse a null result
+- [ ] Explain what SD, SE, and CI each answer, and how pseudoreplication distorts them
 
 ::: callout-note
 **📤 What to turn in before next class**
 
 Upload both of these to the course management system:
 
-1. Your code — the `scripts/` folder (or just `07_power_and_error.R`)
+1. Your code — the `scripts/` folder (or just `08_power_and_error.R`)
 2. This worksheet, with your written answers
 :::
-
-------------------------------------------------------------------------
-
-# Getting unstuck
-
-When code breaks — and it will, that is normal:
-
-1. **Read the error message out loud.** R usually names the line and the problem.
-2. **Check the usual suspects:** did you run `library(tidyverse)` and `library(car)`? Spelling? A missing `)` or `%>%` at the *start* of a line?
-3. `?function_name` opens the built-in help page.
-4. **Bring the exact error** (copy-paste it) to class or office hours.
-
-> 💡 **Key idea:** Every working scientist googles error messages daily. Getting stuck is not failing — it is the job.
 
 ------------------------------------------------------------------------
