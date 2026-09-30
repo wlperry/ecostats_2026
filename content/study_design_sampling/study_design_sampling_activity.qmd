@@ -3,7 +3,7 @@ order: 9
 week: 5
 title: "Activity: Study Design & Sampling"
 subtitle: "Design and sampling"
-description: "Hands-on activity: natural experiments, pseudoreplication, and a priori/post hoc power analysis on a simulated waterfall fish dataset."
+description: "In-class activity: reading a design off a real randomized, blinded, unbalanced experiment — Wright & Czeisler's circadian light study — and testing whether the placebo arm was needed."
 author: "Bill Perry"
 metadata-files:
   - ../../_templates/activities.yml
@@ -12,475 +12,201 @@ format:
   docx: default
 ---
 
-# Worksheet: Study Design and Power Analysis
+# Worksheet: Reading a Design
 
-> ## How to use this worksheet
->
-> Work through each part in order, at your own pace. Type every line of code yourself into a **plain R script** — do not copy-paste. Blocks marked **▶ Run this** are code you should type and execute. Blocks marked **✏️ Your turn** ask you to write, modify, or answer something. Boxes marked **🚀 If you finish early** are optional bonus material that goes a bit further than what we covered in lecture.
->
-> **Every grey `r` box below is code you type into an R script — not into the Console.** Before you start: **File → New File → R Script**, and save it as `09_study_design_sampling.R` in your project's `scripts/` folder. Then work down the worksheet, adding each block to the bottom of that one script, in order.
->
-> **Type the `# ── Part …` header comment at the top of each block, too.** Those comment lines are not decoration — they are how your script stays navigable, how you find your way back to a block that broke, and how I find your work when I read your script. A block with no header comment is a block I cannot place. In RStudio they also show up in the document outline (the `≡` button at the bottom-left of the editor) so you can jump straight to any part.
->
-> This worksheet uses a *simulated* fish dataset — we build the data ourselves in R, rather than loading a file — so you can see exactly what assumptions go into it. We'll study fish mass above and below waterfalls across multiple streams, and use it to practice recognizing proper replication vs. pseudoreplication and running power analysis before and after data collection.
+[📥 Knees data](data/knees.csv){.btn .btn-primary download="knees.csv"} [📥 Tools script (.R)](themes_functions/r_themes_and_functions.R){.btn .btn-primary download="r_themes_and_functions.R"} [📥 Script skeleton (.R)](data/09_study_design_sampling.R){.btn .btn-primary download="09_study_design_sampling.R"}
 
-------------------------------------------------------------------------
+**The study.** Wright & Czeisler (2002) asked whether bright light shone on the **back of the knee** could reset a person's circadian clock, the way light in the **eyes** does. Each volunteer was randomly assigned to one of three treatments and their circadian rhythm shift was measured in hours (negative = the clock shifted later).
 
-# Part 1 · Setup and the Research Question
+- `control` — no light at all
+- `knee` — light on the back of the knee
+- `eyes` — light in the eyes
 
-**▶ Run this in your Script:**
+**Why this study is here.** `knee` is not really a third treatment. It is a **placebo** — it puts a person through the entire procedure (the apparatus, the room, the night, the measurement) while delivering light somewhere it should not work. Today you decide whether that arm earned its place.
 
-``` r
-# ── Part 1.1 · Setup and the Research Question ──────────────────────────
-library(tidyverse)
-library(pwr)
-
-set.seed(42)
-```
-
-**Main Question:** Do waterfalls affect fish mass in stream ecosystems?
-
-**Hypothesis:** Fish below waterfalls are larger, due to better feeding opportunities from nutrients and prey coming down from the lake.
-
-✏️ **Your turn:** Write this as a formal null and alternative hypothesis:
-
-```
-H0 = ________________________________________________________
-Ha = ________________________________________________________
-```
+This is Whitlock & Schluter, Example 15.1.
 
 ------------------------------------------------------------------------
 
-# Part 2 · Study Design — a Natural Experiment
-
-We'll sample fish above and below waterfalls in several streams. This is a **natural experiment**, since we can't manipulate whether a waterfall is present.
-
-**▶ Run this** — simulate the data:
-
-``` r
-# ── Part 2.1 · Study Design ─────────────────────────────────────────────
-# ADJUST THESE VARIABLES TO EXPLORE DIFFERENT SCENARIOS:
-n_streams <- 5         # Number of streams to sample
-n_fish_per_site <- 6   # Number of fish per site (above/below)
-waterfall_effect <- 15 # Effect size: how much larger fish are below (in grams)
-
-stream_df <- tibble(
-  stream_id = 1:n_streams,
-  stream_mean = rnorm(n_streams, mean = 85, sd = 5)  # Random baseline for each stream
-)
-
-f_df <- tibble(
-  stream_id = rep(1:n_streams, each = n_fish_per_site * 2),
-  position = rep(c("above", "below"), each = n_fish_per_site, times = n_streams),
-  fish_id = 1:(n_streams * n_fish_per_site * 2)
-) %>%
-  left_join(stream_df, by = "stream_id") %>%
-  mutate(
-    expected_mass = ifelse(position == "above", stream_mean, stream_mean + waterfall_effect),
-    mass_g = rnorm(n(), mean = expected_mass, sd = 12)
-  ) %>%
-  select(stream_id, position, fish_id, mass_g)
-
-head(f_df, 12)
-```
-
-**▶ Run this** — visualize the pooled data, then by stream:
-
-``` r
-# ── Part 2.2 · Study Design ─────────────────────────────────────────────
-basic_plot <- f_df %>%
-  ggplot(aes(x = position, y = mass_g, fill = position)) +
-  geom_boxplot() +
-  geom_jitter(width = 0.2, alpha = 0.6) +
-  labs(x = "Position Relative to Waterfall", y = "Fish Mass (g)") +
-  theme_minimal()
-basic_plot
-
-stream_plot <- f_df %>%
-  ggplot(aes(x = position, y = mass_g, group = stream_id, color = as.factor(stream_id))) +
-  stat_summary(fun = mean, geom = "point") +
-  stat_summary(fun = mean, geom = "line") +
-  stat_summary(fun.data = mean_se, geom = "errorbar", width = 0.1) +
-  facet_wrap(~stream_id) +
-  labs(x = "Position", y = "Fish Mass (g)", color = "Stream") +
-  theme_minimal()
-stream_plot
-```
-
-✏️ **Your turn:** Looking at `stream_plot`, does every stream show fish getting larger below the waterfall, or does the pattern vary stream to stream?
-
-`________________________`
-
-::: callout-tip
-**🚀 If you finish early:** Change `waterfall_effect` to `0` and rerun the whole simulation. Does `basic_plot` still look like there's a difference? This is what "no true effect" looks like in this simulated world.
-
-``` r
-# ── Part 2.3 · Study Design ─────────────────────────────────────────────
-# Write your code in the R script:
-```
-:::
-
-------------------------------------------------------------------------
-
-# Part 3 · Replication Issues
-
-**Question:** In our fish study, what is the true experimental unit?
-
-A) Individual fish
-B) Stream locations (above/below pairs)
-C) Individual streams
-D) All fish combined
-
-✏️ **Your turn:** Circle your answer above, then explain why in one sentence.
-
-```
-________________________________________________________
-```
-
-**▶ Run this** — the WRONG analysis, treating every fish as independent:
-
-``` r
-# ── Part 3.1 · Replication Issues ───────────────────────────────────────
-# This ignores that fish within a stream may be similar
-pseudo_test <- t.test(mass_g ~ position, data = f_df)
-pseudo_test
-```
-
-**▶ Run this** — the CORRECT analysis, averaging by stream first:
-
-``` r
-# ── Part 3.2 · Replication Issues ───────────────────────────────────────
-stream_means <- f_df %>%
-  group_by(stream_id, position) %>%
-  summarize(mean_mass = mean(mass_g), .groups = "drop")
-
-stream_wide <- stream_means %>%
-  pivot_wider(names_from = position, values_from = mean_mass)
-
-proper_test <- t.test(stream_wide$below, stream_wide$above, paired = TRUE)
-proper_test
-```
-
-The proper analysis uses **streams as replicates** (n = 5, if you kept the default `n_streams`), not individual fish (n = 36 per group).
-
-✏️ **Your turn:** Compare the p-values from `pseudo_test` and `proper_test`. Which one is smaller? Why does pretending fish are independent make the result look more significant than it should?
-
-`________________________`
-
-::: callout-tip
-**🚀 If you finish early:** Rerun Part 2's simulation with `n_fish_per_site <- 50` instead of 6 (keep everything else the same). Does `pseudo_test`'s p-value get even smaller, even though the true number of streams (and true replicates) hasn't changed?
-
-``` r
-# ── Part 3.3 · Replication Issues ───────────────────────────────────────
-# Write your code in the R script:
-```
-:::
-
-------------------------------------------------------------------------
-
-# Part 4 · Power Analysis — Planning Phase
-
-Cohen's d measures the difference between two group means in standard deviations. It helps understand the magnitude of a difference beyond statistical significance. A Cohen's d of 0.2 is a small effect, 0.5 a moderate effect, 0.8 a large effect.
-
-**▶ Run this** — set expected values from pilot data, and compute the effect size:
-
-``` r
-# ── Part 4.1 · Power Analysis ───────────────────────────────────────────
-above_mean <- 85
-below_mean <- 110
-pooled_sd <- 20
-
-effect_val <- abs(below_mean - above_mean) / pooled_sd
-effect_val
-```
-
-**▶ Run this** — required sample size for 80% power:
-
-``` r
-# ── Part 4.2 · Power Analysis ───────────────────────────────────────────
-power_result <- pwr.t.test(
-  d = effect_val,
-  sig.level = 0.05,
-  power = 0.8,
-  type = "paired"
-)
-power_result
-```
-
-✏️ **Your turn:** According to `power_result`, how many streams do we need for 80% power?
-
-`________________________`
-
-**▶ Run this** — visualize the power curve:
-
-``` r
-# ── Part 4.3 · Power Analysis ───────────────────────────────────────────
-power_curve_df <- tibble(streams = 3:15) %>%
-  rowwise() %>%
-  mutate(power = pwr.t.test(n = streams,
-                            d = effect_val,
-                            sig.level = 0.05,
-                            type = "paired")$power) %>%
-  ungroup()
-
-curve_plot <- ggplot(power_curve_df, aes(x = streams, y = power)) +
-  geom_line(linewidth = 1.2, color = "blue") +
-  geom_hline(yintercept = 0.8, linetype = "dashed", color = "red") +
-  geom_vline(xintercept = ceiling(power_result$n), linetype = "dashed", color = "red") +
-  labs(x = "Number of Streams", y = "Statistical Power") +
-  theme_minimal()
-curve_plot
-```
-
-✏️ **Your turn — experiment with different scenarios.** Change the values below and rerun:
-
-``` r
-# ── Part 4.4 · Power Analysis ───────────────────────────────────────────
-above_mean <- 85
-below_mean <- 100    # Try changing this
-pooled_sd <- 25       # Try changing this
-
-effect_val <- abs(below_mean - above_mean) / pooled_sd
-
-power_result <- pwr.t.test(
-  d = effect_val,
-  sig.level = 0.05,
-  power = 0.8,
-  type = "paired"
-)
-power_result
-```
-
-1. What happens to the required sample size if the effect is smaller (`below_mean = 95`)?
-2. What if variation is higher (`pooled_sd = 30`)?
-3. What if we want 90% power instead of 80%?
-
-```
-________________________________________________________
-```
-
-::: callout-tip
-**🚀 If you finish early:** Re-derive `power_result` using `type = "two.sample"` instead of `"paired"`, keeping the same effect size. Does the paired or unpaired design need fewer streams for 80% power? Does that match what lecture said about paired designs and power?
-
-``` r
-# ── Part 4.5 · Power Analysis ───────────────────────────────────────────
-# Write your code in the R script:
-```
-:::
-
-------------------------------------------------------------------------
-
-# Part 5 · Post-Hoc Power Analysis
-
-Now let's analyze the power we actually had with our streams from Part 2.
+# Part 1 · Setup and the data
 
 **▶ Run this:**
 
 ``` r
-# ── Part 5.1 · Post-Hoc Power Analysis ──────────────────────────────────
-observed_above <- mean(stream_wide$above)
-observed_below <- mean(stream_wide$below)
-observed_diff <- observed_below - observed_above
-observed_sd <- sd(stream_wide$below - stream_wide$above)
+# ── Part 1.1 · Setup and the data ───────────────────────────────────────
+library(tidyverse)
+library(effectsize)
 
-observed_effect <- observed_diff / observed_sd
-observed_effect
+source("themes_functions/r_themes_and_functions.R")
+
+knees_df <- read_csv("data/knees.csv")
+
+knees_df
 ```
+
+------------------------------------------------------------------------
+
+# Part 2 · Read the design off the data
+
+Before any test: how many replicates, at what level, and is it balanced?
+
+**▶ Run this:**
 
 ``` r
-# ── Part 5.2 · Post-Hoc Power Analysis ──────────────────────────────────
-actual_power <- pwr.t.test(
-  n = 6,
-  d = observed_effect,
-  sig.level = 0.05,
-  type = "paired"
-)
-actual_power
+# ── Part 2.1 · Read the design off the data ─────────────────────────────
+count(knees_df, treatment)
 ```
 
-✏️ **Your turn:** What was our actual power? Is it above or below the 80% "acceptable" threshold from lecture?
+✏️ **Your turn:** What is the experimental unit here, and is the design balanced?
+
+```
+unit = ____________________    balanced? ____________________
+```
+
+**▶ Run this** — the numbers for each group:
+
+``` r
+# ── Part 2.2 · Read the design off the data ─────────────────────────────
+knees_df %>%
+  group_by(treatment) %>%
+  reframe(summary_stats(shift_h))
+```
+
+**▶ Run this** — look at the data before you test it:
+
+``` r
+# ── Part 2.3 · Read the design off the data ─────────────────────────────
+ggplot(knees_df, aes(treatment, shift_h)) +
+  geom_boxplot() +
+  geom_jitter(width = 0.15)
+```
+
+✏️ **Your turn:** From the plot alone, which treatment looks different from the other two?
 
 `________________________`
 
-::: callout-important
-**⚠️ Careful — this is *observed* power**
-
-We just computed power using `observed_effect`, the effect size from **this very sample**. That number is a mathematical re-expression of the p-value you already have: a small p always gives high observed power, a large p always gives low observed power. It cannot tell you anything the p-value did not.
-
-Use it the way we did in the Power lecture — as an **input to planning the next study**. Do not use it to argue "our result was non-significant *because* we had low power," which is circular.
-
-✏️ **Your turn:** Redo the calculation for an effect size you decide in advance is biologically meaningful — say `d = 0.8` — instead of the observed one. That answers a real question: *could this design have detected an effect worth caring about?*
-
-``` r
-# ── Part 5.3 · Post-Hoc Power Analysis ──────────────────────────────────
-# Write your code in the R script:
-```
-:::
-
-::: callout-tip
-**🚀 If you finish early:** `actual_power` used `n = 6` hardcoded. Replace it with `n = n_streams` so it automatically matches whatever you set in Part 2. Rerun Part 2 with `n_streams <- 10` and confirm `actual_power` updates accordingly.
-
-``` r
-# ── Part 5.4 · Post-Hoc Power Analysis ──────────────────────────────────
-# Write your code in the R script:
-```
-:::
-
 ------------------------------------------------------------------------
 
-# Part 6 · Alternative Analysis Approaches
+# Part 3 · Did the placebo do anything?
 
-**▶ Run this** — what if we ignored the stream pairing?
+This is the bias question: does going through the procedure, without useful light, shift the clock on its own?
 
-``` r
-# ── Part 6.1 · Alternative Analysis Approaches ──────────────────────────
-unpaired_test <- t.test(mean_mass ~ position, data = stream_means)
-unpaired_test
-```
-
-**▶ Run this** — summary statistics at both levels:
+**▶ Run this:**
 
 ``` r
-# ── Part 6.2 · Alternative Analysis Approaches ──────────────────────────
-# By individual fish (the WRONG level of replication)
-summary_df <- f_df %>%
-  group_by(position) %>%
-  summarize(
-    n_fish = n(),
-    mean_mass = mean(mass_g),
-    sd_mass = sd(mass_g),
-    se_mass = sd_mass / sqrt(n_fish)
-  )
-summary_df
-
-# By stream (the proper level of replication)
-stream_summary <- stream_means %>%
-  group_by(position) %>%
-  summarize(
-    n_streams = n(),
-    mean_mass = mean(mean_mass),
-    sd_mass = sd(mean_mass),
-    se_mass = sd_mass / sqrt(n_streams)
-  )
-stream_summary
+# ── Part 3.1 · Did the placebo do anything? ─────────────────────────────
+knees_df %>%
+  filter(treatment %in% c("control", "knee")) %>%
+  t.test(shift_h ~ treatment, data = .)
 ```
 
-✏️ **Your turn:** Compare the `se_mass` values in `summary_df` (fish-level) vs. `stream_summary` (stream-level). Which is smaller, and why does that make fish-level analysis look artificially more precise?
+✏️ **Your turn:** p = __________ . Is there a procedural artifact in this experiment?
 
 `________________________`
 
-::: callout-tip
-**🚀 If you finish early:** Compare the p-value of `unpaired_test` (Part 6) to `proper_test` (Part 3, which was paired). Which is more powerful for this same data — the paired or unpaired analysis at the stream level?
+------------------------------------------------------------------------
+
+# Part 4 · Did the real treatment do anything?
+
+**▶ Run this:**
 
 ``` r
-# ── Part 6.3 · Alternative Analysis Approaches ──────────────────────────
+# ── Part 4.1 · Did the real treatment do anything? ──────────────────────
+knees_df %>%
+  filter(treatment %in% c("control", "eyes")) %>%
+  t.test(shift_h ~ treatment, data = .)
+```
+
+**▶ Run this** — how big is it?
+
+``` r
+# ── Part 4.2 · Did the real treatment do anything? ──────────────────────
+knees_df %>%
+  filter(treatment %in% c("control", "eyes")) %>%
+  cohens_d(shift_h ~ treatment, data = .)
+```
+
+✏️ **Your turn:** p = __________ , d = __________ .
+
+::: callout-note
+**Two comparisons, both decided in advance**
+
+We ran two tests against the same control rather than one test across all three groups. That is legitimate here *because we chose both comparisons before looking* — each one answers a specific design question. Three groups at once is a one-way ANOVA, which is Week 8.
+:::
+
+------------------------------------------------------------------------
+
+# Part 5 · What the design bought
+
+✏️ **Your turn:** In the sponge experiment from lecture, the sham control (foam) **did** differ from the bare control, and the real treatment added nothing. Here the result came out the other way around. One sentence: what would you have concluded in this study if the `knee` arm had never been run?
+
+```
+________________________________________________________
+```
+
+::: callout-tip
+**🚀 If you finish early:** This design is unbalanced (8, 7, 7). Work out how much precision that costs: compare the standard error of the `control` mean with what it would be if all 22 subjects had been split evenly into three groups of about 7.3.
+
+``` r
+# ── Part 5.1 · What the design bought (bonus) ───────────────────────────
 # Write your code in the R script:
 ```
 :::
 
 ------------------------------------------------------------------------
 
-# Part 7 · Design Your Own Study
+# Part 6 · The figure you hand in
 
-**Scenario:** You want to study if fish size differs between fast and slow water areas.
+This is the only plot that gets labels, a theme and a title — because this is the one being graded on presentation.
 
-**Design questions:**
-
-1. **What is your experimental unit?**
-
-```
-________________________________________________________
-```
-
-2. **How many replicates do you need?** Use these values: fast water mean = 75g, slow water mean = 85g, standard deviation = 15g, desired power = 80%.
+**▶ Run this:**
 
 ``` r
-# ── Part 7.1 · Design Your Own Study ────────────────────────────────────
-fast_mean <- 75
-slow_mean <- 85
-sd_val <- 15
+# ── Part 6.1 · The figure you hand in ───────────────────────────────────
+knees_summary <- knees_df %>%
+  group_by(treatment) %>%
+  reframe(summary_stats(shift_h))
 
-effect_size <- abs(slow_mean - fast_mean) / sd_val
+final_plot <- ggplot(knees_summary, aes(treatment, mean)) +
+  geom_col(fill = "grey70", width = 0.6) +
+  geom_errorbar(aes(ymin = mean - se, ymax = mean + se), width = 0.15) +
+  labs(
+    title = "Circadian shift by light treatment",
+    subtitle = "Mean ± 1 SE; light on the knee behaves like no light at all",
+    x = "Light treatment",
+    y = "Circadian shift (hours)"
+  ) +
+  theme_regular(base_size = 12)
 
-sample_result <- pwr.t.test(
-  d = effect_size,
-  sig.level = 0.05,
-  power = 0.8,
-  type = "two.sample"  # or "paired" if appropriate
+final_plot
+
+ggsave(
+  "figures/knees_figure.pdf",
+  plot   = final_plot,
+  width  = 6,
+  height = 4,
+  units  = "in"
 )
-sample_result
 ```
 
-3. **What could cause pseudoreplication in this design?**
-
-```
-________________________________________________________
-```
-
-4. **How would you avoid it?**
-
-```
-________________________________________________________
-```
-
-::: callout-tip
-**🚀 If you finish early:** If fast and slow water sites can be paired *within* the same stream (like above/below waterfall was), redo the calculation with `type = "paired"`. How many fewer replicates do you need?
-
-``` r
-# ── Part 7.2 · Design Your Own Study ────────────────────────────────────
-# Write your code in the R script:
-```
-:::
+✏️ **Your turn:** Open the PDF and check the axis labels are readable before you submit it.
 
 ------------------------------------------------------------------------
-
-# Summary
-
-**Key points:**
-
-- **Experimental unit** — the thing that receives the treatment independently
-- **Replication** — must be at the level of the experimental unit
-- **Power analysis** — plan sample size before collecting data
-- **Paired vs. unpaired** — paired tests are more powerful when appropriate
-- **Effect size** — larger effects need fewer samples to detect
-
-**Common mistakes:**
-
-- Treating subsamples as independent replicates
-- Analyzing data at the wrong level
-- Collecting data before planning the analysis
-- Ignoring natural pairing in the design
 
 # Review and checkpoint
 
 At this point you can:
 
-- [ ] Identify the true experimental unit in a nested/repeated-measures design
-- [ ] Recognize pseudoreplication and fix it by aggregating to the correct level
-- [ ] Run an *a priori* power analysis to plan sample size with `pwr.t.test()`
-- [ ] Run a *post hoc* power analysis on completed data
-- [ ] Explain why a paired design is often more powerful than an unpaired one
+- [ ] State the experimental unit and say whether a design is balanced
+- [ ] Explain what a placebo or sham control is for
+- [ ] Test whether a procedural artifact exists, and interpret the answer either way
+- [ ] Say why the same test can support opposite conclusions in two different designs
+- [ ] Export a labelled, themed figure to PDF
 
 ::: callout-note
-**📤 What to turn in before next class**
+**📤 What to turn in**
 
-Upload both of these to the course management system:
-
-1. Your code — the `scripts/` folder (or just `09_study_design_sampling.R`)
-2. This worksheet, with your written answers
+1. `09_study_design_sampling.R`
+2. `figures/knees_figure.pdf`
+3. This worksheet, with your written answers
 :::
-
-------------------------------------------------------------------------
-
-# Getting unstuck
-
-When code breaks — and it will, that is normal:
-
-1. **Read the error message out loud.** R usually names the line and the problem.
-2. **Check the usual suspects:** did you run `library(tidyverse)` and `library(pwr)`? Spelling? A missing `)` or `%>%` at the *start* of a line?
-3. `?function_name` opens the built-in help page.
-4. **Bring the exact error** (copy-paste it) to class or office hours.
-
-> 💡 **Key idea:** Every working scientist googles error messages daily. Getting stuck is not failing — it is the job.
-
-------------------------------------------------------------------------

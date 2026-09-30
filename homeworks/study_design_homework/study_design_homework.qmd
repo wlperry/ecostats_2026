@@ -1,0 +1,233 @@
+---
+order: 9
+week: 5
+title: "Homework 5 — Study Design & Sampling"
+subtitle: "Finding the real replicate"
+description: "Two coasts, 1022 snails, 18 sites: the same comparison analysed at two different levels of replication, and what happens when you pick the wrong one."
+author: "Bill Perry"
+---
+
+# Worksheet: Finding the Real Replicate
+
+[📥 Littoraria data](data/littoraria.csv){.btn .btn-primary download="littoraria.csv"} [📥 Tools script (.R)](themes_functions/r_themes_and_functions.R){.btn .btn-primary download="r_themes_and_functions.R"} [📥 Script skeleton (.R)](09_study_design_homework.R){.btn .btn-primary download="09_study_design_homework.R"}
+
+**The study.** *Littoraria angulifera* is a mangrove periwinkle found on both sides of the tropical Atlantic. Gotelli & Ellison's dataset holds shell measurements from **1022 snails** collected at **18 sites** — nine on the East Atlantic coast of Africa, nine on the West Atlantic coast of the Americas.
+
+**The question.** Are West Atlantic snails bigger than East Atlantic snails?
+
+**In class** you took a small, tidy, balanced experiment and asked whether one of its treatment arms earned its place. **This is the same workflow on a dataset that is none of those things** — 1022 rows, wildly uneven sampling, and nobody assigned anything to anything. One decision in Part 2 determines whether you get the right answer, and the data will not warn you if you get it wrong.
+
+Columns: `site`, `coast`, `latitude`, `longitude`, `shell_breadth_mm`, `shell_height_mm`, `aperture_length_mm`.
+
+------------------------------------------------------------------------
+
+# Part 1 · Setup and the data
+
+**▶ Run this:**
+
+``` r
+# ── Part 1.1 · Setup and the data ───────────────────────────────────────
+library(tidyverse)
+
+source("themes_functions/r_themes_and_functions.R")
+
+snail_df <- read_csv("data/littoraria.csv")
+
+snail_df
+```
+
+------------------------------------------------------------------------
+
+# Part 2 · Read the design off the data
+
+In class this was one `count()` call and the answer was obvious. Here it is not.
+
+**▶ Run this** — how many snails per coast?
+
+``` r
+# ── Part 2.1 · Read the design off the data ─────────────────────────────
+count(snail_df, coast)
+```
+
+**▶ Run this** — how many snails per *site*?
+
+``` r
+# ── Part 2.2 · Read the design off the data ─────────────────────────────
+count(snail_df, coast, site)
+```
+
+✏️ **Your turn:** Look at the two tables. There are two candidate experimental units in this dataset. Name both, and say how many replicates each one gives you.
+
+```
+Candidate 1: ____________________   n = ______
+Candidate 2: ____________________   n = ______
+```
+
+✏️ **Your turn:** Which one is the right replicate for the question "are West Atlantic snails bigger than East Atlantic snails?" Why? (One sentence. Think about what varies between coasts and what varies within a site.)
+
+```
+________________________________________________________
+```
+
+✏️ **Your turn:** One of the two levels is badly unbalanced and the other is perfectly balanced. Which is which?
+
+`________________________`
+
+------------------------------------------------------------------------
+
+# Part 3 · The analysis almost everyone runs first
+
+**▶ Run this** — every snail treated as an independent replicate:
+
+``` r
+# ── Part 3.1 · The analysis almost everyone runs first ──────────────────
+t.test(shell_breadth_mm ~ coast, data = snail_df)
+```
+
+✏️ **Your turn:** p = __________ . Write down the two group means.
+
+`________________________`
+
+------------------------------------------------------------------------
+
+# Part 4 · The analysis the design actually calls for
+
+**▶ Run this** — collapse to one number per site first, then test:
+
+``` r
+# ── Part 4.1 · The analysis the design actually calls for ───────────────
+site_df <- snail_df %>%
+  group_by(coast, site) %>%
+  summarise(mean_breadth = mean(shell_breadth_mm), n_snails = n(), .groups = "drop")
+
+site_df
+```
+
+✏️ **Your turn:** Write the code for the t-test on `site_df`, comparing `mean_breadth` between coasts.
+
+``` r
+# ── Part 4.2 · The analysis the design actually calls for ───────────────
+# Write your code in the R script:
+```
+
+✏️ **Your turn:** p = __________ . Do the two analyses agree?
+
+`________________________`
+
+------------------------------------------------------------------------
+
+# Part 5 · Why they disagree
+
+**▶ Run this** — the standard error at each level:
+
+``` r
+# ── Part 5.1 · Why they disagree ────────────────────────────────────────
+snail_df %>%
+  group_by(coast) %>%
+  reframe(summary_stats(shell_breadth_mm))
+
+site_df %>%
+  group_by(coast) %>%
+  reframe(summary_stats(mean_breadth))
+```
+
+✏️ **Your turn:** Compare the two `se` columns. Roughly how many times larger is the site-level standard error?
+
+`________________________`
+
+✏️ **Your turn:** The snail-level test says the coasts differ. The site-level test does not. **Neither test is broken** — they are answering different questions. What question does each one actually answer?
+
+```
+Snail-level test answers: _______________________________
+Site-level test answers:  _______________________________
+```
+
+✏️ **Your turn:** Florida contributes 301 snails; Liberia contributes 3. In the snail-level analysis, how much does Florida count relative to Liberia? In the site-level analysis?
+
+```
+________________________________________________________
+```
+
+------------------------------------------------------------------------
+
+# Part 6 · The twist
+
+In class, the placebo arm existed and you got to check whether it mattered. Here, something is missing that you cannot add.
+
+✏️ **Your turn:** This is a natural experiment — nobody assigned snails to coasts. Name **one confounding variable** that differs between the East and West Atlantic and could plausibly drive shell size, and say which column in this dataset you could use to partly adjust for it.
+
+```
+Confounder: ____________________  Column: ____________________
+```
+
+✏️ **Your turn:** From lecture: would controlling for that variable be treating it as a **confounder** or as a **mediator**? Does it change what you should do?
+
+```
+________________________________________________________
+```
+
+::: callout-tip
+**🚀 If you finish early:** `site_df` has an `n_snails` column. A site mean built from 301 snails is a far more precise estimate than one built from 3, yet the site-level t-test treats them as equally reliable. Look up `weights =` in `?lm` and run a weighted version. Does weighting by `n_snails` move the p-value toward the snail-level answer or the site-level one, and does that seem right to you?
+
+``` r
+# ── Part 6.1 · The twist (bonus) ────────────────────────────────────────
+# Write your code in the R script:
+```
+:::
+
+------------------------------------------------------------------------
+
+# Part 7 · The figure you hand in
+
+The only plot with labels, a theme and a title. Show **both levels at once** so the reader can see where the uncertainty actually lives.
+
+**▶ Run this:**
+
+``` r
+# ── Part 7.1 · The figure you hand in ───────────────────────────────────
+final_plot <- ggplot(site_df, aes(coast, mean_breadth)) +
+  geom_jitter(aes(size = n_snails), width = 0.12, alpha = 0.6) +
+  stat_summary(fun = mean, geom = "crossbar", width = 0.4, linewidth = 0.4) +
+  labs(
+    title = "Shell breadth of Littoraria angulifera by coast",
+    subtitle = "One point per site (n = 9 per coast); point size is snails sampled",
+    x = "Coast",
+    y = "Mean shell breadth (mm)",
+    size = "Snails"
+  ) +
+  theme_regular(base_size = 12)
+
+final_plot
+
+ggsave(
+  "figures/littoraria_figure.pdf",
+  plot   = final_plot,
+  width  = 6,
+  height = 4,
+  units  = "in"
+)
+```
+
+✏️ **Your turn:** One sentence for the figure caption — what should a reader conclude from it?
+
+```
+________________________________________________________
+```
+
+------------------------------------------------------------------------
+
+# What to turn in
+
+1. `09_study_design_homework.R`
+2. `figures/littoraria_figure.pdf`
+3. This worksheet, with your written answers
+
+# Review and checkpoint
+
+At this point you can:
+
+- [ ] Find every candidate level of replication in a dataset before testing anything
+- [ ] Choose the level that matches the question, and justify it
+- [ ] Recognise that pseudoreplication shrinks the SE rather than changing the means
+- [ ] Say what an unbalanced sampling effort does to a pooled estimate
+- [ ] Name a confounder in a natural experiment and decide whether adjusting for it is appropriate

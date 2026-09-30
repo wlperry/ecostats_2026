@@ -3,7 +3,7 @@ metadata-files:
   - ../../_templates/_lectures.yml
 title: "Lecture: Study Design & Sampling"
 subtitle: "Designing studies"
-description: "Causality, natural vs. manipulative experiments, replication and pseudoreplication, controls, randomization, sampling designs, and a priori/post hoc power analysis."
+description: "Bias versus sampling error as the two jobs of a design: controls, randomization and blinding against bias; replication, balance and blocking against sampling error. Natural versus manipulative experiments, press and pulse designs, sampling layouts, BACI, and how each design maps onto the analysis we will run later."
 categories: [Design, Sampling]
 order: 9
 week: 5
@@ -31,12 +31,31 @@ execute:
 #| include: false
 library(tidyverse)
 library(patchwork)
-library(flextable)
-library(pwr)  # For power analysis
-library(ggplot2)
-library(viridis)
+library(pwr)         # power analysis
+library(effectsize)  # cohens_d()
+
+source("themes_functions/r_themes_and_functions.R")
 
 set.seed(42)
+
+# ---- numbers reused in the text below, computed once ----
+pine_df <- read_csv("data/pine_data.csv", show_col_types = FALSE)
+
+p_df <- pine_df %>%
+  group_by(team, side) %>%
+  summarise(needle_length_mm = mean(needle_length_mm, na.rm = TRUE),
+            .groups = "drop")
+
+pine_wide <- p_df %>%
+  pivot_wider(names_from = side, values_from = needle_length_mm)
+
+d_unpaired <- abs(cohens_d(needle_length_mm ~ side, data = p_df)$Cohens_d)
+d_paired   <- abs(cohens_d(pine_wide$sunny, pine_wide$shady, paired = TRUE)$Cohens_d)
+
+n_unpaired_80 <- ceiling(pwr.t.test(d = d_unpaired, power = 0.80,
+                                    sig.level = 0.05, type = "two.sample")$n)
+n_paired_80   <- ceiling(pwr.t.test(d = d_paired, power = 0.80,
+                                    sig.level = 0.05, type = "paired")$n)
 ```
 
 ## Where We Left Off
@@ -45,17 +64,15 @@ set.seed(42)
 :::: {.column width="60%"}
 Covered last time:
 
-- What are the assumptions again, and how do you assess them?
-- What to do when assumptions fail:
-  - Mann-Whitney Wilcoxon rank-sum test
-  - Permutation tests
-  - The paired **Wilcoxon signed-rank** test — it ranks the *sizes* of the paired differences and then attaches their signs, so it uses more information than a plain sign test. It is the standard non-parametric partner to the paired t-test, and we ran it on our own four trees
-  - And we saw its limit: with 4 pairs it cannot return a p-value below 0.125, no matter how large the effect
+- Type I and Type II error, and the decision table
+- **Power** — the chance of detecting an effect that is really there
+- *A priori* power to plan a study, retrospective power to plan the *next* one
+- Pairing our four trees took the study from needing `r 2 * n_unpaired_80` trees to needing `r n_paired_80`
 
 ::: callout-note
 **✅ Key idea from last lecture**
 
-A good test choice can't rescue a badly designed study. Today is about the design decisions that come *before* you ever pick a test.
+Power is a property of a **design**, not of a test. Last time we measured it. Today we build the thing being measured — and we do it before any data exist.
 :::
 ::::
 
@@ -68,16 +85,19 @@ A good test choice can't rescue a badly designed study. Today is about the desig
 
 ::::::: columns
 :::: {.column width="60%"}
-Today we'll cover Chapter 1 in Whitlock and Schluter:
+One idea organizes the whole lecture:
 
-- Study design
-- Causality in ecology
-- Experimental design: replication, controls, randomization, independence
-- Sampling in field studies
-- Power analysis: *a priori* and *post hoc*
-- Study design and analysis
+> A design has exactly **two jobs** — get rid of **bias**, and shrink **sampling error**. Every technique today does one or the other.
 
-![Close-up photo of a rock surface with a circular grazed patch (dark, cleared algae in the center) surrounded by a mosaic of ungrazed, algae-covered tiles, illustrating a herbivore grazing-scar pattern from a classic stream ecology study.](images/clipboard-1432414496.png){width="3.12in"}
+- **Bias** → controls, randomization, blinding
+- **Sampling error** → replication, balance, blocking
+- Then: sampling layouts in the field, and which analysis each design leads to
+
+::: callout-note
+**📖 Reading**
+
+Whitlock & Schluter, Ch. 14 — Designing Experiments (§14.4 is bias, §14.5 is sampling error) and Ch. 1 — Statistics and Samples. Gotelli & Ellison, Ch. 6 — Designing Successful Field Studies, and Ch. 7 — A Bestiary of Experimental and Sampling Designs.
+:::
 ::::
 
 :::: {.column width="40%"}
@@ -87,47 +107,86 @@ Lamberti and Resh 1983
 ::::
 :::::::
 
-## Part 1 · Study Design Fundamentals {.divider}
+## Part 1 · Bias and Sampling Error {.divider}
 
-## Study Design Fundamentals
+## The Two Ways an Estimate Goes Wrong
 
 ::::::: columns
 :::: {.column width="60%"}
-- Data analysis has close links to study design
-- **Statistics cannot save a poorly designed study!**
-- Key question: **what is your research question?**
+Your study produces an estimate. It can miss the truth two different ways:
 
-Common scientific questions:
+- **Bias** — your estimate is centred on the *wrong value*. Collect more data and you converge, confidently, on the wrong answer.
+- **Sampling error** — your estimate is centred on the *right value* but bounces around it. Collect more data and it tightens up.
 
-- Spatial/temporal patterns in variable Y? — what are the problems with this data?
-- Effect of factor X on variable Y? — what should you be worried about, and how do you fix it?
-- Are values of variable Y consistent with hypothesis H?
-- What is the best estimate of parameter θ?
+**This distinction is the whole lecture**, because the two problems have completely different cures:
 
-::: callout-note
-**📖 Reference**
+| Problem | Gets worse with | Cured by |
+|---------------|--------------|-------------------|
+| Bias | nothing — more data does not help | controls, randomization, blinding |
+| Sampling error | small n, high variance | replication, balance, blocking |
 
-Gotelli & Ellison, *A Primer of Ecological Statistics*, Ch. 6 — Designing Successful Field Studies.
+::: callout-important
+**⚠️ Why this matters more than any test**
+
+A p-value describes sampling error only. **No statistical test can detect bias in your own design.** That is why design comes first.
 :::
 ::::
 
 :::: {.column width="40%"}
-![Published figure comparing a visited tidepool beach (people wading among the rocks) to a restricted no-access beach, each with bar charts of invertebrate density by species and pie charts showing 78.2% of boulders disturbed at the visited beach versus only 1.8% at the restricted beach.](images/clipboard-2300334690.png){width="3.12in" height="2.48in"}
+![Diagram of a confounding variable Z with arrows pointing to both X and Y, illustrating that a third variable can drive an apparent relationship between the two variables of interest.](images/clipboard-1454702014.png){width="3.12in" height="2.08in"}
 
-What sort of experiment is this design, and what are the issues with it?
+A confounder is a bias machine: it moves the estimate off the truth, and it does not care how many samples you take.
 ::::
 :::::::
 
-## Part 2 · Causality in Ecology {.divider}
-
-## Causality in Ecology — Introduction
+## Start From the Question
 
 ::::::: columns
 :::: {.column width="60%"}
-- Common question: what is the **cause** of Y?
-- Causality is challenging; modern statistics lacks clear language for causality
-- Strength of causal inference varies with study design!
-- Key factor: control of confounding variables, non-independence, and correlated variables
+Before either job, one question: **what is your research question?**
+
+Gotelli & Ellison's four canonical forms:
+
+- Spatial or temporal **pattern** in Y?
+- **Effect** of factor X on Y?
+- Are values of Y **consistent with** hypothesis H?
+- What is the best **estimate** of parameter θ?
+
+Each one implies a different design. "I will go measure some things and see what turns up" implies none of them.
+
+::: callout-note
+**📖 Reference**
+
+Gotelli & Ellison, Ch. 6 — Designing Successful Field Studies.
+:::
+::::
+
+:::: {.column width="40%"}
+![Close-up photo of a rock surface with a circular grazed patch (dark, cleared algae in the center) surrounded by a mosaic of ungrazed, algae-covered tiles, illustrating a herbivore grazing-scar pattern from a classic stream ecology study.](images/clipboard-1432414496.png){width="3.12in"}
+::::
+:::::::
+
+## Part 2 · Causality and the Inference Gradient {.divider}
+
+## How Much Causal Weight Can a Design Carry?
+
+::::::: columns
+:::: {.column width="60%"}
+- The question we usually want answered is **what causes Y?**
+- Statistics has no test for causality — **the design carries the causal claim**, not the analysis
+- Strength of causal inference runs on a gradient, and what moves you up it is **control of confounding**
+
+From weakest to strongest:
+
+1. Observational field study
+2. Field study with measured covariates
+3. Randomized, controlled experiment
+
+::: callout-warning
+**⚠️ The same regression, three different claims**
+
+`lm(y ~ x)` returns the identical output at all three levels. What changes is what you are *entitled to say* about it.
+:::
 ::::
 
 :::: {.column width="40%"}
@@ -135,33 +194,23 @@ What sort of experiment is this design, and what are the issues with it?
 ::::
 :::::::
 
-## Causality in Ecology — Framework
+## Causality Example — Spiders and Lizards
 
 ::::::: columns
 :::: {.column width="60%"}
-- Common question: what is the **cause** of Y?
-- Causality is challenging; modern statistics lacks clear language for causality
-- Strength of causal inference varies with study design
-- Key factor: control of confounding variables, non-independence, and correlated variables
-::::
+**Hypothesis:** on small islands, lizard predation controls spider density.
 
-:::: {.column width="40%"}
-![Humorous meme of a dog looking out a window with text joking that its barking is the reason the mail carrier always leaves unharmed ('I have the power of barking to thank for that'), a lighthearted example of mistaking correlation/coincidence for causation.](images/clipboard-733522902.png){width="3.12in" height="2.58in"}
-::::
-:::::::
+Ask, in order:
 
-## Causality Example
+- What **type** of study could test this?
+- What could produce a lizard–spider correlation with **no causal link at all**?
+- What would you have to **measure** to rule that out? What would you have to **manipulate**?
 
-::::::: columns
-:::: {.column width="60%"}
-**Example:** Spider and lizard populations on small islands
+::: callout-note
+**✅ Where we are going**
 
-**Hypothesis:** On small islands, lizard predation controls spider density
-
-We're interested in causality. How do we get there?
-
-- What type of experiment is this?
-- What are the potential problems with testing this hypothesis?
+We will answer this twice today — once as a natural experiment, once as a manipulative one — and the design, not the statistics, is what differs.
+:::
 ::::
 
 :::: {.column width="40%"}
@@ -169,20 +218,26 @@ We're interested in causality. How do we get there?
 ::::
 :::::::
 
-## Part 3 · Natural vs. Manipulative Experiments {.divider}
+## Part 3 · Natural and Manipulative Experiments {.divider}
 
 ## Natural Experiments
 
 ::::::: columns
 :::: {.column width="60%"}
-- Not really experiments at all!
-- Utilizes natural variation in the predictor variable
-- E.g., survey plots across a natural gradient of lizard density
+Not experiments at all — you use **natural variation** in the predictor. Survey plots across an existing gradient of lizard density.
 
-**Potential problems:**
+**What you gain:** real scale, real systems, long time spans, questions you could never manipulate.
 
-- Cannot determine the direction of the cause ↔ effect relationship
-- Uncontrolled variables may affect results
+**What you give up:**
+
+- Direction of causation is not identified — lizards may eat spiders, or spiders may feed lizards
+- Uncontrolled variables ride along with the predictor
+
+::: callout-note
+**📖 Reference**
+
+Whitlock & Schluter §14.7 — "What if you can't do experiments?" — is exactly this problem, and covers **matching** and **adjusting for covariates** as the two partial fixes.
+:::
 ::::
 
 :::: {.column width="40%"}
@@ -190,15 +245,26 @@ We're interested in causality. How do we get there?
 ::::
 :::::::
 
-## Strengthening Natural Experiments
+## Strengthening a Natural Experiment
 
 ::::::: columns
 :::: {.column width="60%"}
-**Good design:** stronger inference from natural experiments.
+You cannot randomize, so you attack confounding directly:
 
-- Reduce confounding (select plots similar in relevant ways)
-- Adjust for confounding (measure relevant covariates)
-- Identify and measure potential confounding variables
+- **Reduce** it — choose plots that are alike in everything except lizard density (this is **matching**)
+- **Adjust** for it — measure the covariates and put them in the model
+- **Name** it — you cannot adjust for a confounder you never wrote down
+
+Know which one you have:
+
+- A **confounder** drives both X and Y — you must adjust for it
+- A **mediator** sits on the causal path X → M → Y — adjusting for it *removes the effect you are trying to measure*
+
+::: callout-warning
+**⚠️ Same variable, opposite advice**
+
+Moisture as a confounder: control for it. Moisture as a mediator: controlling for it destroys your result. Only the biology tells you which — no diagnostic will.
+:::
 ::::
 
 :::: {.column width="40%"}
@@ -210,16 +276,14 @@ We're interested in causality. How do we get there?
 
 ::::::: columns
 :::: {.column width="60%"}
-The experimenter directly manipulates the predictor variable and measures the response.
+You set the predictor yourself and measure the response. Randomized and controlled, this is the strongest design available.
 
-Randomized, controlled trials: the gold standard.
+**What it costs you** — Gotelli & Ellison's trade-offs:
 
-**Challenges:**
-
-- Often restricted to small "plots"; a scale-replication trade-off
-- Often restricted to small, short-lived organisms
-- Often limited to a small number of treatments; a treatment-replication trade-off
-- Still requires **careful control of confounding variables!**
+- **Scale for replication** — replicable plots are small plots
+- **Organism for tractability** — small, short-lived species
+- **Treatments for replication** — every extra treatment level costs replicates
+- Confounding does **not** disappear; you now own it
 ::::
 
 :::: {.column width="40%"}
@@ -229,121 +293,53 @@ Randomized, controlled trials: the gold standard.
 ::::
 :::::::
 
-## Part 4 · Experimental Design Principles {.divider}
-
-## Experimental Design Principles
+## Press, Pulse, Snapshot, Trajectory
 
 ::::::: columns
 :::: {.column width="60%"}
-Main problem of study design & interpretation: **confounding variables**.
+Gotelli & Ellison's two axes for manipulations — and they answer different questions:
 
-- Is the result due to X, or other factors?
+- **Pulse** — apply the treatment once, then walk away. Measures **recovery**: how fast does the system bounce back?
+- **Press** — maintain the treatment continuously. Measures the **new equilibrium** the system settles into.
 
-Good study design seeks to eliminate confounding through:
+And for sampling the response:
 
-- Replication
-- Randomization
-- Controls
-- Independence
-::::
+- **Snapshot** — measure once at the end. Cheap, and blind to everything in between.
+- **Trajectory** — measure repeatedly through time. Expensive, and the only way to see dynamics.
 
-:::: {.column width="40%"}
-![Diagram of a confounding variable Z with arrows pointing to both X and Y, illustrating that a third variable can drive an apparent relationship between the two variables of interest.](images/clipboard-1454702014.png){width="3.12in" height="2.08in"}
-::::
-:::::::
+::: callout-important
+**⚠️ A snapshot can hide a complete reversal**
 
-## Replication
-
-::::::: columns
-:::: {.column width="60%"}
-Replication is important because:
-
-- Ecological systems are variable
-- Many statistical methods need an estimate of that variability
-
-Without appropriate replication: is the difference due to the manipulation, or something else?
-
-::: callout-warning
-**⚠️ Watch out!**
-
-Replication must be on the appropriate scale — match the scale of replication to the population of interest, or you'll run into **pseudoreplication** (Hurlbert 1984, *Pseudoreplication and the Design of Ecological Field Experiments*).
+Many treatment effects change sign as a system responds. Measure once, at one time, and you get whichever answer that moment happened to hold.
 :::
 ::::
 
 :::: {.column width="40%"}
-![The same tile-array photo repeated, shown here as an example of replicated experimental units on a streambed.](images/clipboard-1638932598.png){width="3.12in" height="2.75in"}
-::::
-:::::::
-
-## Replication Examples
-
-::::::: columns
-:::: {.column width="60%"}
-- **Example 1:** Effects of forest fire on soil invertebrate diversity — replicate samples from burnt and unburnt parts of *a single* forest. What hypothesis is this design addressing?
-- **Example 2:** Effects of copper on barnacle settling — 2 aquaria (+Cu, control), 5 settling plates in each. Are settling plates replicates?
-- **Example 3:** Effects of sewage discharge on water quality — 10 water samples above discharge, 10 below. Are samples replicates?
-::::
-
-:::: {.column width="40%"}
-![Map showing the burned area of the 'Camp House Fire' as an orange shape near Brimson, Minnesota, with roads and nearby towns labeled, illustrating a real forest-fire footprint for the burnt-versus-unburnt forest replication example.](images/clipboard-3427337242.png){width="3.12in"}
-::::
-:::::::
-
-## Consequences of Pseudoreplication
-
-::::::: columns
-:::: {.column width="60%"}
-When you pseudoreplicate, you:
-
-- Underestimate variability
-- Increase the Type I error rate
-
-Replicates must be on a scale appropriate to the population (and hypothesis!) of interest:
-
-- Different burnt/unburnt forest areas
-- Different aquaria
-- Different plants and streams
-::::
-
-:::: {.column width="40%"}
-![Diagram of an aquarium tank containing a fish, a shelter labeled (a), prey items labeled (b), and a barrier or structure labeled (c), used to illustrate the barnacle/copper-aquaria pseudoreplication example where settling plates within the same tank are not true replicates.](images/clipboard-1877860945.png){width="3.12in"}
-::::
-:::::::
-
-## When Replication Is Difficult
-
-::::::: columns
-:::: {.column width="60%"}
-**What if replication is impossible, difficult, or expensive?**
-
-**Example:** effect of temperature on phytoplankton growth — 4 chambers (5, 10, 15, 20°C), 10 beakers in each. Are beakers true replicates?
-
-**Possible solutions:**
-
-- Rerun the experiment a few times, changing the temperature of chambers — block by time
-- Try to account for all possible differences between chambers (light levels, humidity, contamination) — block by chamber
-::::
-
-:::: {.column width="40%"}
 ![Aerial photo of an outdoor research facility with about 20 large circular tanks (mesocosms) arranged in a grid on gravel, plus additional smaller tanks in the background, illustrating replicated temperature-controlled growth chambers.](images/clipboard-3600266009.png){width="3.12in"}
+
+Mesocosms let you press a treatment *and* follow a trajectory — at the cost of scale.
 ::::
 :::::::
 
-## Controls or Reference?
+## Part 4 · Job One: Getting Rid of Bias {.divider}
+
+## Controls — and Why One Is Usually Not Enough
 
 ::::::: columns
 :::: {.column width="60%"}
-**Key question:** is the response due to the manipulation/hypothesized mechanism, or an external factor?
+A control is a unit treated **exactly** like the manipulated units, except for the one thing under investigation.
 
-Controls help address this question:
+That word *exactly* is where designs fail. Your manipulation almost always does something besides the thing you care about:
 
-- Experimental units treated exactly as the manipulated units, except for the manipulation under investigation
-- Can be tricky to implement; requires careful thought
+- **Toxicology:** controls get injected too — same needle, same handling, no toxin
+- **Predator exclosures:** a cage changes flow, light and sediment. You need *two* controls — an open plot **and** a cage-with-holes
+- **Anything you attach, bury, or visit** does something merely by being attached, buried or visited
 
-**Examples:**
+::: callout-note
+**Vocabulary**
 
-- In toxicology, controls and treatment groups must both be injected, but the control does not receive the substance under study
-- Predator exclosures often produce "cage effects" — you need two controls: a grazer/predator control and a "cage control"
+The second kind is a **procedural** or **sham** control. Next slide: real data where forgetting it would have produced a completely wrong paper.
+:::
 ::::
 
 :::: {.column width="40%"}
@@ -351,49 +347,66 @@ Controls help address this question:
 ::::
 :::::::
 
-## Activity: Designing Controls
-
-::: callout-warning
-**Activity: designing controls for pine experiments**
-
-Work in small groups to design appropriate controls for each experiment:
-
-1. Testing whether pine needle length is affected by a particular fertilizer
-2. Testing whether pine needle density affects water retention during drought, using enclosed branches
-3. Testing whether sunlight exposure affects pine seedling growth, using shade cloth
-
-For each experiment, identify:
-
-- What would be appropriate controls?
-- What factors need to be controlled besides the main variable?
-- Could there be "cage effects" or similar issues to consider?
-:::
-
-## Independence
+## A Sham Control Earns Its Keep — Sponges on Mangrove Roots
 
 ::::::: columns
-:::: {.column width="60%"}
-Independence of observations is an assumption of many statistical methods. Events are independent if the occurrence of one has no effect on the occurrence of another.
+:::: {.column width="55%"}
+Ellison, Farnsworth & Twilley (1996) asked whether epibiont sponges promote mangrove root growth. Four treatments, **14 roots each**:
 
-- E.g., offspring of one mother for treatment, offspring of another for control
+```{r study-design-sampling-02}
+#| message: false
+sponge_df <- read_csv("data/sponge_root_growth.csv")
 
-**Temporal/spatial autocorrelation:** a violation of independence.
+sponge_df %>%
+  group_by(treatment) %>%
+  reframe(summary_stats(growth_mm_d))
+```
 
-- Values of variables at a certain place/time are correlated with values at another place/time
-- "Everything is related to everything, but near things are more related than distant things"
-- Special methods exist to adjust for autocorrelation
-
-::: callout-note
-**✅ Our own design, in these terms**
-
-Eight needles from one branch are **not** independent — they share a tree, a microclimate, a genotype. Two sides of the same tree **are** dependent on each other too, but deliberately so: that is a **paired** design, and pairing turns a violation of independence into an advantage.
-
-Non-independence you ignore costs you. Non-independence you plan for pays you.
-:::
+- `Control` — bare root
+- `Foam` — inert foam, the **sham control**
+- `Haliclona`, `Tedania` — the two sponges
 ::::
 
-:::: {.column width="40%"}
-![Photo of a mother rat nursing a litter of newborn pups, illustrating the independence example: offspring from one mother are not independent replicates of each other.](images/clipboard-1994036977.png){width="3.12in" height="4.11in"}
+:::: {.column width="45%"}
+::: callout-note
+**Read the means before the tests**
+
+Bare root grows slowest. Foam — which is not alive — grows nearly as fast as the sponges. That ordering is the whole story.
+:::
+::::
+:::::::
+
+## The Sponge Result, in Two Tests
+
+::::::: columns
+:::: {.column width="55%"}
+```{r study-design-sampling-03}
+# Is there an artifact of having ANYTHING attached?
+t.test(growth_mm_d ~ treatment,
+       data = filter(sponge_df,
+                     treatment %in% c("Control", "Foam")))
+```
+
+```{r study-design-sampling-04}
+# Do the living sponges beat the inert foam?
+sponge_df %>%
+  filter(treatment != "Control") %>%
+  mutate(kind = if_else(treatment == "Foam", "sham", "sponge")) %>%
+  t.test(growth_mm_d ~ kind, data = .)
+```
+::::
+
+:::: {.column width="45%"}
+::: callout-important
+**⚠️ The paper you would have written without the foam**
+
+- `Control` vs `Foam`: **p = 0.021** — the *inert* object significantly increases root growth
+- `Foam` vs sponges: **p = 0.33** — the living sponges add nothing detectable
+
+With only a bare control you would have reported "sponges promote root growth," with a real p-value and a clean figure. The effect is mostly **having an object attached**.
+
+**The sham control is what stands between a correct result and a confident wrong one.**
+:::
 ::::
 :::::::
 
@@ -401,391 +414,350 @@ Non-independence you ignore costs you. Non-independence you plan for pays you.
 
 ::::::: columns
 :::: {.column width="60%"}
-Randomization helps deconfound "lurking" variables — it attempts to equalize the effects of confounders.
+Randomization is how you deconfound the variables you never thought of. It works at **two** levels, and both matter:
 
-**Random sampling from a population:**
+1. **Selection** — which units enter the study. Makes the sample represent the population.
+2. **Assignment** — which unit gets which treatment. Makes the groups exchangeable *before* treatment.
 
-- Experimental units should represent a random sample from the population of interest
-- Ensures unbiased population estimates and inference
-- E.g., animals in an experiment are a random subset of all animals that could have been used
+Haphazard is not random. "Whichever tree I reached first" correlates with trail access, which correlates with light, soil and disturbance.
+
+```{r study-design-sampling-05}
+# Selection: 10 trees from the 100 in the stand
+selected <- sample(1:100, 10)
+
+# Assignment: 5 to treatment, the rest to control
+treated <- sample(selected, 5)
+
+tibble(tree = selected,
+       group = if_else(tree %in% treated, "treatment", "control")) %>%
+  arrange(group)
+```
 ::::
 
 :::: {.column width="40%"}
 ![Diagram of a shoreline (land at bottom, water at top) with shaded squares labeled E (experimental) and unshaded squares labeled C (control) interspersed randomly across the plots, illustrating random assignment of units to treatment and control.](images/clipboard-425378447.png){width="3.12in" height="2.20in"}
-::::
-:::::::
 
-## Randomization in Practice
-
-::::::: columns
-:::: {.column width="60%"}
-**Allocation of experimental units to treatment/control:**
-
-- Experimental units must have an equal chance of being allocated to control or experimental group
-- Properly done by random number generation
-
-Randomization is essential at two levels:
-
-- Random selection from the population
-- Random assignment to treatments
-::::
-
-:::: {.column width="40%"}
-```{r study-design-sampling-02}
-#| echo: false
-#| paged-print: false
-# Example of randomization in R
-# Select 10 trees randomly from 100 possible trees
-all_trees <- 1:100
-selected_trees <- sample(all_trees, 10)
-
-# Randomly assign 5 trees to treatment and 5 to control
-treatment_trees <- sample(selected_trees, 5)
-control_trees <- selected_trees[!selected_trees %in% treatment_trees]
-
-data.frame(
-  Treatment = treatment_trees,
-  Control = control_trees
-)
-```
-::::
-:::::::
-
-## Part 5 · Sampling Design in Field Studies {.divider}
-
-## Sampling Design — Simple Random
-
-::::::: columns
-:::: {.column width="60%"}
-**Simple random design:**
-
-- All individuals/sampling units have an equal chance of being selected
-- Assign a number to all possible units, select units using a random number generator
-- Often tricky in ecology; haphazard sampling is a common (imperfect) alternative
-- Most population estimates and tests assume random sampling
-
-::: callout-note
-**📖 Reference**
-
-Gotelli & Ellison, Ch. 7 — A Bestiary of Experimental and Sampling Designs, covers all four sampling designs on this and the following three slides.
-:::
-::::
-
-:::: {.column width="40%"}
-![Diagram of a blue lake with black squares scattered haphazardly throughout the water, illustrating simple random sampling where every point has an equal chance of being sampled.](images/clipboard-1715765919.png){width="3.12in" height="2.23in"}
-::::
-:::::::
-
-## Sampling Design — Stratified
-
-::::::: columns
-:::: {.column width="60%"}
-**Stratified designs:** if there are distinct strata (groups) in the population, you may want to sample each independently.
-
-- Samples collected from each stratum randomly, n proportional to the "size" of the stratum
-- Means and variances need to be estimated using a different procedure; strata are included in the model
-::::
-
-:::: {.column width="40%"}
-![Diagram of a lake divided into three concentric depth strata (shallow green, mid-depth light blue, deep dark blue), with sample points scattered within each stratum, illustrating stratified random sampling.](images/clipboard-4229571822.png){width="3.12in" height="2.50in"}
-::::
-:::::::
-
-## Sampling Design — Cluster
-
-::::::: columns
-:::: {.column width="60%"}
-**Cluster designs:**
-
-- Focus on sampling subunits nested in larger units
-- Used when other designs are impractical (e.g., due to cost)
-- Mean calculation is easy; variance needs a modified procedure
-- Nested ANOVA is often the appropriate analytical method
-::::
-
-:::: {.column width="40%"}
-![Diagram of a lake with four red circles marking clusters, each containing three sample points, positioned around the shoreline, illustrating cluster sampling where whole groups near a location are sampled together.](images/clipboard-3497374488.png){width="3.12in" height="2.60in"}
-::::
-:::::::
-
-## Sampling Design — Systematic
-
-::::::: columns
-:::: {.column width="60%"}
-**Systematic designs:**
-
-- Sampling units evenly dispersed — "transect" sampling is common in ecology
-- Used to determine changes along a gradient
-- Risk: might coincide with some natural pattern
-::::
-
-:::: {.column width="40%"}
-![Diagram of a lake with sample points evenly spaced in a grid-like pattern across the water, illustrating systematic sampling along a regular interval rather than at random locations.](images/clipboard-1509791440.png){width="3.12in" height="2.34in"}
-::::
-:::::::
-
-## Activity: Field Sampling Pine Trees
-
-::: callout-note
-**Activity: field sampling pine trees**
-
-Let's consider sampling pine needles across campus:
-
-```{r study-design-sampling-03}
-#| echo: false
-#| fig-height: 3.4
-#| fig-width: 3.4
-#| fig-alt: "Scatterplot of a 10-by-10 campus grid with light grey points marking all grid locations and dark green points marking simulated pine tree locations, which are clustered toward the north (higher y-values) side of campus."
-# Let's create a campus map grid (simplified)
-campus_grid <- expand.grid(x = 1:10, y = 1:10)
-
-# Place "pine trees" clustered toward the north side (higher y values)
-set.seed(46)
-pine_locations <- data.frame(
-  x = sample(1:10, 30, replace = TRUE),
-  # Using rbeta to skew distribution toward higher y values
-  # Alpha=1, Beta=3 creates right-skewed distribution, then scale to 1-10 range
-  y = round(rbeta(30, 3, 1) * 9 + 1)
-)
-
-ggplot() +
-  geom_point(data = campus_grid, aes(x, y), color = "lightgrey", size = 0.5) +
-  geom_point(data = pine_locations, aes(x, y), color = "darkgreen", size = 3) +
-  theme_minimal(base_size = 9) +
-  labs(title = "Pine Tree Locations on Campus Grid (North Clustered)")
-```
-
-In groups of 3–4, design a sampling strategy to:
-
-1. Estimate average needle length across campus (simple random sampling)
-2. Compare needle lengths between north and south campus areas (stratified sampling)
-3. Study how needle length changes with distance from the main road (systematic sampling)
-
-For each strategy, describe:
-
-- How many samples you would take
-- Where you would take them
-- What additional variables you might measure
-:::
-
-## Part 6 · Power Analysis {.divider}
-
-## Power Analysis Wrap-Up
-
-::::::: columns
-:::: {.column width="60%"}
-- Power is an important aspect of experimental design:
-  - Low power → higher likelihood of Type II error (1 − β)
-  - A study's power tells us how likely we are to see an effect if one really exists
-- Power analysis can be used:
-  - Before the experiment (*a priori*): how many samples do we need? What effect size can we detect?
-  - After the experiment (*post hoc*): was a finding of no effect due to a lack of true effect, or poor design?
-- Power is a function of: effect size (ES), sample size (n), standard deviation (σ), and α (typically 0.05)
-::::
-
-:::: {.column width="40%"}
-$$\text{Power} \propto \frac{ES \cdot \alpha \cdot \sqrt{n}}{\sigma}$$
-
-::: callout-note
-**📖 Reference**
-
-Whitlock & Schluter, Ch. 14 — Designing Experiments, covers planning the sample size needed for a study.
-:::
-::::
-:::::::
-
-## A Priori Power Analysis
-
-::::::: columns
-:::: {.column width="60%"}
-Using power analysis to plan experiments:
-
-- **Sample size calculation:** how many samples will be needed? Need to know: desired power, variability, significance level, effect size.
-- **Effect size calculation:** what kind of effect can we find, given a particular design? Need to know: desired power, variability, significance level, n.
-
-**Cohen's d** — a standardized measure of effect size, particularly for comparing two means:
-
-- 0.2 = small effect, 0.5 = medium effect, 0.8 = large effect
-::::
-
-:::: {.column width="40%"}
 ::: callout-tip
-**📖 Why standardize?**
+**🖐 `set.seed()` makes it reproducible, not less random**
 
-Cohen's d helps determine the *practical* significance of a finding, as opposed to just statistical significance (p-values). A Cohen's d of 0.8 means the groups differ by 0.8 standard deviations — large enough to be substantial in practical terms.
+Record the seed and anyone can reconstruct exactly which trees you assigned where.
 :::
 ::::
 :::::::
 
-## A Priori Power Analysis — Example
+## Blinding
 
 ::::::: columns
 :::: {.column width="60%"}
-How many samples do you need to find this difference?
+The measurer's expectations leak into the measurements. This is a **bias**, so no amount of data fixes it.
 
-```{r study-design-sampling-04}
-# A priori power analysis for t-test
-# How many samples needed per group?
-effect_size <- 0.8  # Cohen's d
-significance <- 0.05
-desired_power <- 0.8
+- **Single-blind** — the subject does not know the treatment
+- **Double-blind** — the person *measuring* does not know either
+- A **placebo** is what makes subject-blinding possible at all
 
-pwr.t.test(d = effect_size,
-           sig.level = significance,
-           power = desired_power,
-           type = "two.sample")
-```
-::::
-
-:::: {.column width="40%"}
-::: callout-tip
-**🖐 Notice**
-
-`pwr.t.test()` solves for whichever argument you leave out — here, `n`. Leave out a different argument (e.g., `power`) and it solves for that instead.
-:::
-::::
-:::::::
-
-## Post Hoc Power Analysis
-
-::::::: columns
-:::: {.column width="60%"}
-- Imagine you did not reject the null hypothesis — is the result still worth publishing?
-- Is a non-significant result due to low power (poor design), or an actual no-effect situation?
-  - You have n and an estimate of σ
-  - You need to define the effect size you wanted to detect
-  - In return, you get an estimate of the experiment's power
-- Cohen's d is calculated as: d = (Mean1 − Mean2) / SD_pooled
-::::
-
-:::: {.column width="40%"}
-::: callout-important
-**⚠️ There are two things called "post hoc power" — one is useful, one is circular**
-
-**Legitimate:** "Given our n and σ, what power did we have to detect a difference *we decided in advance* was biologically meaningful?" That is a real answer about your design, and it is what the bullets on the left describe.
-
-**Invalid:** computing power from the effect size you *observed*. Observed power is a direct mathematical re-expression of your p-value — a non-significant result *always* yields low observed power. Saying "our result was non-significant and our power was low" says the same thing twice, and is not evidence that there is no effect.
-
-If you want to argue for no effect, use an **equivalence test** or report a confidence interval that excludes any meaningful difference.
-:::
-::::
-:::::::
-
-## Post Hoc Power Analysis — Example
-
-::::::: columns
-:::: {.column width="60%"}
-```{r study-design-sampling-05}
-# Post hoc power analysis
-# If we had n = 20 per group
-effect_size <- 0.5  # Medium effect size
-significance <- 0.05
-sample_size <- 20  # per group
-
-pwr.t.test(n = sample_size,
-           d = effect_size,
-           sig.level = 0.05,
-           type = "two.sample")
-```
-::::
-
-:::: {.column width="40%"}
-::: callout-note
-**✅ Key idea**
-
-Same function as *a priori* power analysis — `pwr.t.test()` — just with `n` supplied and `power` left out to solve for instead.
-:::
-::::
-:::::::
-
-## Activity: Power Analysis for a Pine Needle Experiment
+W&S spend most of Ch. 14's opening on this because medicine learned it the hard way. Ecology mostly has not.
 
 ::: callout-important
-**Activity: power analysis for a pine needle experiment**
+**⚠️ This lands on our own study**
 
-**We already have pilot data — our own.** Four trees, both sides of each, from Week 1. That is exactly what a pilot study is *for*: it does not settle the question, it tells you how big the real study has to be.
+You measured needles **knowing** which side of the tree they came from, and knowing the hypothesis. Nobody cheated. But "is this needle bent or straight, include it or not" is a judgement call, and judgement calls drift toward the expected answer.
+
+The fix is cheap: someone relabels the envelopes, you measure blind to `side`.
+:::
+::::
+
+:::: {.column width="40%"}
+![Humorous meme of a dog looking out a window with text joking that its barking is the reason the mail carrier always leaves unharmed ('I have the power of barking to thank for that'), a lighthearted example of mistaking correlation/coincidence for causation.](images/clipboard-733522902.png){width="3.12in" height="2.58in"}
+
+Expectation is a powerful thing.
+::::
+:::::::
+
+## Part 5 · Job Two: Shrinking Sampling Error {.divider}
+
+## Replication — and at What Scale
+
+::::::: columns
+:::: {.column width="60%"}
+Replication does two jobs: it shrinks the standard error, and it is the **only** way to estimate variability at all.
+
+The hard part is never *how many*. It is **of what**.
+
+- **Fire and soil invertebrates:** samples from burnt and unburnt parts of *one* forest. What population does that describe? One forest.
+- **Copper and barnacles:** 2 aquaria, 5 plates each. `n = 2`, not 10.
+- **Sewage and water quality:** 10 samples above the outfall, 10 below. `n = 1` above and `n = 1` below — one location each.
+
+::: callout-warning
+**⚠️ The rule**
+
+Replicates must vary at the scale your **hypothesis** applies to. Anything finer is **pseudoreplication** (Hurlbert 1984), and it shrinks your SE without adding information — a bias dressed as precision.
+:::
+::::
+
+:::: {.column width="40%"}
+![Map showing the burned area of the 'Camp House Fire' as an orange shape near Brimson, Minnesota, with roads and nearby towns labeled, illustrating a real forest-fire footprint for the burnt-versus-unburnt forest replication example.](images/clipboard-3427337242.png){width="3.12in"}
+::::
+:::::::
+
+## We Already Fixed This Once
+
+::::::: columns
+:::: {.column width="60%"}
+Our own pine data has 64 rows and **8 trees' worth of sides** — 4 trees, two sides each.
+
+Every analysis we have run since Week 4 starts by averaging the 8 needles per side away:
 
 ```{r study-design-sampling-06}
-#| fig-height: 3
-#| fig-width: 3
-# Estimates from OUR four trees (see the Power lecture)
-shady_mean  <- 14.12   # mm
-sunny_mean  <- 15.21   # mm
-pooled_sd   <- 1.81    # mm
-
-effect_size <- abs(shady_mean - sunny_mean) / pooled_sd
-effect_size            # Cohen's d
-
-# How many trees per side would a proper study need?
-pwr.t.test(d = effect_size,
-           sig.level = 0.05,
-           power = 0.8,
-           type = "two.sample")
+p_df
 ```
 
-✏️ **Your turn:** Now re-run it as a **paired** design (`type = "paired"`) using the effect size for the *differences*, `d = 1.36`. How many trees does that need instead?
-:::
+That `group_by() %>% summarise()` is not data cleaning. It is the line where we choose the **tree** as the experimental unit, because the tree is what the hypothesis is about.
+::::
+
+:::: {.column width="40%"}
+![Diagram of an aquarium tank with a fish, a labelled shelter, labelled prey items, and a labelled internal barrier — a single tank holding many measurable items, where the tank and not the item is the experimental unit.](images/clipboard-1877860945.png){width="3.12in"}
+
+One tank, many measurements, `n = 1`.
+::::
+:::::::
+
+## Balance
+
+::::::: columns
+:::: {.column width="60%"}
+For a fixed total effort, **equal group sizes give the smallest standard error** on the difference.
+
+- 10 and 10 beats 15 and 5, using the same 20 units
+- Balance also makes the tests robust: unequal variances hurt far less when n is equal
+- Unbalanced designs are harder to interpret in ANOVA — sums of squares stop being unique (we will hit this in Week 9)
 
 ::: callout-tip
-**🖐 The design decision, in one comparison**
+**🖐 When imbalance is not your fault**
 
-- Unpaired: **44 trees per side** = 88 trees
-- Paired: **7 trees**, both sides of each
+Mortality, lost plots and weather happen. Balance is a design goal, not a moral requirement — but *plan* for balance, and report what you actually ended up with.
+:::
+::::
 
-Same question, same measurement effort per tree, same α and power. The difference is entirely in **how you decide to sample** — which is what this whole lecture is about.
+:::: {.column width="40%"}
+::: callout-note
+**📖 Reference**
+
+Whitlock & Schluter §14.5 — reducing the influence of sampling error: replication, balance, blocking, and choosing extreme treatment levels.
 :::
 
-## Activity: Power Curve Visualization
+::: callout-note
+**Extreme treatments**
+
+If you want to detect a dose response with few replicates, spread your doses wide. Four doses clustered near the middle waste your replicates on a range where nothing happens.
+:::
+::::
+:::::::
+
+## Blocking — and What Our Paired Design Really Was
+
+::::::: columns
+:::: {.column width="60%"}
+**Blocking:** group the units into sets that are alike, then randomize treatments *within* each set. Variation among blocks is removed from the comparison instead of contaminating it.
+
+- Chambers differ? Run every temperature in every chamber — **block by chamber**
+- Days differ? Run all treatments each day — **block by time**
+- Ridiculously variable sites? Put all treatments at each site
 
 ::: callout-important
-**Activity: power analysis for a pine needle experiment**
+**✅ A paired design is a block of size two**
 
+Two sides of the *same tree* share genotype, soil, age and history. Pairing removes all of it from the comparison. That is why `r n_paired_80` trees do the work of `r 2 * n_unpaired_80`.
+
+**Non-independence you ignore costs you. Non-independence you plan for pays you.** Blocking is how you get paid.
+:::
+
+Blocked designs need blocked *analyses* — Week 9 and Week 10.
+::::
+
+:::: {.column width="40%"}
 ```{r study-design-sampling-07}
 #| echo: false
 #| fig-height: 3.2
-#| fig-width: 3.6
-#| fig-alt: "Line plot of statistical power versus sample size per group (5 to 30), rising from low power at small sample sizes toward 1 as sample size increases, with a dashed red horizontal reference line at 80% power marking the sample size needed to reach adequate power."
-sample_sizes <- seq(5, 30, by = 1)
-power_values <- sapply(sample_sizes, function(n) {
-  power <- pwr.t.test(n = n,
-                     d = effect_size,
-                     sig.level = 0.05,
-                     type = "two.sample")$power
-  return(power)
-})
-
-power_df <- data.frame(
-  sample_size = sample_sizes,
-  power = power_values
-)
-
-ggplot(power_df, aes(x = sample_size, y = power)) +
-  geom_line(color = "blue", linewidth = 1) +
-  geom_hline(yintercept = 0.8, linetype = "dashed", color = "red") +
-  theme_minimal(base_size = 9) +
-  labs(title = "Power Analysis for Pine Needle Study",
-       x = "Sample Size (per group)",
-       y = "Statistical Power")
+#| fig-width: 3.4
+#| fig-alt: "Line plot of mean needle length for the shady and sunny side of each of the four trees, one line per tree. Every line slopes upward from shady to sunny, but the four lines sit at clearly different heights, showing that most of the variation is between trees and pairing removes it."
+p_df %>%
+  ggplot(aes(side, needle_length_mm, group = team, colour = team)) +
+  geom_line(linewidth = 0.9) +
+  geom_point(size = 2.6) +
+  theme_regular(base_size = 9) +
+  theme(legend.position = "none") +
+  labs(title = "Four trees, four blocks",
+       x = "Side", y = "Mean needle length (mm)")
 ```
 
-**Questions:**
+Every tree slopes the same way. The trees sit at different heights. Blocking keeps the slope and throws away the heights.
+::::
+:::::::
 
-1. How many trees should we sample to achieve 80% power?
-2. If we can only sample 5 trees per group, what is our power?
-3. How would increasing variability (SD) affect our sample size requirements?
-:::
-
-## Part 7 · Wrap-Up {.divider}
-
-## Study Design and Analysis
+## Independence and Autocorrelation
 
 ::::::: columns
 :::: {.column width="60%"}
-- Study design is closely linked to statistical analysis
-- Recall: categorical vs. continuous variables; dependent vs. independent variables
-- The nature of your variables dictates the analytical approach:
-  - Match your analysis to your design
-  - You cannot "fix" a poor design with fancy statistics
+Most tests assume observations are **independent** — knowing one tells you nothing about another.
+
+**Autocorrelation** is the standard violation: things near each other in space or time resemble each other.
+
+> "Everything is related to everything, but near things are more related than distant things."
+
+- Samples 1 m apart on a transect are not two independent samples
+- Measurements on consecutive days are not independent
+- Offspring of one mother are not independent of each other
+
+The fix is either design (space samples beyond the correlation range) or model (Week 10 and beyond).
+::::
+
+:::: {.column width="40%"}
+![Photo of a mother rat nursing a litter of newborn pups, illustrating the independence example: offspring from one mother are not independent replicates of each other.](images/clipboard-1994036977.png){width="3.12in" height="4.11in"}
+::::
+:::::::
+
+## Part 6 · Sampling Layouts in the Field {.divider}
+
+## Simple Random and Stratified
+
+::::::: columns
+:::: {.column width="50%"}
+**Simple random** — every unit has an equal chance of selection. Number the units, draw with a random number generator.
+
+- What nearly every test assumes you did
+- Genuinely awkward in the field; *haphazard* is the common substitute, and it is not the same thing
+
+**Stratified** — if the population has distinct strata, sample each one separately, with n proportional to stratum size.
+
+- **More precise than simple random** when strata differ, because within-stratum variance is all that is left
+- Strata must go **into the model**, not be ignored
+::::
+
+:::: {.column width="25%"}
+![Diagram of a blue lake with black squares scattered haphazardly throughout the water, illustrating simple random sampling where every point has an equal chance of being sampled.](images/clipboard-1715765919.png){width="2.4in"}
+
+Simple random
+::::
+
+:::: {.column width="25%"}
+![Diagram of a lake divided into three concentric depth strata (shallow green, mid-depth light blue, deep dark blue), with sample points scattered within each stratum, illustrating stratified random sampling.](images/clipboard-4229571822.png){width="2.4in"}
+
+Stratified
+::::
+:::::::
+
+## Cluster and Systematic
+
+::::::: columns
+:::: {.column width="50%"}
+**Cluster** — sample subunits nested inside larger units. Used when travel or access makes anything else impossible.
+
+- Cheap, and **less** precise than simple random for the same total n
+- The clusters are your replicates → **nested ANOVA** (Week 9) or a mixed model (Week 10)
+
+**Systematic** — units evenly spaced; the transect is the ecological classic.
+
+- Ideal for describing change **along a gradient**
+- One real risk: your spacing lines up with a periodicity in the system
+::::
+
+:::: {.column width="25%"}
+![Diagram of a lake with four red circles marking clusters, each containing three sample points, positioned around the shoreline, illustrating cluster sampling where whole groups near a location are sampled together.](images/clipboard-3497374488.png){width="2.4in"}
+
+Cluster
+::::
+
+:::: {.column width="25%"}
+![Diagram of a lake with sample points evenly spaced in a grid-like pattern across the water, illustrating systematic sampling along a regular interval rather than at random locations.](images/clipboard-1509791440.png){width="2.4in"}
+
+Systematic
+::::
+:::::::
+
+## BACI — When You Cannot Randomize an Impact
+
+::::::: columns
+:::: {.column width="60%"}
+Nobody randomizes an oil spill. **Before–After–Control–Impact** is the design for impacts you did not choose:
+
+- Measure **before** and **after**, at both an **impact** site and a **control** site
+- The evidence is the **interaction**: did impact-versus-control *change* from before to after?
+- Before/after alone confounds the impact with time. Control/impact alone confounds it with place. You need both.
+
+::: callout-warning
+**⚠️ Look at the figure — what is missing?**
+
+Visited beach versus restricted beach, measured once. Real difference, real data. But the beaches may always have differed. With **no "before,"** the impact and the site are inseparable.
+:::
+
+BACI is a factorial design with an interaction → Week 9.
+::::
+
+:::: {.column width="40%"}
+![Published figure comparing a visited tidepool beach (people wading among the rocks) to a restricted no-access beach, each with bar charts of invertebrate density by species and pie charts showing 78.2% of boulders disturbed at the visited beach versus only 1.8% at the restricted beach.](images/clipboard-2300334690.png){width="3.12in" height="2.48in"}
+::::
+:::::::
+
+## Part 7 · Sample Size Is a Design Decision {.divider}
+
+## How Big, Decided Before You Start
+
+::::::: columns
+:::: {.column width="60%"}
+We did the mechanics last lecture. The design point is the one worth keeping:
+
+- Power rises with the **effect size**, with **√n**, and with **α** — and falls as **σ** rises
+- **Type II error is β. Power is 1 − β.**
+- Two ways to run it *a priori*: solve for the **n** you need, or for the **effect size** your affordable n could detect
+
+```{r study-design-sampling-08}
+# Our pine pilot, unpaired vs paired — same trees, same needles
+pwr.t.test(d = d_paired, power = 0.80,
+           sig.level = 0.05, type = "paired")$n
+```
+
+**`r n_unpaired_80` trees per side (`r 2 * n_unpaired_80` total) unpaired, versus `r n_paired_80` trees paired.** Nothing changed but the design.
+::::
+
+:::: {.column width="40%"}
+::: callout-note
+**Plan for precision, not just for power**
+
+W&S §14.6 frames this as planning the **width of your confidence interval**. "How precise will my estimate be?" is often the more honest question than "will I get a star?"
+:::
+
+::: callout-important
+**⚠️ Retrospective power, one more time**
+
+Computing power from the effect size you *observed* re-expresses your p-value and tells you nothing new. Use it to plan the next study. To argue *for* no effect, use an equivalence test or a CI that excludes anything meaningful.
+:::
+::::
+:::::::
+
+## Part 8 · From Design to Analysis {.divider}
+
+## Your Design Chooses Your Analysis
+
+::::::: columns
+:::: {.column width="60%"}
+This is Gotelli & Ellison Ch. 7's whole point, and it is also the rest of this course. **Write the design down and the analysis is already decided:**
+
+| Your design | The analysis | When |
+|-----------------|-------------------|--------|
+| One continuous predictor | Regression | Week 6 |
+| Several continuous predictors | Multiple regression | Week 7 |
+| One categorical factor | One-way ANOVA | Week 8 |
+| Two crossed factors, or BACI | Two-way ANOVA + interaction | Week 9 |
+| Subsamples inside units; clusters | Nested ANOVA | Week 9 |
+| Blocks, repeated measures, split-plot | Mixed model | Week 10 |
+| Counts, or presence/absence | GLM | Week 11 |
+| Factor plus a continuous covariate | ANCOVA | Week 12 |
+
+::: callout-important
+**You cannot choose your analysis at the end**
+
+You chose it the day you decided what to measure and how to lay it out. Everything after that is bookkeeping.
+:::
 ::::
 
 :::: {.column width="40%"}
@@ -793,35 +765,33 @@ ggplot(power_df, aes(x = sample_size, y = power)) +
 ::::
 :::::::
 
-## Summary and Take-Home Messages
+## Summary
 
 ::::::: columns
 :::: {.column width="60%"}
-Key concepts we covered today:
-
-1. **Study design is critical** — statistics cannot save poor design
-2. **Natural vs. manipulative experiments** — different approaches to causality
-3. **Principles of good design:** replication at the right scale, proper randomization, appropriate controls, independence
-4. **Power analysis** — planning for sufficient sample size
-5. **Match analysis to design** — your statistical approach should follow from your experimental design
+1. A design has two jobs: **kill bias**, **shrink sampling error**. No test does either for you.
+2. **Bias** → controls (usually more than one), randomization at both levels, blinding.
+3. **Sampling error** → replication at the right scale, balance, blocking.
+4. **Natural experiments** buy realism with causal ambiguity; manipulations buy inference with scale. Press or pulse, snapshot or trajectory — choose deliberately.
+5. **Replicate the thing your hypothesis is about.** Pseudoreplication buys false precision.
+6. **Your design has already chosen your analysis.**
 ::::
 
 :::: {.column width="40%"}
 ::: callout-important
-**Remember:**
+**The sponge slide, if you remember nothing else**
 
-- Correlation ≠ causation
-- Beware of pseudoreplication
-- Design before you collect data
-- Consider practical constraints
-- Report everything transparently
+The inert foam grew roots almost as well as the living sponges. Without that sham control, the paper reports a sponge effect — correctly analysed, properly significant, and wrong.
+
+Design is not the paperwork before the science. It *is* the science.
 :::
 ::::
 :::::::
 
-## References and Additional Resources
+## Readings
 
-- Gotelli, N. J., & Ellison, A. M. (2012). *A Primer of Ecological Statistics* (2nd ed.). Sinauer Associates.
+- **Whitlock & Schluter**, Ch. 14 — Designing Experiments (§14.4 bias; §14.5 sampling error; §14.6 planning for precision; §14.7 observational studies), and Ch. 1 — Statistics and Samples.
+- **Gotelli & Ellison**, Ch. 6 — Designing Successful Field Studies, and Ch. 7 — A Bestiary of Experimental and Sampling Designs.
 - Hurlbert, S. H. (1984). Pseudoreplication and the design of ecological field experiments. *Ecological Monographs*, 54(2), 187–211.
+- Ellison, A. M., Farnsworth, E. J., & Twilley, R. R. (1996). Facultative mutualism between red mangroves and root-fouling sponges in Belizean mangal. *Ecology*, 77(8), 2431–2444.
 - Quinn, G. P., & Keough, M. J. (2002). *Experimental Design and Data Analysis for Biologists*. Cambridge University Press.
-- Zuur, A. F., Ieno, E. N., & Elphick, C. S. (2010). A protocol for data exploration to avoid common statistical problems. *Methods in Ecology and Evolution*, 1(1), 3–14.
