@@ -2,332 +2,263 @@
 order: 10
 week: 6
 title: "Homework 5 — Correlation & Regression"
-subtitle: "Correlation and regression"
-description: "Correlation and simple linear regression."
+subtitle: "The transformation you have to find"
+description: "One hundred stream invertebrate species, body mass against population density: the same regression workflow from class, on data where the first answer you get is the wrong one."
 author: "Bill Perry"
 ---
 
-```{r setup}
-#| include: false
-#| message: false
-#| warning: false
+# Worksheet: The Transformation You Have to Find
 
-# Load required packages
+[📥 Stream invertebrate data](data/stream_invertebrates.csv){.btn .btn-primary download="stream_invertebrates.csv"} [📥 Tools script (.R)](themes_functions/r_themes_and_functions.R){.btn .btn-primary download="r_themes_and_functions.R"} [📥 Script skeleton (.R)](10_correlation_regression_homework.R){.btn .btn-primary download="10_correlation_regression_homework.R"}
 
-library(patchwork)    # For combining plots
-library(broom)        # For tidy statistical output
-library(car)          # For regression diagnostics
-library(lmtest)       # For assumption testing
-library(corrplot)     # For correlation matrices
-library(GGally)       # For pairs plots
-library(tidyverse)    # For data manipulation and visualization
+**The study.** Small animals are common and big animals are rare — that is one of the oldest patterns in ecology. This dataset holds **100 stream invertebrate species**: for each one, the average **body mass** of an individual and the **population density** at which that species lives.
 
+**The question.** Does body mass predict population density, and if so, how steeply?
 
-# Set ggplot theme
-theme_set(theme_light())
-```
+**How this relates to class.** You are running Parts 5–8 of the in-class worksheet again: fit, interpret, partition into sums of squares, check the residuals. Same order, same functions. The difference is that in class the diagnostics confirmed a model that was already fine. Here they will tell you to throw your first model away, and you have to work out what to do instead.
 
-# Assignment Overview
+Columns: `body_mass_mg` (average individual body mass, in milligrams) and `density_per_m2` (individuals per square metre).
 
-This homework assignment will test your understanding of correlation and regression analysis using real forest inventory data from European beech (*Fagus sylvatica*) trees. You will apply the statistical concepts from Lectures 9 and 10 to analyze relationships between tree measurements.
+::: callout-note
+**Before you start**
 
-## Learning Objectives
-
-By completing this assignment, you will be able to:
-
-1.  **Distinguish between correlation and regression analysis**
-2.  **Perform and interpret correlation analyses**
-3.  **Conduct simple linear regression**
-4.  **Test statistical assumptions**
-5.  **Create publication-quality figures**
-
-## Data Description
-
-The dataset `fagus_data.csv` contains forest inventory measurements from European beech trees across different regions and time periods. Key variables include:
-
-- `diameter_mm`: Tree diameter at breast height (millimeters)
-- `stem_volume_m3`: Calculated stem volume (cubic meters)
-- `tree_age`: Estimated tree age (years)
-- `year_of_inventory`: Year when measurements were taken
-- `region`: Geographic region
-- `period`: Time period classification
-- `landuse_code`: Land use classification code
-- `landuse_char`: Land use description
-- `within_formally_protected_areas`: Protection status (0/1)
+You are not reproducing anyone's published analysis, and there is no hidden "right" p-value to hit. You are graded on whether your conclusion follows from your diagnostics.
+:::
 
 ------------------------------------------------------------------------
 
-# Part 1: Data Loading and Initial Exploration
+# Part 1 · Setup and the data
 
-## 1.1 Load and Examine the Data
+**▶ Run this:**
 
-```{r load_data}
-# Load the Fagus data from jacobsson_et_al_fagus_data.csv
+``` r
+# ── Part 1.1 · Setup and the data ───────────────────────────────────────
+library(tidyverse)
 
+source("themes_functions/r_themes_and_functions.R")
 
+bugs_df <- read_csv("data/stream_invertebrates.csv")
 
-
+bugs_df
 ```
 
-```{r}
+✏️ **Your turn:** Look at the range of each column. How many orders of magnitude does each one span?
 
-# summary(fagus_data)
 ```
+body_mass_mg: from __________ to __________
 
-## 1.2 Initial Data Cleaning and Preparation
-
-```{r data_cleaning}
- 
+density_per_m2: from __________ to __________
 ```
 
 ------------------------------------------------------------------------
 
-# Part 2: Descriptive Statistics and Data Exploration
+# Part 2 · Fit the regression you were asked for
 
-## 2.1 Summary Statistics for Key Variables
+Density is the response: we are asking whether mass predicts it.
 
-::: callout-important
-## Question 1: Summary Statistics
+**▶ Run this:**
 
-**Task:** Calculate and interpret summary statistics for the three main continuous variables: diameter, volume, and age.
+``` r
+# ── Part 2.1 · Fit the regression you were asked for ────────────────────
+ggplot(bugs_df, aes(body_mass_mg, density_per_m2)) +
+  geom_point()
 
-**Instructions:**
+bugs_raw <- lm(density_per_m2 ~ body_mass_mg, data = bugs_df)
 
-- Use appropriate R functions to calculate mean, median, standard deviation, and quartiles
-- Comment on the distribution shape (symmetric, skewed) based on these statistics
-- Identify any potential outliers or unusual values
-:::
-
-```{r summary_stats}
-# YOUR CODE HERE: Calculate summary statistics for diameter_mm, stem_volume_m3, and tree_age
-
-# Example structure (replace with your code):
-# summary_stats <- fagus_clean %>%
-#   select(diameter_mm, stem_volume_m3, tree_age) %>%
-#   [YOUR SUMMARY FUNCTION]
-
-# Your interpretation:
-# [Write 2-3 sentences about what the summary statistics tell you about each variable]
+summary(bugs_raw)
 ```
 
-## 2.2 Graphical Data Exploration
+✏️ **Your turn:** Report this fit exactly as the output gives it to you.
 
-::: callout-important
-## Question 2: Data Visualization
+```
+slope = __________   R squared = __________   p = __________
 
-**Task:** Create appropriate plots to visualize the distribution of each variable and relationships between variables.
+In one sentence, what does this model say about body size and abundance?
 
-**Instructions:**
-
-- Create histograms for each continuous variable
-- Create a pairs plot or correlation matrix plot
-- Comment on distributions and potential relationships
-:::
-
-```{r exploratory_plots}
-# YOUR CODE HERE: Create exploratory plots
-
-# Hint: You might want to create:
-# 1. Histograms for each variable
-# 2. A pairs plot using GGally::ggpairs()
-# 3. Individual scatterplots for key relationships
-
-# Your interpretation:
-# [Write 3-4 sentences describing what you observe in the plots]
+____________________________________________________________
 ```
 
 ------------------------------------------------------------------------
 
-# Part 3: Correlation Analysis
+# Part 3 · Sums of squares
 
-## 3.1 Correlation Between Diameter and Volume
+Same three quantities as in class.
 
-::: callout-important
-## Question 3: Correlation Analysis Setup
+**▶ Run this:**
 
-**Task:** Before conducting the correlation analysis, clearly state:
-
-1.  **Type of analysis:** What type of statistical test are you using and why?
-2.  **Hypotheses:** State your null and alternative hypotheses
-3.  **Assumptions:** List the assumptions for this test
-4.  **Variables:** Identify which variables you're analyzing and their measurement scales
-:::
-
-**Your Answer:**
-
-**Type of Analysis:** \[State whether this is a correlation or regression analysis and explain why this choice is appropriate\]
-
-**Hypotheses:**
-
-- H₀: \[State your null hypothesis\]
-- H₁: \[State your alternative hypothesis\]
-
-**Assumptions:**
-
-**Variables:**
-
-- Variable 1: \[Name and describe\]
-- Variable 2: \[Name and describe\]
-
-## 3.2 Perform Correlation Analysis
-
-```{r correlation_analysis}
-# YOUR CODE HERE: Perform correlation analysis between diameter and volume
-
-# Steps to include:
-# 1. Calculate correlation coefficient
-# 2. Perform correlation test
-# 3. Check assumptions (normality tests, scatter plot)
-# 4. Consider non-parametric alternative if needed
-
-# Your code here:
-
+``` r
+# ── Part 3.1 · Sums of squares ──────────────────────────────────────────
+anova(bugs_raw)
 ```
 
-## 3.3 Interpret Correlation Results
+✏️ **Your turn:** Fill in the partition, then compute the fraction the line explains.
 
-::: callout-important
-## Question 4: Correlation Interpretation
+```
+SS regression = __________   SS residual = __________
 
-**Task:** Interpret your correlation results by addressing:
+SS regression / SS total = __________
 
-1.  **Strength and direction:** How strong is the relationship and in what direction?
-2.  **Statistical significance:** Is the correlation statistically significant?
-3.  **Practical significance:** What does this mean biologically/ecologically?
-4.  **Limitations:** What are the limitations of this analysis?
-:::
-
-**Your Interpretation:**
-
-\[Write 4-5 sentences interpreting your correlation results, addressing all the points above\]
+Does that match the R squared from Part 2? ______
+```
 
 ------------------------------------------------------------------------
 
-# Part 4: Regression Analysis
+# Part 4 · Check the residuals
 
-## 4.1 Regression Analysis Setup
+**▶ Run this:**
 
-::: callout-important
-## Question 5: Regression Analysis Setup
+``` r
+# ── Part 4.1 · Check the residuals ──────────────────────────────────────
+par(mfrow = c(2, 2))
+plot(bugs_raw)
+par(mfrow = c(1, 1))
 
-**Task:** For the regression of diameter on tree age, clearly state:
-
-1.  **Type of analysis:** What type of statistical analysis are you using?
-2.  **Model equation:** Write out your regression model
-3.  **Hypotheses:** State your null and alternative hypotheses about the slope
-4.  **Variables:** Clearly identify your predictor and response variables
-:::
-
-**Your Answer:**
-
-**Type of Analysis:** \[State this is simple linear regression and explain the goal\]
-
-**Model Equation:** \[Write the regression equation: Y = α + βX + ε, defining each term\]
-
-**Hypotheses:**
-
-- H₀: \[State null hypothesis about the slope\]
-- H₁: \[State alternative hypothesis about the slope\]
-
-**Variables:**
-
-- Predictor (X): \[Name and describe\]
-- Response (Y): \[Name and describe\]
-
-## 4.2 Perform Regression Analysis
-
-```{r regression_analysis}
-# YOUR CODE HERE: Perform regression analysis of diameter on tree age
-
-# Steps to include:
-# 1. Fit the linear model
-# 2. Get model summary
-# 3. Create ANOVA table
-# 4. Check assumptions with diagnostic plots
-# 5. Perform formal assumption tests
-
-# Your code here:
-
+shapiro.test(residuals(bugs_raw))
 ```
 
-## 4.3 Test Regression Assumptions
-
-```{r assumption_testing}
-# YOUR CODE HERE: Create diagnostic plots and test assumptions
-
-# Include:
-# 1. Residuals vs fitted plot
-# 2. Q-Q plot for normality
-# 3. Scale-location plot for homoscedasticity
-# 4. Influence plot (Cook's distance)
-# 5. Formal tests (Shapiro-Wilk, Breusch-Pagan)
-
-# Your code here:
+✏️ **Your turn:** Go through all four, the way you did in class.
 
 ```
+Linearity (residuals vs fitted): ____________________________
 
-## 4.4 Interpret Regression Results
+Equal variance (scale-location): ____________________________
 
-::: callout-important
-## Question 6: Regression Interpretation
+Normality (QQ + Shapiro p = ______): ________________________
 
-**Task:** Provide a complete interpretation of your regression results:
+Influential points (Cook's distance): _______________________
+```
 
-1.  **Parameter estimates:** What are the slope and intercept estimates and their meanings?
-2.  **Statistical significance:** Is the relationship statistically significant?
-3.  **Model fit:** How much variance is explained (R²)?
-4.  **Assumptions:** Were the assumptions met? Any concerns?
-5.  **Biological interpretation:** What does this relationship mean for forest ecology?
-:::
+✏️ **Your turn:** You now have a non-significant model **and** diagnostics like these. Which of the two do you report, and why can you not just report the p-value and stop?
 
-**Your Interpretation:**
+```
+____________________________________________________________
 
-\[Write a interpretation of your regression results, addressing all points above\]
+____________________________________________________________
+```
 
 ------------------------------------------------------------------------
 
-# Part 5: Publication-Quality Figure and Write-up
+# Part 5 · Fix it
 
-## 5.1 Create Publication-Quality Figure
+Both variables span several orders of magnitude, and the residual plot fans out. That combination has one standard first move.
 
-::: callout-important
-## Question 7: Publication Figure
-
-**Task:** Create a publication-quality figure that effectively displays your regression results.
-
-**Requirements:**
-
-- Professional appearance with clear labels and appropriate sizing
-- Include regression line with confidence interval
-- Use appropriate colors and themes
-- Include informative title and axis labels
-- Consider the target audience (scientific journal)
-:::
-
-```{r publication_figure}
-# YOUR CODE HERE: Create publication-quality figure
-
-# Your code here:
+✏️ **Your turn:** Before you write any code — what transformation are you about to apply, and to which variable(s)?
 
 ```
+____________________________________________________________
+```
 
-# Submission Guidelines
+**▶ Your turn to write it:** add log₁₀ columns for both variables, then plot the transformed data.
 
-## What to turn in -
+``` r
+# ── Part 5.1 · Fix it ───────────────────────────────────────────────────
+# Add log_mass and log_density to bugs_df with mutate(), then plot
+# log_density against log_mass.
+```
 
-1.  a quarto markdown file and dataframe. Note that your code should be able to run with what you turn in.
+**▶ Your turn to write it:** fit the model on the log scale, and check it the same way.
 
-2.  a self-contained word and html file showing the code and output
+``` r
+# ── Part 5.2 · Fix it ───────────────────────────────────────────────────
+# Fit bugs_log, print its summary, print its anova, then run the four
+# diagnostic plots and the Shapiro test on its residuals.
+```
 
-3.  annotations in the quarto file that shows or tells what is being done in the r code chunks describing what you are trying to do - credit will be given even if it does not work as long as you detail what you are doing. As we start to move into more statistics you will be expected to interpret the results.
+✏️ **Your turn:** Put the two models side by side.
 
-## Points
+```
+                    raw scale        log-log scale
+slope               __________       __________
+R squared           __________       __________
+p                   __________       __________
+Shapiro (residuals) __________       __________
+```
 
-- summary stats - 1 points
-- exploratory graphs - 1 point
-- Hypotheses - 2 points
-- Assumptions - 2 points
-- Model and Test Results - 4
-- interpretation - 3 points
-- Assumption Tests - 4 points
-- Final figure - 3 points
+✏️ **Your turn:** The two models disagree completely about whether there is a relationship. Explain, in two or three sentences, why the log-log model is the one to believe — and what was wrong with the first one.
+
+```
+____________________________________________________________
+
+____________________________________________________________
+
+____________________________________________________________
+```
+
+------------------------------------------------------------------------
+
+# Part 6 · The slope is the point
+
+On a log–log plot, the slope is an **exponent**: density ∝ mass^slope.
+
+Ecological theory predicts something specific here. If every species in a stream uses roughly the same total amount of energy per square metre, and an individual's energy use scales as mass^0.75, then density should scale as **mass^−0.75**. That is the *energetic equivalence* prediction.
+
+So the interesting hypothesis is not "is the slope zero?" It is **"is the slope −0.75?"**
+
+**▶ Your turn to write it:** get a 95% confidence interval for the slope of your log-log model.
+
+``` r
+# ── Part 6.1 · The slope is the point ───────────────────────────────────
+# confint() takes a fitted model.
+```
+
+✏️ **Your turn:** Answer the real question.
+
+```
+slope = __________   95% CI = __________ to __________
+
+Does the interval contain -0.75? ______
+
+What does your answer mean biologically?
+
+____________________________________________________________
+```
+
+✏️ **Your turn:** Your model's p-value tests H₀: slope = 0. Why is that null hypothesis almost useless here, and what does the confidence interval give you that it does not?
+
+```
+____________________________________________________________
+
+____________________________________________________________
+```
+
+------------------------------------------------------------------------
+
+# Part 7 · The figure you hand in
+
+**▶ Your turn to write it:** one publication-quality figure of the relationship you decided to believe, saved as a PDF.
+
+``` r
+# ── Part 7.1 · The figure you hand in ───────────────────────────────────
+# Plot the log-log relationship with its fitted line and confidence
+# band. Give it a title, a subtitle, axis labels with units, and
+# theme_regular(). Save it to figures/invertebrate_regression.pdf with
+# ggsave() at 6 x 4 inches.
+```
+
+✏️ **Your turn:** Write the one-sentence result you would put in a paper, with the slope, its CI, and the sample size.
+
+```
+____________________________________________________________
+
+____________________________________________________________
+```
+
+------------------------------------------------------------------------
+
+# Review and checkpoint
+
+At this point you can:
+
+- [ ] Fit a regression, read its slope, and partition it into sums of squares
+- [ ] Recognise heteroscedasticity and non-normal residuals in a diagnostic plot
+- [ ] Decide on a transformation from the diagnostics rather than from habit
+- [ ] Say what a slope means on a log–log scale
+- [ ] Test a slope against a value other than zero using a confidence interval
+
+::: callout-note
+**📤 What to turn in**
+
+1. `10_correlation_regression_homework.R`
+2. `figures/invertebrate_regression.pdf`
+3. This worksheet, with your written answers
+:::

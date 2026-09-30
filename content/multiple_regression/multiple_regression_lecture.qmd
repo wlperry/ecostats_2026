@@ -3,7 +3,7 @@ metadata-files:
   - ../../_templates/_lectures.yml
 title: "Lecture: Multiple Regression"
 subtitle: "Several predictors"
-description: "The multiple regression model, partial regression slopes, ANOVA and hypothesis tests for regression, assumptions and diagnostics, collinearity, interactions, dummy variables, model comparison, and predictor importance — on the Gotelli ant-diversity dataset."
+description: "Multiple regression on Loyn's Victorian forest-bird dataset: partial regression slopes, the ANOVA partition, assumptions and diagnostics, collinearity, interactions, categorical predictors as factors with a chosen reference level, model comparison with AIC, and ranking predictor importance."
 categories: [Regression]
 order: 11
 week: 7
@@ -29,1169 +29,1212 @@ execute:
 #| include: false
 #| message: false
 #| warning: false
-# install.packages("relaimpo")
-library(relaimpo)
 library(plotly)
 library(knitr)
 library(patchwork)
-library(grid)
-library(gridExtra)
 library(car)
-library(boot)
 library(tidyverse)
 
-# To simulate the lion data in example 17.1
-lion_data <- tibble(
-  proportion_black = c(0.21, 0.14, 0.11, 0.13, 0.12, 0.13, 0.12, 0.18, 0.23, 0.22,
-                      0.20, 0.17, 0.15, 0.27, 0.26, 0.21, 0.30, 0.42, 0.43, 0.59,
-                      0.60, 0.72, 0.29, 0.10, 0.48, 0.44, 0.34, 0.37, 0.34, 0.74, 0.79, 0.51),
-  age_years = c(1.1, 1.5, 1.9, 2.2, 2.6, 3.2, 3.2, 2.9, 2.4, 2.1,
-               1.9, 1.9, 1.9, 1.9, 2.8, 3.6, 4.3, 3.8, 4.2, 5.4,
-               5.8, 6.0, 3.4, 4.0, 7.3, 7.3, 7.8, 7.1, 7.1, 13.1, 8.8, 5.4))
+# ---- Loyn's Victorian forest-bird patches, read once and reused all lecture ----
+bird_df <- read_csv("data/loyn_birds.csv", show_col_types = FALSE) %>%
+  mutate(
+    log_area        = log10(area_ha),
+    log_dist        = log10(dist_m),
+    log_dist_larger = log10(dist_larger_m)
+  )
 
-set.seed(123)
-fish_data <- tibble(
-  length_mm = runif(40, 180, 320),
-  mass_g = 0.00001 * length_mm^3 * runif(40, 0.9, 1.1)
-)
-fish_data$lake <- factor(rep(c("Lake A", "Lake B"), each = 20))
+# ---- numbers quoted in the text below, computed once so the prose cannot drift ----
+alone <- function(v) {
+  m <- lm(reformulate(v, "abundance"), data = bird_df)
+  c(slope = unname(coef(m)[2]), p = summary(m)$coefficients[2, 4])
+}
+a_area  <- alone("log_area")
+a_graze <- alone("grazing")
+a_year  <- alone("year_isolated")
+a_alt   <- alone("altitude_m")
 
-ant_df <- read_csv("data/ant_sp_diversity_gotelli.csv")
+full_model <- lm(abundance ~ log_area + log_dist + log_dist_larger +
+                   year_isolated + grazing + altitude_m, data = bird_df)
+full_sum <- summary(full_model)
+b_area_full  <- full_sum$coefficients["log_area", 1]
+b_graze_full <- full_sum$coefficients["grazing", 1]
+p_graze_full <- full_sum$coefficients["grazing", 4]
+
+reduced_model <- lm(abundance ~ log_area + grazing, data = bird_df)
+red_sum <- summary(reduced_model)
+b_graze_red <- red_sum$coefficients["grazing", 1]
+
+anova_red <- Anova(reduced_model, type = "II")
+ss_res  <- sum(residuals(reduced_model)^2)
+ss_tot  <- sum((bird_df$abundance - mean(bird_df$abundance))^2)
+ss_reg  <- ss_tot - ss_res
+
+std_model <- lm(abundance ~ log_area + grazing,
+                data = mutate(bird_df, across(c(abundance, log_area, grazing),
+                                              ~ as.numeric(scale(.)))))
+
+raw_area_model <- lm(abundance ~ area_ha, data = bird_df)
+log_area_model <- lm(abundance ~ log_area, data = bird_df)
+
+# small p-values must print as plain text inline, not knitr's LaTeX sci-notation
+fmt_p <- function(p, digits = 3) {
+  if (p < 0.001) formatC(p, format = "e", digits = 2) else formatC(p, format = "g", digits = digits)
+}
 ```
 
 ## Where We Left Off
 
-::::::: columns
+::::: columns
 :::: {.column width="60%"}
 Covered last time:
 
-- Regression, t-tests, and ANOVA
-- Regression assumptions
-- Sum-of-squares allocation and subdivision from total sums of squares
-
-::: callout-note
-**✅ Key idea from last lecture**
-
-A simple regression has one predictor and one partition of variance (regression vs. residual). Today we add more predictors — the logic barely changes, but the bookkeeping does.
-:::
+- One continuous predictor, one continuous response
+- The **sums-of-squares partition**: $SS_{total} = SS_{regression} + SS_{residual}$
+- Mean squares, the F-ratio, and **t² = F**
+- The four assumptions, all checked on the **residuals**
 ::::
 
 :::: {.column width="40%"}
-```{r multiple-regression-02}
-#| echo: false
-#| fig-height: 3.4
-#| fig-width: 3.4
-#| message: false
-#| warning: false
-#| fig-alt: "Scatterplot of lion age versus proportion of black in the nose, with a fitted regression line. Green segments show the deviation of each fitted value from the overall mean (explained variation) and red segments show the deviation of each observed point from its fitted value (residual variation), illustrating how total variation is partitioned in regression."
-lion_model <- lm(age_years ~ proportion_black, data = lion_data)
-lion_data <- lion_data %>%
-  mutate(predicted = predict(lion_model))
+::: callout-note
+**✅ Key idea from last lecture**
 
-y_mean <- mean(lion_data$age_years)
-highest_point <- lion_data %>% slice_max(age_years, n = 1)
-offset <- 0.003
+A simple regression has one predictor and one partition of variance. Today we add more predictors.
 
-ggplot(lion_data, aes(proportion_black, age_years)) +
-  geom_segment(aes(x = proportion_black - offset, xend = proportion_black - offset,
-                   y = predicted, yend = y_mean),
-               color = "green", alpha = 0.6) +
-  geom_segment(aes(x = proportion_black + offset, xend = proportion_black + offset,
-                   y = age_years, yend = predicted),
-               color = "red", alpha = 0.6) +
-  geom_hline(yintercept = y_mean, color = "lightblue",
-             linetype = "dotted", linewidth = 1) +
-  geom_smooth(method = "lm", se = FALSE) +
-  geom_point() +
-  labs(x = "Prop. Black", y = "Age yrs") +
-  annotate("segment",
-           x = highest_point$proportion_black + 0.01,
-           xend = highest_point$proportion_black + 0.01,
-           y = highest_point$age_years,
-           yend = y_mean,
-           color = "black") +
-  geom_point(aes(y = predicted), color = "blue", size = 2) +
-  geom_point(aes(y = y_mean), color = "lightblue", size = 2) +
-  theme_minimal(base_size = 9)
-```
+The logic barely changes. The **bookkeeping** does — and so does what each slope means.
+:::
 ::::
-:::::::
+:::::
 
 ## Part 1 · Why Multiple Regression? {.divider}
 
 ## Today's Objectives
 
-::::::: columns
+::::: columns
 :::: {.column width="60%"}
 The multiple linear regression model:
 
-- Regression parameters
-- Analysis of variance
-- Null hypotheses
-- Explained variance
-- Assumptions and diagnostics
-- Collinearity
+- Partial regression slopes — and why they are not the same as simple slopes
+- Analysis of variance and the null hypotheses
+- Assumptions, diagnostics and collinearity
 - Interactions
-- Dummy variables
-- Model selection
-- Importance of predictors
+- **Factors, dummy variables, and choosing your reference level**
+- Model comparison and predictor importance
+
+[📥 Bird data](data/loyn_birds.csv){.btn .btn-primary download="loyn_birds.csv"} [📥 Script skeleton (.R)](data/11_multiple_regression.R){.btn .btn-primary download="11_multiple_regression.R"}
 ::::
 
 :::: {.column width="40%"}
 ::: callout-note
-**📖 Reference**
+**📖 Reading**
 
-Whitlock & Schluter, Ch. 17 — Regression, and Gotelli & Ellison, *A Primer of Ecological Statistics*, Ch. 9 — Regression, are the core references for this lecture.
+Quinn & Keough, Ch. 6 — Multiple and Complex Regression.
+
+Whitlock & Schluter, Ch. 17; Gotelli & Ellison, Ch. 9.
 :::
 ::::
-:::::::
+:::::
+
+## The Study · Birds in Fragmented Forest
+
+::::: columns
+:::: {.column width="52%"}
+Loyn (1987) surveyed **`r nrow(bird_df)` remnant forest patches** in Victoria, Australia, and counted the birds in each one. For every patch he also recorded six things that might explain the count.
+
+Small patches, isolated patches, recently cut-off patches and heavily grazed patches are all candidates — and they are not independent of each other.
+::::
+
+:::: {.column width="48%"}
+::: {.compact-table}
+| Column | What it is |
+|:---|:---|
+| `abundance` | birds per patch (the response) |
+| `area_ha` | patch area |
+| `dist_m` | distance to nearest patch |
+| `dist_larger_m` | distance to nearest *larger* patch |
+| `year_isolated` | year the patch was cut off |
+| `grazing` | grazing intensity, 1–5 |
+| `altitude_m` | elevation |
+:::
+::::
+:::::
+
+## Reading the Data In
+
+::::: columns
+:::: {.column width="55%"}
+```{r multiple-regression-02}
+bird_df <- read_csv("data/loyn_birds.csv") %>%
+  mutate(log_area        = log10(area_ha),
+         log_dist        = log10(dist_m),
+         log_dist_larger = log10(dist_larger_m))
+
+glimpse(bird_df)
+```
+::::
+
+:::: {.column width="45%"}
+The three area and distance columns are **logged on the way in**.
+
+That is not a stylistic choice — Part 4 shows what the raw scale does to the residuals, and it is the same failure you met in last week's homework.
+
+::: callout-note
+**`grazing_class`**
+
+The same grazing intensity as a **word** rather than a number. Part 7 is about what changes when you use it.
+:::
+::::
+:::::
 
 ## When Do We Need More Than One Predictor?
 
-::::::: columns
-:::: {.column width="60%"}
-What if there's more than one predictor (X) variable?
+::::: columns
+:::: {.column width="55%"}
+Bird abundance in a patch plausibly depends on **all seven** of those things at once, and they are not independent of each other — small patches tend to be grazed harder, and isolated patches tend to be older.
 
-- If predictors are continuous
-- A mix between categorical and continuous
-- We can use multiple linear regression
+Fitting one predictor at a time cannot answer "does area matter *once grazing is accounted for*."
+
+- Predictors all continuous → **multiple regression**
+- A mix of continuous and categorical → still multiple regression, with dummy variables
 ::::
 
-:::: {.column width="40%"}
+:::: {.column width="45%"}
 |  | Continuous X | Categorical X |
 |:---|:---|:---|
 | **Continuous Y** | Regression | ANOVA |
-| **Categorical Y** | Logistic regression |  |
+| **Categorical Y** | Logistic regression | Contingency tables |
 ::::
-:::::::
+:::::
 
-## From a Line to a (Hyper)plane
+## One Predictor at a Time
 
-::::::: columns
-:::: {.column width="40%"}
-Abundance of ants can be modeled as a function of:
+::::: columns
+:::: {.column width="55%"}
+Start the way you would have last week — fit each predictor on its own.
 
-- latitude
-- longitude
-- both
-
-Instead of a line, it's modeled with a (hyper)plane.
-::::
-
-:::: {.column width="60%"}
 ```{r multiple-regression-03}
 #| echo: false
 #| message: false
-#| warning: false
-#| paged-print: false
-#| fig-alt: "Visualization of the fitted regression plane for ant species richness modeled from elevation and latitude: an interactive 3D scatterplot with a fitted mesh surface in HTML output, or a 2D heat map with contour lines and observed points sized by ant species count in docx/pptx output. Ant species richness declines with increasing elevation and increasing latitude."
-ant_model <- lm(ant_spp ~ elevation + latitude, data = ant_df)
+one_at_a_time <- tibble(
+  predictor = c("log_area", "log_dist", "log_dist_larger",
+                "year_isolated", "grazing", "altitude_m")
+) %>%
+  rowwise() %>%
+  mutate(
+    slope = coef(lm(reformulate(predictor, "abundance"), bird_df))[2],
+    p     = summary(lm(reformulate(predictor, "abundance"), bird_df))$coefficients[2, 4]
+  ) %>%
+  ungroup() %>%
+  mutate(across(c(slope, p), ~ signif(.x, 3)))
 
-elevation_range <- seq(min(ant_df$elevation), max(ant_df$elevation), length.out = 30)
-latitude_range <- seq(min(ant_df$latitude), max(ant_df$latitude), length.out = 30)
-grid <- expand.grid(elevation = elevation_range, latitude = latitude_range)
-grid$ant_spp <- predict(ant_model, newdata = grid)
-
-if (knitr::is_html_output()) {
-  # Interactive 3D view (revealjs / html)
-  ant_plot <- plot_ly() %>%
-    add_trace(
-      data = ant_df,
-      x = ~elevation,
-      y = ~latitude,
-      z = ~ant_spp,
-      type = "scatter3d",
-      mode = "markers",
-      marker = list(size = 5, color = "red"),
-      name = "Observed"
-    ) %>%
-    add_trace(
-      data = grid,
-      x = ~elevation,
-      y = ~latitude,
-      z = ~ant_spp,
-      type = "mesh3d",
-      opacity = 0.5,
-      name = "Fitted Plane"
-    ) %>%
-    layout(
-      scene = list(
-        xaxis = list(title = "Elevation"),
-        yaxis = list(title = "Latitude"),
-        zaxis = list(title = "Ant Species")
-      ),
-      title = "Ant Species Diversity by Elevation and Latitude"
-    )
-  ant_plot
-} else {
-  # Static 2D fallback for docx/pptx: same fitted plane, shown as a contour
-  ant_plot <- ggplot() +
-    geom_tile(data = grid, aes(x = elevation, y = latitude, fill = ant_spp)) +
-    geom_contour(data = grid, aes(x = elevation, y = latitude, z = ant_spp), color = "white", alpha = 0.5) +
-    geom_point(data = ant_df, aes(x = elevation, y = latitude, size = ant_spp), color = "red") +
-    scale_fill_viridis_c(name = "Fitted\nant spp") +
-    labs(title = "Ant Species: Fitted Plane (2D View)",
-         x = "Elevation", y = "Latitude", size = "Observed") +
-    theme_minimal(base_size = 8)
-  ant_plot
-}
+one_at_a_time
 ```
 ::::
-:::::::
 
-## What Multiple Regression Is Used For
+:::: {.column width="45%"}
+**Four of the six are significant on their own**, two of them overwhelmingly.
 
-::::::: columns
-:::: {.column width="40%"}
-Used in a similar way to simple linear regression:
+Grazing looks like the strongest story in the dataset: every extra step of grazing intensity costs about **`r abs(round(a_graze["slope"], 1))` birds**, at p = `r fmt_p(a_graze["p"])`.
 
-- Describe the nature of the relationship between Y and the X's
-- Determine explained/unexplained variation in Y
-- Predict new Ys from X
-- Find the "best" model
+::: callout-warning
+**⚠️ Hold that thought**
+
+Every one of these fits ignores the other five predictors entirely.
+:::
+::::
+:::::
+
+## 🗳️ DECIDE · Which Predictors Will Survive?
+
+::::: columns
+:::: {.column width="60%"}
+We are about to put all six predictors into one model together.
+
+**What do you expect to happen?**
+
+**(a)** All four significant predictors stay significant — they were each real
+
+**(b)** Roughly the same four stay, but with smaller slopes
+
+**(c)** Only one or two survive, and at least one strong predictor becomes non-significant
+
+**(d)** Nothing survives — with six predictors and 56 patches there is not enough data
+
+::: callout-warning
+**✍️ Write your letter down, then vote.**
+:::
 ::::
 
-:::: {.column width="60%"}
+:::: {.column width="40%"}
+::: callout-note
+**The question to ask**
+
+*How much of what grazing "explains" on its own is really being explained by patch area?*
+
+Small patches are grazed harder. Look back at the table — is grazing telling you something area was not already telling you?
+:::
+::::
+:::::
+
+## From a Line to a (Hyper)plane
+
+::::: columns
+:::: {.column width="35%"}
+With one predictor we fit a **line** through a scatterplot.
+
+With two, we fit a **plane** through a cloud — here, bird abundance over log patch area and grazing intensity.
+
+With three or more it is a **hyperplane**, which you cannot draw but can still fit.
+::::
+
+:::: {.column width="65%"}
 ```{r multiple-regression-04}
 #| echo: false
 #| message: false
 #| warning: false
 #| paged-print: false
-#| fig-alt: "Same fitted-plane visualization of ant species richness by elevation and latitude shown above, repeated here to illustrate what multiple regression is used for."
-ant_plot
+#| fig-alt: "Fitted regression plane for bird abundance over log patch area and grazing intensity: an interactive 3D scatterplot with a fitted mesh surface in HTML output, or a 2D heat map with contour lines and observed patches in docx and pptx output. Abundance rises with patch area and falls with grazing."
+plane_model <- lm(abundance ~ log_area + grazing, data = bird_df)
+
+grid <- expand.grid(
+  log_area = seq(min(bird_df$log_area), max(bird_df$log_area), length.out = 30),
+  grazing  = seq(min(bird_df$grazing),  max(bird_df$grazing),  length.out = 30)
+)
+grid$abundance <- predict(plane_model, newdata = grid)
+
+if (knitr::is_html_output()) {
+  plot_ly() %>%
+    add_trace(data = bird_df, x = ~log_area, y = ~grazing, z = ~abundance,
+              type = "scatter3d", mode = "markers",
+              marker = list(size = 4, color = "red"), name = "Patches") %>%
+    add_trace(data = grid, x = ~log_area, y = ~grazing, z = ~abundance,
+              type = "mesh3d", opacity = 0.5, name = "Fitted plane") %>%
+    layout(scene = list(xaxis = list(title = "log10 area"),
+                        yaxis = list(title = "Grazing"),
+                        zaxis = list(title = "Abundance")))
+} else {
+  ggplot() +
+    geom_tile(data = grid, aes(log_area, grazing, fill = abundance)) +
+    geom_contour(data = grid, aes(log_area, grazing, z = abundance),
+                 colour = "white", alpha = 0.5) +
+    geom_point(data = bird_df, aes(log_area, grazing), colour = "red", size = 1.5) +
+    scale_fill_viridis_c(name = "Fitted\nabundance") +
+    labs(x = "log10 patch area (ha)", y = "Grazing intensity") +
+    theme_minimal(base_size = 8)
+}
 ```
 ::::
-:::::::
-
-## The Challenges of Multiple Regression
-
-::::::: columns
-:::: {.column width="60%"}
-Crawley (2012): "Multiple regression models provide some of the most profound challenges faced by the analyst":
-
-- Overfitting
-- Parameter proliferation
-- Multicollinearity
-- Model selection
-::::
-
-:::: {.column width="40%"}
-![Stock photo of a frustrated man in a suit punching through a laptop screen, used humorously to illustrate the frustration multiple regression's challenges (overfitting, multicollinearity, model selection) can cause.](images/clipboard-1736453741.png){width="2.89in"}
-::::
-:::::::
+:::::
 
 ## Part 2 · The Multiple Regression Model {.divider}
 
 ## The Multiple Regression Model
 
-::::::: columns
-:::: {.column width="60%"}
-- A set of i = 1 to n observations
-- Fixed X-values for p predictor variables (X₁, X₂ … Xₚ)
-- Random Y-values:
+::::: columns
+:::: {.column width="55%"}
+For i = 1 to n observations and p predictors:
 
-$$y_i = \beta_0 + \beta_1 x_{i1} + \beta_2 x_{i2} + ... + \beta_p x_{ip} + \epsilon_i$$
+$$y_i = \beta_0 + \beta_1 x_{i1} + \beta_2 x_{i2} + \dots + \beta_p x_{ip} + \epsilon_i$$
+
+- $y_i$ — the response for observation i
+- $\beta_0$ — the intercept, the mean of Y when **every** predictor is 0
+- $\beta_1 \dots \beta_p$ — the **partial** regression slopes
+- $\epsilon_i$ — the error, estimated by the residual $y_i - \hat{y}_i$
 ::::
 
-:::: {.column width="40%"}
-- yᵢ: value of Y for the i-th observation, X₁ = x_i1, X₂ = x_i2, …, Xₚ = x_ip
-- β₀: population intercept — the mean value of Y when X₁ = 0, X₂ = 0, …, Xₚ = 0
-::::
-:::::::
-
-## Partial Regression Slopes
-
-::::::: columns
-:::: {.column width="60%"}
-$$y_i = \beta_0 + \beta_1 x_{i1} + \beta_2 x_{i2} + ... + \beta_p x_{ip} + \epsilon_i$$
-
-- β₁: partial regression slope — change in Y per unit change in X₁, holding other X-vars constant
-- β₂: partial regression slope for X₂, holding others constant
-- βₚ: partial regression slope for Xₚ, holding others constant
-::::
-
-:::: {.column width="40%"}
+:::: {.column width="45%"}
 ::: callout-note
 **✅ Key idea — what "partial" means**
 
-The relationship between a predictor and the response **while holding all other predictors constant**. It tells you the isolated effect of one variable, controlling for the influence of others.
+A partial slope is the change in Y per one-unit change in that predictor **while every other predictor is held constant**.
+
+It is a *conditional* statement. Change what else is in the model and you have changed the condition — so the number is allowed to change too.
 :::
 ::::
-:::::::
+:::::
 
-## Partial Regression Slopes — the Ant Model
+## The Full Model · The Answer to the Vote
 
-::::::: columns
-:::: {.column width="60%"}
-Model: `ant_spp ~ elevation + latitude`
-
-- The partial slope for elevation tells you how ant species richness changes with elevation when latitude is held constant
-  - 1-m increase in elevation → ant spp decrease by 0.012 spp, holding latitude constant
-  - Or: 100-m increase in elevation → lose 1.2 spp
-- The partial slope for latitude tells you how ant species richness changes with latitude when elevation is held constant
-  - 1-degree increase in latitude → ant spp decrease by 2 species, holding elevation constant
-  - Moving north = fewer ant spp, even comparing sites at the same elevation
-::::
-
-:::: {.column width="40%"}
+::::: columns
+:::: {.column width="55%"}
 ```{r multiple-regression-05}
-#| fig-height: 3.4
-#| fig-width: 3.4
-ant_model <- lm(ant_spp ~ elevation + latitude, data = ant_df)
-summary(ant_model)
+full_model <- lm(abundance ~ log_area + log_dist +
+                   log_dist_larger + year_isolated +
+                   grazing + altitude_m,
+                 data = bird_df)
+
+summary(full_model)
 ```
 ::::
-:::::::
 
-## Regression Parameters — the Error Term
+:::: {.column width="45%"}
+::: callout-important
+**✅ The answer is (c).**
 
-::::::: columns
-:::: {.column width="60%"}
-$$y_i = \beta_0 + \beta_1 x_{i1} + \beta_2 x_{i2} + ... + \beta_p x_{ip} + \epsilon_i$$
+Four predictors were significant alone. In the model together, **only `log_area` survives** (p < 0.001).
 
-- εᵢ: unexplained error — the difference between yᵢ and the value predicted by the model (ŷᵢ)
-- ant_spp = β₀ + β₁(lat) + β₂(elevation) + εᵢ
-::::
+Grazing has gone from a slope of **`r round(a_graze["slope"], 2)`** (p = `r fmt_p(a_graze["p"])`) to **`r round(b_graze_full, 2)`** (p = `r fmt_p(p_graze_full)`) — most of what grazing appeared to explain was patch area wearing a different hat.
 
-:::: {.column width="40%"}
-::: callout-tip
-**🖐 Notice**
-
-This is exactly the same "signal vs. noise" structure as a simple regression — just with more terms on the signal side.
+Year of isolation and altitude have gone the same way.
 :::
 ::::
-:::::::
+:::::
 
-## Regression Parameters — Estimation
+## Why Not Just Regress Y on Each X Separately?
 
-::::::: columns
-:::: {.column width="60%"}
-$$y_i = \beta_0 + \beta_1 x_{i1} + \beta_2 x_{i2} + ... + \beta_p x_{ip} + \epsilon_i$$
+::::: columns
+:::: {.column width="55%"}
+Each simple regression asks *"does this predictor track abundance?"* The multiple regression asks *"does it track abundance **among patches that are otherwise alike**?"*
 
-- Estimate multiple regression parameters (intercept, partial slopes) using OLS to fit the regression line
-- OLS minimizes $\sum(y_i - \hat{y}_i)^2$, the SS (vertical distance) between observed yᵢ and predicted ŷᵢ for each xᵢⱼ
-- ε estimated as residuals: εᵢ = yᵢ − ŷᵢ
-- Calculation solves a set of simultaneous normal equations with matrix algebra
-::::
+Those are different questions, and they can have different answers.
 
-:::: {.column width="40%"}
-::: callout-note
-**✅ Key idea**
-
-You'll never do this matrix algebra by hand — R's `lm()` does it instantly. What matters is knowing *what* it's minimizing.
+::: {.compact-table}
+| Predictor | Alone | In the full model |
+|:---|---:|---:|
+| log area | `r round(a_area["slope"], 2)` | **`r round(b_area_full, 2)`** |
+| grazing | `r round(a_graze["slope"], 2)` | **`r round(b_graze_full, 2)`** |
+| year isolated | `r round(a_year["slope"], 3)` | **`r round(coef(full_model)["year_isolated"], 3)`** |
+| altitude | `r round(a_alt["slope"], 3)` | **`r round(coef(full_model)["altitude_m"], 3)`** |
 :::
 ::::
-:::::::
 
-## Regression Parameters — Prediction
-
-::::::: columns
-:::: {.column width="60%"}
-The regression equation can be used for prediction by substituting new values for the predictor (X) variables.
-
-- Confidence intervals are calculated for parameters
-- Confidence and prediction intervals depend on the number of observations and predictors
-  - More observations decrease interval width
-  - More predictors increase interval width
-- Predictions should be restricted to within the range of the X variables
-::::
-
-:::: {.column width="40%"}
+:::: {.column width="45%"}
 ::: callout-warning
-**⚠️ Watch out!**
+**⚠️ Neither number is "wrong"**
 
-Extrapolating a multiple regression beyond the observed range of *any* predictor is riskier than in simple regression — the fitted (hyper)plane has no guarantee of being right outside the data cloud.
+If you want to predict bird abundance from grazing alone, `r round(a_graze["slope"], 2)` is the right slope to use.
+
+If you want to claim grazing has an effect **beyond** the fact that grazed patches are small, `r round(b_graze_full, 2)` is the number you have to defend — and here you cannot.
 :::
 ::::
-:::::::
+:::::
+
+## Estimation and Prediction
+
+::::: columns
+:::: {.column width="55%"}
+**Estimation.** Ordinary least squares again: choose the coefficients that minimise $\sum(y_i - \hat{y}_i)^2$. With several predictors this is a set of simultaneous equations solved with matrix algebra — `lm()` does it instantly, and what matters is knowing *what* it minimises.
+
+**Prediction.** Substitute new values for every predictor.
+
+- More observations → narrower intervals
+- More predictors → wider intervals
+- Stay inside the range of **every** predictor
+::::
+
+:::: {.column width="45%"}
+::: callout-warning
+**⚠️ Extrapolation is worse here**
+
+In simple regression you only have to stay inside one range. Here you have to stay inside the **data cloud** — and a combination can be far outside it even when each predictor separately looks ordinary.
+
+There are no 1000-ha patches under intense grazing in these data. The model will still happily predict one.
+:::
+::::
+:::::
 
 ## Part 3 · ANOVA for Multiple Regression {.divider}
 
 ## Partitioning Variance — Sums of Squares
 
-::::::: columns
-:::: {.column width="60%"}
-Variance — $SS_{total}$ is partitioned into $SS_{regression}$ and $SS_{residual}$.
+::::: columns
+:::: {.column width="55%"}
+Exactly the partition from last week, with p predictors instead of one:
 
-- $SS_{regression}$ is the variance in Y explained by the model
-- $SS_{residual}$ is the variance not explained by the model
+$$SS_{total} = SS_{regression} + SS_{residual}$$
+
+- $SS_{regression}$ — variation the model explains
+- $SS_{residual}$ — variation it does not
+- Regression df is now **p**, not 1
 ::::
 
-:::: {.column width="40%"}
-| Source | SS | df |
-|:---|:---|:---|
-| Regression | $\sum (y_i - \bar{y})^2$ | $p$ |
-| Residual | $\sum (y_i - \hat{y}_i)^2$ | $n-p-1$ |
-| Total | $\sum (y_i - \bar{y})^2$ | $n-1$ |
-::::
-:::::::
-
-## From Sums of Squares to Mean Squares
-
-::::::: columns
-:::: {.column width="60%"}
-SS converted to (non-additive) MS = SS/df:
-
-- $MS_{residual}$: estimates population variance
-- $MS_{regression}$: estimates population variance + variation due to the strength of the X-Y relationships
-- MS is an estimate of variance that doesn't increase with sample size the way SS does
-::::
-
-:::: {.column width="40%"}
+:::: {.column width="45%"}
+::: {.compact-table}
 | Source | SS | df | MS |
 |:---|:---|:---|:---|
-| Regression | $\sum (y_i - \bar{y})^2$ | $p$ | SS/df |
+| Regression | $\sum (\hat{y}_i - \bar{y})^2$ | $p$ | SS/df |
 | Residual | $\sum (y_i - \hat{y}_i)^2$ | $n-p-1$ | SS/df |
-| Total | $\sum (y_i - \bar{y})^2$ | $n-1$ |  |
+| Total | $\sum (y_i - \bar{y})^2$ | $n-1$ | |
+:::
+
+Mean squares are variances, so they do not grow with n — which is why the F-ratio is built from them and not from the sums of squares directly.
 ::::
-:::::::
+:::::
 
 ## Hypotheses — the "Basic" Test
 
-::::::: columns
-:::: {.column width="60%"}
-Two null hypotheses are usually tested in MLR. The "basic" H₀: all partial regression slopes equal 0; β₁ = β₂ = … = βₚ = 0.
+::::: columns
+:::: {.column width="55%"}
+The **overall F-test** at the bottom of `summary()` tests one null:
 
-- If the "basic" H₀ is true, $MS_{regression}$ and $MS_{residual}$ estimate the same variance, and their ratio (F-ratio) ≈ 1
-- If the "basic" H₀ is false (at least one β ≠ 0), $MS_{regression}$ estimates variance + partial regression slope effects, and the F-ratio will be > 1 — compared to the F-distribution for a p-value
+$$H_0: \beta_1 = \beta_2 = \dots = \beta_p = 0$$
+
+- If it is true, $MS_{regression}$ and $MS_{residual}$ estimate the same variance and F ≈ 1
+- If any β is non-zero, $MS_{regression}$ is inflated and F > 1
+
+It tells you the model as a whole explains something. It does **not** tell you which predictor did the work.
 ::::
 
-:::: {.column width="40%"}
-::: callout-note
-**📖 Reference**
+:::: {.column width="45%"}
+::: callout-warning
+**⚠️ A significant overall F with nothing significant inside it**
 
-Gotelli & Ellison, Ch. 9, covers this F-test framework for multiple regression in detail.
+This happens, and it is the classic signature of collinearity: the predictors jointly explain a lot, but they are so tangled that no individual slope can be pinned down.
 :::
 ::::
-:::::::
+:::::
 
-## Hypotheses — Testing One Specific β
+## Hypotheses — Testing One Predictor
 
-::::::: columns
-:::: {.column width="60%"}
-Also: is any *specific* β = 0 (explanatory role)?
+::::: columns
+:::: {.column width="55%"}
+To ask whether one specific β is zero, fit the model **with** and **without** it and compare:
 
-- E.g., does latitude have an effect on ant species?
-- These H's are tested through model comparison
-- **Model 1** — with 2 predictors X₁, X₂: $y_i = \beta_0 + \beta_1 x_{i1} + \beta_2 x_{i2} + \epsilon_i$
-- **Model 2** — to test H₀ that β₂ = 0, compare the fit of Model 1 to Model 2 with 1 predictor: $y_i = \beta_0 + \beta_1 x_{i1} + \epsilon_i$
+$$SS_{extra} = SS_{regression}^{full} - SS_{regression}^{reduced}$$
+
+$$F_{1,\,n-p-1} = \frac{MS_{extra}}{MS_{residual}^{full}}$$
+
+```{r multiple-regression-06}
+reduced_model <- lm(abundance ~ log_area + grazing,
+                    data = bird_df)
+
+anova(reduced_model, full_model)
+```
 ::::
 
-:::: {.column width="40%"}
+:::: {.column width="45%"}
+Dropping **four** predictors at once — distance, distance to a larger patch, year of isolation and altitude — costs nothing detectable (p = `r fmt_p(anova(reduced_model, full_model)[2, "Pr(>F)"])`).
+
 ::: callout-tip
-**🖐 Notice**
+**🖐 You rarely run this by hand**
 
-This is a preview of the model-comparison approach we'll use throughout this lecture — fit two nested models and compare their fit.
+The t-test beside each coefficient in `summary()` answers the same question for a single predictor. Use `anova()` when you want to drop a **group** of predictors at once.
 :::
 ::::
-:::::::
-
-## Hypotheses — the Partial F-Test
-
-::::::: columns
-:::: {.column width="60%"}
-- If $SS_{regression}$ of model 1 = model 2, we cannot reject H₀: β₁ = 0 — adding X₂ did not explain any additional variance
-- If $SS_{regression}$ of model 1 > model 2, there's evidence to reject H₀: β₂ = 0 — adding X₂ explains more variance
-- SS for β₂ is $SS_{extra,\beta_2}$ = Full $SS_{regression}$ − Reduced $SS_{regression}$ — this quantifies how much additional variance X₂ explains
-- Use a partial F-test to test H₀: β₂ = 0:
-
-$$F_{1,n-p} = \frac{MS_{Extra}}{Full\ MS_{Residual}}$$
-::::
-
-:::: {.column width="40%"}
-::: callout-tip
-**🖐 Notice**
-
-R also gives you a t-test for each coefficient that answers exactly this same question — you rarely need to run the partial F-test by hand.
-:::
-::::
-:::::::
+:::::
 
 ## Explained Variance
 
-::::::: columns
-:::: {.column width="60%"}
-Explained variance (r²) is calculated the same way as for simple regression:
+::::: columns
+:::: {.column width="55%"}
+$$R^2 = \frac{SS_{regression}}{SS_{total}} = 1 - \frac{SS_{residual}}{SS_{total}}$$
 
-$$r^2 = \frac{SS_{Regression}}{SS_{Total}} = 1 - \frac{SS_{Residual}}{SS_{Total}}$$
+For the reduced model: $\dfrac{`r round(ss_reg, 0)`}{`r round(ss_tot, 0)`}$ = **`r round(red_sum$r.squared, 3)`**
+
+The six-predictor model manages `r round(full_sum$r.squared, 3)` — higher, as it must be.
 ::::
 
-:::: {.column width="40%"}
+:::: {.column width="45%"}
 ::: callout-warning
-**⚠️ Watch out!**
+**⚠️ Watch out**
 
-- r² values cannot be used to directly compare models with different numbers of predictors
-- r² values will always increase as predictors are added, even useless ones
-- r² values with different transformations of Y are not comparable
+- R² **always** rises when you add a predictor, even a useless one
+- So R² cannot be used to compare models with different numbers of predictors
+- R² from models with differently transformed Y are not comparable at all
 :::
+
+That is why adjusted R² and AIC exist, and we come back to them in Part 8.
 ::::
-:::::::
+:::::
 
 ## Part 4 · Assumptions and Diagnostics {.divider}
 
-## Assumptions and Diagnostics — Outliers
+## First: Does a Predictor Need a Transform?
 
-::::::: columns
-:::: {.column width="60%"}
-- Assume fixed X's — unrealistic in most biological settings, but a working assumption
-- No major (influential) outliers
-- Check leverage and influence with Cook's Dᵢ
+::::: columns
+:::: {.column width="55%"}
+Patch area runs from **`r min(bird_df$area_ha)` ha to `r format(max(bird_df$area_ha), big.mark = ",")` ha** — four orders of magnitude. Fitted raw, it behaves exactly like last week's homework:
+
+::: {.compact-table}
+| | raw `area_ha` | `log10(area_ha)` |
+|:---|---:|---:|
+| slope | `r round(coef(raw_area_model)[2], 4)` | `r round(coef(log_area_model)[2], 2)` |
+| R² | `r round(summary(raw_area_model)$r.squared, 3)` | `r round(summary(log_area_model)$r.squared, 3)` |
+| Shapiro on residuals | `r fmt_p(shapiro.test(residuals(raw_area_model))$p.value)` | `r fmt_p(shapiro.test(residuals(log_area_model))$p.value)` |
+:::
+
+Every model in this lecture uses `log_area`, and the diagnostics are why.
 ::::
 
-:::: {.column width="40%"}
-```{r multiple-regression-06}
-#| fig-height: 3.2
-#| fig-width: 3.4
-#| fig-alt: "Cook's distance plot showing each observation's influence on the ant species richness regression model, as vertical bars from zero, used to identify potentially influential outliers."
-plot(ant_model, which = 4)
-```
-::::
-:::::::
-
-## Assumptions and Diagnostics — Residuals
-
-::::::: columns
-:::: {.column width="60%"}
-- Normality, equal variance, independence
-- Residual QQ-plots, residuals-vs-predicted-values plot
-- Distribution/variance issues are often corrected by transforming Y
-::::
-
-:::: {.column width="40%"}
+:::: {.column width="45%"}
 ```{r multiple-regression-07}
-#| echo: false
-#| fig-width: 3.4
-#| fig-height: 3.2
-#| fig-alt: "Two stacked diagnostic plots for the ant species richness regression model: a residuals-versus-fitted-values plot for checking equal variance, and a normal Q-Q plot of residuals for checking normality."
-par(mfrow = c(2, 1), mar = c(4, 4, 2, 1))
-plot(ant_model, which = 1)
-plot(ant_model, which = 2)
-par(mfrow = c(1, 1))
-```
-::::
-:::::::
-
-## Assumptions and Diagnostics — Sample Size and Collinearity
-
-::::::: columns
-:::: {.column width="60%"}
-- **More observations than predictor variables** — ideally at least **10× observations than predictors**, to avoid "overfitting." 2 predictors = 20 observations, minimum!
-- **No collinearity** — need uncorrelated predictor variables (assessed using a scatterplot matrix and VIFs)
-- **Each X has a linear relationship with Y after accounting for other predictors** — checked with Added Variable (AV) plots, also called partial regression plots
-::::
-
-:::: {.column width="40%"}
-::: callout-tip
-**📖 AV plots in R**
-
-- All predictors: `avPlots(ant_model)`
-- One predictor: `avPlot(ant_model, variable = "elevation")`
-
-AV plots show the relationship between Y and X₁ after removing the linear effects of all other predictors.
-:::
-::::
-:::::::
-
-## Why Not Just Regress Y on Each X Separately?
-
-::::::: columns
-:::: {.column width="40%"}
-Regressing Y vs. each X separately does not consider the effect of other predictors — but we want to know the shape of the relationship while holding other predictors constant.
-
-**Compare the slopes:**
-
-| Predictor | Alone | Controlling for the other |
-|-----------|-----------|-----------|
-| elevation | −0.0146 | **−0.0123** |
-| latitude | −2.340 | **−2.010** |
-
-Both shrink a little once the other predictor is in the model — each was taking a small amount of credit that belonged to the other.
-
-::: callout-note
-**✅ Why only "a little" here?**
-
-Because elevation and latitude are **nearly independent** in these data (r = 0.18). When predictors *are* strongly correlated, the same comparison can change a slope's size dramatically — or even flip its sign.
-:::
-::::
-
-:::: {.column width="60%"}
-```{r multiple-regression-08}
 #| echo: false
 #| message: false
 #| warning: false
-#| paged-print: false
-#| fig-width: 3.6
-#| fig-height: 3.6
-#| fig-alt: "Two stacked scatterplots with fitted regression lines and confidence bands: ant species richness versus elevation (top, negative relationship) and ant species richness versus latitude (bottom, negative relationship), each fit separately without controlling for the other predictor."
-p1 <- ggplot(ant_df, aes(x = elevation, y = ant_spp)) +
-  geom_point(size = 3, color = "darkblue") +
-  geom_smooth(method = "lm", se = TRUE, color = "red") +
-  labs(x = "Elevation (m)", y = "Ant Species Richness") +
-  theme_minimal(base_size = 8)
+#| fig-height: 3.4
+#| fig-width: 3.4
+#| fig-alt: "Two stacked scatterplots of bird abundance against patch area: on the raw scale the points pile against the left axis, and on a log10 scale they spread into a straight-line relationship."
+p_raw <- ggplot(bird_df, aes(area_ha, abundance)) +
+  geom_point(size = 1.2) + geom_smooth(method = "lm", se = FALSE, colour = "red") +
+  labs(title = "Raw area", x = NULL, y = NULL) + theme_minimal(base_size = 8)
 
-p2 <- ggplot(ant_df, aes(x = latitude, y = ant_spp)) +
-  geom_point(size = 3, color = "darkblue") +
-  geom_smooth(method = "lm", se = TRUE, color = "red") +
-  labs(x = "Latitude (degrees)", y = "Ant Species Richness") +
-  theme_minimal(base_size = 8)
+p_log <- ggplot(bird_df, aes(log_area, abundance)) +
+  geom_point(size = 1.2) + geom_smooth(method = "lm", se = FALSE, colour = "blue") +
+  labs(title = "log10 area", x = NULL, y = NULL) + theme_minimal(base_size = 8)
 
-p1 / p2
+p_raw / p_log
 ```
 ::::
-:::::::
+:::::
+
+## Assumptions and Diagnostics — Outliers
+
+::::: columns
+:::: {.column width="55%"}
+- Fixed X values — unrealistic in field data, but the working assumption
+- **No overly influential points** — check leverage and influence with **Cook's distance**
+- A point can be extreme in Y, extreme in X, or extreme in the *combination*; only the third kind is uniquely a multiple-regression problem
+
+Largest Cook's distance here is **`r round(max(cooks.distance(reduced_model)), 2)`** — nothing near the usual threshold of 1.
+::::
+
+:::: {.column width="45%"}
+```{r multiple-regression-08}
+#| fig-height: 3
+#| fig-width: 3.2
+#| fig-alt: "Cook's distance plot for the reduced bird-abundance model, showing each patch's influence as a vertical bar."
+plot(reduced_model, which = 4)
+```
+::::
+:::::
+
+## Assumptions and Diagnostics — Residuals
+
+::::: columns
+:::: {.column width="55%"}
+Normality, equal variance and independence — all read off the **residuals**, exactly as last week.
+
+```{r multiple-regression-09}
+shapiro.test(residuals(reduced_model))
+```
+
+Distribution and variance problems are usually fixed by transforming Y, or a predictor, before anything more exotic.
+::::
+
+:::: {.column width="45%"}
+```{r multiple-regression-10}
+#| echo: false
+#| fig-width: 3.2
+#| fig-height: 3.2
+#| fig-alt: "Two stacked diagnostic plots for the reduced bird-abundance model: residuals versus fitted values, and a normal QQ plot of the residuals."
+par(mfrow = c(2, 1), mar = c(4, 4, 2, 1))
+plot(reduced_model, which = 1)
+plot(reduced_model, which = 2)
+par(mfrow = c(1, 1))
+```
+::::
+:::::
+
+## Assumptions — Sample Size and Added-Variable Plots
+
+::::: columns
+:::: {.column width="55%"}
+- **More observations than predictors** — a common rule of thumb is **10 observations per predictor**. Six predictors would want 60; we have `r nrow(bird_df)`, so the full model is already at the edge
+- **Predictors not collinear** — Part 5
+- **Each X linear in Y after accounting for the others** — this is what an **added-variable plot** shows, and it is the multiple-regression version of "plot your data first"
+
+``` r
+avPlots(reduced_model)
+```
+::::
+
+:::: {.column width="45%"}
+```{r multiple-regression-11}
+#| echo: false
+#| message: false
+#| warning: false
+#| fig-height: 3
+#| fig-width: 3.4
+#| fig-alt: "Added-variable plots for the reduced bird-abundance model, one for log area and one for grazing, each showing the relationship with abundance after removing the other predictor's effect."
+avPlots(reduced_model, ask = FALSE, main = "")
+```
+
+Each panel is Y and one X **after** the other predictor's effect has been removed from both.
+::::
+:::::
 
 ## Part 5 · Collinearity {.divider}
 
 ## Collinearity — the Problem
 
-::::::: columns
-:::: {.column width="60%"}
-- Potential predictor variables are often correlated (e.g., morphometrics, nutrients, climatic parameters)
-- Multicollinearity (strong correlation between predictors) causes problems for parameter estimates
-- Severe collinearity causes unstable parameter estimates — a small change in a single value can result in large changes in βₚ estimates
-- Inflates partial-slope error estimates, and causes a loss of power
+::::: columns
+:::: {.column width="55%"}
+Predictors in field data are almost never independent. Here, **small patches are grazed harder** — r = `r round(cor(bird_df$log_area, bird_df$grazing), 2)`.
+
+When predictors overlap:
+
+- Parameter estimates become **unstable** — one changed value can move them a lot
+- Standard errors **inflate**, so slopes lose significance
+- The model can fit well while no single slope is trustworthy
 ::::
 
-:::: {.column width="40%"}
-```{r multiple-regression-09}
+:::: {.column width="45%"}
+```{r multiple-regression-12}
 #| echo: false
-#| message: false
-#| warning: false
-#| paged-print: false
-cor_matrix <- cor(ant_df[, c("elevation", "latitude", "ant_spp")])
-print(cor_matrix)
+bird_df %>%
+  select(log_area, log_dist, log_dist_larger,
+         year_isolated, grazing, altitude_m) %>%
+  cor() %>%
+  round(2)
 ```
 ::::
-:::::::
+:::::
 
 ## Collinearity — Detecting It
 
-::::::: columns
-:::: {.column width="60%"}
-Collinearity can be detected by:
-
-- **Variance Inflation Factors (VIF):**
+::::: columns
+:::: {.column width="55%"}
+**Variance Inflation Factors:**
 
 $$VIF_{X_j} = \frac{1}{1 - R^2_j}$$
 
-where $R^2_j$ is the R² you get from regressing **$X_j$ on all the *other* predictors** — not the pairwise correlation between two of them. (With only two predictors those happen to coincide; with three or more they do not.)
+where $R^2_j$ comes from regressing **$X_j$ on all the *other* predictors** — not from a pairwise correlation. (With two predictors they coincide; with more they do not.)
 
 - Rule of thumb: **VIF > 10 is bad**; some authors use > 5
-- Best/simplest solution: exclude variables that are highly correlated with other variables — they're probably measuring similar things and are redundant
+- Simplest fix: drop predictors that are measuring the same thing
+::::
 
-```{r multiple-regression-10}
-# car::vif() does this for you
-vif(ant_model)
+:::: {.column width="45%"}
+```{r multiple-regression-13}
+vif(full_model)
 ```
+
+::: callout-note
+**✅ Key idea**
+
+A high VIF does not mean the model is wrong. It means you cannot trust the **individual** partial slopes, even when the model as a whole fits well.
+:::
+::::
+:::::
+
+## 🗳️ DECIDE · The Slope That Changed Its Mind
+
+::::: columns
+:::: {.column width="60%"}
+Grazing went from **`r round(a_graze["slope"], 2)`** on its own to **`r round(b_graze_full, 2)`** in the full model, and lost its significance. The VIFs are all under 3.
+
+**What is the right thing to say about grazing?**
+
+**(a)** Grazing has no effect on bird abundance
+
+**(b)** The effect of grazing is real but small — the full model estimates it better
+
+**(c)** Grazing and patch area explain overlapping variation, and these data cannot cleanly separate them
+
+**(d)** The full model is broken by collinearity and should be discarded
+
+::: callout-warning
+**✍️ One letter. Write it down, then argue it with your neighbour.**
+:::
 ::::
 
 :::: {.column width="40%"}
 ::: callout-note
-**✅ Key idea**
+**The question to ask**
 
-A high VIF doesn't mean your model is "wrong" — it means you can't trust the *individual* partial slopes for the correlated predictors, even if the overall model fits well.
-:::
-
-::: callout-tip
-**🖐 Our ants are fine**
-
-Both VIFs are about **1.03** — essentially no inflation. Latitude and elevation are nearly independent here, which is why each partial slope is interpretable on its own.
-
-A VIF of 1 means "this predictor shares nothing with the others." That is the ideal, and it is rarer than you would like.
+*Is this a statement about the world, or a statement about what this dataset can resolve?*
 :::
 ::::
-:::::::
+:::::
+
+## What the Data Can and Cannot Separate
+
+::::: columns
+:::: {.column width="55%"}
+::: callout-important
+**✅ The answer is (c).**
+
+Grazing and area are correlated at r = `r round(cor(bird_df$log_area, bird_df$grazing), 2)`. The heavily grazed patches in this dataset are *also* the small ones, so no analysis can tell you which of the two is doing the work.
+
+**(a)** overstates it — a non-significant partial slope is not evidence of no effect.
+**(b)** is the common mistake: the full model is not "better", it answers a *different, conditional* question.
+**(d)** is wrong too — VIFs under 3 are mild, and the model predicts perfectly well. It just cannot apportion credit.
+:::
+::::
+
+:::: {.column width="45%"}
+::: callout-tip
+**🖐 What would settle it**
+
+Find, or create, patches that break the correlation: **large heavily grazed** patches and **small lightly grazed** ones.
+
+That is a design problem, not an analysis problem — which is where this course started.
+:::
+::::
+:::::
 
 ## Part 6 · Interactions {.divider}
 
 ## Interactions — Additive vs. Multiplicative
 
-::::::: columns
-:::: {.column width="60%"}
-Predictors can be modeled as:
+::::: columns
+:::: {.column width="55%"}
+So far every model has been **additive** — the effect of area is the same at every grazing level.
 
-- [additive]{.underline} (effect of temp, plus precip, plus fertility), or
-- [multiplicative (interactive)]{.underline}
-- **Interaction:** the effect of Xᵢ depends on the level of Xⱼ
-- The partial slope of Y vs. X₁ is different for different levels of X₂ (and vice versa) — measured by β₃
+An **interaction** says the effect of one predictor *depends on* the level of another:
 
-$$y_i = \beta_0 + \beta_1X_{i1} + \beta_2X_{i2} + \epsilon_i \quad \text{vs.} \quad y_i = \beta_0 + \beta_1X_{i1} + \beta_2X_{i2} + \beta_3X_{i1}X_{i2} + \epsilon_i$$
+$$y_i = \beta_0 + \beta_1X_{1} + \beta_2X_{2} + \epsilon_i$$
+$$y_i = \beta_0 + \beta_1X_{1} + \beta_2X_{2} + \beta_3X_{1}X_{2} + \epsilon_i$$
 
-This leads to "curvature" of the regression (hyper)plane.
+An interaction term is just **another predictor**: the product of two others, with its own coefficient.
 ::::
 
-:::: {.column width="40%"}
-::: callout-tip
-**🖐 Notice**
+:::: {.column width="45%"}
+::: callout-note
+**✅ Key idea**
 
-An interaction term is just another predictor: the product $X_1 \times X_2$, fit with its own coefficient β₃.
+Additive: parallel lines.
+
+Interactive: lines with different slopes — the fitted surface is no longer flat.
 :::
 ::::
-:::::::
+:::::
 
-## Interactions — Curvature of the Regression Plane
+## Interactions — Fitting One
 
-::::::: columns
-:::: {.column width="30%"}
-Interaction terms lead to "curvature" of the regression (hyper)plane.
-::::
+::::: columns
+:::: {.column width="55%"}
+```{r multiple-regression-14}
+interaction_model <- lm(abundance ~ log_area * grazing,
+                        data = bird_df)
 
-:::: {.column width="70%"}
-```{r multiple-regression-11}
-#| echo: false
-#| message: false
-#| warning: false
-#| paged-print: false
-#| fig-alt: "Visualization of the ant species richness model that includes an elevation-by-latitude interaction: an interactive 3D scatterplot with a curved fitted surface in HTML output, or a 2D heat map with contour lines and observed points sized by ant species count in docx/pptx output, showing that the fitted surface is curved rather than a flat plane."
-model_interaction_int <- lm(ant_spp ~ elevation * latitude, data = ant_df)
-
-elevation_range_int <- seq(min(ant_df$elevation), max(ant_df$elevation), length.out = 30)
-latitude_range_int <- seq(min(ant_df$latitude), max(ant_df$latitude), length.out = 30)
-grid_int <- expand.grid(elevation = elevation_range, latitude = latitude_range)
-grid_int$ant_spp <- predict(model_interaction_int, newdata = grid_int)
-
-z_matrix_int <- matrix(grid_int$ant_spp, nrow = 30, ncol = 30)
-
-if (knitr::is_html_output()) {
-  ant_int_plot <- plot_ly() %>%
-    add_trace(
-      data = ant_df,
-      x = ~elevation,
-      y = ~latitude,
-      z = ~ant_spp,
-      type = "scatter3d",
-      mode = "markers",
-      marker = list(size = 5, color = "red"),
-      name = "Observed"
-    ) %>%
-    add_surface(
-      x = elevation_range_int,
-      y = latitude_range_int,
-      z = z_matrix_int,
-      opacity = 0.7,
-      colorscale = "Viridis",
-      name = "Interaction Model"
-    ) %>%
-    layout(
-      scene = list(
-        xaxis = list(title = "Elevation"),
-        yaxis = list(title = "Latitude"),
-        zaxis = list(title = "Ant Species")
-      ),
-      title = "Ant Species: Interaction Model (Curved Surface)"
-    )
-  ant_int_plot
-} else {
-  # Static 2D fallback for docx/pptx: same fitted (curved) surface, shown as a contour
-  ant_int_plot <- ggplot() +
-    geom_tile(data = grid_int, aes(x = elevation, y = latitude, fill = ant_spp)) +
-    geom_contour(data = grid_int, aes(x = elevation, y = latitude, z = ant_spp), color = "white", alpha = 0.5) +
-    geom_point(data = ant_df, aes(x = elevation, y = latitude, size = ant_spp), color = "red") +
-    scale_fill_viridis_c(name = "Fitted\nant spp") +
-    labs(title = "Ant Species: Interaction Model (2D View)",
-         x = "Elevation", y = "Latitude", size = "Observed") +
-    theme_minimal(base_size = 8)
-  ant_int_plot
-}
+summary(interaction_model)$coefficients
 ```
 ::::
-:::::::
+
+:::: {.column width="45%"}
+The interaction is **significant** (p = `r fmt_p(summary(lm(abundance ~ log_area * grazing, data = bird_df))$coefficients[4, 4])`), and `a * b` expands to `a + b + a:b` automatically.
+
+**What it means:** patch area matters **more** where grazing is heavy. In lightly grazed country a small patch still holds birds; under heavy grazing only the big patches do.
+
+::: callout-warning
+**⚠️ You cannot read the main effects the same way any more**
+
+With an interaction in the model, the `log_area` coefficient is the slope **when grazing = 0** — a value that does not exist in these data.
+:::
+::::
+:::::
 
 ## Interactions — the Cost
 
-::::::: columns
-:::: {.column width="60%"}
-Adding interactions:
+::::: columns
+:::: {.column width="55%"}
+- **Parameter proliferation.** Every predictor you add roughly doubles the number of possible terms — six predictors with all interactions is 64 terms, and you have `r nrow(bird_df)` patches
+- **Interpretation gets harder**, as the slide before shows
+- **Include an interaction when it makes biological sense**, not because it might be significant
 
-- Means many more predictors ("parameter proliferation") — 2ⁿ terms are required; 6 parameters = 64 terms, 7 parameters = 128 terms
-- Makes interpretation more complex
-- **When to include interactions? When they make biological sense!**
+"Does fragmentation hurt more where grazing is heavy" is a real hypothesis. That is why this one belongs.
 ::::
 
-:::: {.column width="40%"}
+:::: {.column width="45%"}
 ::: callout-warning
-**⚠️ Watch out!**
+**⚠️ Watch out**
 
-Don't add interaction terms just to see if they're significant — with enough predictors, some interaction will hit p < 0.05 by chance alone.
+Test enough interactions and one will reach p < 0.05 by chance. With six predictors there are 15 two-way interactions alone — at α = 0.05 you expect roughly one false positive just from testing them all.
 :::
 ::::
-:::::::
+:::::
 
-## Part 7 · Dummy Variables {.divider}
+## Part 7 · Factors and Dummy Variables {.divider}
 
-## Dummy Variables
+## Categorical Predictors Become Dummy Variables
 
-::::::: columns
+::::: columns
+:::: {.column width="55%"}
+So far grazing has been a **number**, 1 to 5, which forces every step to have the same effect. That is a strong assumption — is the jump from light to moderate really the same size as moderate to heavy?
+
+Treat it as a **category** instead and the model estimates each level separately. A categorical predictor with k levels becomes **k − 1 dummy variables**, each 0 or 1.
+
+One level gets no dummy at all. That is the **reference level**, and every other coefficient is a comparison *against it*.
+::::
+
+:::: {.column width="45%"}
+```{r multiple-regression-15}
+count(bird_df, grazing, grazing_class)
+```
+::::
+:::::
+
+## R Picks the Reference Level for You — Alphabetically
+
+::::: columns
+:::: {.column width="55%"}
+```{r multiple-regression-16}
+bird_df <- bird_df %>%
+  mutate(grazing_class = factor(grazing_class))
+
+levels(bird_df$grazing_class)
+```
+
+A character column becomes a factor in **alphabetical** order, so the reference level here is **heavy** — the fourth of five grazing intensities, chosen by spelling.
+::::
+
+:::: {.column width="45%"}
+```{r multiple-regression-17}
+#| echo: false
+lm(abundance ~ log_area + grazing_class, data = bird_df) %>%
+  summary() %>%
+  coef() %>%
+  round(2)
+```
+
+Every grazing coefficient is now "compared with **heavy** grazing," which is a comparison nobody asked for.
+::::
+:::::
+
+## 🗳️ DECIDE · Which Level Should Be the Reference?
+
+::::: columns
 :::: {.column width="60%"}
-Multiple linear regression accommodates continuous and categorical variables (gender, vegetation type, etc.). Categorical vars become "dummy vars": number of dummy variables = number of categories − 1.
+The five grazing classes are `minimal`, `light`, `moderate`, `heavy`, `intense`.
 
-- **Sex M/F:** need 1 dummy var with two values (0, 1)
-- **Fertility L/M/H:** need 2 dummy vars, each with two values (0, 1): fert1 (0 if L or H, 1 if M), fert2 (1 if H, 0 if L or M)
+**Which should be the reference level, and why?**
+
+**(a)** `heavy` — leave R's default alone; the choice does not affect the model
+
+**(b)** `intense` — the most extreme level makes the biggest contrasts
+
+**(c)** `minimal` — the least-disturbed level, so every coefficient reads as the cost of adding grazing
+
+**(d)** It does not matter, because R² and the F-test are identical either way
+
+::: callout-warning
+**✍️ Careful — two of these are true statements. Only one is the right decision.**
+:::
 ::::
 
 :::: {.column width="40%"}
-| Fertility | fert1 | fert2 |
-|:---|:---|:---|
-| Low | 0 | 0 |
-| Med | 1 | 0 |
-| High | 0 | 1 |
+::: callout-note
+**The question to ask**
+
+*Which comparison do I want to read straight off the output?*
+:::
 ::::
-:::::::
+:::::
 
-## Dummy Variables — the Reference Condition
+## Choosing the Reference Yourself · `fct_relevel()`
 
-::::::: columns
-:::: {.column width="60%"}
-Coefficients are interpreted relative to a reference condition:
+::::: columns
+:::: {.column width="55%"}
+::: callout-important
+**✅ The answer is (c).**
 
-- R codes dummy variables automatically
-- It picks the "reference" level alphabetically
-- Dummy variables with more than 2 levels add extra predictor variables to the model
-::::
+(d) is *true* — the fit, R², F and the ANOVA table are all identical whichever level is the reference. But it is not a reason to accept a bad default: the coefficients are what people read, and they should answer the question you asked.
 
-:::: {.column width="40%"}
-| Fertility | fert1 | fert2 |
-|:---|:---|:---|
-| Low | 0 | 0 |
-| Med | 1 | 0 |
-| High | 0 | 1 |
-::::
-:::::::
+`minimal` grazing is the closest thing this observational study has to a **control**, so putting it first makes every other coefficient "birds lost relative to the least-grazed patches."
+:::
 
-## Dummy Variables — Worked Example
+```{r multiple-regression-18}
+bird_df <- bird_df %>%
+  mutate(grazing_class = fct_relevel(
+    grazing_class,
+    "minimal", "light", "moderate", "heavy", "intense"))
 
-::::::: columns
-:::: {.column width="60%"}
-![R console output for a linear model regressing total net primary productivity on mean annual temperature, mean annual precipitation, and a three-level fertility factor (High reference, Low, Med), showing the coefficient table with all predictors highly significant (p < 0.001) and dummy-variable coefficients of 205.16 for Low and 116.33 for Medium fertility relative to High.](images/clipboard-3847962697.png){width="3.12in"}
+levels(bird_df$grazing_class)
+```
 ::::
 
-:::: {.column width="40%"}
-![Boxplot of net primary productivity by fertility category (High, Low, Med), showing the Low fertility group with the highest median productivity, matching the positive dummy-variable coefficients shown in the accompanying regression output.](images/clipboard-3285444079.png){width="2.60in"}
+:::: {.column width="45%"}
+::: callout-tip
+**🖐 The habit to build**
+
+Any time a factor enters a model, set its reference level **on purpose**, in the same line where you create the factor.
+
+`fct_relevel()` moves the levels you name to the front and leaves the rest in place, so naming just the control is enough:
+
+``` r
+fct_relevel(treatment, "control")
+```
+:::
 ::::
-:::::::
+:::::
+
+## Same Model, Same F, a Readable Story
+
+::::: columns
+:::: {.column width="55%"}
+```{r multiple-regression-19}
+grazing_model <- lm(abundance ~ log_area + grazing_class,
+                    data = bird_df)
+
+summary(grazing_model)$coefficients %>% round(2)
+```
+::::
+
+:::: {.column width="45%"}
+Now every coefficient is a comparison with **minimal** grazing, and the pattern is obvious:
+
+- light, moderate and heavy are all **indistinguishable** from minimal
+- `intense` costs about **`r abs(round(coef(grazing_model)["grazing_classintense"], 1))` birds**, p < 0.001
+
+**Grazing is a threshold, not a gradient** — and fitting it as the number 1–5 hid that completely, averaging the effect into `r round(b_graze_red, 2)` birds per step.
+::::
+:::::
+
+## Why This Matters Even More in ANOVA
+
+::::: columns
+:::: {.column width="55%"}
+With only continuous predictors there is no reference level at all — every slope is "per unit of X" and nothing is being compared with anything.
+
+The moment a **factor** enters the model, every coefficient becomes a **contrast against the reference**, and that is the whole structure of the next five weeks:
+
+- **One-way ANOVA** — treatment means against a control
+- **Two-way ANOVA** — main effects read at the other factor's reference level
+- **ANCOVA** — separate intercepts, all relative to one group
+::::
+
+:::: {.column width="45%"}
+::: callout-important
+**✅ The rule to carry forward**
+
+`factor()` gives you alphabetical order. Alphabetical order is almost never the order your experiment was designed in.
+
+**Set the control as the first level, every time**, and your model output reads as "what each treatment did to the control" without any further work.
+:::
+::::
+:::::
 
 ## Part 8 · Comparing Models {.divider}
 
 ## Comparing Models — the Problem
 
-::::::: columns
-:::: {.column width="60%"}
-When you have multiple predictors (and interactions!):
+::::: columns
+:::: {.column width="55%"}
+- Which predictors should be in the model?
+- **Occam's razor:** the best model balances fit against complexity
+- **Overfitting:** a high R² bought with useless predictors — which is why R² alone cannot choose between models
 
-- How do you choose the "best" model?
-- Which predictors should you include?
-- **Occam's razor:** the "best" model balances complexity with fit to the data
-- To choose: compare "nested" models
-- **Overfitting:** getting a high r² just by having more (useless) predictors — so r² alone is not a good way to choose between nested models
+Compare **nested** models: one whose predictors are a subset of the other's.
 ::::
 
-:::: {.column width="40%"}
+:::: {.column width="45%"}
 ::: callout-note
 **📖 Reference**
 
-Whitlock & Schluter, Ch. 17, covers model comparison and selection for regression.
+Quinn & Keough, Ch. 6, works through exactly this dataset. Whitlock & Schluter, Ch. 17, covers model comparison for regression.
 :::
 ::::
-:::::::
+:::::
 
 ## Comparing Models — Penalizing Complexity
 
-::::::: columns
-:::: {.column width="60%"}
-Need to account for the increase in fit that comes just from added predictors:
+::::: columns
+:::: {.column width="55%"}
+Two ways to charge a model for its predictors:
 
-- Adjusted r²
-- Akaike's Information Criterion (AIC)
-- Both "penalize" models for extra predictors
-- Higher adjusted r² and lower AIC are better when comparing models (p = predictors, n = sample size)
+$$\text{Adjusted } R^2 = 1 - \frac{SS_{Residual}/(n - p - 1)}{SS_{Total}/(n - 1)}$$
+
+$$\text{AIC} = n\ln(SS_{Residual}) + 2(p + 1) - n\ln(n)$$
+
+- **Higher** adjusted R² is better
+- **Lower** AIC is better
+- AIC is comparative only — the number on its own means nothing, and models must be fitted to **the same rows**
 ::::
 
-:::: {.column width="40%"}
-$$\text{Adjusted } r^2 = 1 - \frac{SS_{Residual}/(n - (p + 1))}{SS_{Total}/(n - 1)}$$
-$$\text{AIC} = n[\ln(SS_{Residual})] + 2(p + 1) - n\ln(n)$$
+:::: {.column width="45%"}
+::: callout-warning
+**⚠️ The NA trap**
+
+If one predictor has missing values, `lm()` silently drops those rows. Two models fitted to different numbers of rows **cannot** be compared by AIC, and R will not warn you.
+:::
 ::::
-:::::::
+:::::
 
 ## Comparing Models — How to Search
 
-::::::: columns
-:::: {.column width="60%"}
-- Can fit all possible models, then compare AICs or adjusted r² — tedious with lots of predictors
-- Automated forward (and backward) stepwise procedures: start with no terms (or all terms), add (remove) the term with the largest (smallest) partial F statistic
-- We will use a manual form of backward selection
+::::: columns
+:::: {.column width="55%"}
+- Fit all possible models and compare — fine with a few predictors, hopeless with many
+- **Automated stepwise** selection adds or removes terms by partial F or AIC
+- We use **manual backward selection**: start full, drop what earns nothing, stop when dropping hurts
 ::::
 
-:::: {.column width="40%"}
-::: callout-tip
-**🖐 Notice**
+:::: {.column width="45%"}
+::: callout-warning
+**⚠️ Stepwise selection is controversial**
 
-Automated stepwise selection is convenient but controversial — it can overfit and doesn't know which predictors make biological sense. Manual, hypothesis-driven selection is usually better for a small model.
+It inflates R², biases p-values, and knows nothing about biology. A small set of models you can *justify* beats an automated search over all of them.
 :::
 ::::
-:::::::
-
-## Comparing Models — the Full Model
-
-```{r multiple-regression-12}
-#| echo: false
-#| message: false
-#| warning: false
-#| paged-print: false
-full_model <- lm(ant_spp ~ elevation + latitude, data = ant_df)
-elevation_only <- lm(ant_spp ~ elevation, data = ant_df)
-latitude_only <- lm(ant_spp ~ latitude, data = ant_df)
-
-cat("\n========== FULL MODEL (Both Variables) ==========\n")
-summary(full_model)
-```
-
-## Comparing Models — Elevation Only
-
-```{r multiple-regression-13}
-#| echo: false
-#| message: false
-#| warning: false
-#| paged-print: false
-cat("\n========== ELEVATION ONLY MODEL ==========\n")
-summary(elevation_only)
-```
-
-## Comparing Models — Latitude Only
-
-```{r multiple-regression-14}
-#| echo: false
-#| message: false
-#| warning: false
-#| paged-print: false
-cat("\n========== LATITUDE ONLY MODEL ==========\n")
-summary(latitude_only)
-```
+:::::
 
 ## Comparing Models — Putting It Together
 
-```{r multiple-regression-15}
-#| echo: false
-#| message: false
-#| warning: false
-#| paged-print: false
-cat("\n========== MODEL COMPARISON TABLE ==========\n")
+::::: columns
+:::: {.column width="55%"}
+```{r multiple-regression-20}
+model_comparison <- tibble(
+  model = c("all six predictors",
+            "log_area + grazing",
+            "log_area only",
+            "grazing only"),
+  adj_r2 = c(summary(full_model)$adj.r.squared,
+             summary(reduced_model)$adj.r.squared,
+             summary(lm(abundance ~ log_area, bird_df))$adj.r.squared,
+             summary(lm(abundance ~ grazing, bird_df))$adj.r.squared),
+  AIC = c(AIC(full_model),
+          AIC(reduced_model),
+          AIC(lm(abundance ~ log_area, bird_df)),
+          AIC(lm(abundance ~ grazing, bird_df)))
+) %>%
+  mutate(delta_AIC = AIC - min(AIC)) %>%
+  arrange(AIC)
 
-full_adj_r2 <- summary(full_model)$adj.r.squared
-elev_adj_r2 <- summary(elevation_only)$adj.r.squared
-lat_adj_r2 <- summary(latitude_only)$adj.r.squared
-
-full_aic <- AIC(full_model)
-elev_aic <- AIC(elevation_only)
-lat_aic <- AIC(latitude_only)
-
-comparison <- data.frame(
-  Model = c("Both Variables",
-            "Elevation Only",
-            "Latitude Only"),
-  Adjusted_R2 = c(full_adj_r2, elev_adj_r2, lat_adj_r2),
-  AIC = c(full_aic, elev_aic, lat_aic),
-  R2_vs_Full = c(0, elev_adj_r2 - full_adj_r2, lat_adj_r2 - full_adj_r2),
-  AIC_vs_Full = c(0, elev_aic - full_aic, lat_aic - full_aic)
-)
-print(comparison)
-
-cat("\n========== KEY FINDINGS ==========\n")
-cat(sprintf("Full Model AIC: %.2f (Adjusted R^2: %.4f)\n", full_aic, full_adj_r2))
-cat(sprintf("Elevation Only AIC: %.2f (Adjusted R^2: %.4f)\n", elev_aic, elev_adj_r2))
-cat(sprintf("Latitude Only AIC: %.2f (Adjusted R^2: %.4f)\n", lat_aic, lat_adj_r2))
-
-cat("\n--- Differences from Full Model ---\n")
-cat(sprintf("Removing latitude: AIC increases by %.2f, Adj R^2 decreases by %.4f\n",
-            elev_aic - full_aic, elev_adj_r2 - full_adj_r2))
-cat(sprintf("Removing elevation: AIC increases by %.2f, Adj R^2 decreases by %.4f\n",
-            lat_aic - full_aic, lat_adj_r2 - full_adj_r2))
-
-cat("\n========== CONCLUSION ==========\n")
-cat("Full model has LOWEST AIC (best fit)\n")
-cat("Full model has HIGHEST Adjusted R^2 (explains most variance)\n")
-cat("Removing either variable worsens model performance\n")
-cat("\nBoth elevation and latitude are important predictors of ant species diversity!\n")
+model_comparison
 ```
+::::
+
+:::: {.column width="45%"}
+::: callout-important
+**✅ The two-predictor model wins**
+
+It has the **lowest AIC** and essentially the same adjusted R² as the full model — with four fewer predictors.
+
+A **ΔAIC above about 2** is usually treated as a real difference, so the full model's extra terms are not paying for themselves.
+:::
+
+The `anova()` test in Part 3 said the same thing. Two routes, one answer.
+::::
+:::::
 
 ## Part 9 · Relative Importance of Predictors {.divider}
 
 ## How Important Is Each Predictor?
 
-::::::: columns
-:::: {.column width="60%"}
-Usually we want to know the relative importance of predictors in explaining Y. Three general approaches:
+::::: columns
+:::: {.column width="55%"}
+Three standard approaches, and they answer slightly different questions:
 
-- Using F-tests (or t-tests) on partial regression slopes
-- Using the coefficient of partial determination
-- Using standardized partial regression slopes
+1. **F- or t-tests** on the partial slopes
+2. **Coefficient of partial determination** — the variance a predictor adds
+3. **Standardized partial slopes** — every predictor in SD units
+
+None of them is "the" right answer.
 ::::
 
-:::: {.column width="40%"}
-::: callout-note
-**✅ Key idea**
-
-None of these three approaches is "the" right answer — each answers a slightly different question about importance.
-:::
-::::
-:::::::
-
-## Approach 1 — F-Tests on Partial Slopes
-
-::::::: columns
-:::: {.column width="60%"}
-Using F-tests (or t-tests) on partial regression slopes:
-
-- Conduct F-tests of H₀ that each partial regression slope = 0
-- If you cannot reject H₀, discard the predictor
-- Can get additional clues from the relative size of F-values
-- Does **not** tell us the absolute importance of a predictor — you usually cannot directly compare slope parameters
-::::
-
-:::: {.column width="40%"}
+:::: {.column width="45%"}
 ::: callout-warning
-**⚠️ Watch out!**
+**⚠️ Why the raw slopes cannot be compared**
 
-A bigger F-value doesn't automatically mean a "more important" predictor if the predictors are on very different scales.
+`log_area` has a slope of `r round(coef(reduced_model)["log_area"], 2)` and `grazing` `r round(coef(reduced_model)["grazing"], 2)`.
+
+One is "birds per tenfold increase in area," the other is "birds per step of grazing intensity." Comparing those two numbers is comparing metres with kilograms.
 :::
 ::::
-:::::::
+:::::
 
-## Approach 2 — Coefficient of Partial Determination
+## Approaches 1 and 2 — Partial F and Partial R²
 
-::::::: columns
-:::: {.column width="60%"}
-The reduction in variation of Y due to adding predictor Xⱼ:
+::::: columns
+:::: {.column width="55%"}
+```{r multiple-regression-21}
+Anova(reduced_model, type = "II")
+```
 
-$$r_{X_j}^2 = \frac{SS_{Extra}}{Reduced\ SS_{Residual}}$$
-
-- $SS_{Extra}$ = increase in $SS_{regression}$ when Xⱼ is added to the model
-- Reduced $SS_{residual}$ is the unexplained SS from the model *without* Xⱼ
+**Partial η²** = $\dfrac{SS_{predictor}}{SS_{predictor} + SS_{residual}}$ — variance explained *after* controlling for the other predictor.
 ::::
 
-:::: {.column width="40%"}
-::: callout-tip
-**🖐 Notice**
-
-This is the same $SS_{Extra}$ logic from the partial F-test earlier — just expressed as a proportion of variance instead of an F-ratio.
+:::: {.column width="45%"}
+::: {.compact-table}
+| | log_area | grazing |
+|:---|---:|---:|
+| partial η² | `r round(anova_red[1,"Sum Sq"]/(anova_red[1,"Sum Sq"]+ss_res), 3)` | `r round(anova_red[2,"Sum Sq"]/(anova_red[2,"Sum Sq"]+ss_res), 3)` |
+| ΔR² | `r round(anova_red[1,"Sum Sq"]/ss_tot, 3)` | `r round(anova_red[2,"Sum Sq"]/ss_tot, 3)` |
 :::
+
+**ΔR²** is what the model's R² would lose if you dropped that predictor — its *unique* contribution.
+
+Both say area is the stronger of the two.
 ::::
-:::::::
+:::::
 
-## Approach 3 — Standardized Partial Regression Slopes
+## Approach 3 — Standardized Partial Slopes
 
-::::::: columns
-:::: {.column width="60%"}
-Predictors on different scales cannot be directly compared — why?
+::::: columns
+:::: {.column width="55%"}
+Rescale every variable to mean 0 and SD 1, and the slopes become directly comparable: "SDs of Y per SD of X."
 
-- Standardize all variables (mean = 0, SD = 1)
-- Scales are then identical, and a larger standardized partial slope means a more important variable
-::::
+```{r multiple-regression-22}
+bird_z <- bird_df %>%
+  mutate(across(c(abundance, log_area, grazing),
+                ~ as.numeric(scale(.))))
 
-:::: {.column width="40%"}
-::: callout-note
-**✅ Key idea**
-
-Standardizing puts every predictor in "SD units," so a slope of 0.5 always means "half an SD change in Y per SD change in X" — directly comparable across predictors.
-:::
-::::
-:::::::
-
-## Partial Eta Squared and Delta R²
-
-::::::: columns
-:::: {.column width="60%"}
-Using partial r² values — **partial eta squared (pEta²):**
-
-- **Elevation: 0.3189 (31.9%)** — elevation explains 31.9% of the variance *after controlling for latitude*
-- **Latitude: 0.3564 (35.6%)** — latitude explains 35.6% of the variance *after controlling for elevation*
-- Both are important predictors! Latitude is slightly stronger
-
-**Delta R² (semi-partial R²):**
-
-- Elevation: 0.2087 — if you removed elevation, R² would drop by 20.9%
-- Latitude: 0.2468 — if you removed latitude, R² would drop by 24.7%
-- Shows the *unique* contribution of each predictor to the total variance explained
-::::
-
-:::: {.column width="40%"}
-```{r multiple-regression-16}
-#| echo: false
-#| message: false
-#| warning: false
-#| paged-print: false
-anova_result <- Anova(full_model, type = "II")
-
-cat("\n== Type II ANOVA (car package) ==\n")
-print(anova_result)
-
-SSR <- anova_result$`Sum Sq`
-df_terms <- anova_result$Df
-SSE <- sum(residuals(full_model)^2)
-SST <- sum((ant_df$ant_spp - mean(ant_df$ant_spp))^2)
-
-results <- data.frame(
-  Coefficients = rownames(anova_result),
-  SSR = SSR,
-  df = df_terms,
-  pEta_sqr = SSR / (SSR + SSE),
-  dR_sqr = SSR / SST
-)
-
-cat("== Coefficients Table ==\n")
-print(results, row.names = FALSE, digits = 4)
-
-cat("\n== Summary Statistics ==\n")
-cat(sprintf("SSE: %.1f\n", SSE))
-cat(sprintf("SST: %.1f\n", SST))
-cat(sprintf("Model R^2: %.4f\n", summary(full_model)$r.squared))
+lm(abundance ~ log_area + grazing, data = bird_z) %>%
+  coef() %>% round(3)
 ```
 ::::
-:::::::
+
+:::: {.column width="45%"}
+**log_area `r round(coef(std_model)[2], 2)`** versus **grazing `r round(coef(std_model)[3], 2)`** — area is about `r round(abs(coef(std_model)[2]/coef(std_model)[3]), 1)`× the influence of grazing per standard deviation.
+
+::: callout-note
+**✅ All three agree here**
+
+Partial F, partial R² and standardized slopes all rank area above grazing. When they *disagree*, that is worth reporting — it usually means the predictors are tangled.
+:::
+::::
+:::::
 
 ## Wrap-up
 
-::::::: columns
-:::: {.column width="60%"}
 Today you:
 
-- Extended the regression line to a **plane** — two or more predictors at once
-- Learned to read a **partial slope**: the effect of one predictor *holding the others constant*, which is not the same as its slope on its own
-- Tested the whole model with an **overall F**, and single predictors with **partial F-tests**
-- Diagnosed **collinearity** with `vif()`, and saw why a high VIF poisons the individual slopes without necessarily hurting the fit
-- Fitted an **interaction** and paid for it in degrees of freedom and interpretability
-- Coded a categorical predictor as **dummy variables** against a reference level
-- Compared models with **adjusted R²** and **AIC**, which penalize you for adding predictors
-- Ranked predictors by partial F, partial R², and standardized slopes
+- Extended the regression line to a **plane**, and fitted `r nrow(bird_df)` forest patches against six predictors at once
+- Watched four predictors that were significant alone collapse to **one** in the model together
+- Read a **partial slope** as a conditional statement, and saw that neither it nor the simple slope is "wrong"
+- Tested groups of predictors with `anova(reduced, full)` and single ones with the t-tests in `summary()`
+- Diagnosed **collinearity** with `vif()`, and learned to say "these data cannot separate them" instead of "it has no effect"
+- Fitted a real **interaction** — fragmentation costs more where grazing is heavy
+- Turned a categorical predictor into **dummy variables**, and set the reference level on purpose with `fct_relevel()`
+- Compared models with **adjusted R²** and **AIC**, and ranked predictors three different ways
 
+## The Three Things to Carry Out of Here
+
+::::: columns
+:::: {.column width="50%"}
 ::: callout-important
-**⚠️ The trap to remember**
+**⚠️ R² always rises**
 
-Adding predictors **always** raises plain R². That is why we never compare models on R² alone — adjusted R² and AIC exist precisely because "it explains more variance" is not the same as "it is a better model."
+Adding predictors can only increase plain R². Adjusted R² and AIC exist precisely because "explains more variance" is not the same as "is a better model."
+:::
+
+::: callout-note
+**✅ A partial slope is conditional**
+
+"What does area do among patches grazed the same amount?" Change what else is in the model and you have changed the question.
 :::
 ::::
 
-:::: {.column width="40%"}
-::: callout-note
-**✅ The one idea to keep**
+:::: {.column width="50%"}
+::: callout-important
+**✅ Set your reference level**
 
-A partial slope answers a *conditional* question — "what does elevation do among sites at the same latitude?" Change which other predictors are in the model and you have changed the question, so the number is allowed to change too.
+`factor()` sorts alphabetically. Your control is almost never first alphabetically — use `fct_relevel()` and make the output say what you meant.
+
+This is the habit that makes every ANOVA from Week 8 onward readable.
 :::
 
 ::: callout-note
 **Up next — Analysis of Variance**
 
-- What happens when every predictor is categorical
-- Why ANOVA and regression are the same machinery wearing different clothes
+What happens when **every** predictor is categorical, and why ANOVA and regression are the same machinery in different clothes.
 :::
 ::::
-:::::::
+:::::
+
+## Readings
+
+- **Quinn, G. P., & Keough, M. J.** (2002). *Experimental Design and Data Analysis for Biologists*, Ch. 6 — Multiple and Complex Regression. This lecture follows their Box 6-2 analysis of the Loyn data.
+- **Whitlock & Schluter**, Ch. 17 — Regression.
+- **Gotelli & Ellison**, Ch. 9 — Regression.
+- Loyn, R. H. (1987). Effects of patch area and habitat on bird abundances, species numbers and tree health in fragmented Victorian forests. In *Nature Conservation: The Role of Remnants of Native Vegetation*. Surrey Beatty & Sons.
 
 ## Getting unstuck
 
 When code breaks — and it will, that is normal:
 
 1.  Read the **error message** out loud; it usually names the line
-2.  Check the usual suspects: is it `y ~ x1 + x2` (additive) or `y ~ x1 * x2` (interaction)? Is `car` loaded for `vif()`? Are you comparing models fitted to the **same rows** — an `NA` in one predictor silently drops that row
+2.  Check the usual suspects: is it `y ~ x1 + x2` (additive) or `y ~ x1 * x2` (interaction)? Is `car` loaded for `vif()` and `Anova()`? Are you comparing models fitted to the **same rows** — an `NA` in one predictor silently drops that row
 3.  `?function_name` opens the help page
 4.  Bring the **exact error** (copy-paste it) to class or office hours
 

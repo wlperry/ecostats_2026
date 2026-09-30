@@ -197,7 +197,7 @@
     }
   </style>
 <meta property="og:title" content="Lecture: Analysis of Variance (ANOVA) – UMD Biostatistics">
-<meta property="og:description" content="One-way ANOVA and its connection to regression: partitioning sums of squares, the F-ratio, assumptions and diagnostics, post-hoc testing, reporting, and non-parametric alternatives (Kruskal-Wallis, Dunn’s test) — on a circadian-rhythm light-treatment dataset.">
+<meta property="og:description" content="One-way ANOVA as regression with a categorical predictor: partitioning sums of squares, the F-ratio, assumptions and diagnostics, setting the reference level with fct_relevel(), post-hoc testing, reporting, and the non-parametric route when assumptions genuinely fail. Uses the fiddler crab claw-radiator experiment and a nematode lifespan dataset.">
 <meta property="og:site_name" content="UMD Biostatistics">
 </head>
 <body class="quarto-light">
@@ -223,13 +223,13 @@ Bill Perry
 <div class="column" style="width:60%;">
 <p>Covered last time — Multiple Regression:</p>
 <ul>
-<li>The MLR model, regression parameters</li>
-<li>Analysis of variance for regression</li>
-<li>Null hypotheses, explained variance</li>
-<li>Assumptions and diagnostics</li>
-<li>Collinearity, interactions, dummy variables</li>
-<li>Model selection, importance of predictors</li>
+<li>Partial slopes, and why they are conditional</li>
+<li>Collinearity, and saying “these data cannot separate them”</li>
+<li>Interactions</li>
+<li><strong>Factors, dummy variables, and <code>fct_relevel()</code></strong></li>
+<li>Model comparison with adjusted R² and AIC</li>
 </ul>
+</div><div class="column" style="width:40%;">
 <div class="callout callout-note callout-titled callout-style-default">
 <div class="callout-body">
 <div class="callout-title">
@@ -240,37 +240,32 @@ Bill Perry
 </div>
 <div class="callout-content">
 <p><strong>✅ Key idea from last lecture</strong></p>
-<p>You already built an ANOVA table for a regression — you just called it “analysis of variance for regression.” Today we apply the exact same machinery to categorical predictors.</p>
+<p>You already built an ANOVA table for a regression, and you already turned a categorical predictor into dummy variables.</p>
+<p>Today every predictor is categorical. <strong>The machinery does not change at all</strong> — only the name on the front does.</p>
 </div>
 </div>
-</div>
-</div><div class="column" style="width:40%;">
-<div class="quarto-figure quarto-figure-center">
-<figure>
-<p><img data-src="images/clipboard-2698541257.png" style="width:3.12in"></p>
-<figcaption>XKCD comic ‘Linear Regression’: a scatterplot of scattered points with a nearly flat fitted regression line labeled R-squared = 0.06 next to the same points connected into a constellation-like stick figure labeled ‘Rexthor, the Dog-Bearer’, captioned ‘I don’t trust linear regressions when it’s harder to guess the direction of the correlation from the scatter plot than to find new constellations on it.’</figcaption>
-</figure>
 </div>
 </div></div>
 </section>
-<section id="part-1-anova-overview" class="slide level2 divider">
-<h2>Part 1 · ANOVA Overview</h2>
+<section id="part-1-overview" class="slide level2 divider">
+<h2>Part 1 · Overview</h2>
 </section>
 <section id="todays-objectives" class="slide level2">
 <h2>Today’s Objectives</h2>
 <div class="columns">
 <div class="column" style="width:60%;">
-<p><strong>ANOVA:</strong> analysis of variance, single-factor today, multi-factor to come.</p>
+<p>One-way ANOVA, end to end:</p>
 <ul>
-<li>Predictor variables: fixed</li>
-<li>The ANOVA model</li>
-<li>Analysis and partitioning of variance</li>
-<li>Null hypothesis</li>
+<li>Why ANOVA <em>is</em> regression with a categorical predictor</li>
+<li>Partitioning variance, and the F-ratio</li>
 <li>Assumptions and diagnostics</li>
-<li>Post-hoc tests — Tukey and others</li>
-<li>Reporting the results</li>
-<li>Mixed-model ANOVA — random effects</li>
+<li>Setting the reference level on purpose</li>
+<li>Post-hoc tests — which pairs actually differ</li>
+<li>Reporting results</li>
+<li>What to do when the assumptions genuinely fail</li>
 </ul>
+<p><a href="data/fiddler_crabs.csv" class="btn btn-primary" download="fiddler_crabs.csv">📥 Crab data</a> <a href="data/nematode_lifespan.csv" class="btn btn-primary" download="nematode_lifespan.csv">📥 Nematode data</a></p>
+</div><div class="column" style="width:40%;">
 <div class="callout callout-note callout-titled callout-style-default">
 <div class="callout-body">
 <div class="callout-title">
@@ -280,13 +275,12 @@ Bill Perry
 <p><strong>Note</strong></p>
 </div>
 <div class="callout-content">
-<p><strong>📖 Reference</strong></p>
-<p>Gotelli &amp; Ellison, <em>A Primer of Ecological Statistics</em>, Ch. 10 — The Analysis of Variance, is the core reference for this lecture.</p>
+<p><strong>📖 Reading</strong></p>
+<p>Whitlock &amp; Schluter, Ch. 15 — Comparing Means of More Than Two Groups.</p>
+<p>Gotelli &amp; Ellison, Ch. 10 — The Analysis of Variance.</p>
 </div>
 </div>
 </div>
-</div><div class="column" style="width:40%;">
-<p>What if the response is continuous and the predictor(s) categorical?</p>
 <table class="caption-top">
 <thead>
 <tr class="header">
@@ -299,628 +293,46 @@ Bill Perry
 <tr class="odd">
 <td style="text-align: left;"><strong>Continuous Y</strong></td>
 <td style="text-align: left;">Regression</td>
-<td style="text-align: left;">ANOVA</td>
+<td style="text-align: left;"><strong>ANOVA</strong></td>
 </tr>
 <tr class="even">
 <td style="text-align: left;"><strong>Categorical Y</strong></td>
-<td style="text-align: left;">Logistic regression</td>
-<td style="text-align: left;"></td>
+<td style="text-align: left;">Logistic</td>
+<td style="text-align: left;">Contingency</td>
 </tr>
 </tbody>
 </table>
 </div></div>
 </section>
-<section id="part-2-anova-and-regression-connection" class="slide level2 divider">
-<h2>Part 2 · ANOVA and Regression Connection</h2>
-</section>
-<section id="anova-and-regression-connection" class="slide level2">
-<h2>ANOVA and Regression Connection</h2>
+<section id="the-study-does-a-big-claw-act-as-a-radiator" class="slide level2">
+<h2>The Study · Does a Big Claw Act as a Radiator?</h2>
 <div class="columns">
-<div class="column" style="width:60%;">
-<p><strong>Both regression and ANOVA:</strong></p>
+<div class="column" style="width:55%;">
+<p>A male fiddler crab has one hugely enlarged claw. Darnell &amp; Munguia asked whether it doubles as a <strong>heat radiator</strong>, dumping heat so the crab can stay out foraging in the sun.</p>
+<p>Four groups of <strong>21 crabs each</strong>, body temperature above ambient measured in the field:</p>
 <ul>
-<li>Partition the total variation in Y</li>
-<li>Use F-tests for significance, where one MS is divided by another</li>
+<li><code>intact male</code> — the control</li>
+<li><code>male major removed</code> — the big claw taken off</li>
+<li><code>male minor removed</code> — a small claw taken off, the <strong>procedural control</strong></li>
+<li><code>female</code> — never had a major claw at all</li>
 </ul>
-<p><strong>Regression:</strong></p>
-<ul>
-<li>Form: <span class="math inline">\(Y = \beta_0 + \beta_1X + \varepsilon\)</span> — Y is the response, β₀ the intercept, β₁ the slope, X the predictor, ε the error</li>
-<li>Test: <span class="math inline">\(H_0: \beta_1 = 0\)</span> — rejecting means X significantly predicts Y</li>
-</ul>
-</div><div class="column" style="width:40%;">
-<p><strong>ANOVA:</strong></p>
-<ul>
-<li>Form: <span class="math inline">\(Y_{ij} = \mu + A_i + \varepsilon_{ij}\)</span> — <span class="math inline">\(Y_{ij}\)</span> is observation j in group i, μ the grand mean, <span class="math inline">\(A_i\)</span> the effect of group i, ε the error</li>
-<li>Test: <span class="math inline">\(H_0: \mu_1 = \mu_2 = ... = \mu_k\)</span> — rejecting means at least one group differs</li>
-</ul>
-</div></div>
-</section>
-<section id="the-same-partitioning-two-kinds-of-predictor" class="slide level2">
-<h2>The Same Partitioning, Two Kinds of Predictor</h2>
-<div class="columns">
-<div class="column" style="width:60%;">
-<p>General method for partitioning variation in a continuous dependent variable:</p>
-<ul>
-<li>One or more continuous (and categorical) predictors → <strong>regression</strong></li>
-<li>One or more categorical predictors → <strong>ANOVA</strong></li>
-<li>Categorical predictor variables represent groups or experimental treatments</li>
-</ul>
-</div><div class="column" style="width:40%;">
+<p>If the big claw sheds heat, removing it should make males <strong>hotter</strong>.</p>
+</div><div class="column" style="width:45%;">
 <div class="cell">
-<div class="cell-output-display">
-<div>
-<figure>
-<p><img data-src="analysis_of_variance_lecture_files/figure-revealjs/analysis-of-variance-02-1.png" alt="Two stacked plots: a scatterplot of absorbance versus nitrate concentration with a fitted regression line and equation, above a jittered scatterplot of phase shift by light treatment group with mean points and confidence-interval error bars, illustrating that regression and ANOVA both partition variation but with a continuous versus categorical predictor." width="345"></p>
-</figure>
-</div>
-</div>
-</div>
-</div></div>
-</section>
-<section id="anova-as-regression" class="slide level2">
-<h2>ANOVA as Regression</h2>
-<div class="callout callout-tip callout-titled callout-style-default">
-<div class="callout-body">
-<div class="callout-title">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<p><strong>Tip</strong></p>
-</div>
-<div class="callout-content">
-<p><strong>ANOVA as regression</strong></p>
-<p>With one categorical variable, ANOVA is equivalent to regression with dummy variables. In fact, when we run ANOVAs we use the same code as for regression!</p>
-<p><code>regression: model &lt;- lm(response ~ predictor, data = df)</code> <code>anova: model &lt;- lm(response ~ factor, data = df)</code></p>
-<div class="cell">
-<div class="cell-output-display">
-<div>
-<figure>
-<p><img data-src="analysis_of_variance_lecture_files/figure-revealjs/analysis-of-variance-03-1.png" alt="Jittered scatterplot of a simulated response variable by three nutrient treatment groups (No, Low, High), with diamond points marking each group's mean and confidence-interval error bars, illustrating a one-way ANOVA setup." width="326"></p>
-</figure>
-</div>
-</div>
-</div>
-</div>
-</div>
-</div>
-</section>
-<section id="part-3-anova-goals-and-logic" class="slide level2 divider">
-<h2>Part 3 · ANOVA Goals and Logic</h2>
-</section>
-<section id="anova-goals" class="slide level2">
-<h2>ANOVA Goals</h2>
-<div class="columns">
-<div class="column" style="width:60%;">
-<p>ANOVA aims to compare means of groups:</p>
-<ul>
-<li>Attributes contribution of predictors + “error” to variability</li>
-<li>Tests H₀ that population (random effects) or group (fixed effects) means are equal</li>
-<li>Single factor (1-way) and multifactor (2-, 3-way designs)
-<ul>
-<li>Single factor: one factor with more than two levels</li>
-</ul></li>
-<li>Multifactor: two or three factors with two or more levels each — examines variation due to factors <strong>AND</strong> their interaction</li>
-</ul>
-</div><div class="column" style="width:40%;">
-<div class="cell">
-<div class="cell-output-display">
-<div>
-<figure>
-<p><img data-src="analysis_of_variance_lecture_files/figure-revealjs/analysis-of-variance-04-1.png" alt="Jittered scatterplot of circadian phase shift by light treatment (Control, Knees, Eyes), with diamond points marking each group's mean and confidence-interval error bars." width="288"></p>
-</figure>
-</div>
-</div>
-</div>
-</div></div>
-</section>
-<section id="analysis-of-variance" class="slide level2">
-<h2>Analysis of Variance</h2>
-<div class="columns">
-<div class="column" style="width:60%;">
-<p><em>Analysis of variance</em> is the most powerful approach known for simultaneously testing if the means of k groups are equal — it works by assessing whether individuals chosen from different groups are, on average, more different than individuals chosen from the same group.</p>
-<p>The null hypothesis of ANOVA is that the population means μᵢ are the same for all treatments.</p>
-<ul>
-<li><strong>H₀:</strong> μ₁ = μ₂ = … = μₖ</li>
-<li><strong>H₁:</strong> at least one μᵢ is different from the others</li>
-</ul>
-<p>Rejecting H₀ in ANOVA is evidence that the mean of at least one group is different from the others — it does <strong>not</strong> indicate <em>which</em> means differ.</p>
-</div><div class="column" style="width:40%;">
-<div class="cell">
-<div class="cell-output-display">
-<div>
-<figure>
-<p><img data-src="analysis_of_variance_lecture_files/figure-revealjs/analysis-of-variance-05-1.png" alt="The circadian phase shift by light treatment plot repeated, shown alongside the ANOVA null and alternative hypothesis statements." width="288"></p>
-</figure>
-</div>
-</div>
-</div>
-</div></div>
-</section>
-<section id="anova-logic" class="slide level2 scrollable">
-<h2>ANOVA Logic</h2>
-<div class="columns">
-<div class="column" style="width:60%;">
-<p>Even if all groups had the same true mean, the data would likely show different sample means for each group due to sampling error.</p>
-<p>The key insight of ANOVA: we can estimate how much variation among group means ought to be present from sampling error alone if H₀ is true. ANOVA lets us determine whether there is more variance among the sample means than expected by chance alone. If so, we infer real differences among the population means.</p>
-<p>Two key measures of variation are calculated and compared:</p>
-<ol type="1">
-<li><strong>Group mean square (<span class="math inline">\(MS_{groups}\)</span>)</strong> — variation among subjects from different groups</li>
-<li><strong>Error mean square (<span class="math inline">\(MS_{error}\)</span>)</strong> — variation among subjects within the same group</li>
-</ol>
-<p><span class="math display">\[F = \frac{MS_{groups}}{MS_{error}}\]</span></p>
-</div><div class="column" style="width:40%;">
-<div class="cell">
-<div class="cell-output-display">
-<div>
-<figure>
-<p><img data-src="analysis_of_variance_lecture_files/figure-revealjs/analysis-of-variance-06-1.png" alt="Three stacked plots illustrating ANOVA's variance partitioning: total variation as each point's deviation from the grand mean, among-groups variation as each group mean's deviation from the grand mean, and within-groups variation as each point's deviation from its own group mean." width="326"></p>
-</figure>
-</div>
-</div>
-</div>
-</div></div>
-</section>
-<section id="part-4-partitioning-the-sum-of-squares" class="slide level2 divider">
-<h2>Part 4 · Partitioning the Sum of Squares</h2>
-</section>
-<section id="partitioning-the-sum-of-squares" class="slide level2 scrollable">
-<h2>Partitioning the Sum of Squares</h2>
-<div class="columns">
-<div class="column" style="width:60%;">
-<p>The total variation in Y can be expressed as a sum of squares:</p>
-<p><span class="math display">\[SS_{total} = \sum_{i=1}^{a}\sum_{j=1}^{n}(Y_{ij} - \bar{Y})^2\]</span></p>
-<p>This can be partitioned into two components:</p>
-<ol type="1">
-<li><strong>Among Groups (Treatment):</strong> <span class="math inline">\(SS_{among} = n\sum_{i=1}^{a}(\bar{Y}_i - \bar{Y})^2\)</span></li>
-<li><strong>Within Groups (Error):</strong> <span class="math inline">\(SS_{within} = \sum_{i=1}^{a}\sum_{j=1}^{n}(Y_{ij} - \bar{Y}_i)^2\)</span></li>
-</ol>
-<p>These components are additive: <span class="math inline">\(SS_{total} = SS_{among} + SS_{within}\)</span></p>
-</div><div class="column" style="width:40%;">
-<div class="cell">
-<div class="cell-output-display">
-<div>
-<figure>
-<p><img data-src="analysis_of_variance_lecture_files/figure-revealjs/analysis-of-variance-07-1.png" alt="The three-panel total/among/within variance partitioning figure repeated, shown alongside the sum-of-squares formulas it illustrates." width="326"></p>
-</figure>
-</div>
-</div>
-</div>
-</div></div>
-</section>
-<section id="a-worked-sum-of-squares-example" class="slide level2">
-<h2>A Worked Sum-of-Squares Example</h2>
-<div class="columns">
-<div class="column" style="width:60%;">
-<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a aria-label="1"></a>crab_df <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="st">"data/fiddler_crabs.csv"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb1-2"><a aria-label="2"></a>  <span class="fu">mutate</span>(<span class="at">crab_type =</span> <span class="fu">factor</span>(crab_type))</span>
+<span id="cb1-3"><a aria-label="3"></a></span>
+<span id="cb1-4"><a aria-label="4"></a><span class="fu">count</span>(crab_df, crab_type)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>
-Call:
-lm(formula = phase_shift ~ treatment, data = circ_data)
-
-Residuals:
-     Min       1Q   Median       3Q      Max 
--1.27857 -0.36125  0.03857  0.61147  1.06571 
-
-Coefficients:
-               Estimate Std. Error t value Pr(&gt;|t|)   
-(Intercept)    -0.30875    0.24888  -1.241  0.22988   
-treatmentEyes  -1.24268    0.36433  -3.411  0.00293 **
-treatmentKnees -0.02696    0.36433  -0.074  0.94178   
----
-Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
-
-Residual standard error: 0.7039 on 19 degrees of freedom
-Multiple R-squared:  0.4342,    Adjusted R-squared:  0.3746 
-F-statistic: 7.289 on 2 and 19 DF,  p-value: 0.004472</code></pre>
-</div>
-<div class="cell-output cell-output-stdout">
-<pre><code>Analysis of Variance Table
-
-Response: phase_shift
-          Df Sum Sq Mean Sq F value   Pr(&gt;F)   
-treatment  2 7.2245  3.6122  7.2894 0.004472 **
-Residuals 19 9.4153  0.4955                    
----
-Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</code></pre>
+<pre><code># A tibble: 4 × 2
+  crab_type              n
+  &lt;fct&gt;              &lt;int&gt;
+1 female                21
+2 intact male           21
+3 male major removed    21
+4 male minor removed    21</code></pre>
 </div>
 </div>
-</div><div class="column" style="width:40%;">
-<div class="callout callout-important callout-titled callout-style-default">
-<div class="callout-body">
-<div class="callout-title">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<p><strong>Important</strong></p>
-</div>
-<div class="callout-content">
-<p><strong>Key connection to regression</strong></p>
-<p>This is the same partitioning we saw in regression analysis:</p>
-<p><span class="math display">\[SS_{total} = SS_{regression} + SS_{residual}\]</span></p>
-<ul>
-<li><span class="math inline">\(SS_{among}\)</span> in ANOVA = <span class="math inline">\(SS_{regression}\)</span> in regression</li>
-<li><span class="math inline">\(SS_{within}\)</span> in ANOVA = <span class="math inline">\(SS_{residual}\)</span> in regression</li>
-</ul>
-<p>Both measure how much variation is explained by our model vs.&nbsp;unexplained (error).</p>
-</div>
-</div>
-</div>
-</div></div>
-</section>
-<section id="the-anova-table" class="slide level2">
-<h2>The ANOVA Table</h2>
-<div class="columns">
-<div class="column" style="width:60%;">
-<p>The ANOVA table organizes all computations leading to a test of the null hypothesis of no differences among population means.</p>
-<ul>
-<li><strong>Source of variation</strong> — what is being tested</li>
-<li><strong>Sum of squares</strong> — total variation for each source</li>
-<li><strong>df</strong> — degrees of freedom for each source</li>
-<li><strong>Mean squares</strong> — sum of squares divided by df</li>
-<li><strong>F-ratio</strong> — ratio of mean squares, used to test significance</li>
-<li><strong>P-value</strong> — probability of observing our results if H₀ is true</li>
-</ul>
-<p><strong>Example:</strong> for a one-way ANOVA with 3 groups and 4 replicates per group: df(treatments) = a − 1 = 2, df(error) = a(n − 1) = 3(4 − 1) = 9, df(total) = an − 1 = 11</p>
-</div><div class="column" style="width:40%;">
-<div class="cell">
-<div class="cell-output cell-output-stdout">
-<pre><code>
-Call:
-lm(formula = phase_shift ~ treatment, data = circ_data)
-
-Residuals:
-     Min       1Q   Median       3Q      Max 
--1.27857 -0.36125  0.03857  0.61147  1.06571 
-
-Coefficients:
-               Estimate Std. Error t value Pr(&gt;|t|)   
-(Intercept)    -0.30875    0.24888  -1.241  0.22988   
-treatmentEyes  -1.24268    0.36433  -3.411  0.00293 **
-treatmentKnees -0.02696    0.36433  -0.074  0.94178   
----
-Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
-
-Residual standard error: 0.7039 on 19 degrees of freedom
-Multiple R-squared:  0.4342,    Adjusted R-squared:  0.3746 
-F-statistic: 7.289 on 2 and 19 DF,  p-value: 0.004472</code></pre>
-</div>
-<div class="cell-output cell-output-stdout">
-<pre><code>Analysis of Variance Table
-
-Response: phase_shift
-          Df Sum Sq Mean Sq F value   Pr(&gt;F)   
-treatment  2 7.2245  3.6122  7.2894 0.004472 **
-Residuals 19 9.4153  0.4955                    
----
-Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</code></pre>
-</div>
-<div class="cell-output cell-output-stdout">
-<pre><code># A tibble: 3 × 4
-  treatment   Mean    SD     N
-  &lt;fct&gt;      &lt;dbl&gt; &lt;dbl&gt; &lt;int&gt;
-1 Control   -0.309 0.618     8
-2 Eyes      -1.55  0.706     7
-3 Knees     -0.336 0.791     7</code></pre>
-</div>
-</div>
-</div></div>
-</section>
-<section id="comparing-anova-and-regression-tables" class="slide level2">
-<h2>Comparing ANOVA and Regression Tables</h2>
-<div class="callout callout-important callout-titled callout-style-default">
-<div class="callout-body">
-<div class="callout-title">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<p><strong>Important</strong></p>
-</div>
-<div class="callout-content">
-<p><strong>ANOVA table:</strong></p>
-<table class="caption-top">
-<thead>
-<tr class="header">
-<th>Source</th>
-<th>df</th>
-<th>SS</th>
-<th>MS</th>
-<th>F</th>
-<th>p</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td>Treatment</td>
-<td>a-1</td>
-<td>SS_treatment</td>
-<td>MS_treatment</td>
-<td>F</td>
-<td>p</td>
-</tr>
-<tr class="even">
-<td>Error</td>
-<td>a(n-1)</td>
-<td>SS_error</td>
-<td>MS_error</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>Total</td>
-<td>a*n-1</td>
-<td>SS_total</td>
-<td></td>
-<td></td>
-<td></td>
-</tr>
-</tbody>
-</table>
-<p><strong>Is equivalent to an ANOVA table from a regression model:</strong></p>
-<table class="caption-top">
-<thead>
-<tr class="header">
-<th>Source</th>
-<th>df</th>
-<th>SS</th>
-<th>MS</th>
-<th>F</th>
-<th>p</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td>Regression</td>
-<td>k</td>
-<td>SS_regression</td>
-<td>MS_regression</td>
-<td>F</td>
-<td>p</td>
-</tr>
-<tr class="even">
-<td>Error</td>
-<td>n-k-1</td>
-<td>SS_residual</td>
-<td>MS_residual</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>Total</td>
-<td>n-1</td>
-<td>SS_total</td>
-<td></td>
-<td></td>
-<td></td>
-</tr>
-</tbody>
-</table>
-<p>Where k = number of predictor/dummy variables = a − 1, and a = treatment groups/levels of factors.</p>
-</div>
-</div>
-</div>
-</section>
-<section id="part-5-the-f-ratio" class="slide level2 divider">
-<h2>Part 5 · The F-Ratio</h2>
-</section>
-<section id="the-f-ratio" class="slide level2">
-<h2>The F-Ratio</h2>
-<div class="columns">
-<div class="column" style="width:60%;">
-<p><span class="math display">\[F = \frac{MS_{among}}{MS_{error}}\]</span></p>
-<ul>
-<li>Under H₀ (all means equal): the F-ratio should be approximately 1</li>
-<li>Larger F-ratios suggest among-group variance exceeds what’s expected by chance</li>
-<li>With the circadian rhythm data: F = 7.29, p = 0.004 — we reject H₀</li>
-<li>The F-ratio follows an F-distribution with (a − 1) and a(n − 1) df</li>
-</ul>
-<div class="cell">
-<div class="cell-output cell-output-stdout">
-<pre><code># A tibble: 2 × 2
-  Metric                    Value
-  &lt;chr&gt;                     &lt;dbl&gt;
-1 F-observed                 7.29
-2 F-critical (alpha = 0.05)  3.52</code></pre>
-</div>
-</div>
-</div><div class="column" style="width:40%;">
-<div class="cell">
-<div class="cell-output-display">
-<div>
-<figure>
-<p><img data-src="analysis_of_variance_lecture_files/figure-revealjs/analysis-of-variance-11-1.png" alt="F-distribution curve with 2 and 19 degrees of freedom, with the rejection region beyond the critical F-value shaded red and a dashed blue line marking the critical F-value." width="326"></p>
-</figure>
-</div>
-</div>
-</div>
-</div></div>
-</section>
-<section id="connection-of-an-f-test-to-a-t-test" class="slide level2">
-<h2>Connection of an F-Test to a T-Test</h2>
-<div class="columns">
-<div class="column" style="width:60%;">
-<p>An ANOVA with two groups (a = 2) is equivalent to a t-test — why F = t²? Both test the same hypothesis: are the means of two groups different?</p>
-<ul>
-<li><strong>The t-statistic:</strong> <span class="math inline">\(t = \frac{\bar{X}_1 - \bar{X}_2}{SE_{difference}}\)</span> — measures how many standard errors apart the two means are, and can be + or −</li>
-<li><strong>The F-statistic:</strong> <span class="math inline">\(F = \frac{MS_B}{MS_W}\)</span> — the ratio of variance <em>between</em> groups to variance <em>within</em> groups</li>
-<li>Unlike t, F is always non-negative (it’s a ratio of squared quantities)</li>
-</ul>
-</div><div class="column" style="width:40%;">
-<p><strong>The mathematical connection:</strong></p>
-<ul>
-<li>Both measure the same signal-to-noise ratio — numerators capture the difference between groups (signal), denominators capture variability within groups (noise)</li>
-<li>With two groups: <span class="math inline">\(MS_B\)</span> relates directly to <span class="math inline">\((\bar{X}_1 - \bar{X}_2)^2\)</span>, and <span class="math inline">\(MS_W\)</span> relates to the pooled variance</li>
-<li><strong>Degrees of freedom match up too:</strong> t-test df = n₁ + n₂ − 2; F-test df₁ = 1 (numerator), df₂ = n₁ + n₂ − 2 (denominator)</li>
-<li>An F-distribution with df₁ = 1 is the square of a t-distribution with df₂</li>
-</ul>
-</div></div>
-</section>
-<section id="why-this-matters-anova-generalizes-the-t-test" class="slide level2">
-<h2>Why This Matters — ANOVA Generalizes the T-Test</h2>
-<div class="columns">
-<div class="column" style="width:60%;">
-<ul>
-<li>Shows ANOVA is actually a <em>generalization</em> of the t-test</li>
-<li>When a = 2, you get the same result either way</li>
-<li>But ANOVA extends naturally to comparing three or more groups — you can’t do that directly with a t-test without running into multiple-comparison problems</li>
-</ul>
-</div><div class="column" style="width:40%;">
-<div class="cell">
-<div class="cell-output cell-output-stdout">
-<pre><code>Using circ_data (Control vs Knees groups):
- t-statistic: 0.0741 
- t^2: 0.0055 
- F-statistic: 0.0055 
- Difference (should be ~0): 0 </code></pre>
-</div>
-</div>
-</div></div>
-</section>
-<section id="f-ratio-confirmed-on-the-full-model" class="slide level2">
-<h2>F-Ratio, Confirmed on the Full Model</h2>
-<div class="columns">
-<div class="column" style="width:60%;">
-<p><span class="math display">\[F = \frac{MS_{among}}{MS_{error}}\]</span></p>
-<ul>
-<li>Under H₀ (all means equal), the F-ratio should be ≈ 1</li>
-<li>Larger F-ratios suggest among-group variance exceeds chance</li>
-<li>With the circadian rhythm data: F₂,₁₉ = 7.29, p = 0.004 — we reject H₀</li>
-<li>The F-ratio follows an F-distribution with (a − 1) and a(n − 1) df</li>
-</ul>
-<div class="cell">
-<div class="cell-output cell-output-stdout">
-<pre><code>
-Call:
-lm(formula = phase_shift ~ treatment, data = circ_data)
-
-Residuals:
-     Min       1Q   Median       3Q      Max 
--1.27857 -0.36125  0.03857  0.61147  1.06571 
-
-Coefficients:
-               Estimate Std. Error t value Pr(&gt;|t|)   
-(Intercept)    -0.30875    0.24888  -1.241  0.22988   
-treatmentEyes  -1.24268    0.36433  -3.411  0.00293 **
-treatmentKnees -0.02696    0.36433  -0.074  0.94178   
----
-Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
-
-Residual standard error: 0.7039 on 19 degrees of freedom
-Multiple R-squared:  0.4342,    Adjusted R-squared:  0.3746 
-F-statistic: 7.289 on 2 and 19 DF,  p-value: 0.004472</code></pre>
-</div>
-<div class="cell-output cell-output-stdout">
-<pre><code>Anova Table (Type II tests)
-
-Response: phase_shift
-          Sum Sq Df F value   Pr(&gt;F)   
-treatment 7.2245  2  7.2894 0.004472 **
-Residuals 9.4153 19                    
----
-Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</code></pre>
-</div>
-</div>
-</div><div class="column" style="width:40%;">
-<div class="cell">
-<div class="cell-output-display">
-<div>
-<figure>
-<p><img data-src="analysis_of_variance_lecture_files/figure-revealjs/analysis-of-variance-14-1.png" alt="The circadian phase shift by light treatment plot repeated once more, shown alongside the F-ratio result confirmed on the full three-group model." width="288"></p>
-</figure>
-</div>
-</div>
-</div>
-</div></div>
-</section>
-<section id="part-6-variance-explained-r²" class="slide level2 divider">
-<h2>Part 6 · Variance Explained — R²</h2>
-</section>
-<section id="variance-explained-r²" class="slide level2">
-<h2>Variance Explained: R²</h2>
-<div class="columns">
-<div class="column" style="width:60%;">
-<p>R² summarizes the contribution of group differences to total variation:</p>
-<p><span class="math display">\[R^2 = \frac{SS_{among}}{SS_{total}}\]</span></p>
-<p>This is interpreted as the “fraction of the variation in Y that is explained by groups.” For the circadian rhythm data:</p>
-<p><span class="math display">\[R^2 = \frac{7.224}{16.639} = 0.43\]</span></p>
-<p>43% of the total variation in phase shift is explained by differences in light treatment, with the remaining 57% unexplained.</p>
-<p><strong>Connection to regression:</strong> this is exactly the same calculation as R² in regression, <span class="math inline">\(R^2 = SS_{regression}/SS_{total}\)</span>.</p>
-</div><div class="column" style="width:40%;">
-<div class="cell">
-<div class="cell-output-display">
-<div>
-<figure>
-<p><img data-src="analysis_of_variance_lecture_files/figure-revealjs/analysis-of-variance-15-1.png" alt="Two stacked plots: a filled-rectangle diagram showing the percentage of variance explained (blue) versus unexplained (grey) by treatment, and a scatterplot of phase shift against treatment group coded as a number with a fitted regression line and R-squared label, showing ANOVA as a regression view." width="326"></p>
-</figure>
-</div>
-</div>
-</div>
-</div></div>
-</section>
-<section id="part-7-assumptions-and-diagnostics" class="slide level2 divider">
-<h2>Part 7 · Assumptions and Diagnostics</h2>
-</section>
-<section id="anova-assumptions" class="slide level2">
-<h2>ANOVA Assumptions</h2>
-<div class="columns">
-<div class="column" style="width:60%;">
-<p>ANOVA has the same assumptions as the two-sample t-test, but applied to all k groups:</p>
-<ul>
-<li><strong>Random samples</strong> from corresponding populations</li>
-<li><strong>Normality</strong> — Y values are normally distributed in each population</li>
-<li><strong>Homogeneity of variance</strong> — variance is the same in all populations</li>
-<li><strong>Independence</strong> — observations are independent</li>
-</ul>
-</div><div class="column" style="width:40%;">
-<p><strong>Checking assumptions:</strong></p>
-<ul>
-<li>Normality: QQ plots, histogram of residuals, Shapiro-Wilk test</li>
-<li>Homogeneity: plot residuals vs.&nbsp;predicted values or x-values</li>
-<li>Independence: examine the experimental design</li>
-</ul>
-<p><strong>If assumptions are violated:</strong> transform Y (e.g., log, square root), use robust or non-parametric alternatives, or use generalized linear models (GLMs).</p>
-</div></div>
-</section>
-<section id="the-four-standard-diagnostic-plots" class="slide level2">
-<h2>The Four Standard Diagnostic Plots</h2>
-<div class="columns">
-<div class="column" style="width:60%;">
-<div class="cell">
-<div class="cell-output-display">
-<div>
-<figure>
-<p><img data-src="analysis_of_variance_lecture_files/figure-revealjs/analysis-of-variance-16-1.png" alt="Four standard regression diagnostic plots for the ANOVA model, hand-built with ggplot2: residuals vs. fitted, normal Q-Q, scale-location, and residuals vs. leverage." width="345"></p>
-</figure>
-</div>
-</div>
-</div>
-</div><div class="column" style="width:40%;">
-<div class="callout callout-tip callout-titled callout-style-default">
-<div class="callout-body">
-<div class="callout-title">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<p><strong>Tip</strong></p>
-</div>
-<div class="callout-content">
-<p><strong>🖐 Notice</strong></p>
-<p>These are the same four diagnostic views R gives you automatically from <code>plot(model)</code> — here built by hand with <code>ggplot2</code> + <code>broom::fortify()</code> so we can style them consistently.</p>
-</div>
-</div>
-</div>
-</div></div>
-</section>
-<section id="a-newer-way-to-check-the-performance-package" class="slide level2">
-<h2>A Newer Way to Check — the <code>performance</code> Package</h2>
-<div class="columns">
-<div class="column" style="width:60%;">
-<div class="quarto-figure quarto-figure-center">
-<figure>
-<p><img data-src="diagnostics_2.png" style="width:4in"></p>
-<figcaption>Multi-panel model diagnostic figure generated by performance::check_model(), including residual, normality, homogeneity of variance, and collinearity panels with built-in reference bands.</figcaption>
-</figure>
-</div>
-</div><div class="column" style="width:40%;">
 <div class="callout callout-note callout-titled callout-style-default">
 <div class="callout-body">
 <div class="callout-title">
@@ -930,710 +342,15 @@ Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</code></pre>
 <p><strong>Note</strong></p>
 </div>
 <div class="callout-content">
-<p><strong>✅ Key idea</strong></p>
-<p><code>check_model()</code> from the <code>performance</code> package builds all the standard diagnostic panels — plus a few extra (e.g., collinearity) — in one call, with built-in guidance on what “good” looks like for each panel.</p>
+<p><strong>A balanced design</strong></p>
+<p>Equal n in every group — which makes the degrees-of-freedom arithmetic below clean, and the test robust.</p>
 </div>
 </div>
 </div>
 </div></div>
 </section>
-<section id="levenes-test" class="slide level2">
-<h2>Levene’s Test</h2>
-<div class="columns">
-<div class="column" style="width:60%;">
-<p>Levene’s test of homogeneity of variance.</p>
-<ul>
-<li>Null hypothesis: variances are homogeneous</li>
-<li>So you <em>want</em> a non-significant result here</li>
-</ul>
-</div><div class="column" style="width:40%;">
-<div class="cell">
-<div class="cell-output cell-output-stdout">
-<pre><code>Levene's Test for Homogeneity of Variance (center = median)
-      Df F value Pr(&gt;F)
-group  2  0.1586 0.8545
-      19               </code></pre>
-</div>
-</div>
-</div></div>
-</section>
-<section id="shapiro-wilk-test" class="slide level2">
-<h2>Shapiro-Wilk Test</h2>
-<div class="columns">
-<div class="column" style="width:60%;">
-<p>Shapiro-Wilk normality test.</p>
-<ul>
-<li>Null hypothesis: the data are normally distributed</li>
-<li>So you <em>want</em> a non-significant result here</li>
-</ul>
-</div><div class="column" style="width:40%;">
-<div class="cell">
-<div class="cell-output cell-output-stdout">
-<pre><code>
-    Shapiro-Wilk normality test
-
-data:  residuals(circ_model)
-W = 0.95893, p-value = 0.468</code></pre>
-</div>
-</div>
-</div></div>
-</section>
-<section id="shared-assumptions-with-regression" class="slide level2">
-<h2>Shared Assumptions with Regression</h2>
-<div class="callout callout-note callout-titled callout-style-default">
-<div class="callout-body">
-<div class="callout-title">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<p><strong>Note</strong></p>
-</div>
-<div class="callout-content">
-<p><strong>ANOVA and regression share virtually identical assumptions, because they are both linear models:</strong></p>
-<table class="caption-top">
-<colgroup>
-<col style="width: 33%">
-<col style="width: 33%">
-<col style="width: 33%">
-</colgroup>
-<thead>
-<tr class="header">
-<th>Assumption</th>
-<th>ANOVA</th>
-<th>Regression</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td>Linearity</td>
-<td>Each group has its own mean; effects are additive (no interaction in one-way ANOVA)</td>
-<td>Relationship between X and Y is linear</td>
-</tr>
-<tr class="even">
-<td>Normality</td>
-<td>Residuals are normal</td>
-<td>Residuals are normal</td>
-</tr>
-<tr class="odd">
-<td>Equal variance</td>
-<td>Variance is the same across all groups</td>
-<td>Variance is the same across all X values</td>
-</tr>
-<tr class="even">
-<td>Independence</td>
-<td>Observations are independent</td>
-<td>Observations are independent</td>
-</tr>
-</tbody>
-</table>
-</div>
-</div>
-</div>
-</section>
-<section id="part-8-post-hoc-testing" class="slide level2 divider">
-<h2>Part 8 · Post-Hoc Testing</h2>
-</section>
-<section id="anova-post-hoc-testing-overview" class="slide level2">
-<h2>ANOVA Post-Hoc Testing — Overview</h2>
-<div class="columns">
-<div class="column" style="width:50%;">
-<p>When ANOVA rejects H₀, we need to determine which groups differ.</p>
-<ul>
-<li><strong>Unplanned (post hoc) comparisons:</strong> used when no specific comparisons were planned; must adjust for multiple testing. Common methods: Tukey-Kramer, Bonferroni, Scheffé, Sidak</li>
-<li><strong>Planned comparisons:</strong> have strong prior justification, use pooled variance from all groups, have higher precision than separate t-tests</li>
-<li><strong>Example:</strong> Tukey’s HSD to compare all pairs of treatments in the circadian rhythm data</li>
-</ul>
-</div><div class="column" style="width:50%;">
-<div class="cell">
-<div class="cell-output cell-output-stdout">
-<pre><code> contrast        estimate    SE df t.ratio p.value
- Control - Eyes     1.243 0.364 19   3.411  0.0079
- Control - Knees    0.027 0.364 19   0.074  0.9970
- Eyes - Knees      -1.216 0.376 19  -3.231  0.0117
-
-P value adjustment: tukey method for comparing a family of 3 estimates </code></pre>
-</div>
-<div class="cell-output cell-output-stdout">
-<pre><code> treatment emmean    SE df lower.CL upper.CL .group
- Eyes      -1.551 0.266 19    -2.25   -0.855  a    
- Knees     -0.336 0.266 19    -1.03    0.361   b   
- Control   -0.309 0.249 19    -0.96    0.343   b   
-
-Confidence level used: 0.95 
-Conf-level adjustment: sidak method for 3 estimates 
-P value adjustment: tukey method for comparing a family of 3 estimates 
-significance level used: alpha = 0.05 
-NOTE: If two or more means share the same grouping symbol,
-      then we cannot show them to be different.
-      But we also did not show them to be the same. </code></pre>
-</div>
-</div>
-</div></div>
-</section>
-<section id="post-hoc-testing-planned-comparisons" class="slide level2">
-<h2>Post-Hoc Testing — Planned Comparisons</h2>
-<div class="columns">
-<div class="column" style="width:50%;">
-<p>When ANOVA rejects H₀, we need to determine which groups differ.</p>
-<ul>
-<li><strong>Unplanned (post hoc) comparisons:</strong> used when no specific comparisons were planned; must adjust for multiple testing. Common methods: Tukey-Kramer, Bonferroni, Scheffé</li>
-<li><strong>Planned comparisons:</strong> have strong prior justification, use pooled variance from all groups, have higher precision than separate t-tests</li>
-<li><strong>Example:</strong> using Tukey’s HSD to compare all pairs of treatments</li>
-</ul>
-</div><div class="column" style="width:50%;">
-<div class="cell">
-<div class="cell-output cell-output-stdout">
-<pre><code>[1] "Control" "Eyes"    "Knees"  </code></pre>
-</div>
-<div class="cell-output cell-output-stdout">
-<pre><code> contrast         estimate    SE df t.ratio p.value
- control vs eyes     1.243 0.364 19   3.411  0.0029
- control vs knees    0.027 0.364 19   0.074  0.9418</code></pre>
-</div>
-</div>
-</div></div>
-</section>
-<section id="comparison-of-post-hoc-tests" class="slide level2">
-<h2>Comparison of Post-Hoc Tests</h2>
-<div class="columns">
-<div class="column" style="width:60%;">
-<p><strong>The main post-hoc tests:</strong></p>
-<ul>
-<li><strong>Tukey-Kramer (HSD):</strong> compares all possible pairs of group means, controls family-wise error rate, most powerful when comparing ALL pairwise combinations</li>
-<li><strong>Bonferroni:</strong> adjusts α by dividing by the number of comparisons (α/k); very conservative; best for a small number of <em>planned</em> comparisons</li>
-<li><strong>Sidak:</strong> similar to Bonferroni but slightly less conservative: 1−(1−α)^(1/k); gives slightly more power</li>
-<li><strong>Dunnett’s Test:</strong> specifically for comparing treatment groups to a control; more powerful than the others for that specific job</li>
-</ul>
-<p>The key tradeoff is between power (detecting real differences) and Type I error control (avoiding false positives). More conservative tests give better error control but less power.</p>
-</div><div class="column" style="width:40%;">
-<div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb16"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb16-1"><a aria-label="1"></a>tukey_result <span class="ot">&lt;-</span> <span class="fu">emmeans</span>(circ_model, <span class="st">"treatment"</span>) <span class="sc">|&gt;</span></span>
-<span id="cb16-2"><a aria-label="2"></a>  <span class="fu">pairs</span>(<span class="at">adjust =</span> <span class="st">"tukey"</span>)</span>
-<span id="cb16-3"><a aria-label="3"></a></span>
-<span id="cb16-4"><a aria-label="4"></a>bonferroni_result <span class="ot">&lt;-</span> <span class="fu">emmeans</span>(circ_model, <span class="st">"treatment"</span>) <span class="sc">|&gt;</span></span>
-<span id="cb16-5"><a aria-label="5"></a>  <span class="fu">pairs</span>(<span class="at">adjust =</span> <span class="st">"bonferroni"</span>)</span>
-<span id="cb16-6"><a aria-label="6"></a></span>
-<span id="cb16-7"><a aria-label="7"></a>sidak_result <span class="ot">&lt;-</span> <span class="fu">emmeans</span>(circ_model, <span class="st">"treatment"</span>) <span class="sc">|&gt;</span></span>
-<span id="cb16-8"><a aria-label="8"></a>  <span class="fu">pairs</span>(<span class="at">adjust =</span> <span class="st">"sidak"</span>)</span>
-<span id="cb16-9"><a aria-label="9"></a></span>
-<span id="cb16-10"><a aria-label="10"></a>dunnett_result <span class="ot">&lt;-</span> <span class="fu">emmeans</span>(circ_model, <span class="st">"treatment"</span>) <span class="sc">|&gt;</span></span>
-<span id="cb16-11"><a aria-label="11"></a>  <span class="fu">contrast</span>(<span class="at">method =</span> <span class="st">"trt.vs.ctrl"</span>, <span class="at">ref =</span> <span class="dv">1</span>, <span class="at">adjust =</span> <span class="st">"dunnett"</span>)</span>
-<span id="cb16-12"><a aria-label="12"></a></span>
-<span id="cb16-13"><a aria-label="13"></a>all_methods <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(</span>
-<span id="cb16-14"><a aria-label="14"></a>  <span class="fu">summary</span>(tukey_result) <span class="sc">|&gt;</span></span>
-<span id="cb16-15"><a aria-label="15"></a>    <span class="fu">as_tibble</span>() <span class="sc">|&gt;</span></span>
-<span id="cb16-16"><a aria-label="16"></a>    <span class="fu">select</span>(contrast, estimate, SE, p.value) <span class="sc">|&gt;</span></span>
-<span id="cb16-17"><a aria-label="17"></a>    <span class="fu">mutate</span>(<span class="at">Method =</span> <span class="st">"Tukey"</span>),</span>
-<span id="cb16-18"><a aria-label="18"></a></span>
-<span id="cb16-19"><a aria-label="19"></a>  <span class="fu">summary</span>(bonferroni_result) <span class="sc">|&gt;</span></span>
-<span id="cb16-20"><a aria-label="20"></a>    <span class="fu">as_tibble</span>() <span class="sc">|&gt;</span></span>
-<span id="cb16-21"><a aria-label="21"></a>    <span class="fu">select</span>(contrast, estimate, SE, p.value) <span class="sc">|&gt;</span></span>
-<span id="cb16-22"><a aria-label="22"></a>    <span class="fu">mutate</span>(<span class="at">Method =</span> <span class="st">"Bonferroni"</span>),</span>
-<span id="cb16-23"><a aria-label="23"></a></span>
-<span id="cb16-24"><a aria-label="24"></a>  <span class="fu">summary</span>(sidak_result) <span class="sc">|&gt;</span></span>
-<span id="cb16-25"><a aria-label="25"></a>    <span class="fu">as_tibble</span>() <span class="sc">|&gt;</span></span>
-<span id="cb16-26"><a aria-label="26"></a>    <span class="fu">select</span>(contrast, estimate, SE, p.value) <span class="sc">|&gt;</span></span>
-<span id="cb16-27"><a aria-label="27"></a>    <span class="fu">mutate</span>(<span class="at">Method =</span> <span class="st">"Sidak"</span>)</span>
-<span id="cb16-28"><a aria-label="28"></a>)</span>
-<span id="cb16-29"><a aria-label="29"></a></span>
-<span id="cb16-30"><a aria-label="30"></a>all_methods <span class="sc">|&gt;</span></span>
-<span id="cb16-31"><a aria-label="31"></a>  <span class="fu">select</span>(contrast, Method, p.value) <span class="sc">|&gt;</span></span>
-<span id="cb16-32"><a aria-label="32"></a>  <span class="fu">pivot_wider</span>(<span class="at">names_from =</span> Method, <span class="at">values_from =</span> p.value) <span class="sc">|&gt;</span></span>
-<span id="cb16-33"><a aria-label="33"></a>  <span class="fu">arrange</span>(Tukey)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="cell-output cell-output-stdout">
-<pre><code># A tibble: 3 × 4
-  contrast          Tukey Bonferroni   Sidak
-  &lt;chr&gt;             &lt;dbl&gt;      &lt;dbl&gt;   &lt;dbl&gt;
-1 Control - Eyes  0.00787    0.00879 0.00877
-2 Eyes - Knees    0.0117     0.0132  0.0131 
-3 Control - Knees 0.997      1       1.000  </code></pre>
-</div>
-</div>
-</div></div>
-</section>
-<section id="post-hoc-visualization" class="slide level2">
-<h2>Post-Hoc Visualization</h2>
-<div class="columns">
-<div class="column" style="width:50%;">
-<p>When ANOVA rejects H₀, we need to determine which groups differ.</p>
-<ul>
-<li><strong>Unplanned comparisons:</strong> used when no specific comparisons were planned; must adjust for multiple testing. Common methods: Tukey-Kramer, Bonferroni, Scheffé</li>
-<li><strong>Planned comparisons:</strong> have strong prior justification, use pooled variance, higher precision than separate t-tests</li>
-<li><strong>Example:</strong> Tukey’s HSD to compare all pairs of treatments</li>
-</ul>
-</div><div class="column" style="width:50%;">
-<div class="cell">
-<div class="cell-output-display">
-<div>
-<figure>
-<p><img data-src="analysis_of_variance_lecture_files/figure-revealjs/analysis-of-variance-23-1.png" alt="Estimated marginal mean phase shift by treatment with 95% confidence interval error bars, connected by a line." width="326"></p>
-</figure>
-</div>
-</div>
-</div>
-</div></div>
-</section>
-<section id="significance-groups-plot" class="slide level2">
-<h2>Significance Groups Plot</h2>
-<div class="columns">
-<div class="column" style="width:60%;">
-<p>When ANOVA rejects H₀, we need to determine which groups differ.</p>
-<ul>
-<li><strong>Unplanned comparisons:</strong> used when no specific comparisons were planned; must adjust for multiple testing. Common methods: Tukey-Kramer, Bonferroni, Scheffé</li>
-<li><strong>Planned comparisons:</strong> have strong prior justification, use pooled variance, higher precision than separate t-tests</li>
-<li><strong>Example:</strong> Tukey’s HSD to compare all pairs of treatments</li>
-</ul>
-</div><div class="column" style="width:40%;">
-<div class="cell">
-<div class="cell-output-display">
-<div>
-<figure>
-<p><img data-src="analysis_of_variance_lecture_files/figure-revealjs/analysis-of-variance-24-1.png" alt="Jittered scatterplot of phase shift by treatment with mean points and confidence-interval error bars, and Tukey compact-letter-display labels below each group showing which groups share a letter (not significantly different)." width="326"></p>
-</figure>
-</div>
-</div>
-</div>
-</div></div>
-</section>
-<section id="part-9-reporting-results" class="slide level2 divider">
-<h2>Part 9 · Reporting Results</h2>
-</section>
-<section id="reporting-anova-results" class="slide level2 scrollable">
-<h2>Reporting ANOVA Results</h2>
-<div class="columns">
-<div class="column" style="width:60%;">
-<p><strong>Formal scientific writing example:</strong></p>
-<p>“The effect of light treatment on circadian rhythm phase shift was analyzed using a one-way ANOVA. There was a significant effect of treatment on phase shift (F(2, 19) = 7.29, p = 0.004, η² = 0.43). Post-hoc comparisons using Tukey’s HSD test indicated that the mean phase shift for the Eyes treatment (M = −1.55 h, SD = 0.71) was significantly different from both the Control treatment (M = −0.31 h, SD = 0.62) and the Knees treatment (M = −0.34 h, SD = 0.79). However, the Control and Knees treatments did not significantly differ from each other. These results suggest that light exposure to the eyes, but not to the knees, impacts circadian rhythm phase shifts.”</p>
-</div><div class="column" style="width:40%;">
-<div class="callout callout-note callout-titled callout-style-default">
-<div class="callout-body">
-<div class="callout-title">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<p><strong>Note</strong></p>
-</div>
-<div class="callout-content">
-<p><strong>Key ANOVA principles</strong></p>
-<ol type="1">
-<li>Compares means across multiple groups simultaneously</li>
-<li>Both ANOVA and regression are special cases of the General Linear Model — ANOVA with categorical predictors = regression with dummy variables</li>
-<li>Both partition variance into explained and unexplained components: <span class="math inline">\(SS_{Total} = SS_{Between} + SS_{Within}\)</span></li>
-<li>Fixed effects target specific groups of interest (most common); random effects sample from a larger population</li>
-</ol>
-</div>
-</div>
-</div>
-</div></div>
-</section>
-<section id="part-10-non-parametric-alternatives" class="slide level2 divider">
-<h2>Part 10 · Non-Parametric Alternatives</h2>
-</section>
-<section id="overview-of-non-parametric-tests" class="slide level2 scrollable">
-<h2>Overview of Non-Parametric Tests</h2>
-<div class="columns">
-<div class="column" style="width:60%;">
-<p><strong>Common non-parametric alternatives to ANOVA</strong> — these make fewer assumptions about the data distribution.</p>
-<ol type="1">
-<li><strong>Kruskal-Wallis test</strong> — non-parametric alternative to one-way ANOVA; tests for differences in median ranks; works with ordinal or continuous data. Assumptions: independent observations, similar distribution shapes</li>
-<li><strong>Mood’s median test</strong> (not covered here) — tests whether medians differ across groups; more robust but less powerful than Kruskal-Wallis; good for highly skewed data</li>
-</ol>
-</div><div class="column" style="width:40%;">
-<p><strong>When to use non-parametric tests:</strong></p>
-<ul>
-<li>Small sample sizes</li>
-<li>Heavily skewed data</li>
-<li>Legitimate outliers present</li>
-<li>Very unequal variances</li>
-<li>Ordinal (ranked) data</li>
-<li>Assumption checks clearly fail</li>
-</ul>
-<p><strong>Trade-offs:</strong> fewer assumptions and more robust to outliers, but less statistical power and testing medians/ranks rather than means.</p>
-</div></div>
-</section>
-<section id="the-kruskal-wallis-h-test" class="slide level2">
-<h2>The Kruskal-Wallis H Test</h2>
-<div class="columns">
-<div class="column" style="width:60%;">
-<p>The most common non-parametric alternative to one-way ANOVA.</p>
-<p><strong>What it does:</strong> ranks all observations from smallest to largest, compares the sum of ranks between groups, tests if groups come from the same distribution.</p>
-<p><strong>Hypotheses:</strong> H₀ — all groups have the same distribution (same median); H₁ — at least one group differs.</p>
-<p><strong>Test statistic:</strong></p>
-<p><span class="math display">\[H = \frac{12}{N(N+1)} \sum_{i=1}^{k} n_i (\bar{R}_i - \bar{R})^2 - 3(N+1)\]</span></p>
-<p>Where N = total sample size, k = number of groups, <span class="math inline">\(\bar{R}_i\)</span> = mean rank for group i, <span class="math inline">\(\bar{R}\)</span> = overall mean rank = (N+1)/2, nᵢ = sample size for group i. Distribution approximated by χ² with (k−1) df.</p>
-</div><div class="column" style="width:40%;">
-<p><strong>Assumptions of Kruskal-Wallis — much more relaxed than parametric ANOVA:</strong></p>
-<ul>
-<li><strong>Independence</strong> — same as parametric ANOVA, still critical</li>
-<li><strong>Similar distribution shapes</strong> — groups should have similar spread/variance; if violated, interpret as differences in distributions generally, not just medians</li>
-<li><strong>Ordinal or continuous data</strong></li>
-</ul>
-<p><strong>What’s NOT assumed:</strong> normal distribution, equal variances (though it helps interpretation), a specific distribution shape.</p>
-</div></div>
-</section>
-<section id="demonstrating-assumption-violations" class="slide level2">
-<h2>Demonstrating Assumption Violations</h2>
-<div class="columns">
-<div class="column" style="width:60%;">
-<p><strong>Creating a modified dataset with clear violations:</strong></p>
-<div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb18"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb18-1"><a aria-label="1"></a><span class="fu">set.seed</span>(<span class="dv">42</span>)</span>
-<span id="cb18-2"><a aria-label="2"></a>violated_circ_df <span class="ot">&lt;-</span> circ_data <span class="sc">%&gt;%</span></span>
-<span id="cb18-3"><a aria-label="3"></a>  <span class="fu">mutate</span>(</span>
-<span id="cb18-4"><a aria-label="4"></a>    <span class="at">phase_shift_violated =</span> <span class="fu">case_when</span>(</span>
-<span id="cb18-5"><a aria-label="5"></a>      treatment <span class="sc">==</span> <span class="st">"Control"</span> <span class="sc">~</span> phase_shift,</span>
-<span id="cb18-6"><a aria-label="6"></a>      treatment <span class="sc">==</span> <span class="st">"Knees"</span> <span class="sc">~</span> phase_shift <span class="sc">*</span> <span class="fl">3.25</span>,</span>
-<span id="cb18-7"><a aria-label="7"></a>      treatment <span class="sc">==</span> <span class="st">"Eyes"</span> <span class="sc">~</span> {</span>
-<span id="cb18-8"><a aria-label="8"></a>        n <span class="ot">&lt;-</span> <span class="fu">length</span>(phase_shift)</span>
-<span id="cb18-9"><a aria-label="9"></a>        <span class="fu">c</span>(phase_shift[<span class="dv">1</span><span class="sc">:</span>(n<span class="dv">-2</span>)], phase_shift[(n<span class="dv">-1</span>)<span class="sc">:</span>n] <span class="sc">-</span> <span class="dv">7</span>)</span>
-<span id="cb18-10"><a aria-label="10"></a>      }</span>
-<span id="cb18-11"><a aria-label="11"></a>    )</span>
-<span id="cb18-12"><a aria-label="12"></a>  )</span>
-<span id="cb18-13"><a aria-label="13"></a></span>
-<span id="cb18-14"><a aria-label="14"></a>violated_model <span class="ot">&lt;-</span> <span class="fu">lm</span>(phase_shift_violated <span class="sc">~</span> treatment,</span>
-<span id="cb18-15"><a aria-label="15"></a>                     <span class="at">data =</span> violated_circ_df)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-</div>
-<p><strong>What we changed:</strong> increased variance in the Knees group, added extreme outliers to the Eyes group, creating unequal variances and non-normality.</p>
-</div><div class="column" style="width:40%;">
-<div class="cell">
-<div class="cell-output-display">
-<div>
-<figure>
-<p><img data-src="analysis_of_variance_lecture_files/figure-revealjs/analysis-of-variance-26-1.png" alt="Jittered scatterplot with boxplots of a modified phase-shift dataset with deliberately introduced unequal variance and outliers, by light treatment group." width="326"></p>
-</figure>
-</div>
-</div>
-</div>
-</div></div>
-</section>
-<section id="checking-violated-data-assumptions-normality" class="slide level2">
-<h2>Checking Violated-Data Assumptions — Normality</h2>
-<div class="columns">
-<div class="column" style="width:50%;">
-<p><strong>Clear violation:</strong> p &lt; 0.05, points deviate from the line.</p>
-<div class="cell">
-<div class="cell-output cell-output-stdout">
-<pre><code>
-    Shapiro-Wilk normality test
-
-data:  resid(violated_model)
-W = 0.89473, p-value = 0.02335</code></pre>
-</div>
-</div>
-</div><div class="column" style="width:50%;">
-<div class="cell">
-<div class="cell-output-display">
-<div>
-<figure>
-<p><img data-src="analysis_of_variance_lecture_files/figure-revealjs/analysis-of-variance-28-1.png" alt="Normal Q-Q plot of residuals from the deliberately violated ANOVA model, with points visibly curving away from the reference line, showing a clear departure from normality." width="326"></p>
-</figure>
-</div>
-</div>
-</div>
-</div></div>
-</section>
-<section id="checking-violated-data-assumptions-variance" class="slide level2">
-<h2>Checking Violated-Data Assumptions — Variance</h2>
-<div class="columns">
-<div class="column" style="width:50%;">
-<p><strong>Clear violation:</strong> p &lt; 0.05, unequal variances evident.</p>
-<div class="cell">
-<div class="cell-output cell-output-stdout">
-<pre><code>Levene's Test for Homogeneity of Variance (center = median)
-      Df F value Pr(&gt;F)
-group  2  1.5618 0.2355
-      19               </code></pre>
-</div>
-</div>
-</div><div class="column" style="width:50%;">
-<div class="cell">
-<div class="cell-output-display">
-<div>
-<figure>
-<p><img data-src="analysis_of_variance_lecture_files/figure-revealjs/analysis-of-variance-30-1.png" alt="Scale-location plot for the deliberately violated ANOVA model, showing an uneven spread of standardized residuals across fitted values consistent with unequal variance." width="326"></p>
-</figure>
-</div>
-</div>
-</div>
-</div></div>
-</section>
-<section id="performing-the-kruskal-wallis-test-original-data" class="slide level2">
-<h2>Performing the Kruskal-Wallis Test — Original Data</h2>
-<div class="columns">
-<div class="column" style="width:60%;">
-<p><strong>Even though assumptions are met, let’s compare results:</strong></p>
-<div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb21"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb21-1"><a aria-label="1"></a>kruskal_original_result <span class="ot">&lt;-</span> <span class="fu">kruskal.test</span>(</span>
-<span id="cb21-2"><a aria-label="2"></a>  phase_shift <span class="sc">~</span> treatment,</span>
-<span id="cb21-3"><a aria-label="3"></a>  <span class="at">data =</span> circ_data)</span>
-<span id="cb21-4"><a aria-label="4"></a>kruskal_original_result</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="cell-output cell-output-stdout">
-<pre><code>
-    Kruskal-Wallis rank sum test
-
-data:  phase_shift by treatment
-Kruskal-Wallis chi-squared = 9.4231, df = 2, p-value = 0.008991</code></pre>
-</div>
-</div>
-<p><strong>Interpretation:</strong> H = test statistic (χ² approximation); df = k − 1 = 2; <strong>p = 0.009</strong> (significant at α = 0.05); conclusion: at least one group differs.</p>
-<p><strong>Compare to parametric ANOVA:</strong></p>
-<div class="cell">
-<div class="cell-output cell-output-stdout">
-<pre><code>Analysis of Variance Table
-
-Response: phase_shift
-          Df Sum Sq Mean Sq F value   Pr(&gt;F)   
-treatment  2 7.2245  3.6122  7.2894 0.004472 **
-Residuals 19 9.4153  0.4955                    
----
-Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</code></pre>
-</div>
-</div>
-</div><div class="column" style="width:40%;">
-<p><strong>How Kruskal-Wallis works:</strong></p>
-<div class="cell">
-<div class="cell-output-display">
-<div>
-<figure>
-<p><img data-src="analysis_of_variance_lecture_files/figure-revealjs/analysis-of-variance-33-1.png" alt="Jittered scatterplot of rank-transformed phase shift by treatment, with diamond points marking each group's mean rank, illustrating the ranks the Kruskal-Wallis test compares." width="307"></p>
-</figure>
-</div>
-</div>
-</div>
-<div class="cell">
-<div class="cell-output cell-output-stdout">
-<pre><code># A tibble: 3 × 4
-  treatment mean_rank sum_rank     n
-  &lt;fct&gt;         &lt;dbl&gt;    &lt;dbl&gt; &lt;int&gt;
-1 Control       14.6       117     8
-2 Eyes           5.29       37     7
-3 Knees         14.1        99     7</code></pre>
-</div>
-</div>
-</div></div>
-</section>
-<section id="kruskal-wallis-on-violated-data" class="slide level2">
-<h2>Kruskal-Wallis on Violated Data</h2>
-<div class="columns">
-<div class="column" style="width:60%;">
-<p><strong>Non-parametric test handles violations:</strong></p>
-<div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb25"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb25-1"><a aria-label="1"></a>kruskal_violated_result <span class="ot">&lt;-</span> <span class="fu">kruskal.test</span>(</span>
-<span id="cb25-2"><a aria-label="2"></a>  phase_shift_violated <span class="sc">~</span> treatment,</span>
-<span id="cb25-3"><a aria-label="3"></a>  <span class="at">data =</span> violated_circ_df)</span>
-<span id="cb25-4"><a aria-label="4"></a>kruskal_violated_result</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="cell-output cell-output-stdout">
-<pre><code>
-    Kruskal-Wallis rank sum test
-
-data:  phase_shift_violated by treatment
-Kruskal-Wallis chi-squared = 6.8453, df = 2, p-value = 0.03263</code></pre>
-</div>
-</div>
-<div class="cell">
-<div class="cell-output cell-output-stdout">
-<pre><code>Analysis of Variance Table
-
-Response: phase_shift_violated
-          Df  Sum Sq Mean Sq F value Pr(&gt;F)  
-treatment  2  41.806 20.9029  2.8361 0.0836 .
-Residuals 19 140.037  7.3704                 
----
-Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</code></pre>
-</div>
-</div>
-<p><strong>This is the whole argument, in four numbers:</strong></p>
-<table class="caption-top">
-<thead>
-<tr class="header">
-<th>Data</th>
-<th>ANOVA (parametric)</th>
-<th>Kruskal-Wallis</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td>Original</td>
-<td>F = 7.29, <strong>p = 0.004</strong> ✅</td>
-<td>H = 9.42, <strong>p = 0.009</strong> ✅</td>
-</tr>
-<tr class="even">
-<td>Violated</td>
-<td>F = 2.84, <strong>p = 0.084</strong> ❌</td>
-<td>H = 6.85, <strong>p = 0.033</strong> ✅</td>
-</tr>
-</tbody>
-</table>
-<div class="callout callout-important callout-titled callout-style-default">
-<div class="callout-body">
-<div class="callout-title">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<p><strong>Important</strong></p>
-</div>
-<div class="callout-content">
-<p><strong>The parametric test lost the effect. The rank test kept it.</strong></p>
-<p>Nothing about the biology changed — we only inflated one group’s variance and pushed two points out into the tail. That was enough to drag the F-test’s p-value from 0.004 to 0.084, across the α = 0.05 line.</p>
-<p>Kruskal-Wallis barely noticed, because ranks don’t care <em>how far</em> out an outlier is, only that it is out there.</p>
-</div>
-</div>
-</div>
-</div><div class="column" style="width:40%;">
-<div class="cell">
-<div class="cell-output-display">
-<div>
-<figure>
-<p><img data-src="analysis_of_variance_lecture_files/figure-revealjs/analysis-of-variance-37-1.png" alt="Jittered scatterplot of rank-transformed phase shift by treatment for the deliberately violated dataset, with diamond points marking each group's mean rank, illustrating why Kruskal-Wallis stays valid when raw values are heavily skewed or contain outliers." width="307"></p>
-</figure>
-</div>
-</div>
-</div>
-<p><strong>Why Kruskal-Wallis is robust:</strong> uses ranks instead of raw values, outliers affect ranks minimally, unequal variances are less problematic, no distribution assumptions are needed.</p>
-</div></div>
-</section>
-<section id="post-hoc-tests-for-kruskal-wallis-pairwise-wilcoxon" class="slide level2">
-<h2>Post-Hoc Tests for Kruskal-Wallis — Pairwise Wilcoxon</h2>
-<div class="columns">
-<div class="column" style="width:60%;">
-<p><strong>Just like ANOVA, we need post-hoc tests to identify which groups differ:</strong></p>
-<div class="cell">
-<div class="cell-output cell-output-stdout">
-<pre><code>
-    Pairwise comparisons using Wilcoxon rank sum exact test 
-
-data:  nonparam_circ_df$phase_shift and nonparam_circ_df$treatment 
-
-      Control Eyes  
-Eyes  0.0037  -     
-Knees 1.0000  0.0787
-
-P value adjustment method: bonferroni </code></pre>
-</div>
-</div>
-<p><strong>Interpretation of p-values:</strong> Control vs Eyes: p = 0.004 (significant); Control vs Knees: p = 1.000 (not significant); Eyes vs Knees: p = 0.079 (not significant).</p>
-<p><strong>Common adjustment methods:</strong> <code>"bonferroni"</code> (most conservative), <code>"holm"</code> (less conservative), <code>"BH"</code> (Benjamini-Hochberg, controls false discovery rate), <code>"none"</code> (not recommended).</p>
-</div><div class="column" style="width:40%;">
-<div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb29"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb29-1"><a aria-label="1"></a>pairwise_violated_result <span class="ot">&lt;-</span> <span class="fu">pairwise.wilcox.test</span>(</span>
-<span id="cb29-2"><a aria-label="2"></a>  <span class="at">x =</span> violated_circ_df<span class="sc">$</span>phase_shift_violated,</span>
-<span id="cb29-3"><a aria-label="3"></a>  <span class="at">g =</span> violated_circ_df<span class="sc">$</span>treatment,</span>
-<span id="cb29-4"><a aria-label="4"></a>  <span class="at">p.adjust.method =</span> <span class="st">"bonferroni"</span></span>
-<span id="cb29-5"><a aria-label="5"></a>)</span>
-<span id="cb29-6"><a aria-label="6"></a>pairwise_violated_result</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="cell-output cell-output-stdout">
-<pre><code>
-    Pairwise comparisons using Wilcoxon rank sum exact test 
-
-data:  violated_circ_df$phase_shift_violated and violated_circ_df$treatment 
-
-      Control Eyes  
-Eyes  0.0037  -     
-Knees 1.0000  1.0000
-
-P value adjustment method: bonferroni </code></pre>
-</div>
-</div>
-<div class="cell">
-<div class="cell-output cell-output-stdout">
-<pre><code># A tibble: 3 × 3
-  comparison       original_data violated_data
-  &lt;chr&gt;                    &lt;dbl&gt;         &lt;dbl&gt;
-1 Control vs Eyes         0.0037        0.0037
-2 Control vs Knees        1             1     
-3 Eyes vs Knees           0.0787        1     </code></pre>
-</div>
-</div>
-</div></div>
-</section>
-<section id="dunns-test-an-alternative-post-hoc" class="slide level2">
-<h2>Dunn’s Test — an Alternative Post-Hoc</h2>
-<div class="columns">
-<div class="column" style="width:60%;">
-<p><strong>Dunn’s test is specifically designed for Kruskal-Wallis post-hoc comparisons:</strong></p>
-<div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb32"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb32-1"><a aria-label="1"></a>dunn_original_result <span class="ot">&lt;-</span> <span class="fu">dunnTest</span>(</span>
-<span id="cb32-2"><a aria-label="2"></a>  phase_shift <span class="sc">~</span> treatment,</span>
-<span id="cb32-3"><a aria-label="3"></a>  <span class="at">data =</span> circ_data,</span>
-<span id="cb32-4"><a aria-label="4"></a>  <span class="at">method =</span> <span class="st">"bonferroni"</span>)</span>
-<span id="cb32-5"><a aria-label="5"></a>dunn_original_result</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="cell-output cell-output-stdout">
-<pre><code>       Comparison          Z     P.unadj      P.adj
-1  Control - Eyes  2.7789287 0.005453849 0.01636155
-2 Control - Knees  0.1434629 0.885924641 1.00000000
-3    Eyes - Knees -2.5517789 0.010717452 0.03215236</code></pre>
-</div>
-</div>
-<p><strong>Advantages:</strong> designed specifically for Kruskal-Wallis, provides Z-statistics in addition to p-values, multiple adjustment methods available, more appropriate than multiple Wilcoxon tests. A Z-statistic tells you how many standard deviations a difference is from the expected value (usually zero, “no difference”).</p>
-</div><div class="column" style="width:40%;">
-<div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb34"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb34-1"><a aria-label="1"></a>dunn_violated_result <span class="ot">&lt;-</span> <span class="fu">dunnTest</span>(</span>
-<span id="cb34-2"><a aria-label="2"></a>  phase_shift_violated <span class="sc">~</span> treatment,</span>
-<span id="cb34-3"><a aria-label="3"></a>  <span class="at">data =</span> violated_circ_df,</span>
-<span id="cb34-4"><a aria-label="4"></a>  <span class="at">method =</span> <span class="st">"bonferroni"</span></span>
-<span id="cb34-5"><a aria-label="5"></a>)</span>
-<span id="cb34-6"><a aria-label="6"></a>dunn_violated_result</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="cell-output cell-output-stdout">
-<pre><code>       Comparison         Z     P.unadj      P.adj
-1  Control - Eyes  2.614212 0.008943349 0.02683005
-2 Control - Knees  1.126449 0.259975463 0.77992639
-3    Eyes - Knees -1.440520 0.149720243 0.44916073</code></pre>
-</div>
-</div>
-<p><strong>Interpreting Z-statistics:</strong> large |Z| values indicate bigger differences; Z &gt; 1.96 is approximately equivalent to p &lt; 0.05; the sign indicates the direction of the difference.</p>
-</div></div>
-</section>
-<section id="which-post-hoc-test-should-you-use" class="slide level2">
-<h2>Which Post-Hoc Test Should You Use?</h2>
-<div class="columns">
-<div class="column" style="width:60%;">
-<ul>
-<li><strong>Use Dunn’s test</strong> because it’s the proper follow-up to Kruskal-Wallis, maintains consistency with the overall K-W ranking, is more statistically appropriate for the omnibus test you ran, and is standard in published research</li>
-<li>Wilcoxon is fine for simple two-group comparisons, but once you’ve run Kruskal-Wallis (a 3+ group test), Dunn’s is the standard choice</li>
-</ul>
-</div><div class="column" style="width:40%;">
-<div class="callout callout-tip callout-titled callout-style-default">
-<div class="callout-body">
-<div class="callout-title">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<p><strong>Tip</strong></p>
-</div>
-<div class="callout-content">
-<p><strong>🖐 Notice</strong></p>
-<p>Kruskal-Wallis ranks ALL your data once. Dunn’s test uses those same ranks. Pairwise Wilcoxon throws away that information and re-ranks separately for each pair.</p>
-</div>
-</div>
-</div>
-</div></div>
-</section>
-<section id="reporting-non-parametric-results" class="slide level2">
-<h2>Reporting Non-Parametric Results</h2>
-<div class="columns">
-<div class="column" style="width:60%;">
-<p><strong>Essential elements to include:</strong> test name and purpose, sample sizes per group, medians and IQRs (not means and SDs!), test statistic (H) and degrees of freedom, p-value, effect size, post-hoc test results, conclusion.</p>
-<p><strong>Example write-up:</strong> “A Kruskal-Wallis test was conducted to compare the effect of light treatment on circadian rhythm phase shift across three groups: Control (n = 8), Knees (n = 7), and Eyes (n = 7). Median phase shifts were −0.48 hours (IQR = 0.89) for Control, −0.29 hours (IQR = 0.93) for Knees, and −1.48 hours (IQR = 0.68) for Eyes. The test revealed a statistically significant difference in phase shift between the groups, H(2) = 9.42, p = 0.009, ε² = 0.45. Post-hoc pairwise comparisons using Dunn’s test with Bonferroni correction indicated that the Eyes treatment differed significantly from both Control (p = 0.016) and Knees (p = 0.032), while Control and Knees did not differ (p = 1.000).”</p>
-<div class="callout callout-note callout-titled callout-style-default">
-<div class="callout-body">
-<div class="callout-title">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<p><strong>Note</strong></p>
-</div>
-<div class="callout-content">
-<p><strong>📖 Where ε² comes from</strong></p>
-<p><span class="math display">\[\varepsilon^2 = \frac{H}{(n^2-1)/(n+1)}\]</span></p>
-<p>Here <span class="math inline">\(9.42 / 21 = 0.45\)</span> — the rank-based analogue of R². Watch out: some software reports <span class="math inline">\(\eta^2_H = (H-k+1)/(n-k)\)</span> instead, which gives 0.39 for these data. <strong>Say which one you used.</strong></p>
-</div>
-</div>
-</div>
-</div><div class="column" style="width:40%;">
-<p><strong>In-text citation format:</strong></p>
-<blockquote>
-<p>The Kruskal-Wallis test revealed significant differences between treatment groups, H(2) = 9.42, p = .009.</p>
-</blockquote>
+<section id="how-today-works" class="slide level2">
+<h2>🗳️ How Today Works</h2>
 <div class="callout callout-warning callout-titled callout-style-default">
 <div class="callout-body">
 <div class="callout-title">
@@ -1643,51 +360,40 @@ P value adjustment method: bonferroni </code></pre>
 <p><strong>Warning</strong></p>
 </div>
 <div class="callout-content">
-<p><strong>⚠️ Common mistakes to avoid</strong></p>
-<ul>
-<li>Reporting means instead of medians, using SD instead of IQR</li>
-<li>Not mentioning it’s a non-parametric test</li>
-<li>Not justifying why a non-parametric test was used</li>
-</ul>
+<p><strong>🗳️ Six times today, you make the call</strong></p>
+<p>Six slides are marked <strong>🗳️ DECIDE</strong>. Each asks a multiple-choice question, and I will <em>not</em> tell you the answer on that slide.</p>
+<p><strong>How it works:</strong> write your letter down — actually write it — then hold up fingers 1–4. If the room splits, turn to the person next to you, argue for ninety seconds, and we vote again. Nothing here is graded. The point is that you commit before you find out.</p>
 </div>
-</div>
-</div>
-</div></div>
-</section>
-<section id="reporting-the-table-format" class="slide level2">
-<h2>Reporting — the Table Format</h2>
-<div class="cell">
-<div class="cell-output cell-output-stdout">
-<pre><code>Table 1. Descriptive Statistics for Phase Shift by Treatment
-
- 
-
-Note. IQR = interquartile range.
-Kruskal-Wallis H(2) = 9.42, p = 0.009</code></pre>
-</div>
-<div class="cell-output cell-output-stdout">
-<pre><code># A tibble: 3 × 6
-  treatment     n Median   IQR   Min   Max
-  &lt;fct&gt;     &lt;int&gt;  &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt;
-1 Control       8 -0.485 0.89  -1.27  0.53
-2 Eyes          7 -1.48  0.675 -2.83 -0.78
-3 Knees         7 -0.29  0.93  -1.61  0.73</code></pre>
 </div>
 </div>
 </section>
-<section id="wrap-up" class="slide level2">
-<h2>Wrap-up</h2>
+<section id="part-2-anova-is-regression" class="slide level2 divider">
+<h2>Part 2 · ANOVA Is Regression</h2>
+</section>
+<section id="same-machinery-different-predictor" class="slide level2">
+<h2>Same Machinery, Different Predictor</h2>
 <div class="columns">
-<div class="column" style="width:60%;">
-<p>Today you:</p>
+<div class="column" style="width:50%;">
+<p><strong>Regression</strong></p>
+<p><span class="math display">\[Y_i = \beta_0 + \beta_1X_i + \varepsilon_i\]</span></p>
 <ul>
-<li>Saw that <strong>ANOVA <em>is</em> regression</strong> with a categorical predictor — same partitioning, same F-ratio, different-looking output</li>
-<li>Split <span class="math inline">\(SS_{total}\)</span> into <span class="math inline">\(SS_{among}\)</span> and <span class="math inline">\(SS_{within}\)</span>, and turned them into mean squares</li>
-<li>Built the <strong>F-ratio</strong> as signal ÷ noise, and confirmed that with two groups <strong>F = t²</strong> exactly</li>
-<li>Checked the assumptions — Levene’s for equal variance, Shapiro-Wilk on the <strong>residuals</strong>, and the four diagnostic plots</li>
-<li>Used <strong>Tukey’s HSD</strong> to find <em>which</em> groups differ, after the omnibus test said <em>some</em> group does</li>
-<li>Reported the result the way a journal expects, with an effect size</li>
-<li>Switched to <strong>Kruskal-Wallis</strong> and <strong>Dunn’s test</strong> when assumptions fail</li>
+<li>X is continuous</li>
+<li>H₀: β₁ = 0</li>
+<li>One slope</li>
+</ul>
+<p><strong>ANOVA</strong></p>
+<p><span class="math display">\[Y_{ij} = \mu + A_i + \varepsilon_{ij}\]</span></p>
+<ul>
+<li><span class="math inline">\(A_i\)</span> is the effect of group i</li>
+<li>H₀: μ₁ = μ₂ = … = μₖ</li>
+<li>One coefficient per group, minus one</li>
+</ul>
+</div><div class="column" style="width:50%;">
+<p>Both:</p>
+<ul>
+<li>Partition total variation into <strong>explained</strong> and <strong>left over</strong></li>
+<li>Divide each sum of squares by its degrees of freedom</li>
+<li>Test with an <strong>F-ratio</strong> of the two mean squares</li>
 </ul>
 <div class="callout callout-important callout-titled callout-style-default">
 <div class="callout-body">
@@ -1698,8 +404,38 @@ Kruskal-Wallis H(2) = 9.42, p = 0.009</code></pre>
 <p><strong>Important</strong></p>
 </div>
 <div class="callout-content">
-<p><strong>⚠️ The order matters</strong></p>
-<p>A significant F says <em>at least one</em> group differs — it does not say which. Post-hoc tests answer that, and they only make sense <strong>after</strong> a significant omnibus test. Running all pairwise t-tests instead inflates your Type I error with every comparison.</p>
+<p><strong>✅ The same <code>lm()</code> call</strong></p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a aria-label="1"></a><span class="co"># regression</span></span>
+<span id="cb3-2"><a aria-label="2"></a><span class="fu">lm</span>(absorbance <span class="sc">~</span> nitrate, <span class="at">data =</span> df)</span>
+<span id="cb3-3"><a aria-label="3"></a></span>
+<span id="cb3-4"><a aria-label="4"></a><span class="co"># ANOVA</span></span>
+<span id="cb3-5"><a aria-label="5"></a><span class="fu">lm</span>(body_temp_c <span class="sc">~</span> crab_type, <span class="at">data =</span> df)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>The only difference is that <code>crab_type</code> is a factor, so R builds dummy variables for you — exactly as it did last week.</p>
+</div>
+</div>
+</div>
+</div></div>
+</section>
+<section id="decide-why-not-just-run-all-the-t-tests" class="slide level2">
+<h2>🗳️ DECIDE · Why Not Just Run All the t-tests?</h2>
+<div class="columns">
+<div class="column" style="width:60%;">
+<p>With four crab groups there are <strong>six</strong> possible pairwise t-tests. Suppose every group really has the same mean, and you run all six at α = 0.05.</p>
+<p><strong>What is the chance you get at least one “significant” result?</strong></p>
+<p><strong>(a)</strong> 5% — that is what α = 0.05 means</p>
+<p><strong>(b)</strong> About 12%</p>
+<p><strong>(c)</strong> About 26%</p>
+<p><strong>(d)</strong> 30% — 6 × 5%</p>
+<div class="callout callout-warning callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Warning</strong></p>
+</div>
+<div class="callout-content">
+<p><strong>✍️ Write your letter down, then vote.</strong></p>
 </div>
 </div>
 </div>
@@ -1713,9 +449,1214 @@ Kruskal-Wallis H(2) = 9.42, p = 0.009</code></pre>
 <p><strong>Note</strong></p>
 </div>
 <div class="callout-content">
-<p><strong>✅ The one idea to keep</strong></p>
-<p>We deliberately broke the assumptions and watched the parametric p-value slide from <strong>0.004 to 0.084</strong> while the rank-based one held at <strong>0.033</strong>.</p>
-<p>The data’s biology never changed. Only its shape did. That is what “assumption violation” costs you, in one number.</p>
+<p><strong>The question to ask</strong></p>
+<p><em>What is the chance of getting no false positives in six independent tries?</em></p>
+</div>
+</div>
+</div>
+</div></div>
+</section>
+<section id="the-multiple-comparisons-problem" class="slide level2">
+<h2>The Multiple-Comparisons Problem</h2>
+<div class="columns">
+<div class="column" style="width:55%;">
+<div class="callout callout-important callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Important</strong></p>
+</div>
+<div class="callout-content">
+<p><strong>✅ The answer is (c) — about 26%.</strong></p>
+<p><span class="math display">\[1 - (1 - 0.05)^6 = 0.265\]</span></p>
+<p>Each test has a 95% chance of behaving. Six in a row behave only 73.5% of the time, so you have roughly a <strong>one in four</strong> chance of at least one false positive — before you have learned anything.</p>
+<p><strong>(d)</strong> is the common guess. Adding probabilities overshoots, because the ways of being wrong overlap.</p>
+</div>
+</div>
+</div>
+</div><div class="column" style="width:45%;">
+<p><strong>ANOVA’s job is to ask one question first:</strong> <em>is there any difference at all among these groups?</em></p>
+<p>One test, one α, one p-value. Only if it rejects do you go looking for <strong>which</strong> groups differ — and then you use a post-hoc method that controls the error rate across that whole family of comparisons.</p>
+<p>With 10 groups there are 45 pairs, and the chance of at least one false positive is over <strong>90%</strong>.</p>
+</div></div>
+</section>
+<section id="part-3-the-logic" class="slide level2 divider">
+<h2>Part 3 · The Logic</h2>
+</section>
+<section id="anovas-question" class="slide level2">
+<h2>ANOVA’s Question</h2>
+<div class="columns">
+<div class="column" style="width:55%;">
+<p>Even if every group had the same true mean, the sample means would differ, just from sampling error.</p>
+<p>ANOVA asks whether the sample means differ <strong>more than sampling error alone would produce</strong>:</p>
+<ul>
+<li><strong><span class="math inline">\(MS_{among}\)</span></strong> — how spread out the group means are</li>
+<li><strong><span class="math inline">\(MS_{within}\)</span></strong> — how spread out individuals are inside their own group</li>
+</ul>
+<p><span class="math display">\[F = \frac{MS_{among}}{MS_{within}}\]</span></p>
+<ul>
+<li><strong>H₀:</strong> μ₁ = μ₂ = μ₃ = μ₄</li>
+<li><strong>H₁:</strong> at least one mean differs</li>
+</ul>
+</div><div class="column" style="width:45%;">
+<div class="cell">
+<div class="cell-output-display">
+<div>
+<figure>
+<p><img data-src="analysis_of_variance_lecture_files/figure-revealjs/analysis-of-variance-03-1.png" alt="Jittered scatterplot of fiddler crab body temperature by crab type, with a large diamond marking each group mean and error bars showing the confidence interval of the mean." width="307"></p>
+</figure>
+</div>
+</div>
+</div>
+</div></div>
+</section>
+<section id="where-the-variation-goes" class="slide level2">
+<h2>Where the Variation Goes</h2>
+<div class="columns">
+<div class="column" style="width:45%;">
+<p>Every point’s distance from the <strong>grand mean</strong> splits into two pieces, exactly as in regression:</p>
+<p><span class="math display">\[\underbrace{(Y_{ij} - \bar{Y})}_{\text{total}} = \underbrace{(\bar{Y}_i - \bar{Y})}_{\text{among}} + \underbrace{(Y_{ij} - \bar{Y}_i)}_{\text{within}}\]</span></p>
+<p>Square and sum over every observation:</p>
+<p><span class="math display">\[SS_{total} = SS_{among} + SS_{within}\]</span></p>
+<p>The dashed line is the grand mean; the coloured bars are the group means.</p>
+</div><div class="column" style="width:55%;">
+<div class="cell">
+<div class="cell-output-display">
+<div>
+<figure>
+<p><img data-src="analysis_of_variance_lecture_files/figure-revealjs/analysis-of-variance-04-1.png" alt="Three stacked panels showing the ANOVA partition on the crab data: total variation as each point's deviation from the grand mean, among-group variation as each group mean's deviation from the grand mean, and within-group variation as each point's deviation from its own group mean." width="364"></p>
+</figure>
+</div>
+</div>
+</div>
+</div></div>
+</section>
+<section id="part-4-partitioning-the-sum-of-squares" class="slide level2 divider">
+<h2>Part 4 · Partitioning the Sum of Squares</h2>
+</section>
+<section id="the-sums-of-squares" class="slide level2">
+<h2>The Sums of Squares</h2>
+<div class="columns">
+<div class="column" style="width:55%;">
+<p><span class="math display">\[SS_{total} = \sum_{i}\sum_{j}(Y_{ij} - \bar{Y})^2\]</span></p>
+<p><span class="math display">\[SS_{among} = \sum_{i} n_i(\bar{Y}_i - \bar{Y})^2\]</span></p>
+<p><span class="math display">\[SS_{within} = \sum_{i}\sum_{j}(Y_{ij} - \bar{Y}_i)^2\]</span></p>
+<p>with <strong>a</strong> groups and <span class="math inline">\(n_i\)</span> observations in group i:</p>
+<ul>
+<li><span class="math inline">\(df_{among} = a - 1\)</span> = 3</li>
+<li><span class="math inline">\(df_{within} = N - a\)</span> = 80</li>
+<li><span class="math inline">\(df_{total} = N - 1\)</span> = 83</li>
+</ul>
+</div><div class="column" style="width:45%;">
+<div class="callout callout-tip callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Tip</strong></p>
+</div>
+<div class="callout-content">
+<p><strong>🖐 Note the <span class="math inline">\(n_i\)</span></strong></p>
+<p>Each group mean’s deviation is weighted by that group’s <strong>own</strong> sample size. With a balanced design every <span class="math inline">\(n_i\)</span> is the same and it simplifies to <span class="math inline">\(n\sum(\bar{Y}_i - \bar{Y})^2\)</span> — but only then.</p>
+<p>Our design is balanced at n = 21, so both forms agree here.</p>
+</div>
+</div>
+</div>
+</div></div>
+</section>
+<section id="computing-them-by-hand" class="slide level2">
+<h2>Computing Them by Hand</h2>
+<div class="columns">
+<div class="column" style="width:55%;">
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb4"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a aria-label="1"></a>grand_mean <span class="ot">&lt;-</span> <span class="fu">mean</span>(crab_df<span class="sc">$</span>body_temp_c)</span>
+<span id="cb4-2"><a aria-label="2"></a></span>
+<span id="cb4-3"><a aria-label="3"></a>crab_parts <span class="ot">&lt;-</span> crab_df <span class="sc">%&gt;%</span></span>
+<span id="cb4-4"><a aria-label="4"></a>  <span class="fu">group_by</span>(crab_type) <span class="sc">%&gt;%</span></span>
+<span id="cb4-5"><a aria-label="5"></a>  <span class="fu">mutate</span>(<span class="at">group_mean =</span> <span class="fu">mean</span>(body_temp_c)) <span class="sc">%&gt;%</span></span>
+<span id="cb4-6"><a aria-label="6"></a>  <span class="fu">ungroup</span>()</span>
+<span id="cb4-7"><a aria-label="7"></a></span>
+<span id="cb4-8"><a aria-label="8"></a>ss_total  <span class="ot">&lt;-</span> <span class="fu">sum</span>((crab_parts<span class="sc">$</span>body_temp_c <span class="sc">-</span> grand_mean)<span class="sc">^</span><span class="dv">2</span>)</span>
+<span id="cb4-9"><a aria-label="9"></a>ss_among  <span class="ot">&lt;-</span> <span class="fu">sum</span>((crab_parts<span class="sc">$</span>group_mean  <span class="sc">-</span> grand_mean)<span class="sc">^</span><span class="dv">2</span>)</span>
+<span id="cb4-10"><a aria-label="10"></a>ss_within <span class="ot">&lt;-</span> <span class="fu">sum</span>((crab_parts<span class="sc">$</span>body_temp_c <span class="sc">-</span> crab_parts<span class="sc">$</span>group_mean)<span class="sc">^</span><span class="dv">2</span>)</span>
+<span id="cb4-11"><a aria-label="11"></a></span>
+<span id="cb4-12"><a aria-label="12"></a><span class="fu">c</span>(<span class="at">total =</span> ss_total, <span class="at">among =</span> ss_among, <span class="at">within =</span> ss_within)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>   total    among   within 
+6.108929 2.641310 3.467619 </code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a aria-label="1"></a>ss_among <span class="sc">+</span> ss_within</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] 6.108929</code></pre>
+</div>
+</div>
+</div><div class="column" style="width:45%;">
+<p><strong>2.641 + 3.468 = 6.109</strong> — exactly, as it must.</p>
+<div class="callout callout-important callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Important</strong></p>
+</div>
+<div class="callout-content">
+<p><strong>✅ The same identity as regression</strong></p>
+<ul>
+<li><span class="math inline">\(SS_{among}\)</span> here is <span class="math inline">\(SS_{regression}\)</span> there</li>
+<li><span class="math inline">\(SS_{within}\)</span> here is <span class="math inline">\(SS_{residual}\)</span> there</li>
+</ul>
+<p>Different names, same partition, same arithmetic.</p>
+</div>
+</div>
+</div>
+</div></div>
+</section>
+<section id="the-anova-table-from-r" class="slide level2">
+<h2>The ANOVA Table from R</h2>
+<div class="columns">
+<div class="column" style="width:55%;">
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a aria-label="1"></a>crab_model <span class="ot">&lt;-</span> <span class="fu">lm</span>(body_temp_c <span class="sc">~</span> crab_type, <span class="at">data =</span> crab_df)</span>
+<span id="cb8-2"><a aria-label="2"></a></span>
+<span id="cb8-3"><a aria-label="3"></a><span class="fu">anova</span>(crab_model)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Analysis of Variance Table
+
+Response: body_temp_c
+          Df Sum Sq Mean Sq F value    Pr(&gt;F)    
+crab_type  3 2.6413 0.88044  20.312 6.997e-10 ***
+Residuals 80 3.4676 0.04335                      
+---
+Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</code></pre>
+</div>
+</div>
+</div><div class="column" style="width:45%;">
+<p>Every number is one you just built:</p>
+<ul>
+<li><strong>Sum Sq</strong> — 2.64 and 3.47</li>
+<li><strong>Df</strong> — a − 1 = 3, N − a = 80</li>
+<li><strong>Mean Sq</strong> — Sum Sq ÷ Df</li>
+<li><strong>F value</strong> — the ratio of those two mean squares</li>
+</ul>
+<p><strong>F = 20.31, p = 7.00e-10.</strong></p>
+</div></div>
+</section>
+<section id="decide-what-does-that-f-tell-you" class="slide level2">
+<h2>🗳️ DECIDE · What Does That F Tell You?</h2>
+<div class="columns">
+<div class="column" style="width:60%;">
+<p>The ANOVA returns <strong>F = 20.31, p = 7.00e-10</strong>.</p>
+<p><strong>What have you just learned?</strong></p>
+<p><strong>(a)</strong> All four crab types have different mean temperatures</p>
+<p><strong>(b)</strong> At least one crab type differs from at least one other</p>
+<p><strong>(c)</strong> Removing the major claw raises body temperature</p>
+<p><strong>(d)</strong> The major claw explains 43.2% of the variation in temperature, so the radiator hypothesis is supported</p>
+<div class="callout callout-warning callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Warning</strong></p>
+</div>
+<div class="callout-content">
+<p><strong>✍️ One letter. Write it down.</strong></p>
+</div>
+</div>
+</div>
+</div><div class="column" style="width:40%;">
+<div class="callout callout-note callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Note</strong></p>
+</div>
+<div class="callout-content">
+<p><strong>The question to ask</strong></p>
+<p><em>What was the null hypothesis, exactly?</em></p>
+<p>A test can only tell you about the hypothesis it tested.</p>
+</div>
+</div>
+</div>
+</div></div>
+</section>
+<section id="what-f-does-and-does-not-say" class="slide level2">
+<h2>What F Does and Does Not Say</h2>
+<div class="columns">
+<div class="column" style="width:55%;">
+<div class="callout callout-important callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Important</strong></p>
+</div>
+<div class="callout-content">
+<p><strong>✅ The answer is (b).</strong></p>
+<p>H₀ was “all four means are equal.” Rejecting it says <strong>at least one</strong> differs — not which, not how many, and not in which direction.</p>
+<p><strong>(a)</strong> claims far more than the test supports. <strong>(c)</strong> is a directional claim about one specific pair; that needs a post-hoc comparison, and Part 8 shows it is not even true. <strong>(d)</strong> misreads R²: 0.432 is the variance explained by <strong>crab type</strong>, which bundles sex and two surgeries together, not by the claw alone.</p>
+</div>
+</div>
+</div>
+</div><div class="column" style="width:45%;">
+<div class="callout callout-warning callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Warning</strong></p>
+</div>
+<div class="callout-content">
+<p><strong>⚠️ The most common ANOVA mistake</strong></p>
+<p>Reporting a significant F and then describing whichever group means look farthest apart, as though the F test had said so.</p>
+<p><strong>It did not.</strong> The F test is an entry ticket, not an answer.</p>
+</div>
+</div>
+</div>
+</div></div>
+</section>
+<section id="part-5-the-f-ratio" class="slide level2 divider">
+<h2>Part 5 · The F-Ratio</h2>
+</section>
+<section id="what-f-actually-is" class="slide level2">
+<h2>What F Actually Is</h2>
+<div class="columns">
+<div class="column" style="width:55%;">
+<p><span class="math display">\[F = \frac{MS_{among}}{MS_{within}}\]</span></p>
+<ul>
+<li><span class="math inline">\(MS_{within}\)</span> estimates the background variance σ² — pooled from inside the groups, where the treatment cannot reach</li>
+<li><span class="math inline">\(MS_{among}\)</span> estimates that <strong>same</strong> σ², <em>plus</em> anything real that separates the group means</li>
+<li><strong>If H₀ is true, both estimate σ² and F ≈ 1</strong></li>
+</ul>
+<p>Here F = <strong>20.31</strong> — the group means are 20 times further apart than within-group noise alone can explain.</p>
+</div><div class="column" style="width:45%;">
+<div class="callout callout-tip callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Tip</strong></p>
+</div>
+<div class="callout-content">
+<p><strong>🖐 Why F is never negative</strong></p>
+<p>It is a ratio of two variances, and a variance is a sum of <strong>squares</strong>. The direction of a difference disappears the moment you square it — which is why a significant F cannot tell you which way anything went.</p>
+</div>
+</div>
+</div>
+</div></div>
+</section>
+<section id="f-and-t-are-the-same-test" class="slide level2">
+<h2>F and t Are the Same Test</h2>
+<div class="columns">
+<div class="column" style="width:55%;">
+<p>Take just two of the four groups — intact males and females — and test them both ways:</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb10"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a aria-label="1"></a>crab_two <span class="ot">&lt;-</span> crab_df <span class="sc">%&gt;%</span></span>
+<span id="cb10-2"><a aria-label="2"></a>  <span class="fu">filter</span>(crab_type <span class="sc">%in%</span> <span class="fu">c</span>(<span class="st">"intact male"</span>, <span class="st">"female"</span>)) <span class="sc">%&gt;%</span></span>
+<span id="cb10-3"><a aria-label="3"></a>  <span class="fu">droplevels</span>()</span>
+<span id="cb10-4"><a aria-label="4"></a></span>
+<span id="cb10-5"><a aria-label="5"></a><span class="fu">t.test</span>(body_temp_c <span class="sc">~</span> crab_type,</span>
+<span id="cb10-6"><a aria-label="6"></a>       <span class="at">data =</span> crab_two, <span class="at">var.equal =</span> <span class="cn">TRUE</span>)<span class="sc">$</span>statistic</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>       t 
+5.958321 </code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb12"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a aria-label="1"></a><span class="fu">anova</span>(<span class="fu">lm</span>(body_temp_c <span class="sc">~</span> crab_type,</span>
+<span id="cb12-2"><a aria-label="2"></a>         <span class="at">data =</span> crab_two))[<span class="dv">1</span>, <span class="st">"F value"</span>]</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] 35.50158</code></pre>
+</div>
+</div>
+</div><div class="column" style="width:45%;">
+<p><strong>t = 5.958</strong>, so <strong>t² = 35.5</strong> — and <strong>F = 35.5</strong>.</p>
+<p>Identical, with identical p-values.</p>
+<div class="callout callout-important callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Important</strong></p>
+</div>
+<div class="callout-content">
+<p><strong>✅ ANOVA generalises the t-test</strong></p>
+<p>With two groups they are the same test. With three or more, the t-test has nowhere to go and ANOVA does.</p>
+<p>This is the same <strong>t² = F</strong> identity you proved on a regression slope in Week 6.</p>
+</div>
+</div>
+</div>
+</div></div>
+</section>
+<section id="variance-explained" class="slide level2">
+<h2>Variance Explained</h2>
+<div class="columns">
+<div class="column" style="width:55%;">
+<p><span class="math display">\[R^2 = \frac{SS_{among}}{SS_{total}} = \frac{2.64}{6.11} = 0.432\]</span></p>
+<p>Crab type accounts for about <strong>43.2%</strong> of the variation in body temperature. The rest is individual crabs being individual crabs.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb14"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a aria-label="1"></a><span class="fu">summary</span>(crab_model)<span class="sc">$</span>r.squared</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] 0.4323687</code></pre>
+</div>
+</div>
+</div><div class="column" style="width:45%;">
+<div class="callout callout-note callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Note</strong></p>
+</div>
+<div class="callout-content">
+<p><strong>Significant and partial, at the same time</strong></p>
+<p>p = 7.00e-10 says the group differences are not noise. R² = 0.43 says they explain under half of what is going on.</p>
+<p>Both are true, and a results section should carry both.</p>
+</div>
+</div>
+</div>
+</div></div>
+</section>
+<section id="part-6-assumptions-and-diagnostics" class="slide level2 divider">
+<h2>Part 6 · Assumptions and Diagnostics</h2>
+</section>
+<section id="the-three-assumptions" class="slide level2 scrollable">
+<h2>The Three Assumptions</h2>
+<div class="columns">
+<div class="column" style="width:55%;">
+<p>One-way ANOVA assumes:</p>
+<ol type="1">
+<li><strong>Independence</strong> — observations do not depend on each other. This one comes from the <strong>design</strong>, and no plot can rescue it</li>
+<li><strong>Normality</strong> — of the <strong>residuals</strong>, not of the raw response</li>
+<li><strong>Equal variance</strong> (homoscedasticity) across groups</li>
+</ol>
+<p>ANOVA is fairly robust to mild departures from 2 and 3 <strong>when the design is balanced</strong>, which is one more reason to plan for equal n.</p>
+</div><div class="column" style="width:45%;">
+<div class="callout callout-warning callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Warning</strong></p>
+</div>
+<div class="callout-content">
+<p><strong>⚠️ Normality of what?</strong></p>
+<p>Not <code>body_temp_c</code>. Not each group separately. <strong>The residuals of the fitted model</strong> — exactly as in regression.</p>
+<p>A response that looks bimodal because the groups differ is perfectly fine; that is the effect you are testing.</p>
+</div>
+</div>
+</div>
+</div></div>
+</section>
+<section id="the-four-diagnostic-plots" class="slide level2 scrollable">
+<h2>The Four Diagnostic Plots</h2>
+<div class="columns">
+<div class="column" style="width:45%;">
+<p>The same four panels you read for a regression:</p>
+<ol type="1">
+<li><strong>Residuals vs fitted</strong> — with a factor, the points stack in vertical columns, one per group. You are looking for <strong>equal spread</strong> in each column</li>
+<li><strong>QQ plot</strong> — residuals against normal</li>
+<li><strong>Scale-location</strong> — same check, easier to see</li>
+<li><strong>Residuals vs leverage</strong> — influential points</li>
+</ol>
+</div><div class="column" style="width:55%;">
+<div class="cell">
+<div class="cell-output-display">
+<div>
+<figure>
+<p><img data-src="analysis_of_variance_lecture_files/figure-revealjs/analysis-of-variance-09-1.png" alt="Four standard diagnostic plots for the crab ANOVA model: residuals versus fitted values, normal QQ plot, scale-location, and residuals versus leverage." width="345"></p>
+</figure>
+</div>
+</div>
+</div>
+</div></div>
+</section>
+<section id="levenes-test-equal-variances" class="slide level2">
+<h2>Levene’s Test — Equal Variances</h2>
+<div class="columns">
+<div class="column" style="width:55%;">
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb16"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb16-1"><a aria-label="1"></a><span class="fu">leveneTest</span>(body_temp_c <span class="sc">~</span> crab_type, <span class="at">data =</span> crab_df)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Levene's Test for Homogeneity of Variance (center = median)
+      Df F value Pr(&gt;F)
+group  3  0.1587 0.9238
+      80               </code></pre>
+</div>
+</div>
+<p>H₀ is <strong>“the variances are equal”</strong>, so a <strong>large</strong> p-value is the good outcome — the same backwards logic as Shapiro-Wilk.</p>
+</div><div class="column" style="width:45%;">
+<p>p = 0.924 — nothing to worry about.</p>
+<div class="callout callout-tip callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Tip</strong></p>
+</div>
+<div class="callout-content">
+<p><strong>🖐 Levene vs Bartlett</strong></p>
+<p>Bartlett’s test is more powerful but assumes normality itself. Levene’s works on absolute deviations from the group median, so it is far more robust. Use Levene.</p>
+</div>
+</div>
+</div>
+</div></div>
+</section>
+<section id="shapiro-wilk-normality-of-the-residuals" class="slide level2">
+<h2>Shapiro-Wilk — Normality of the Residuals</h2>
+<div class="columns">
+<div class="column" style="width:55%;">
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb18"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb18-1"><a aria-label="1"></a><span class="fu">shapiro.test</span>(<span class="fu">residuals</span>(crab_model))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>
+    Shapiro-Wilk normality test
+
+data:  residuals(crab_model)
+W = 0.97566, p-value = 0.112</code></pre>
+</div>
+</div>
+<p>Note what goes inside: <strong><code>residuals(crab_model)</code></strong>.</p>
+</div><div class="column" style="width:45%;">
+<p>p = 0.112 — the residuals are consistent with normal.</p>
+<div class="callout callout-warning callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Warning</strong></p>
+</div>
+<div class="callout-content">
+<p><strong>⚠️ Do not let the test overrule the plot</strong></p>
+<p>At small n it cannot detect real problems; at large n it flags departures too small to matter. The QQ plot is the primary evidence.</p>
+</div>
+</div>
+</div>
+</div></div>
+</section>
+<section id="one-call-for-all-of-it" class="slide level2">
+<h2>One Call for All of It</h2>
+<div class="columns">
+<div class="column" style="width:45%;">
+<p><code>performance::check_model()</code> draws every assumption check in one labelled panel, with a plain-English caption on each.</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb20"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb20-1"><a aria-label="1"></a><span class="fu">check_model</span>(crab_model)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>Useful for a quick look. Still worth knowing what each panel is, which is why we did them one at a time first.</p>
+</div><div class="column" style="width:55%;">
+<div class="cell">
+<div class="cell-output-display">
+<div>
+<figure>
+<p><img data-src="analysis_of_variance_lecture_files/figure-revealjs/analysis-of-variance-12-1.png" alt="The performance package's check_model output for the crab ANOVA, showing posterior predictive check, linearity, homogeneity of variance, influential observations and normality of residuals in one labelled panel." width="384"></p>
+</figure>
+</div>
+</div>
+</div>
+</div></div>
+</section>
+<section id="part-7-the-reference-level-again" class="slide level2 divider">
+<h2>Part 7 · The Reference Level, Again</h2>
+</section>
+<section id="r-sorts-alphabetically-still" class="slide level2">
+<h2>R Sorts Alphabetically — Still</h2>
+<div class="columns">
+<div class="column" style="width:55%;">
+<p>Read the file without thinking about it and the four crab types become a factor in <strong>alphabetical</strong> order:</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb21"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb21-1"><a aria-label="1"></a><span class="fu">levels</span>(crab_df<span class="sc">$</span>crab_type)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] "female"             "intact male"        "male major removed"
+[4] "male minor removed"</code></pre>
+</div>
+</div>
+<p>So the reference is <strong>female</strong> — and every coefficient in the model becomes “compared with a female crab.”</p>
+</div><div class="column" style="width:45%;">
+<div class="callout callout-warning callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Warning</strong></p>
+</div>
+<div class="callout-content">
+<p><strong>⚠️ That is the wrong baseline for this experiment</strong></p>
+<p>The question is what happens when you <strong>remove a claw from a male</strong>. The comparison that answers it is against an <strong>intact male</strong>, not against a female.</p>
+<p>The model fits identically either way. The output only answers your question if you tell it what your question was.</p>
+</div>
+</div>
+</div>
+</div></div>
+</section>
+<section id="decide-which-crab-is-the-control" class="slide level2">
+<h2>🗳️ DECIDE · Which Crab Is the Control?</h2>
+<div class="columns">
+<div class="column" style="width:60%;">
+<p>You are about to set the reference level deliberately.</p>
+<p><strong>Which level should it be, and why?</strong></p>
+<p><strong>(a)</strong> <code>female</code> — keep R’s default; the model fit is identical anyway</p>
+<p><strong>(b)</strong> <code>intact male</code> — the untouched version of the animals that were manipulated</p>
+<p><strong>(c)</strong> <code>male minor removed</code> — it is the procedural control, so it accounts for the surgery</p>
+<p><strong>(d)</strong> It makes no difference, because the F-test and R² do not change</p>
+<div class="callout callout-warning callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Warning</strong></p>
+</div>
+<div class="callout-content">
+<p><strong>✍️ Careful — two of these are true statements. Only one is the right decision.</strong></p>
+</div>
+</div>
+</div>
+</div><div class="column" style="width:40%;">
+<div class="callout callout-note callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Note</strong></p>
+</div>
+<div class="callout-content">
+<p><strong>The question to ask</strong></p>
+<p><em>Which single comparison do I most want to read straight off the coefficient table?</em></p>
+</div>
+</div>
+</div>
+</div></div>
+</section>
+<section id="fct_relevel-saying-what-you-meant" class="slide level2 scrollable">
+<h2><code>fct_relevel()</code> · Saying What You Meant</h2>
+<div class="columns">
+<div class="column" style="width:55%;">
+<div class="callout callout-important callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Important</strong></p>
+</div>
+<div class="callout-content">
+<p><strong>✅ The answer is (b).</strong></p>
+<ol start="4" type="a">
+<li><p>is <em>true</em> — F, R², and the ANOVA table are identical whichever level is the reference. That is not a reason to accept a default chosen by spelling.</p></li>
+<li><p>is tempting and it is the right <strong>comparison</strong> to make eventually — but as the baseline it hides the very contrast the experiment was built around.</p></li>
+</ol>
+</div>
+</div>
+</div>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb23"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb23-1"><a aria-label="1"></a>crab_df <span class="ot">&lt;-</span> crab_df <span class="sc">%&gt;%</span></span>
+<span id="cb23-2"><a aria-label="2"></a>  <span class="fu">mutate</span>(<span class="at">crab_type =</span> <span class="fu">fct_relevel</span>(crab_type, <span class="st">"intact male"</span>))</span>
+<span id="cb23-3"><a aria-label="3"></a></span>
+<span id="cb23-4"><a aria-label="4"></a>crab_model <span class="ot">&lt;-</span> <span class="fu">lm</span>(body_temp_c <span class="sc">~</span> crab_type, <span class="at">data =</span> crab_df)</span>
+<span id="cb23-5"><a aria-label="5"></a></span>
+<span id="cb23-6"><a aria-label="6"></a><span class="fu">summary</span>(crab_model)<span class="sc">$</span>coefficients <span class="sc">%&gt;%</span> <span class="fu">round</span>(<span class="dv">3</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>                            Estimate Std. Error t value Pr(&gt;|t|)
+(Intercept)                    1.286      0.045  28.300    0.000
+crab_typefemale                0.390      0.064   6.077    0.000
+crab_typemale major removed    0.129      0.064   2.001    0.049
+crab_typemale minor removed   -0.076      0.064  -1.186    0.239</code></pre>
+</div>
+</div>
+</div><div class="column" style="width:45%;">
+<p>Now every row reads as “<strong>degrees hotter than an intact male</strong>”:</p>
+<ul>
+<li><code>female</code> <strong>+0.39</strong> — clearly hotter</li>
+<li><code>male major removed</code> <strong>+0.13</strong></li>
+<li><code>male minor removed</code> <strong>-0.08</strong></li>
+</ul>
+<div class="callout callout-tip callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Tip</strong></p>
+</div>
+<div class="callout-content">
+<p><strong>🖐 The habit</strong></p>
+<p>Set the reference in the same line that creates the factor. <code>fct_relevel(x, "control")</code> moves one level to the front and leaves the rest alone.</p>
+</div>
+</div>
+</div>
+</div></div>
+</section>
+<section id="part-8-post-hoc-testing" class="slide level2 divider">
+<h2>Part 8 · Post-Hoc Testing</h2>
+</section>
+<section id="what-post-hoc-tests-are-for" class="slide level2">
+<h2>What Post-Hoc Tests Are For</h2>
+<div class="columns">
+<div class="column" style="width:55%;">
+<p>The F-test said <em>something</em> differs. Post-hoc tests say <strong>what</strong>, while keeping the family-wide error rate at α.</p>
+<ul>
+<li><strong>Planned (a priori) comparisons</strong> — a small number of contrasts you committed to <strong>before</strong> seeing the data. More powerful, because there are fewer of them</li>
+<li><strong>Unplanned (post-hoc) comparisons</strong> — all pairs, after the fact. Safer, less powerful</li>
+</ul>
+<p><strong>Tukey’s HSD</strong> is the standard for all pairwise comparisons with equal n.</p>
+</div><div class="column" style="width:45%;">
+<div class="callout callout-warning callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Warning</strong></p>
+</div>
+<div class="callout-content">
+<p><strong>⚠️ Deciding after you look is not a plan</strong></p>
+<p>Choosing which comparisons to make <em>because they looked big</em> re-introduces exactly the multiple-comparisons problem the correction exists to solve.</p>
+</div>
+</div>
+</div>
+</div></div>
+</section>
+<section id="tukeys-hsd" class="slide level2">
+<h2>Tukey’s HSD</h2>
+<div class="columns">
+<div class="column" style="width:55%;">
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb25"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb25-1"><a aria-label="1"></a><span class="fu">TukeyHSD</span>(<span class="fu">aov</span>(crab_model))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>  Tukey multiple comparisons of means
+    95% family-wise confidence level
+
+Fit: aov(formula = crab_model)
+
+$crab_type
+                                             diff         lwr         upr
+female-intact male                     0.39047619  0.22189182  0.55906056
+male major removed-intact male         0.12857143 -0.04001294  0.29715579
+male minor removed-intact male        -0.07619048 -0.24477484  0.09239389
+male major removed-female             -0.26190476 -0.43048913 -0.09332040
+male minor removed-female             -0.46666667 -0.63525103 -0.29808230
+male minor removed-male major removed -0.20476190 -0.37334627 -0.03617754
+                                          p adj
+female-intact male                    0.0000002
+male major removed-intact male        0.1962212
+male minor removed-intact male        0.6375171
+male major removed-female             0.0006106
+male minor removed-female             0.0000000
+male minor removed-male major removed 0.0108312</code></pre>
+</div>
+</div>
+</div><div class="column" style="width:45%;">
+<p>Each row is one pair: the difference in means, a confidence interval, and a p-value <strong>already adjusted</strong> for the whole family of six comparisons.</p>
+<p>A pair differs when its interval excludes zero.</p>
+</div></div>
+</section>
+<section id="decide-reading-the-tukey-output" class="slide level2">
+<h2>🗳️ DECIDE · Reading the Tukey Output</h2>
+<div class="columns">
+<div class="column" style="width:60%;">
+<p>The radiator hypothesis predicts that a male whose <strong>major claw was removed</strong> should run <strong>hotter</strong> than an intact male.</p>
+<p>Tukey gives <code>male major removed − intact male</code> a difference of <strong>+0.129</strong> with an adjusted <strong>p = 0.196</strong>.</p>
+<p><strong>What should you conclude?</strong></p>
+<p><strong>(a)</strong> The hypothesis is supported — the difference is in the predicted direction</p>
+<p><strong>(b)</strong> The hypothesis fails — removing the major claw did not significantly change temperature</p>
+<p><strong>(c)</strong> The hypothesis is supported, because females are significantly hotter than every male group</p>
+<p><strong>(d)</strong> Nothing can be concluded, because the overall ANOVA was significant</p>
+<div class="callout callout-warning callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Warning</strong></p>
+</div>
+<div class="callout-content">
+<p><strong>✍️ One letter, then argue it with your neighbour.</strong></p>
+</div>
+</div>
+</div>
+</div><div class="column" style="width:40%;">
+<div class="callout callout-note callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Note</strong></p>
+</div>
+<div class="callout-content">
+<p><strong>The question to ask</strong></p>
+<p><em>Which comparison does the hypothesis actually make a prediction about?</em></p>
+</div>
+</div>
+</div>
+</div></div>
+</section>
+<section id="what-tukey-actually-found" class="slide level2">
+<h2>What Tukey Actually Found</h2>
+<div class="columns">
+<div class="column" style="width:55%;">
+<div class="callout callout-important callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Important</strong></p>
+</div>
+<div class="callout-content">
+<p><strong>✅ The answer is (b).</strong></p>
+<p>Removing the major claw moved temperature by 0.13 °C, adjusted p = 0.2 — not distinguishable from zero. The direction is right and the evidence is not there.</p>
+<p><strong>(c)</strong> is the trap: females <em>are</em> hotter than every male group, but females differ from males in many ways besides the claw. That comparison cannot test a claw-removal hypothesis.</p>
+</div>
+</div>
+</div>
+</div><div class="column" style="width:45%;">
+<p><strong>What did differ</strong> (adjusted p):</p>
+<div class="compact-table">
+<table class="caption-top">
+<thead>
+<tr class="header">
+<th style="text-align: left;">Comparison</th>
+<th style="text-align: right;">p</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">female − intact male</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">major removed − intact</td>
+<td style="text-align: right;">0.196</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">minor removed − intact</td>
+<td style="text-align: right;">0.638</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">major − minor removed</td>
+<td style="text-align: right;">0.011</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The big effect in this dataset is <strong>sex</strong>, not surgery.</p>
+</div></div>
+</section>
+<section id="estimated-marginal-means" class="slide level2">
+<h2>Estimated Marginal Means</h2>
+<div class="columns">
+<div class="column" style="width:55%;">
+<p><code>emmeans</code> gives the same comparisons with more control — any contrast you like, any adjustment method:</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb27"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb27-1"><a aria-label="1"></a><span class="fu">emmeans</span>(crab_model, pairwise <span class="sc">~</span> crab_type,</span>
+<span id="cb27-2"><a aria-label="2"></a>        <span class="at">adjust =</span> <span class="st">"tukey"</span>)<span class="sc">$</span>contrasts</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code> contrast                                estimate     SE df t.ratio p.value
+ intact male - female                     -0.3905 0.0643 80  -6.077 &lt;0.0001
+ intact male - male major removed         -0.1286 0.0643 80  -2.001  0.1962
+ intact male - male minor removed          0.0762 0.0643 80   1.186  0.6375
+ female - male major removed               0.2619 0.0643 80   4.076  0.0006
+ female - male minor removed               0.4667 0.0643 80   7.263 &lt;0.0001
+ male major removed - male minor removed   0.2048 0.0643 80   3.187  0.0108
+
+P value adjustment: tukey method for comparing a family of 4 estimates </code></pre>
+</div>
+</div>
+</div><div class="column" style="width:45%;">
+<div class="callout callout-tip callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Tip</strong></p>
+</div>
+<div class="callout-content">
+<p><strong>🖐 Why <code>emmeans</code> and not just <code>TukeyHSD()</code></strong></p>
+<p><code>TukeyHSD()</code> only does all-pairs on a balanced <code>aov</code>. <code>emmeans</code> handles unbalanced designs, covariates, several factors and <strong>planned contrasts</strong> — and it is what you will use from Week 9 onward.</p>
+</div>
+</div>
+</div>
+</div></div>
+</section>
+<section id="part-9-reporting" class="slide level2 divider">
+<h2>Part 9 · Reporting</h2>
+</section>
+<section id="reporting-an-anova" class="slide level2">
+<h2>Reporting an ANOVA</h2>
+<div class="columns">
+<div class="column" style="width:55%;">
+<p>A results sentence needs the <strong>test, the statistic with both df, the p-value, and the direction</strong> — then the post-hoc detail.</p>
+<blockquote>
+<p>Body temperature differed among crab types (one-way ANOVA, F<sub>3,80</sub> = 20.31, p &lt; 0.001, R² = 0.43). Females were warmer than intact males by 0.39 °C (Tukey HSD, adjusted p &lt; 0.001), but removing the major claw did not detectably change male temperature (0.13 °C, adjusted p = 0.2).</p>
+</blockquote>
+</div><div class="column" style="width:45%;">
+<div class="callout callout-note callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Note</strong></p>
+</div>
+<div class="callout-content">
+<p><strong>✅ What that sentence does</strong></p>
+<ul>
+<li>Names the test</li>
+<li>Gives <strong>both</strong> degrees of freedom</li>
+<li>Reports effect size, not just p</li>
+<li>States the post-hoc method <strong>and</strong> that its p-values are adjusted</li>
+<li>Reports the non-significant comparison the hypothesis was about, rather than quietly dropping it</li>
+</ul>
+</div>
+</div>
+</div>
+</div></div>
+</section>
+<section id="part-10-when-the-assumptions-fail" class="slide level2 divider">
+<h2>Part 10 · When the Assumptions Fail</h2>
+</section>
+<section id="a-second-dataset-nematode-lifespan" class="slide level2">
+<h2>A Second Dataset · Nematode Lifespan</h2>
+<div class="columns">
+<div class="column" style="width:55%;">
+<p>The crab data behaved. Most data do not.</p>
+<p>Here are <strong>200 nematodes</strong>, 50 in each of four treatments, exposed to a parasite as larvae, as adults, as both, or to <strong>water</strong> as a control. The response is lifespan in days.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb29"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb29-1"><a aria-label="1"></a>worm_df <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="st">"data/nematode_lifespan.csv"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb29-2"><a aria-label="2"></a>  <span class="fu">mutate</span>(<span class="at">treatment =</span> <span class="fu">fct_relevel</span>(treatment, <span class="st">"water"</span>))</span>
+<span id="cb29-3"><a aria-label="3"></a></span>
+<span id="cb29-4"><a aria-label="4"></a><span class="fu">count</span>(worm_df, treatment)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code># A tibble: 4 × 2
+  treatment       n
+  &lt;fct&gt;       &lt;int&gt;
+1 water          50
+2 adult          50
+3 larva          50
+4 larva+adult    50</code></pre>
+</div>
+</div>
+</div><div class="column" style="width:45%;">
+<div class="cell">
+<div class="cell-output-display">
+<div>
+<figure>
+<p><img data-src="analysis_of_variance_lecture_files/figure-revealjs/analysis-of-variance-18-1.png" alt="Boxplots with jittered points of nematode lifespan by treatment, showing unequal spread between groups and a long tail in the larva-plus-adult group." width="307"></p>
+</figure>
+</div>
+</div>
+</div>
+<p>Note that the <strong><code>water</code> control sorts last alphabetically</strong> — another reason to relevel on purpose.</p>
+</div></div>
+</section>
+<section id="these-assumptions-genuinely-fail" class="slide level2">
+<h2>These Assumptions Genuinely Fail</h2>
+<div class="columns">
+<div class="column" style="width:55%;">
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb31"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb31-1"><a aria-label="1"></a>worm_model <span class="ot">&lt;-</span> <span class="fu">lm</span>(lifespan_days <span class="sc">~</span> treatment, <span class="at">data =</span> worm_df)</span>
+<span id="cb31-2"><a aria-label="2"></a></span>
+<span id="cb31-3"><a aria-label="3"></a><span class="fu">shapiro.test</span>(<span class="fu">residuals</span>(worm_model))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>
+    Shapiro-Wilk normality test
+
+data:  residuals(worm_model)
+W = 0.97626, p-value = 0.001808</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb33"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb33-1"><a aria-label="1"></a><span class="fu">leveneTest</span>(lifespan_days <span class="sc">~</span> treatment, <span class="at">data =</span> worm_df)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Levene's Test for Homogeneity of Variance (center = median)
+       Df F value    Pr(&gt;F)    
+group   3  22.481 1.493e-12 ***
+      196                      
+---
+Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</code></pre>
+</div>
+</div>
+</div><div class="column" style="width:45%;">
+<ul>
+<li>Shapiro-Wilk <strong>p = 0.00181</strong> — residuals are not normal</li>
+<li>Levene <strong>p = 1.49e-12</strong> — variances are nowhere near equal</li>
+</ul>
+<p>Look back at the boxplots: group SDs run from 3.3 to 8.7 days.</p>
+<div class="callout callout-warning callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Warning</strong></p>
+</div>
+<div class="callout-content">
+<p><strong>⚠️ Nothing here is simulated</strong></p>
+<p>This is the published dataset, unmodified. Real data fails these tests routinely.</p>
+</div>
+</div>
+</div>
+</div></div>
+</section>
+<section id="decide-what-do-you-do-now" class="slide level2">
+<h2>🗳️ DECIDE · What Do You Do Now?</h2>
+<div class="columns">
+<div class="column" style="width:60%;">
+<p>An ANOVA on these data returns <strong>F = 15.25, p = 5.87e-09</strong> — but the residuals are non-normal and the variances are unequal.</p>
+<p><strong>What is the right next step?</strong></p>
+<p><strong>(a)</strong> Report the ANOVA — it is significant, and ANOVA is robust</p>
+<p><strong>(b)</strong> Drop the group with the biggest variance and re-run</p>
+<p><strong>(c)</strong> Try a transformation, and if that fails use a rank-based test such as Kruskal-Wallis</p>
+<p><strong>(d)</strong> Report nothing — the data cannot be analysed</p>
+<div class="callout callout-warning callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Warning</strong></p>
+</div>
+<div class="callout-content">
+<p><strong>✍️ Write your letter down, then vote.</strong></p>
+</div>
+</div>
+</div>
+</div><div class="column" style="width:40%;">
+<div class="callout callout-note callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Note</strong></p>
+</div>
+<div class="callout-content">
+<p><strong>The question to ask</strong></p>
+<p><em>Is the problem with the data, or with the test I chose for it?</em></p>
+</div>
+</div>
+</div>
+</div></div>
+</section>
+<section id="the-kruskal-wallis-test" class="slide level2">
+<h2>The Kruskal-Wallis Test</h2>
+<div class="columns">
+<div class="column" style="width:55%;">
+<div class="callout callout-important callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Important</strong></p>
+</div>
+<div class="callout-content">
+<p><strong>✅ The answer is (c).</strong></p>
+<p>Transform first — a log or square root often fixes both problems at once, and keeps you in a framework that extends to more factors. If it does not, move to a rank-based test.</p>
+<p><strong>(b)</strong> is data deletion to make a test pass, which is not a repair.</p>
+</div>
+</div>
+</div>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb35"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb35-1"><a aria-label="1"></a><span class="fu">kruskal.test</span>(lifespan_days <span class="sc">~</span> treatment, <span class="at">data =</span> worm_df)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>
+    Kruskal-Wallis rank sum test
+
+data:  lifespan_days by treatment
+Kruskal-Wallis chi-squared = 29.463, df = 3, p-value = 1.79e-06</code></pre>
+</div>
+</div>
+</div><div class="column" style="width:45%;">
+<p>Kruskal-Wallis replaces every value by its <strong>rank</strong> and asks whether the rank totals differ more than chance — so it needs no normality and is not thrown by unequal spread.</p>
+<p><strong>χ² = 29.46, df = 3, p = 1.79e-06.</strong></p>
+<p>The conclusion survives. What changes is that you can now defend it.</p>
+</div></div>
+</section>
+<section id="dunns-test-the-post-hoc-for-ranks" class="slide level2">
+<h2>Dunn’s Test — the Post-Hoc for Ranks</h2>
+<div class="columns">
+<div class="column" style="width:55%;">
+<p>Kruskal-Wallis has the same limit as F: it says <em>something</em> differs, not what. <strong>Dunn’s test</strong> is its post-hoc.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb37"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb37-1"><a aria-label="1"></a><span class="fu">dunnTest</span>(lifespan_days <span class="sc">~</span> treatment,</span>
+<span id="cb37-2"><a aria-label="2"></a>         <span class="at">data =</span> worm_df, <span class="at">method =</span> <span class="st">"bh"</span>)<span class="sc">$</span>res <span class="sc">%&gt;%</span></span>
+<span id="cb37-3"><a aria-label="3"></a>  <span class="fu">mutate</span>(<span class="fu">across</span>(<span class="fu">where</span>(is.numeric), <span class="sc">~</span> <span class="fu">signif</span>(.x, <span class="dv">3</span>)))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>           Comparison      Z  P.unadj    P.adj
+1       water - adult -3.120 1.78e-03 2.67e-03
+2       water - larva  0.917 3.59e-01 4.31e-01
+3       adult - larva  4.040 5.32e-05 1.60e-04
+4 water - larva+adult -3.510 4.56e-04 9.11e-04
+5 adult - larva+adult -0.381 7.03e-01 7.03e-01
+6 larva - larva+adult -4.420 9.76e-06 5.85e-05</code></pre>
+</div>
+</div>
+</div><div class="column" style="width:45%;">
+<div class="callout callout-note callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Note</strong></p>
+</div>
+<div class="callout-content">
+<p><strong>Which adjustment?</strong></p>
+<p><code>"bonferroni"</code> is the strictest and costs the most power. <code>"bh"</code> (Benjamini-Hochberg) controls the <strong>false discovery rate</strong> instead, and is the usual choice when you have more than a handful of comparisons.</p>
+</div>
+</div>
+</div>
+<p><code>pairwise.wilcox.test()</code> does a similar job; Dunn’s is preferred because it uses the same ranking as the Kruskal-Wallis it follows.</p>
+</div></div>
+</section>
+<section id="which-test-should-you-use" class="slide level2">
+<h2>Which Test Should You Use?</h2>
+<div class="compact-table">
+<table class="caption-top">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Situation</th>
+<th style="text-align: left;">Parametric route</th>
+<th style="text-align: left;">Non-parametric route</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">Compare 2 groups</td>
+<td style="text-align: left;">t-test</td>
+<td style="text-align: left;">Mann-Whitney U / Wilcoxon rank-sum</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Compare 3+ groups</td>
+<td style="text-align: left;"><strong>one-way ANOVA</strong></td>
+<td style="text-align: left;"><strong>Kruskal-Wallis</strong></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Post-hoc, all pairs</td>
+<td style="text-align: left;">Tukey HSD, <code>emmeans</code></td>
+<td style="text-align: left;">Dunn’s test, pairwise Wilcoxon</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">What it compares</td>
+<td style="text-align: left;">means</td>
+<td style="text-align: left;">mean ranks (≈ medians)</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Needs</td>
+<td style="text-align: left;">normal residuals, equal variance</td>
+<td style="text-align: left;">neither</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Costs you</td>
+<td style="text-align: left;">nothing, when assumptions hold</td>
+<td style="text-align: left;">power, and the original units</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p><strong>Try a transformation before you give up the parametric route</strong> — it keeps your effect sizes interpretable and extends to the multi-factor designs coming in Week 9.</p>
+</section>
+<section id="reporting-a-non-parametric-result" class="slide level2">
+<h2>Reporting a Non-Parametric Result</h2>
+<div class="columns">
+<div class="column" style="width:55%;">
+<blockquote>
+<p>Nematode lifespan differed among parasite-exposure treatments (Kruskal-Wallis χ²<sub>3</sub> = 29.46, p &lt; 0.001). A Kruskal-Wallis test was used because the residuals of the equivalent ANOVA were non-normal (Shapiro-Wilk p = 0.00181) and variances were unequal (Levene p = 1.49e-12). Dunn’s tests with Benjamini-Hochberg adjustment showed that larva-exposed worms outlived worms exposed as adults or as both.</p>
+</blockquote>
+</div><div class="column" style="width:45%;">
+<div class="callout callout-important callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Important</strong></p>
+</div>
+<div class="callout-content">
+<p><strong>✅ Say <em>why</em> you went non-parametric</strong></p>
+<p>A reader cannot tell whether you chose a rank test because your data required it or because it gave you the answer you wanted — unless you show the assumption checks that made the decision.</p>
+<p>Report the numbers that drove the choice, not just the choice.</p>
+</div>
+</div>
+</div>
+</div></div>
+</section>
+<section id="wrap-up" class="slide level2">
+<h2>Wrap-up</h2>
+<p>Today you:</p>
+<ul>
+<li>Saw that ANOVA <strong>is</strong> regression with a categorical predictor — the same <code>lm()</code>, the same partition, the same F</li>
+<li>Worked out why six t-tests carry a <strong>26%</strong> chance of a false positive, and what ANOVA does about it</li>
+<li>Built <span class="math inline">\(SS_{among}\)</span> and <span class="math inline">\(SS_{within}\)</span> by hand and matched them to <code>anova()</code></li>
+<li>Confirmed <strong>t² = F</strong> on a two-group subset, for the second time this term</li>
+<li>Checked independence, normality and equal variance — the last two <strong>on the residuals</strong></li>
+<li>Set the reference level with <strong><code>fct_relevel()</code></strong> so the coefficients answered the experiment’s question</li>
+<li>Used <strong>Tukey HSD</strong> to find which pairs differ, and learned that the claw-removal comparison was not one of them</li>
+<li>Moved to <strong>Kruskal-Wallis and Dunn’s test</strong> on a dataset whose assumptions genuinely failed</li>
+</ul>
+</section>
+<section id="the-three-things-to-carry-out-of-here" class="slide level2">
+<h2>The Three Things to Carry Out of Here</h2>
+<div class="columns">
+<div class="column" style="width:50%;">
+<div class="callout callout-important callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Important</strong></p>
+</div>
+<div class="callout-content">
+<p><strong>⚠️ A significant F is an entry ticket</strong></p>
+<p>It says at least one group differs. It never says which, how many, or in which direction. Everything past that comes from post-hoc comparisons you planned or corrected for.</p>
+</div>
+</div>
+</div>
+<div class="callout callout-note callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Note</strong></p>
+</div>
+<div class="callout-content">
+<p><strong>✅ Assumptions live in the residuals</strong></p>
+<p>Except independence, which lives in the <strong>design</strong> — and no plot will ever show it to you.</p>
+</div>
+</div>
+</div>
+</div><div class="column" style="width:50%;">
+<div class="callout callout-important callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Important</strong></p>
+</div>
+<div class="callout-content">
+<p><strong>✅ Set the reference level</strong></p>
+<p><code>fct_relevel(x, "control")</code>, in the line that makes the factor. The fit never changes; the readability always does.</p>
 </div>
 </div>
 </div>
@@ -1729,21 +1670,26 @@ Kruskal-Wallis H(2) = 9.42, p = 0.009</code></pre>
 </div>
 <div class="callout-content">
 <p><strong>Up next — Two-Way ANOVA</strong></p>
-<ul>
-<li>Two categorical predictors at once</li>
-<li>Interaction: when the effect of one factor depends on the other</li>
-</ul>
+<p>Two factors at once, and the thing that only exists when you have two: the <strong>interaction</strong>.</p>
 </div>
 </div>
 </div>
 </div></div>
+</section>
+<section id="readings" class="slide level2">
+<h2>Readings</h2>
+<ul>
+<li><strong>Whitlock &amp; Schluter</strong>, Ch. 15 — Comparing Means of More Than Two Groups (§15.4 assumptions and transformations; §15.5 planned and unplanned comparisons; §15.6 the Kruskal-Wallis test).</li>
+<li><strong>Gotelli &amp; Ellison</strong>, Ch. 10 — The Analysis of Variance.</li>
+<li>Darnell, M. Z., &amp; Munguia, P. (2011). Thermoregulation as an alternate function of the sexually dimorphic fiddler crab claw. <em>The American Naturalist</em>, 178(3), 419–428.</li>
+</ul>
 </section>
 <section id="getting-unstuck" class="slide level2 scrollable">
 <h2>Getting unstuck</h2>
 <p>When code breaks — and it will, that is normal:</p>
 <ol type="1">
 <li>Read the <strong>error message</strong> out loud; it usually names the line</li>
-<li>Check the usual suspects: is your grouping variable a <strong>factor</strong> (<code>as.factor()</code>)? Did you pass the model to <code>TukeyHSD()</code> via <code>aov()</code>, not <code>lm()</code>? Is <code>car</code> loaded for <code>leveneTest()</code>, <code>FSA</code> for <code>dunnTest()</code>?</li>
+<li>Check the usual suspects: is your grouping column a <strong>factor</strong>? Did you pass <code>residuals(model)</code> to <code>shapiro.test()</code> rather than the raw response? Is <code>car</code> loaded for <code>leveneTest()</code>, <code>FSA</code> for <code>dunnTest()</code>?</li>
 <li><code>?function_name</code> opens the help page</li>
 <li>Bring the <strong>exact error</strong> (copy-paste it) to class or office hours</li>
 </ol>

@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="author" content="Bill Perry">
-<meta name="description" content="Hands-on activity: multicollinearity, variable transformations, model diagnostics, model comparison, and predictor importance on the Michaletz et al.&nbsp;(2014) global forest NPP dataset.">
+<meta name="description" content="In-class activity on Loyn’s Victorian forest-bird data: fit predictors alone and together, diagnose collinearity, simplify the model, and set a factor’s reference level with fct_relevel().">
 
 <title>Activity: Multiple Regression – UMD Biostatistics</title>
 <style>
@@ -120,7 +120,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <link rel="stylesheet" href="../../css/main.css">
 <link rel="stylesheet" href="../../css/main.css">
 <meta property="og:title" content="Activity: Multiple Regression – UMD Biostatistics">
-<meta property="og:description" content="Hands-on activity: multicollinearity, variable transformations, model diagnostics, model comparison, and predictor importance on the Michaletz et al.&nbsp;(2014) global forest NPP dataset.">
+<meta property="og:description" content="In-class activity on Loyn’s Victorian forest-bird data: fit predictors alone and together, diagnose collinearity, simplify the model, and set a factor’s reference level with fct_relevel().">
 <meta property="og:site_name" content="UMD Biostatistics">
 </head>
 
@@ -413,7 +413,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 <div>
   <div class="description">
-    Hands-on activity: multicollinearity, variable transformations, model diagnostics, model comparison, and predictor importance on the Michaletz et al.&nbsp;(2014) global forest NPP dataset.
+    In-class activity on Loyn’s Victorian forest-bird data: fit predictors alone and together, diagnose collinearity, simplify the model, and set a factor’s reference level with fct_relevel().
   </div>
 </div>
 
@@ -436,307 +436,210 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </header>
 
 
-<section id="worksheet-multiple-regression-forest-net-primary-production" class="level1">
-<h1>Worksheet: Multiple Regression — Forest Net Primary Production</h1>
-</section>
-<section id="part-1-setup-and-data" class="level1">
-<h1>Part 1 · Setup and Data</h1>
-<p><strong>▶ Run this in your Script:</strong></p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 1.1 · Setup and Data ───────────────────────────────────────────</span></span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tidyverse)    <span class="co"># For data manipulation and visualization</span></span>
-<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(car)           <span class="co"># For regression diagnostics (VIF, etc.)</span></span>
-<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(corrplot)      <span class="co"># For correlation plots</span></span>
-<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(GGally)        <span class="co"># For pairs plots</span></span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(broom)         <span class="co"># For tidy model outputs</span></span>
-<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>forest_df <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="st">"data/michaletz_etal_2014_clean.csv"</span>)</span>
-<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="fu">head</span>(forest_df)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>✏️ <strong>Your turn:</strong> Run <code>glimpse(forest_df)</code>. Which columns look continuous, and which look categorical?</p>
-<p><code>________________________</code></p>
+<section id="worksheet-multiple-regression" class="level1">
+<h1>Worksheet: Multiple Regression</h1>
+<p><a href="data/loyn_birds.csv" class="btn btn-primary" download="loyn_birds.csv">📥 Bird data</a> <a href="themes_functions/r_themes_and_functions.R" class="btn btn-primary" download="r_themes_and_functions.R">📥 Tools script (.R)</a> <a href="data/11_multiple_regression.R" class="btn btn-primary" download="11_multiple_regression.R">📥 Script skeleton (.R)</a></p>
+<p>The lecture’s dataset: <strong>56 remnant forest patches</strong> in Victoria, Australia, from Loyn (1987). Bird <code>abundance</code> is the response, and six patch characteristics are the candidate predictors.</p>
+<p>You will do four things, in this order: fit the predictors <strong>one at a time</strong>, fit them <strong>all at once</strong> and see what happens, work out <strong>why</strong> it happened, and then decide what to keep.</p>
 <hr>
 </section>
-<section id="part-2-exploring-multicollinearity" class="level1">
-<h1>Part 2 · Exploring Multicollinearity</h1>
-<p><strong>▶ Run this</strong> — a correlation matrix, and a visual version of it:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 2.1 · Exploring Multicollinearity ──────────────────────────────</span></span>
-<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>num_vars <span class="ot">&lt;-</span> forest_df <span class="sc">%&gt;%</span></span>
-<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select_if</span>(is.numeric)</span>
-<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>cor_matrix <span class="ot">&lt;-</span> <span class="fu">cor</span>(num_vars, <span class="at">use =</span> <span class="st">"complete.obs"</span>)</span>
-<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>cor_matrix</span>
-<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a><span class="fu">corrplot</span>(cor_matrix, <span class="at">method =</span> <span class="st">"color"</span>, <span class="at">type =</span> <span class="st">"upper"</span>,</span>
-<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>         <span class="at">addCoef.col =</span> <span class="st">"grey45"</span>, <span class="at">tl.cex =</span> <span class="fl">0.8</span>, <span class="at">number.cex =</span> <span class="fl">0.7</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>▶ Run this</strong> — a pairs plot for a fuller picture:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 2.2 · Exploring Multicollinearity ──────────────────────────────</span></span>
-<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>forest_df <span class="sc">%&gt;%</span></span>
-<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(<span class="sc">-</span>leaf) <span class="sc">%&gt;%</span>  <span class="co"># Exclude categorical variable for pairs plot</span></span>
-<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggpairs</span>(</span>
-<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">upper =</span> <span class="fu">list</span>(<span class="at">continuous =</span> <span class="fu">wrap</span>(<span class="st">"cor"</span>, <span class="at">size =</span> <span class="dv">5</span>)),</span>
-<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>    <span class="at">lower =</span> <span class="fu">list</span>(<span class="at">continuous =</span> <span class="fu">wrap</span>(<span class="st">"points"</span>, <span class="at">alpha =</span> <span class="fl">0.6</span>, <span class="at">size =</span> <span class="fl">0.8</span>))</span>
-<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">+</span></span>
-<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>✏️ <strong>Your turn:</strong> From the correlation matrix, which two predictors look most strongly correlated with each other?</p>
-<p><code>________________________</code></p>
-<p><strong>▶ Run this</strong> — fit the full model with every predictor:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 2.3 · Exploring Multicollinearity ──────────────────────────────</span></span>
-<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>model_init <span class="ot">&lt;-</span> <span class="fu">lm</span>(npp <span class="sc">~</span> age <span class="sc">+</span> biomass <span class="sc">+</span> season <span class="sc">+</span> temp <span class="sc">+</span></span>
-<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>             precip <span class="sc">+</span> teb <span class="sc">+</span> leaf, <span class="at">data =</span> forest_df)</span>
-<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(model_init)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>▶ Run this</strong> — check Variance Inflation Factors:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 2.4 · Exploring Multicollinearity ──────────────────────────────</span></span>
-<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>vif_values <span class="ot">&lt;-</span> <span class="fu">vif</span>(model_init)</span>
-<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>vif_values</span>
-<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>vif_df <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
-<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">Variable =</span> <span class="fu">names</span>(vif_values),</span>
-<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">VIF =</span> <span class="fu">as.numeric</span>(vif_values)</span>
-<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>) <span class="sc">%&gt;%</span></span>
-<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(<span class="fu">desc</span>(VIF))</span>
-<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(vif_df, <span class="fu">aes</span>(<span class="at">x =</span> <span class="fu">reorder</span>(Variable, VIF), <span class="at">y =</span> VIF)) <span class="sc">+</span></span>
-<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_col</span>(<span class="at">fill =</span> <span class="st">"darkblue"</span>, <span class="at">alpha =</span> <span class="fl">0.7</span>) <span class="sc">+</span></span>
-<span id="cb5-13"><a href="#cb5-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_hline</span>(<span class="at">yintercept =</span> <span class="dv">10</span>, <span class="at">color =</span> <span class="st">"red"</span>, <span class="at">linetype =</span> <span class="st">"dashed"</span>, <span class="at">linewidth =</span> <span class="dv">1</span>) <span class="sc">+</span></span>
-<span id="cb5-14"><a href="#cb5-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_hline</span>(<span class="at">yintercept =</span> <span class="dv">5</span>, <span class="at">color =</span> <span class="st">"orange"</span>, <span class="at">linetype =</span> <span class="st">"dashed"</span>, <span class="at">linewidth =</span> <span class="dv">1</span>) <span class="sc">+</span></span>
-<span id="cb5-15"><a href="#cb5-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">coord_flip</span>() <span class="sc">+</span></span>
-<span id="cb5-16"><a href="#cb5-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(</span>
-<span id="cb5-17"><a href="#cb5-17" aria-hidden="true" tabindex="-1"></a>    <span class="at">title =</span> <span class="st">"Variance Inflation Factors"</span>,</span>
-<span id="cb5-18"><a href="#cb5-18" aria-hidden="true" tabindex="-1"></a>    <span class="at">subtitle =</span> <span class="st">"Red line: VIF = 10 (serious concern), Orange line: VIF = 5 (moderate concern)"</span>,</span>
-<span id="cb5-19"><a href="#cb5-19" aria-hidden="true" tabindex="-1"></a>    <span class="at">x =</span> <span class="st">"Variables"</span>, <span class="at">y =</span> <span class="st">"VIF"</span></span>
-<span id="cb5-20"><a href="#cb5-20" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">+</span></span>
-<span id="cb5-21"><a href="#cb5-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>✏️ <strong>Your turn:</strong> Which predictor(s) have VIF &gt; 10? Does that match what you flagged from the correlation matrix?</p>
-<p><code>________________________</code></p>
-<div class="callout callout-style-default callout-tip callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-Tip
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p><strong>🚀 If you finish early:</strong> Recompute VIF using only 3 predictors of your choice (drop the rest from the model formula). Do the remaining VIFs change? Why would dropping a correlated predictor lower the VIFs of the ones that are left?</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 2.5 · Exploring Multicollinearity ──────────────────────────────</span></span>
-<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Write your code in the R script:</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-</div>
-</div>
-<hr>
-</section>
-<section id="part-3-addressing-multicollinearity" class="level1">
-<h1>Part 3 · Addressing Multicollinearity</h1>
-<p>Season and temperature are highly correlated. Let’s remove season.</p>
+<section id="part-1-setup-and-the-data" class="level1">
+<h1>Part 1 · Setup and the data</h1>
 <p><strong>▶ Run this:</strong></p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 3.1 · Addressing Multicollinearity ─────────────────────────────</span></span>
-<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>model_2 <span class="ot">&lt;-</span> <span class="fu">lm</span>(npp <span class="sc">~</span> age <span class="sc">+</span> biomass <span class="sc">+</span> temp <span class="sc">+</span> precip <span class="sc">+</span> teb <span class="sc">+</span> leaf,</span>
-<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>             <span class="at">data =</span> forest_df)</span>
-<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(model_2)</span>
-<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>vif_values2 <span class="ot">&lt;-</span> <span class="fu">vif</span>(model_2)</span>
-<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>vif_values2</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>✏️ <strong>Your turn:</strong> Did removing <code>season</code> fix the VIF problem?</p>
-<p><code>________________________</code></p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 1.1 · Setup and the data ───────────────────────────────────────</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tidyverse)</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(car)</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="fu">source</span>(<span class="st">"themes_functions/r_themes_and_functions.R"</span>)</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>bird_df <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="st">"data/loyn_birds.csv"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">log_area        =</span> <span class="fu">log10</span>(area_ha),</span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>         <span class="at">log_dist        =</span> <span class="fu">log10</span>(dist_m),</span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>         <span class="at">log_dist_larger =</span> <span class="fu">log10</span>(dist_larger_m))</span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>bird_df</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>✏️ <strong>Your turn:</strong> Why are area and the two distances logged? Look at the range of <code>area_ha</code>.</p>
+<pre><code>____________________________________________________________</code></pre>
 <hr>
 </section>
-<section id="part-4-checking-the-shape-of-relationships" class="level1">
-<h1>Part 4 · Checking the Shape of Relationships</h1>
-<p><strong>▶ Run this</strong> — Added Variable (partial regression) plots:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 4.1 · Checking the Shape of Relationships ──────────────────────</span></span>
-<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="fu">par</span>(<span class="at">mfrow =</span> <span class="fu">c</span>(<span class="dv">2</span>, <span class="dv">3</span>))</span>
-<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a><span class="fu">avPlots</span>(model_2, <span class="at">main =</span> <span class="st">"Partial Regression Plots"</span>)</span>
-<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a><span class="fu">par</span>(<span class="at">mfrow =</span> <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">1</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>The original analysis found <code>age</code> showed a curvy relationship. Let’s try a log transformation. (Really, you should try transforming the <em>response</em> variable first — we’re doing <code>age</code> here to see the AV-plot difference clearly.)</p>
+<section id="part-2-one-predictor-at-a-time" class="level1">
+<h1>Part 2 · One predictor at a time</h1>
+<p><strong>▶ Run this</strong> — three separate simple regressions:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 2.1 · One predictor at a time ──────────────────────────────────</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(<span class="fu">lm</span>(abundance <span class="sc">~</span> log_area, <span class="at">data =</span> bird_df))</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(<span class="fu">lm</span>(abundance <span class="sc">~</span> grazing, <span class="at">data =</span> bird_df))</span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(<span class="fu">lm</span>(abundance <span class="sc">~</span> year_isolated, <span class="at">data =</span> bird_df))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>✏️ <strong>Your turn:</strong> Record each one.</p>
+<pre><code>log_area:      slope = __________  p = __________
+
+grazing:       slope = __________  p = __________
+
+year_isolated: slope = __________  p = __________
+
+How many are significant? __________</code></pre>
+<hr>
+</section>
+<section id="part-3-all-of-them-at-once" class="level1">
+<h1>Part 3 · All of them at once</h1>
 <p><strong>▶ Run this:</strong></p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 4.2 · Checking the Shape of Relationships ──────────────────────</span></span>
-<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>forest_df <span class="ot">&lt;-</span> forest_df <span class="sc">%&gt;%</span></span>
-<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">log_age =</span> <span class="fu">log10</span>(age))</span>
-<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>model_3 <span class="ot">&lt;-</span> <span class="fu">lm</span>(npp <span class="sc">~</span> log_age <span class="sc">+</span> biomass <span class="sc">+</span> temp <span class="sc">+</span> precip <span class="sc">+</span> teb <span class="sc">+</span> leaf,</span>
-<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>             <span class="at">data =</span> forest_df)</span>
-<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(model_3)</span>
-<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a><span class="fu">par</span>(<span class="at">mfrow =</span> <span class="fu">c</span>(<span class="dv">2</span>, <span class="dv">3</span>))</span>
-<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a><span class="fu">avPlots</span>(model_3, <span class="at">main =</span> <span class="st">"Partial Regression Plots (Log age)"</span>)</span>
-<span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a><span class="fu">par</span>(<span class="at">mfrow =</span> <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">1</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>✏️ <strong>Your turn:</strong> Compare the AV plot for <code>age</code> before and after the log transform. Does the relationship look straighter now?</p>
-<p><code>________________________</code></p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 3.1 · All of them at once ──────────────────────────────────────</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>full_model <span class="ot">&lt;-</span> <span class="fu">lm</span>(abundance <span class="sc">~</span> log_area <span class="sc">+</span> log_dist <span class="sc">+</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>                   log_dist_larger <span class="sc">+</span> year_isolated <span class="sc">+</span></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>                   grazing <span class="sc">+</span> altitude_m,</span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>                 <span class="at">data =</span> bird_df)</span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(full_model)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>✏️ <strong>Your turn:</strong> Which predictors are still significant?</p>
+<pre><code>Still significant: _________________________________________
+
+grazing slope alone = __________   in this model = __________</code></pre>
+<p>✏️ <strong>Your turn:</strong> Both grazing slopes came from the same 56 patches. Is one of them wrong? Explain what each one is actually measuring.</p>
+<pre><code>____________________________________________________________
+
+____________________________________________________________</code></pre>
 <hr>
 </section>
-<section id="part-5-model-diagnostics" class="level1">
-<h1>Part 5 · Model Diagnostics</h1>
-<p><strong>▶ Run this</strong> — the four standard diagnostic plots:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 5.1 · Model Diagnostics ────────────────────────────────────────</span></span>
-<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="fu">par</span>(<span class="at">mfrow =</span> <span class="fu">c</span>(<span class="dv">2</span>, <span class="dv">2</span>))</span>
-<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(model_3)</span>
-<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a><span class="fu">par</span>(<span class="at">mfrow =</span> <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">1</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>▶ Run this</strong> — a closer look at residuals vs.&nbsp;fitted:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 5.2 · Model Diagnostics ────────────────────────────────────────</span></span>
-<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>residuals_data <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
-<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">Fitted =</span> <span class="fu">fitted</span>(model_3),</span>
-<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">Residuals =</span> <span class="fu">residuals</span>(model_3),</span>
-<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">Standardized_Residuals =</span> <span class="fu">rstandard</span>(model_3)</span>
-<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(residuals_data, <span class="fu">aes</span>(<span class="at">x =</span> Fitted, <span class="at">y =</span> Residuals)) <span class="sc">+</span></span>
-<span id="cb11-9"><a href="#cb11-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>(<span class="at">alpha =</span> <span class="fl">0.6</span>) <span class="sc">+</span></span>
-<span id="cb11-10"><a href="#cb11-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_smooth</span>(<span class="at">method =</span> <span class="st">"lm"</span>, <span class="at">color =</span> <span class="st">"red"</span>) <span class="sc">+</span></span>
-<span id="cb11-11"><a href="#cb11-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_hline</span>(<span class="at">yintercept =</span> <span class="dv">0</span>, <span class="at">linetype =</span> <span class="st">"dashed"</span>) <span class="sc">+</span></span>
-<span id="cb11-12"><a href="#cb11-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Residuals vs Fitted Values"</span>, <span class="at">x =</span> <span class="st">"Fitted Values"</span>, <span class="at">y =</span> <span class="st">"Residuals"</span>) <span class="sc">+</span></span>
-<span id="cb11-13"><a href="#cb11-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>Let’s also try a cube-root transformation of the response, <code>npp</code>:</p>
+<section id="part-4-why-it-happened" class="level1">
+<h1>Part 4 · Why it happened</h1>
 <p><strong>▶ Run this:</strong></p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 5.3 · Model Diagnostics ────────────────────────────────────────</span></span>
-<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>forest_df <span class="ot">&lt;-</span> forest_df <span class="sc">%&gt;%</span></span>
-<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">npp_cuberoot =</span> npp<span class="sc">^</span>(<span class="dv">1</span><span class="sc">/</span><span class="dv">3</span>))</span>
-<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>model_4 <span class="ot">&lt;-</span> <span class="fu">lm</span>(npp_cuberoot <span class="sc">~</span> log_age <span class="sc">+</span> biomass <span class="sc">+</span> temp <span class="sc">+</span> precip <span class="sc">+</span></span>
-<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>             teb <span class="sc">+</span> leaf, <span class="at">data =</span> forest_df)</span>
-<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(model_4)</span>
-<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a><span class="fu">par</span>(<span class="at">mfrow =</span> <span class="fu">c</span>(<span class="dv">2</span>, <span class="dv">2</span>))</span>
-<span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(model_4)</span>
-<span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a><span class="fu">par</span>(<span class="at">mfrow =</span> <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">1</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>✏️ <strong>Your turn:</strong> Do the residual plots for <code>model_4</code> look better than for <code>model_3</code>? What specifically improved (or didn’t)?</p>
-<p><code>________________________</code></p>
-<div class="callout callout-style-default callout-tip callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-Tip
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p><strong>🚀 If you finish early:</strong> Try a square-root transform of <code>npp</code> instead of cube-root (<code>sqrt(npp)</code>). Refit the model and compare its residual plots to <code>model_4</code>’s.</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb13"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 5.4 · Model Diagnostics ────────────────────────────────────────</span></span>
-<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Write your code in the R script:</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-</div>
-</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 4.1 · Why it happened ──────────────────────────────────────────</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>bird_df <span class="sc">%&gt;%</span></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(log_area, log_dist, log_dist_larger,</span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>         year_isolated, grazing, altitude_m) <span class="sc">%&gt;%</span></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">cor</span>() <span class="sc">%&gt;%</span></span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">round</span>(<span class="dv">2</span>)</span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a><span class="fu">vif</span>(full_model)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>✏️ <strong>Your turn:</strong> Find the two most strongly correlated predictors, and say in one sentence what that correlation means on the ground.</p>
+<pre><code>Pair: __________ and __________   r = __________
+
+On the ground: ______________________________________________</code></pre>
+<p>✏️ <strong>Your turn:</strong> All the VIFs are small. Does that mean collinearity is not a problem here?</p>
+<pre><code>____________________________________________________________</code></pre>
 <hr>
 </section>
-<section id="part-6-model-simplification-and-comparison" class="level1">
-<h1>Part 6 · Model Simplification and Comparison</h1>
-<p><strong>▶ Run this</strong> — drop the non-significant <code>precip</code> term:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb14"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 6.1 · Model Simplification and Comparison ──────────────────────</span></span>
-<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>model_5 <span class="ot">&lt;-</span> <span class="fu">lm</span>(npp_cuberoot <span class="sc">~</span> log_age <span class="sc">+</span> biomass <span class="sc">+</span> temp <span class="sc">+</span> teb <span class="sc">+</span> leaf,</span>
-<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>             <span class="at">data =</span> forest_df)</span>
-<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(model_5)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>▶ Run this</strong> — compare <code>model_4</code> and <code>model_5</code> by AIC:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb15"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 6.2 · Model Simplification and Comparison ──────────────────────</span></span>
-<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>model_comparison <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
-<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">Model =</span> <span class="fu">c</span>(<span class="st">"Model 4 (Full)"</span>, <span class="st">"Model 5 (No precip)"</span>),</span>
-<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">AIC =</span> <span class="fu">c</span>(<span class="fu">AIC</span>(model_4), <span class="fu">AIC</span>(model_5)),</span>
-<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">R_squared =</span> <span class="fu">c</span>(<span class="fu">summary</span>(model_4)<span class="sc">$</span>r.squared, <span class="fu">summary</span>(model_5)<span class="sc">$</span>r.squared),</span>
-<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">Adj_R_squared =</span> <span class="fu">c</span>(<span class="fu">summary</span>(model_4)<span class="sc">$</span>adj.r.squared, <span class="fu">summary</span>(model_5)<span class="sc">$</span>adj.r.squared)</span>
-<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a>model_comparison</span>
-<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-10"><a href="#cb15-10" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(model_5, <span class="at">conf.int =</span> <span class="cn">TRUE</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>✏️ <strong>Your turn:</strong> Does <code>model_5</code> have a lower AIC than <code>model_4</code>? Given the “penalize complexity” logic from lecture, what does that tell you about dropping <code>precip</code>?</p>
-<p><code>________________________</code></p>
+<section id="part-5-simplify-the-model" class="level1">
+<h1>Part 5 · Simplify the model</h1>
+<p><strong>▶ Run this</strong> — drop the four predictors that earned nothing, then test whether dropping them cost anything:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 5.1 · Simplify the model ───────────────────────────────────────</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>reduced_model <span class="ot">&lt;-</span> <span class="fu">lm</span>(abundance <span class="sc">~</span> log_area <span class="sc">+</span> grazing, <span class="at">data =</span> bird_df)</span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a><span class="fu">anova</span>(reduced_model, full_model)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>▶ Run this</strong> — compare the two models the other way:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 5.2 · Simplify the model ───────────────────────────────────────</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a><span class="fu">tibble</span>(</span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">model  =</span> <span class="fu">c</span>(<span class="st">"six predictors"</span>, <span class="st">"log_area + grazing"</span>),</span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">adj_r2 =</span> <span class="fu">c</span>(<span class="fu">summary</span>(full_model)<span class="sc">$</span>adj.r.squared,</span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>             <span class="fu">summary</span>(reduced_model)<span class="sc">$</span>adj.r.squared),</span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">AIC    =</span> <span class="fu">c</span>(<span class="fu">AIC</span>(full_model), <span class="fu">AIC</span>(reduced_model))</span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>✏️ <strong>Your turn:</strong> Do the two methods agree? Which model do you keep?</p>
+<pre><code>anova p = __________   lower AIC = __________
+
+Model I keep: _______________________________________________</code></pre>
 <hr>
 </section>
-<section id="part-7-predictor-importance" class="level1">
-<h1>Part 7 · Predictor Importance</h1>
-<p><strong>▶ Run this</strong> — partial R² for every predictor at once, using <code>sensemakr</code>:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb16"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 7.1 · Predictor Importance ─────────────────────────────────────</span></span>
-<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(sensemakr)</span>
-<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>partial_r2_sensemakr <span class="ot">&lt;-</span> <span class="fu">partial_r2</span>(model_5)</span>
-<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>partial_r2_sensemakr</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>▶ Run this</strong> — the same idea, computed by hand from a Type III ANOVA table:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb17"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 7.2 · Predictor Importance ─────────────────────────────────────</span></span>
-<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>anova_type3 <span class="ot">&lt;-</span> <span class="fu">Anova</span>(model_5, <span class="at">type =</span> <span class="st">"III"</span>)</span>
-<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>anova_type3</span>
-<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a>f_stats <span class="ot">&lt;-</span> anova_type3<span class="sc">$</span><span class="st">`</span><span class="at">F value</span><span class="st">`</span>[<span class="sc">!</span><span class="fu">is.na</span>(anova_type3<span class="sc">$</span><span class="st">`</span><span class="at">F value</span><span class="st">`</span>)]</span>
-<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a>df_num <span class="ot">&lt;-</span> anova_type3<span class="sc">$</span>Df[<span class="sc">!</span><span class="fu">is.na</span>(anova_type3<span class="sc">$</span><span class="st">`</span><span class="at">F value</span><span class="st">`</span>)]</span>
-<span id="cb17-7"><a href="#cb17-7" aria-hidden="true" tabindex="-1"></a>df_den <span class="ot">&lt;-</span> anova_type3<span class="sc">$</span>Df[<span class="fu">nrow</span>(anova_type3)]  <span class="co"># Residual df</span></span>
-<span id="cb17-8"><a href="#cb17-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb17-9"><a href="#cb17-9" aria-hidden="true" tabindex="-1"></a>partial_r2_from_f <span class="ot">&lt;-</span> f_stats <span class="sc">*</span> df_num <span class="sc">/</span> (f_stats <span class="sc">*</span> df_num <span class="sc">+</span> df_den)</span>
-<span id="cb17-10"><a href="#cb17-10" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb17-11"><a href="#cb17-11" aria-hidden="true" tabindex="-1"></a>results_table <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
-<span id="cb17-12"><a href="#cb17-12" aria-hidden="true" tabindex="-1"></a>  <span class="at">Variable =</span> <span class="fu">rownames</span>(anova_type3)[<span class="sc">!</span><span class="fu">is.na</span>(anova_type3<span class="sc">$</span><span class="st">`</span><span class="at">F value</span><span class="st">`</span>)],</span>
-<span id="cb17-13"><a href="#cb17-13" aria-hidden="true" tabindex="-1"></a>  <span class="at">F_statistic =</span> f_stats,</span>
-<span id="cb17-14"><a href="#cb17-14" aria-hidden="true" tabindex="-1"></a>  <span class="at">p_value =</span> anova_type3<span class="sc">$</span><span class="st">`</span><span class="at">Pr(&gt;F)</span><span class="st">`</span>[<span class="sc">!</span><span class="fu">is.na</span>(anova_type3<span class="sc">$</span><span class="st">`</span><span class="at">F value</span><span class="st">`</span>)],</span>
-<span id="cb17-15"><a href="#cb17-15" aria-hidden="true" tabindex="-1"></a>  <span class="at">Partial_R_squared =</span> partial_r2_from_f</span>
-<span id="cb17-16"><a href="#cb17-16" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb17-17"><a href="#cb17-17" aria-hidden="true" tabindex="-1"></a>results_table</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>✏️ <strong>Your turn:</strong> Do the <code>sensemakr</code> partial R² values roughly match your by-hand <code>Partial_R_squared</code> column?</p>
-<p><code>________________________</code></p>
-<div class="callout callout-style-default callout-tip callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-Tip
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p><strong>🚀 If you finish early:</strong> Which single predictor has the highest partial R² in <code>model_5</code>? Does that match which predictor had the smallest p-value in <code>summary(model_5)</code>?</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb18"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 7.3 · Predictor Importance ─────────────────────────────────────</span></span>
-<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Write your code in the R script:</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-</div>
-</div>
+<section id="part-6-check-the-assumptions" class="level1">
+<h1>Part 6 · Check the assumptions</h1>
+<p><strong>▶ Run this:</strong></p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb14"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 6.1 · Check the assumptions ────────────────────────────────────</span></span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a><span class="fu">par</span>(<span class="at">mfrow =</span> <span class="fu">c</span>(<span class="dv">2</span>, <span class="dv">2</span>))</span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(reduced_model)</span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a><span class="fu">par</span>(<span class="at">mfrow =</span> <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">1</span>))</span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a><span class="fu">shapiro.test</span>(<span class="fu">residuals</span>(reduced_model))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>✏️ <strong>Your turn:</strong> One line per assumption.</p>
+<pre><code>Linearity: __________________________________________________
+
+Equal variance: _____________________________________________
+
+Normality (Shapiro p = ______): _____________________________
+
+Influential points: _________________________________________</code></pre>
 <hr>
 </section>
-<section id="part-8-an-alternative-standardized-variables" class="level1">
-<h1>Part 8 · An Alternative: Standardized Variables</h1>
-<p><strong>▶ Run this</strong> — refit with every numeric predictor standardized (mean 0, SD 1), including a temp × precip interaction:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb19"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 8.1 · An Alternative ───────────────────────────────────────────</span></span>
-<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>forest_standardized <span class="ot">&lt;-</span> forest_df <span class="sc">%&gt;%</span></span>
-<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
-<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">npp_sqrt_scaled =</span> <span class="fu">scale</span>(<span class="fu">sqrt</span>(npp))[,<span class="dv">1</span>],</span>
-<span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">log_age_scaled =</span> <span class="fu">scale</span>(<span class="fu">log10</span>(age))[,<span class="dv">1</span>],</span>
-<span id="cb19-6"><a href="#cb19-6" aria-hidden="true" tabindex="-1"></a>    <span class="at">biomass_scaled =</span> <span class="fu">scale</span>(biomass)[,<span class="dv">1</span>],</span>
-<span id="cb19-7"><a href="#cb19-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">temp_scaled =</span> <span class="fu">scale</span>(temp)[,<span class="dv">1</span>],</span>
-<span id="cb19-8"><a href="#cb19-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">precip_scaled =</span> <span class="fu">scale</span>(precip)[,<span class="dv">1</span>],</span>
-<span id="cb19-9"><a href="#cb19-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">teb_scaled =</span> <span class="fu">scale</span>(teb)[,<span class="dv">1</span>]</span>
-<span id="cb19-10"><a href="#cb19-10" aria-hidden="true" tabindex="-1"></a>  )</span>
-<span id="cb19-11"><a href="#cb19-11" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb19-12"><a href="#cb19-12" aria-hidden="true" tabindex="-1"></a>model_std <span class="ot">&lt;-</span> <span class="fu">lm</span>(npp_sqrt_scaled <span class="sc">~</span> log_age_scaled <span class="sc">+</span> biomass_scaled <span class="sc">+</span></span>
-<span id="cb19-13"><a href="#cb19-13" aria-hidden="true" tabindex="-1"></a>                temp_scaled <span class="sc">*</span> precip_scaled <span class="sc">+</span> teb_scaled,</span>
-<span id="cb19-14"><a href="#cb19-14" aria-hidden="true" tabindex="-1"></a>                <span class="at">data =</span> forest_standardized)</span>
-<span id="cb19-15"><a href="#cb19-15" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(model_std)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>✏️ <strong>Your turn:</strong> In <code>model_std</code>, which predictor has the largest absolute standardized coefficient? Is that the same predictor that had the highest partial R² in Part 7?</p>
-<p><code>________________________</code></p>
+<section id="part-7-grazing-as-a-factor" class="level1">
+<h1>Part 7 · Grazing as a factor</h1>
+<p>Grazing has been a number, 1 to 5, which forces every step to cost the same. Now let it be a <strong>category</strong> so each level is estimated separately.</p>
+<p><strong>▶ Run this</strong> — make it a factor and look at the order R chose:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb16"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 7.1 · Grazing as a factor ──────────────────────────────────────</span></span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>bird_df <span class="ot">&lt;-</span> bird_df <span class="sc">%&gt;%</span></span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">grazing_class =</span> <span class="fu">factor</span>(grazing_class))</span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a><span class="fu">levels</span>(bird_df<span class="sc">$</span>grazing_class)</span>
+<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(<span class="fu">lm</span>(abundance <span class="sc">~</span> log_area <span class="sc">+</span> grazing_class, <span class="at">data =</span> bird_df))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>✏️ <strong>Your turn:</strong> Which level is R using as the reference, and why did it pick that one?</p>
+<pre><code>Reference level: __________   Why: _________________________</code></pre>
+<p><strong>▶ Run this</strong> — put the least-grazed level first instead:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb18"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 7.2 · Grazing as a factor ──────────────────────────────────────</span></span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>bird_df <span class="ot">&lt;-</span> bird_df <span class="sc">%&gt;%</span></span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">grazing_class =</span> <span class="fu">fct_relevel</span>(grazing_class,</span>
+<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a>                                     <span class="st">"minimal"</span>, <span class="st">"light"</span>, <span class="st">"moderate"</span>,</span>
+<span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a>                                     <span class="st">"heavy"</span>, <span class="st">"intense"</span>))</span>
+<span id="cb18-6"><a href="#cb18-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-7"><a href="#cb18-7" aria-hidden="true" tabindex="-1"></a><span class="fu">levels</span>(bird_df<span class="sc">$</span>grazing_class)</span>
+<span id="cb18-8"><a href="#cb18-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-9"><a href="#cb18-9" aria-hidden="true" tabindex="-1"></a>grazing_model <span class="ot">&lt;-</span> <span class="fu">lm</span>(abundance <span class="sc">~</span> log_area <span class="sc">+</span> grazing_class, <span class="at">data =</span> bird_df)</span>
+<span id="cb18-10"><a href="#cb18-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-11"><a href="#cb18-11" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(grazing_model)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>✏️ <strong>Your turn:</strong> Write down the four grazing coefficients and their p-values.</p>
+<pre><code>light:    __________  p = __________
+
+moderate: __________  p = __________
+
+heavy:    __________  p = __________
+
+intense:  __________  p = __________</code></pre>
+<p>✏️ <strong>Your turn:</strong> Compare the R² and F-statistic of the two models in 7.1 and 7.2. What changed, and what did not?</p>
+<pre><code>Changed: ____________________________________________________
+
+Did not change: _____________________________________________</code></pre>
+<p>✏️ <strong>Your turn:</strong> Fitting grazing as the number 1–5 gave one slope of about −2.9 birds per step. What does the factor version show that the number version hid?</p>
+<pre><code>____________________________________________________________</code></pre>
 <hr>
 </section>
-<section id="key-findings" class="level1">
-<h1>Key Findings</h1>
-<ol type="1">
-<li><strong>Multicollinearity</strong> — growing season length and temperature were highly correlated; removed season to address it.</li>
-<li><strong>Variable transformations</strong> — log transformation of age improved model fit; cube-root transformation of npp addressed assumption violations.</li>
-<li><strong>Final model results</strong> — significant predictors: age (negative), biomass (positive), temp (positive); teb had a negative effect; leaf type differences were significant.</li>
-<li><strong>Biological interpretation</strong> — younger stands had higher npp (for a given biomass); higher biomass was associated with higher npp; temperature was positively related to npp; coniferous forests had lower npp than broadleaf forests.</li>
-</ol>
-<div class="callout callout-style-default callout-note callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-Note
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p><strong>Reference</strong></p>
-<p>Michaletz, S.T., Cheng, D., Kerkhoff, A.J. &amp; Enquist, B.J. (2014). Convergence of terrestrial plant production across global climate gradients. <em>Nature</em>, 512, 39–43.</p>
-</div>
-</div>
+<section id="part-8-the-figure-you-hand-in" class="level1">
+<h1>Part 8 · The figure you hand in</h1>
+<p><strong>▶ Run this:</strong></p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb22"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 8.1 · The figure you hand in ───────────────────────────────────</span></span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>final_plot <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(bird_df, <span class="fu">aes</span>(log_area, abundance,</span>
+<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a>                                  <span class="at">colour =</span> grazing_class)) <span class="sc">+</span></span>
+<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>(<span class="at">size =</span> <span class="fl">2.5</span>) <span class="sc">+</span></span>
+<span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_smooth</span>(<span class="at">method =</span> <span class="st">"lm"</span>, <span class="at">se =</span> <span class="cn">FALSE</span>) <span class="sc">+</span></span>
+<span id="cb22-6"><a href="#cb22-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(</span>
+<span id="cb22-7"><a href="#cb22-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">title =</span> <span class="st">"Bird abundance rises with patch area and falls under intense grazing"</span>,</span>
+<span id="cb22-8"><a href="#cb22-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">subtitle =</span> <span class="st">"56 remnant forest patches, Victoria, Australia (Loyn 1987)"</span>,</span>
+<span id="cb22-9"><a href="#cb22-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">x =</span> <span class="st">"log10 patch area (ha)"</span>,</span>
+<span id="cb22-10"><a href="#cb22-10" aria-hidden="true" tabindex="-1"></a>    <span class="at">y =</span> <span class="st">"Bird abundance"</span>,</span>
+<span id="cb22-11"><a href="#cb22-11" aria-hidden="true" tabindex="-1"></a>    <span class="at">colour =</span> <span class="st">"Grazing"</span></span>
+<span id="cb22-12"><a href="#cb22-12" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">+</span></span>
+<span id="cb22-13"><a href="#cb22-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_regular</span>(<span class="at">base_size =</span> <span class="dv">12</span>)</span>
+<span id="cb22-14"><a href="#cb22-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-15"><a href="#cb22-15" aria-hidden="true" tabindex="-1"></a>final_plot</span>
+<span id="cb22-16"><a href="#cb22-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-17"><a href="#cb22-17" aria-hidden="true" tabindex="-1"></a><span class="fu">ggsave</span>(</span>
+<span id="cb22-18"><a href="#cb22-18" aria-hidden="true" tabindex="-1"></a>  <span class="st">"figures/bird_regression.pdf"</span>,</span>
+<span id="cb22-19"><a href="#cb22-19" aria-hidden="true" tabindex="-1"></a>  <span class="at">plot   =</span> final_plot,</span>
+<span id="cb22-20"><a href="#cb22-20" aria-hidden="true" tabindex="-1"></a>  <span class="at">width  =</span> <span class="dv">7</span>,</span>
+<span id="cb22-21"><a href="#cb22-21" aria-hidden="true" tabindex="-1"></a>  <span class="at">height =</span> <span class="fl">4.5</span>,</span>
+<span id="cb22-22"><a href="#cb22-22" aria-hidden="true" tabindex="-1"></a>  <span class="at">units  =</span> <span class="st">"in"</span></span>
+<span id="cb22-23"><a href="#cb22-23" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>✏️ <strong>Your turn:</strong> Open the PDF and check the legend order runs minimal → intense, not alphabetically.</p>
+<hr>
 </section>
 <section id="review-and-checkpoint" class="level1">
 <h1>Review and checkpoint</h1>
 <p>At this point you can:</p>
 <ul class="task-list">
-<li><label><input type="checkbox">Detect multicollinearity with a correlation matrix and VIFs, and address it by dropping a redundant predictor</label></li>
-<li><label><input type="checkbox">Use Added Variable plots to check whether a predictor’s relationship with Y is linear</label></li>
-<li><label><input type="checkbox">Apply and evaluate predictor and response transformations</label></li>
-<li><label><input type="checkbox">Read the standard four-panel regression diagnostic plots</label></li>
-<li><label><input type="checkbox">Compare nested models with AIC and adjusted R²</label></li>
-<li><label><input type="checkbox">Quantify predictor importance with partial R² and standardized coefficients</label></li>
+<li><label><input type="checkbox">Fit several predictors one at a time and then together, and explain why the slopes differ</label></li>
+<li><label><input type="checkbox">Read a correlation matrix and <code>vif()</code> output</label></li>
+<li><label><input type="checkbox">Say what a dataset cannot separate, rather than that a predictor “has no effect”</label></li>
+<li><label><input type="checkbox">Drop predictors and test whether it cost anything, with <code>anova()</code> and with AIC</label></li>
+<li><label><input type="checkbox">Turn a categorical predictor into a factor and set its reference level with <code>fct_relevel()</code></label></li>
+<li><label><input type="checkbox">Export a labelled figure to PDF</label></li>
 </ul>
 <div class="callout callout-style-default callout-note callout-titled">
 <div class="callout-header d-flex align-content-center">
@@ -748,89 +651,16 @@ Note
 </div>
 </div>
 <div class="callout-body-container callout-body">
-<p><strong>📤 What to turn in before next class</strong></p>
-<p>Upload both of these to the course management system:</p>
+<p><strong>📤 What to turn in</strong></p>
 <ol type="1">
-<li>Your code — the <code>scripts/</code> folder (or just <code>11_multiple_regression.R</code>)</li>
+<li><code>11_multiple_regression.R</code></li>
+<li><code>figures/bird_regression.pdf</code></li>
 <li>This worksheet, with your written answers</li>
 </ol>
 </div>
 </div>
-<hr>
-</section>
-<section id="part-9-take-home-extension-nutrients-and-chlorophyll-in-new-zealand-lakes" class="level1">
-<h1>Part 9 · Take-Home Extension — Nutrients and Chlorophyll in New Zealand Lakes</h1>
-<p><em>Due Monday, October 19 — before the Analysis of Variance class.</em></p>
-<p>Same workflow as Parts 1–6 — correlation/multicollinearity check, fit the model, diagnose, transform if needed, interpret — new dataset, new question. This time you decide what (if anything) needs fixing before you trust the model; nobody walks you through it step by step.</p>
-<section id="background" class="level2">
-<h2 class="anchored" data-anchor-id="background">Background</h2>
-<p>Abell et al.&nbsp;(2010) studied nutrient limitation in New Zealand lakes. Chlorophyll-a is a standard proxy for algal biomass, and both phosphorus and nitrogen can drive it up. Below are measurements from 111 New Zealand lakes.</p>
-<p><strong>▶ Run this:</strong></p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb20"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 9.1 · Take-Home Extension ──────────────────────────────────────</span></span>
-<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a>nz_df <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="st">"data/abel_et_al_lakes_data.csv"</span>)</span>
-<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a><span class="fu">head</span>(nz_df)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-</section>
-<section id="your-task" class="level2">
-<h2 class="anchored" data-anchor-id="your-task">Your Task</h2>
-<p><strong>Question:</strong> How do total phosphorus and total nitrogen jointly predict chlorophyll-a concentration across these lakes?</p>
-<p>✏️ <strong>Your turn:</strong> State your hypotheses. Check for multicollinearity between the two predictors and decide whether it’s a problem here. Look at the shape of each relationship and decide whether a transformation is needed before you trust a linear model (hint: nutrient–chlorophyll relationships are rarely linear on the raw scale). Justify whatever choices you make, then fit the model, interpret it, and report the result properly.</p>
-<pre><code>H0 =
-________________________________________________________
-Ha =
-________________________________________________________
-Model/transformation I will use and why:
-________________________________________________________
-________________________________________________________</code></pre>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb22"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 9.2 · Take-Home Extension ──────────────────────────────────────</span></span>
-<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Write your code in the R script:</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<pre><code>Interpretation:
-________________________________________________________
-________________________________________________________</code></pre>
-</section>
-<section id="final-figure" class="level2">
-<h2 class="anchored" data-anchor-id="final-figure">Final Figure</h2>
-<p>Produce one publication-quality figure showing the relationship between chlorophyll-a and the predictor(s) that mattered most — proper axis labels, no default <code>ggplot</code> grey background — and export it with <code>ggsave()</code>.</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb24"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 9.3 · Take-Home Extension ──────────────────────────────────────</span></span>
-<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Write your code in the R script:</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="callout callout-style-default callout-note callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-Note
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p><strong>📤 What to turn in — due Oct 19</strong></p>
-<p>Your write-up should include:</p>
-<ul class="task-list">
-<li><label><input type="checkbox">The question</label></li>
-<li><label><input type="checkbox">Your hypotheses</label></li>
-<li><label><input type="checkbox">Which model/transformation you used, and your justification for choosing it</label></li>
-<li><label><input type="checkbox">The code and its output</label></li>
-<li><label><input type="checkbox">Your interpretation of the result</label></li>
-<li><label><input type="checkbox">A final figure showing the result</label></li>
-</ul>
-</div>
-</div>
-<div class="callout callout-style-default callout-note callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-Note
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p><strong>Reference</strong></p>
-<p>Abell, J.M., Özkundakci, D. &amp; Hamilton, D.P. (2010). Nitrogen and phosphorus limitation of phytoplankton growth in New Zealand lakes. <em>Ecosystems</em>, 13, 966–977.</p>
-</div>
-</div>
 
 
-</section>
 </section>
 
 </main> <!-- /main -->

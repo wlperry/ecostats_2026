@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="author" content="Bill Perry">
-<meta name="description" content="Hands-on activity: correlation, simple linear regression, diagnostic plots, and ANOVA for regression on the Nazca booby, lion nose-pigmentation, and prairie-biodiversity datasets.">
+<meta name="description" content="In-class activity in two halves: code the correlation on the Nazca booby and Indian rope trick data, then fit the lion regression, build its sums of squares by hand, and test its assumptions.">
 
 <title>Activity: Correlation vs Linear Models – UMD Biostatistics</title>
 <style>
@@ -116,11 +116,40 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   }
 }</script>
 
+  <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
+  <script defer="" src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-chtml.js" type="text/javascript"></script>
+
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN" && texText && texText.data) {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
 
 <link rel="stylesheet" href="../../css/main.css">
 <link rel="stylesheet" href="../../css/main.css">
 <meta property="og:title" content="Activity: Correlation vs Linear Models – UMD Biostatistics">
-<meta property="og:description" content="Hands-on activity: correlation, simple linear regression, diagnostic plots, and ANOVA for regression on the Nazca booby, lion nose-pigmentation, and prairie-biodiversity datasets.">
+<meta property="og:description" content="In-class activity in two halves: code the correlation on the Nazca booby and Indian rope trick data, then fit the lion regression, build its sums of squares by hand, and test its assumptions.">
 <meta property="og:site_name" content="UMD Biostatistics">
 </head>
 
@@ -413,7 +442,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 <div>
   <div class="description">
-    Hands-on activity: correlation, simple linear regression, diagnostic plots, and ANOVA for regression on the Nazca booby, lion nose-pigmentation, and prairie-biodiversity datasets.
+    In-class activity in two halves: code the correlation on the Nazca booby and Indian rope trick data, then fit the lion regression, build its sums of squares by hand, and test its assumptions.
   </div>
 </div>
 
@@ -438,505 +467,237 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 <section id="worksheet-correlation-and-linear-regression" class="level1">
 <h1>Worksheet: Correlation and Linear Regression</h1>
-</section>
-<section id="part-1-setup-and-data" class="level1">
-<h1>Part 1 · Setup and Data</h1>
-<p><strong>▶ Run this in your Script:</strong></p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 1.1 · Setup and Data ───────────────────────────────────────────</span></span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tidyverse)  <span class="co"># For data manipulation and visualization</span></span>
-<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(patchwork)  <span class="co"># For combining plots</span></span>
-<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(car)         <span class="co"># For regression diagnostics</span></span>
-<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(broom)       <span class="co"># For tidy model output</span></span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">123</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>▶ Run this</strong> — build the three example datasets:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 1.2 · Setup and Data ───────────────────────────────────────────</span></span>
-<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Lion data from Example 17.1</span></span>
-<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>l_df <span class="ot">&lt;-</span> <span class="fu">tibble</span>(</span>
-<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">prop_black =</span> <span class="fu">c</span>(<span class="fl">0.21</span>, <span class="fl">0.14</span>, <span class="fl">0.11</span>, <span class="fl">0.13</span>, <span class="fl">0.12</span>, <span class="fl">0.13</span>, <span class="fl">0.12</span>, <span class="fl">0.18</span>, <span class="fl">0.23</span>, <span class="fl">0.22</span>,</span>
-<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>                <span class="fl">0.20</span>, <span class="fl">0.17</span>, <span class="fl">0.15</span>, <span class="fl">0.27</span>, <span class="fl">0.26</span>, <span class="fl">0.21</span>, <span class="fl">0.30</span>, <span class="fl">0.42</span>, <span class="fl">0.43</span>, <span class="fl">0.59</span>,</span>
-<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>                <span class="fl">0.60</span>, <span class="fl">0.72</span>, <span class="fl">0.29</span>, <span class="fl">0.10</span>, <span class="fl">0.48</span>, <span class="fl">0.44</span>, <span class="fl">0.34</span>, <span class="fl">0.37</span>, <span class="fl">0.34</span>, <span class="fl">0.74</span>, <span class="fl">0.79</span>, <span class="fl">0.51</span>),</span>
-<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">age_yr =</span> <span class="fu">c</span>(<span class="fl">1.1</span>, <span class="fl">1.5</span>, <span class="fl">1.9</span>, <span class="fl">2.2</span>, <span class="fl">2.6</span>, <span class="fl">3.2</span>, <span class="fl">3.2</span>, <span class="fl">2.9</span>, <span class="fl">2.4</span>, <span class="fl">2.1</span>,</span>
-<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>          <span class="fl">1.9</span>, <span class="fl">1.9</span>, <span class="fl">1.9</span>, <span class="fl">1.9</span>, <span class="fl">2.8</span>, <span class="fl">3.6</span>, <span class="fl">4.3</span>, <span class="fl">3.8</span>, <span class="fl">4.2</span>, <span class="fl">5.4</span>,</span>
-<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>          <span class="fl">5.8</span>, <span class="fl">6.0</span>, <span class="fl">3.4</span>, <span class="fl">4.0</span>, <span class="fl">7.3</span>, <span class="fl">7.3</span>, <span class="fl">7.8</span>, <span class="fl">7.1</span>, <span class="fl">7.1</span>, <span class="fl">13.1</span>, <span class="fl">8.8</span>, <span class="fl">5.4</span>)</span>
-<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a><span class="co"># Booby data from Example 16.1</span></span>
-<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>b_df <span class="ot">&lt;-</span> <span class="fu">tibble</span>(</span>
-<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>  <span class="at">visits =</span> <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">7</span>, <span class="dv">15</span>, <span class="dv">4</span>, <span class="dv">11</span>, <span class="dv">14</span>, <span class="dv">23</span>, <span class="dv">14</span>, <span class="dv">9</span>, <span class="dv">5</span>, <span class="dv">4</span>, <span class="dv">10</span>,</span>
-<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>            <span class="dv">13</span>, <span class="dv">13</span>, <span class="dv">14</span>, <span class="dv">12</span>, <span class="dv">13</span>, <span class="dv">9</span>, <span class="dv">8</span>, <span class="dv">18</span>, <span class="dv">22</span>, <span class="dv">22</span>, <span class="dv">23</span>, <span class="dv">31</span>),</span>
-<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>  <span class="at">aggression =</span> <span class="fu">c</span>(<span class="sc">-</span><span class="fl">0.80</span>, <span class="sc">-</span><span class="fl">0.92</span>, <span class="sc">-</span><span class="fl">0.80</span>, <span class="sc">-</span><span class="fl">0.46</span>, <span class="sc">-</span><span class="fl">0.47</span>, <span class="sc">-</span><span class="fl">0.46</span>, <span class="sc">-</span><span class="fl">0.23</span>, <span class="sc">-</span><span class="fl">0.16</span>,</span>
-<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a>                 <span class="sc">-</span><span class="fl">0.23</span>, <span class="sc">-</span><span class="fl">0.23</span>, <span class="sc">-</span><span class="fl">0.16</span>, <span class="sc">-</span><span class="fl">0.10</span>, <span class="sc">-</span><span class="fl">0.10</span>, <span class="fl">0.04</span>, <span class="fl">0.13</span>, <span class="fl">0.19</span>,</span>
-<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a>                 <span class="fl">0.25</span>, <span class="fl">0.23</span>, <span class="fl">0.15</span>, <span class="fl">0.23</span>, <span class="fl">0.31</span>, <span class="fl">0.18</span>, <span class="fl">0.17</span>, <span class="fl">0.39</span>)</span>
-<span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb2-20"><a href="#cb2-20" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-21"><a href="#cb2-21" aria-hidden="true" tabindex="-1"></a><span class="co"># Prairie stability data from Example 17.3</span></span>
-<span id="cb2-22"><a href="#cb2-22" aria-hidden="true" tabindex="-1"></a>p_df <span class="ot">&lt;-</span> <span class="fu">tibble</span>(</span>
-<span id="cb2-23"><a href="#cb2-23" aria-hidden="true" tabindex="-1"></a>  <span class="at">spp_n =</span> <span class="fu">rep</span>(<span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">2</span>, <span class="dv">4</span>, <span class="dv">8</span>, <span class="dv">16</span>), <span class="at">times =</span> <span class="fu">c</span>(<span class="dv">32</span>, <span class="dv">32</span>, <span class="dv">32</span>, <span class="dv">32</span>, <span class="dv">33</span>)),</span>
-<span id="cb2-24"><a href="#cb2-24" aria-hidden="true" tabindex="-1"></a>  <span class="at">log_stability =</span> <span class="fl">1.20</span> <span class="sc">+</span> <span class="fl">0.033</span> <span class="sc">*</span> spp_n <span class="sc">+</span> <span class="fu">rnorm</span>(<span class="dv">161</span>, <span class="dv">0</span>, <span class="fl">0.35</span>)</span>
-<span id="cb2-25"><a href="#cb2-25" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="callout callout-style-default callout-tip callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-Tip
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p><strong>Package overview</strong></p>
+<p><a href="data/booby_aggression.csv" class="btn btn-primary" download="booby_aggression.csv">📥 Booby data</a> <a href="data/rope_trick.csv" class="btn btn-primary" download="rope_trick.csv">📥 Rope trick data</a> <a href="data/lion_noses.csv" class="btn btn-primary" download="lion_noses.csv">📥 Lion data</a> <a href="themes_functions/r_themes_and_functions.R" class="btn btn-primary" download="r_themes_and_functions.R">📥 Tools script (.R)</a> <a href="data/10_correlation_linear_models.R" class="btn btn-primary" download="10_correlation_linear_models.R">📥 Script skeleton (.R)</a></p>
+<p>This worksheet runs in two halves, matching the lecture. <strong>Parts 1–4 are correlation</strong>: two measured variables, one number, no direction. <strong>Parts 5–8 are regression</strong>: a fitted line, the sums of squares it is made of, and the diagnostics that decide whether to believe it.</p>
+<p>Three datasets, all from Whitlock &amp; Schluter:</p>
 <ul>
-<li><strong>tidyverse</strong> — data science toolkit</li>
-<li><strong>patchwork</strong> — combine multiple ggplot2 plots easily</li>
-<li><strong>car</strong> — companion to Applied Regression (diagnostic tools)</li>
-<li><strong>broom</strong> — convert statistical objects into tidy data frames</li>
+<li><code>booby_aggression.csv</code> — Example 16.1. Nestling visits and adult aggression in Nazca boobies</li>
+<li><code>rope_trick.csv</code> — Example 16.5. Years since seeing the Indian rope trick, and how impressive it is remembered as</li>
+<li><code>lion_noses.csv</code> — Example 17.1. Proportion of black on a male lion’s nose, and its age</li>
 </ul>
-</div>
-</div>
-<div class="callout callout-style-default callout-tip callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-Tip
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p><strong>🚀 If you finish early:</strong> Run <code>glimpse()</code> on all three data frames. Which columns are the predictor (X) and which are the response (Y) in each?</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 1.3 · Setup and Data ───────────────────────────────────────────</span></span>
-<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Write your code in the R script:</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-</div>
-</div>
 <hr>
 </section>
-<section id="part-2-correlation-analysis" class="level1">
-<h1>Part 2 · Correlation Analysis</h1>
-<div class="callout callout-style-default callout-note callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-Note
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p><strong>Correlation analysis: data types and assumptions</strong></p>
-<p><strong>Data types required:</strong> both X and Y are continuous numerical, and both should be <em>measured</em> (not manipulated).</p>
-<p><strong>Assumptions for Pearson correlation:</strong> random sampling, bivariate normality, a linear relationship, and no extreme outliers.</p>
-</div>
-</div>
-<p>Let’s start with the Nazca booby data.</p>
+<section id="part-1-setup-and-the-data" class="level1">
+<h1>Part 1 · Setup and the data</h1>
 <p><strong>▶ Run this:</strong></p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 2.1 · Correlation Analysis ─────────────────────────────────────</span></span>
-<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="fu">cor</span>(b_df<span class="sc">$</span>visits, b_df<span class="sc">$</span>aggression)</span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 1.1 · Setup and the data ───────────────────────────────────────</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tidyverse)</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(patchwork)</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="fu">source</span>(<span class="st">"themes_functions/r_themes_and_functions.R"</span>)</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>booby_df <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="st">"data/booby_aggression.csv"</span>)</span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>rope_df  <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="st">"data/rope_trick.csv"</span>)</span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>lion_df  <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="st">"data/lion_noses.csv"</span>)</span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>booby_df</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<hr>
+</section>
+<section id="part-2-correlation" class="level1">
+<h1>Part 2 · Correlation</h1>
+<p><strong>▶ Run this</strong> — look at the data before you test it:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 2.1 · Correlation ──────────────────────────────────────────────</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(booby_df, <span class="fu">aes</span>(visits_as_nestling, future_aggression)) <span class="sc">+</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>✏️ <strong>Your turn:</strong> Is the trend straight, or is there a curve in it? Any point far off on its own?</p>
+<pre><code>____________________________________________________________</code></pre>
+<p><strong>▶ Run this</strong> — the coefficient, then the test:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 2.2 · Correlation ──────────────────────────────────────────────</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="fu">cor</span>(booby_df<span class="sc">$</span>visits_as_nestling, booby_df<span class="sc">$</span>future_aggression)</span>
 <span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="fu">cor.test</span>(b_df<span class="sc">$</span>visits, b_df<span class="sc">$</span>aggression)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>▶ Run this</strong> — save the coefficient and get the variance explained:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 2.2 · Correlation Analysis ─────────────────────────────────────</span></span>
-<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>booby_corr <span class="ot">&lt;-</span> <span class="fu">cor</span>(b_df<span class="sc">$</span>visits, b_df<span class="sc">$</span>aggression)</span>
-<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>booby_corr</span>
-<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>booby_corr<span class="sc">^</span><span class="dv">2</span>  <span class="co"># R-squared (variance explained)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>▶ Run this</strong> — visualize it:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 2.3 · Correlation Analysis ─────────────────────────────────────</span></span>
-<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>b_df <span class="sc">%&gt;%</span></span>
-<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> visits, <span class="at">y =</span> aggression)) <span class="sc">+</span></span>
-<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>(<span class="at">size =</span> <span class="dv">3</span>, <span class="at">alpha =</span> <span class="fl">0.7</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="callout callout-style-default callout-important callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-Important
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p><strong>Activity: interpret the correlation</strong></p>
-<p>Based on the output above, answer:</p>
-<ol type="1">
-<li><strong>Direction</strong>: Is the correlation positive or negative? What does this mean biologically?</li>
-<li><strong>Strength</strong>: How would you classify this correlation (weak, moderate, strong)?</li>
-<li><strong>Significance</strong>: Is the correlation statistically significant? What is the p-value?</li>
-<li><strong>Variance explained</strong>: What percentage of variance in adult aggression is explained by nestling visits?</li>
-</ol>
-<pre><code>1. ________________________________________________________
-2. ________________________________________________________
-3. ________________________________________________________
-4. ________________________________________________________</code></pre>
-</div>
-</div>
-<p><strong>▶ Run this</strong> — test the assumptions:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 2.4 · Correlation Analysis ─────────────────────────────────────</span></span>
-<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="fu">shapiro.test</span>(b_df<span class="sc">$</span>visits)</span>
-<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a><span class="fu">shapiro.test</span>(b_df<span class="sc">$</span>aggression)</span>
-<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>p1 <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(b_df, <span class="fu">aes</span>(<span class="at">x =</span> visits)) <span class="sc">+</span></span>
-<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_histogram</span>(<span class="at">bins =</span> <span class="dv">10</span>, <span class="at">fill =</span> <span class="st">"lightblue"</span>, <span class="at">color =</span> <span class="st">"black"</span>) <span class="sc">+</span></span>
-<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Distribution of Visits"</span>, <span class="at">x =</span> <span class="st">"Visits as Nestling"</span>, <span class="at">y =</span> <span class="st">"Count"</span>) <span class="sc">+</span></span>
-<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span>
-<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a>p2 <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(b_df, <span class="fu">aes</span>(<span class="at">x =</span> aggression)) <span class="sc">+</span></span>
-<span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_histogram</span>(<span class="at">bins =</span> <span class="dv">10</span>, <span class="at">fill =</span> <span class="st">"lightgreen"</span>, <span class="at">color =</span> <span class="st">"black"</span>) <span class="sc">+</span></span>
-<span id="cb8-12"><a href="#cb8-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Distribution of Aggression"</span>, <span class="at">x =</span> <span class="st">"Future Aggression"</span>, <span class="at">y =</span> <span class="st">"Count"</span>) <span class="sc">+</span></span>
-<span id="cb8-13"><a href="#cb8-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span>
-<span id="cb8-14"><a href="#cb8-14" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-15"><a href="#cb8-15" aria-hidden="true" tabindex="-1"></a>p3 <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(b_df, <span class="fu">aes</span>(<span class="at">sample =</span> visits)) <span class="sc">+</span></span>
-<span id="cb8-16"><a href="#cb8-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">stat_qq</span>() <span class="sc">+</span> <span class="fu">stat_qq_line</span>() <span class="sc">+</span></span>
-<span id="cb8-17"><a href="#cb8-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Q-Q Plot: Visits"</span>, <span class="at">x =</span> <span class="st">"Theoretical"</span>, <span class="at">y =</span> <span class="st">"Sample"</span>) <span class="sc">+</span></span>
-<span id="cb8-18"><a href="#cb8-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span>
-<span id="cb8-19"><a href="#cb8-19" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-20"><a href="#cb8-20" aria-hidden="true" tabindex="-1"></a>p4 <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(b_df, <span class="fu">aes</span>(<span class="at">sample =</span> aggression)) <span class="sc">+</span></span>
-<span id="cb8-21"><a href="#cb8-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">stat_qq</span>() <span class="sc">+</span> <span class="fu">stat_qq_line</span>() <span class="sc">+</span></span>
-<span id="cb8-22"><a href="#cb8-22" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Q-Q Plot: Aggression"</span>, <span class="at">x =</span> <span class="st">"Theoretical"</span>, <span class="at">y =</span> <span class="st">"Sample"</span>) <span class="sc">+</span></span>
-<span id="cb8-23"><a href="#cb8-23" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span>
-<span id="cb8-24"><a href="#cb8-24" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-25"><a href="#cb8-25" aria-hidden="true" tabindex="-1"></a>(p1 <span class="sc">+</span> p2) <span class="sc">/</span> (p3 <span class="sc">+</span> p4)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<blockquote class="blockquote">
-<p>⚠️ If normality assumptions are violated (p &lt; 0.05 in the Shapiro-Wilk test), consider Spearman’s rank correlation (non-parametric), a data transformation, or removing outliers (if justified).</p>
-</blockquote>
-<p><strong>▶ Run this</strong> — Spearman’s correlation:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 2.5 · Correlation Analysis ─────────────────────────────────────</span></span>
-<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="fu">cor.test</span>(b_df<span class="sc">$</span>visits, b_df<span class="sc">$</span>aggression, <span class="at">method =</span> <span class="st">"spearman"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>✏️ <strong>Your turn:</strong> Do the Pearson and Spearman results agree on the direction and significance of the relationship?</p>
-<p><code>________________________</code></p>
-<div class="callout callout-style-default callout-tip callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-Tip
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p><strong>🚀 If you finish early:</strong> Compute Kendall’s tau instead (<code>method = "kendall"</code>). How does its magnitude compare to Pearson’s r and Spearman’s rho for the same data?</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 2.6 · Correlation Analysis ─────────────────────────────────────</span></span>
-<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Write your code in the R script:</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-</div>
-</div>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="fu">cor.test</span>(booby_df<span class="sc">$</span>visits_as_nestling, booby_df<span class="sc">$</span>future_aggression)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>▶ Run this</strong> — square it for the variance explained:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 2.3 · Correlation ──────────────────────────────────────────────</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>r_booby <span class="ot">&lt;-</span> <span class="fu">cor</span>(booby_df<span class="sc">$</span>visits_as_nestling, booby_df<span class="sc">$</span>future_aggression)</span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>r_booby<span class="sc">^</span><span class="dv">2</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>✏️ <strong>Your turn:</strong> Fill these in from the output above.</p>
+<pre><code>r = ____________   p = ____________   r squared = ____________
+
+What share of the variation do the two variables share? ____________ %</code></pre>
+<p>✏️ <strong>Your turn:</strong> Write one sentence stating what the correlation means biologically — without using the word “cause.”</p>
+<pre><code>____________________________________________________________
+
+____________________________________________________________</code></pre>
 <hr>
 </section>
-<section id="part-3-simple-linear-regression" class="level1">
-<h1>Part 3 · Simple Linear Regression</h1>
-<p>Now let’s move from correlation to regression using the lion nose data.</p>
-<div class="callout callout-style-default callout-note callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-Note
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p><strong>Linear regression: data types and assumptions</strong></p>
-<p><strong>Data types required:</strong> X (predictor) and Y (response) are both continuous numerical; X can be fixed/controlled, Y is the outcome of interest.</p>
-<p><strong>Assumptions:</strong> linearity, independence, homoscedasticity, normality of residuals, and no influential outliers.</p>
-</div>
-</div>
-<p><strong>▶ Run this</strong> — fit the model:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 3.1 · Simple Linear Regression ─────────────────────────────────</span></span>
-<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>lion_model <span class="ot">&lt;-</span> <span class="fu">lm</span>(age_yr <span class="sc">~</span> prop_black, <span class="at">data =</span> l_df)</span>
-<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(lion_model)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="callout callout-style-default callout-important callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-Important
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p><strong>Activity: interpret the regression output</strong></p>
-<ol type="1">
-<li><strong>Regression equation</strong>: age = ______________ + ______________ × prop_black</li>
-<li><strong>Slope interpretation</strong>: what does the slope value mean in biological terms?</li>
-<li><strong>R-squared</strong>: what percentage of variation in age is explained by nose blackness?</li>
-<li><strong>Significance</strong>: is the relationship statistically significant? How do you know?</li>
-</ol>
-<pre><code>1. ________________________________________________________
-2. ________________________________________________________
-3. ________________________________________________________
-4. ________________________________________________________</code></pre>
-</div>
-</div>
-<p><strong>▶ Run this</strong> — visualize the fitted line with its confidence band:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb13"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 3.2 · Simple Linear Regression ─────────────────────────────────</span></span>
-<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>l_df <span class="sc">%&gt;%</span></span>
-<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> prop_black, <span class="at">y =</span> age_yr)) <span class="sc">+</span></span>
-<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>(<span class="at">size =</span> <span class="dv">3</span>, <span class="at">alpha =</span> <span class="fl">0.7</span>) <span class="sc">+</span></span>
-<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_smooth</span>(<span class="at">method =</span> <span class="st">"lm"</span>, <span class="at">se =</span> <span class="cn">TRUE</span>, <span class="at">color =</span> <span class="st">"red"</span>, <span class="at">fill =</span> <span class="st">"pink"</span>, <span class="at">alpha =</span> <span class="fl">0.3</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<blockquote class="blockquote">
-<p>💡 <strong>Confidence interval</strong> = range for the <em>mean</em> age of all lions with that nose blackness. <strong>Prediction interval</strong> = range for an <em>individual</em> lion with that nose blackness. Prediction intervals are always wider.</p>
-</blockquote>
-<div class="callout callout-style-default callout-tip callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-Tip
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p><strong>🚀 If you finish early:</strong> Use <code>predict(lion_model, newdata = tibble(prop_black = 0.5), interval = "confidence")</code> and then <code>interval = "prediction"</code> for the same <code>prop_black = 0.5</code>. Confirm the prediction interval is wider.</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb14"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 3.3 · Simple Linear Regression ─────────────────────────────────</span></span>
-<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Write your code in the R script:</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-</div>
-</div>
+<section id="part-3-correlation-assumptions" class="level1">
+<h1>Part 3 · Correlation assumptions</h1>
+<p>Pearson’s r assumes both variables are normal, the relationship is linear, and no outlier is driving it.</p>
+<p><strong>▶ Run this</strong> — the formal test on each variable:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 3.1 · Correlation assumptions ──────────────────────────────────</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="fu">shapiro.test</span>(booby_df<span class="sc">$</span>visits_as_nestling)</span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a><span class="fu">shapiro.test</span>(booby_df<span class="sc">$</span>future_aggression)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>▶ Run this</strong> — and the picture:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 3.2 · Correlation assumptions ──────────────────────────────────</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>h1 <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(booby_df, <span class="fu">aes</span>(visits_as_nestling)) <span class="sc">+</span> <span class="fu">geom_histogram</span>(<span class="at">bins =</span> <span class="dv">10</span>)</span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>h2 <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(booby_df, <span class="fu">aes</span>(future_aggression)) <span class="sc">+</span> <span class="fu">geom_histogram</span>(<span class="at">bins =</span> <span class="dv">10</span>)</span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>q1 <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(booby_df, <span class="fu">aes</span>(<span class="at">sample =</span> visits_as_nestling)) <span class="sc">+</span> <span class="fu">geom_qq</span>() <span class="sc">+</span> <span class="fu">geom_qq_line</span>()</span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>q2 <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(booby_df, <span class="fu">aes</span>(<span class="at">sample =</span> future_aggression)) <span class="sc">+</span> <span class="fu">geom_qq</span>() <span class="sc">+</span> <span class="fu">geom_qq_line</span>()</span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a>(h1 <span class="sc">/</span> h2) <span class="sc">|</span> (q1 <span class="sc">/</span> q2)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>✏️ <strong>Your turn:</strong> Remember H₀ here is “these data ARE normal.” Do both variables pass?</p>
+<pre><code>visits: p = __________ pass? ______    aggression: p = __________ pass? ______</code></pre>
+<p>✏️ <strong>Your turn:</strong> One of them lands very close to 0.05 while its QQ plot looks fine. At n = 24, which do you believe, and does it change the coefficient you report?</p>
+<pre><code>____________________________________________________________</code></pre>
 <hr>
 </section>
-<section id="part-4-testing-regression-assumptions" class="level1">
-<h1>Part 4 · Testing Regression Assumptions</h1>
-<p><strong>▶ Run this</strong> — the four-panel diagnostic plot:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb15"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 4.1 · Testing Regression Assumptions ───────────────────────────</span></span>
-<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a><span class="fu">par</span>(<span class="at">mfrow =</span> <span class="fu">c</span>(<span class="dv">2</span>, <span class="dv">2</span>))</span>
-<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(lion_model)</span>
-<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a><span class="fu">par</span>(<span class="at">mfrow =</span> <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">1</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="callout callout-style-default callout-note callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-Note
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p><strong>Understanding regression diagnostic plots</strong></p>
-<ol type="1">
-<li><strong>Residuals vs Fitted</strong> — look for random scatter around the horizontal line at 0; patterns indicate non-linearity or heteroscedasticity.</li>
-<li><strong>Q-Q Plot</strong> — look for points following the diagonal line; deviations indicate non-normal residuals.</li>
-<li><strong>Scale-Location</strong> — look for random scatter with a horizontal trend line; increasing spread indicates heteroscedasticity.</li>
-<li><strong>Residuals vs Leverage</strong> — look for points within Cook’s distance lines; points outside indicate influential observations.</li>
-</ol>
-</div>
-</div>
-<p><strong>▶ Run this</strong> — the formal tests:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb16"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 4.2 · Testing Regression Assumptions ───────────────────────────</span></span>
-<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>shapiro_residuals <span class="ot">&lt;-</span> <span class="fu">shapiro.test</span>(<span class="fu">residuals</span>(lion_model))</span>
-<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>shapiro_residuals</span>
+<section id="part-4-when-normality-fails" class="level1">
+<h1>Part 4 · When normality fails</h1>
+<p>Same workflow, a dataset that does not cooperate: an impressiveness <strong>score</strong>, which is bounded and lumpy.</p>
+<p><strong>▶ Run this:</strong></p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 4.1 · When normality fails ─────────────────────────────────────</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(rope_df, <span class="fu">aes</span>(years_since_seen, impressiveness)) <span class="sc">+</span></span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>()</span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a><span class="fu">shapiro.test</span>(rope_df<span class="sc">$</span>impressiveness)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>▶ Run this</strong> — both coefficients on the same data:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb13"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 4.2 · When normality fails ─────────────────────────────────────</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a><span class="fu">cor.test</span>(rope_df<span class="sc">$</span>years_since_seen, rope_df<span class="sc">$</span>impressiveness)</span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a><span class="fu">cor.test</span>(rope_df<span class="sc">$</span>years_since_seen, rope_df<span class="sc">$</span>impressiveness,</span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>         <span class="at">method =</span> <span class="st">"spearman"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>✏️ <strong>Your turn:</strong> Which coefficient do you report for these data, and why?</p>
+<pre><code>Pearson r = __________   Spearman rho = __________
+
+I report ______________ because ______________________________</code></pre>
+<p>✏️ <strong>Your turn:</strong> Spearman works on ranks. What did you give up by switching to it?</p>
+<pre><code>____________________________________________________________</code></pre>
+<p><strong>That is the correlation half.</strong> The rest of the worksheet fits a line.</p>
+<hr>
+</section>
+<section id="part-5-fitting-a-regression" class="level1">
+<h1>Part 5 · Fitting a regression</h1>
+<p><strong>▶ Run this:</strong></p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb16"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 5.1 · Fitting a regression ─────────────────────────────────────</span></span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(lion_df, <span class="fu">aes</span>(proportion_black, age_years)) <span class="sc">+</span></span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>()</span>
 <span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(lmtest)</span>
-<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a>bp_test <span class="ot">&lt;-</span> <span class="fu">bptest</span>(lion_model)  <span class="co"># Breusch-Pagan test for homoscedasticity</span></span>
-<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a>bp_test</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="callout callout-style-default callout-important callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-Important
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p><strong>Activity: assess assumption violations</strong></p>
-<p>Based on the diagnostic plots and tests:</p>
-<ol type="1">
-<li><strong>Linearity</strong>: does the relationship appear linear? (Check Residuals vs Fitted)</li>
-<li><strong>Normality</strong>: are the residuals normally distributed? (Check Q-Q plot and Shapiro test)</li>
-<li><strong>Homoscedasticity</strong>: is the variance constant? (Check Scale-Location plot and BP test)</li>
-<li><strong>Influential points</strong>: are there any concerning influential observations?</li>
-</ol>
-<pre><code>1. ________________________________________________________
-2. ________________________________________________________
-3. ________________________________________________________
-4. ________________________________________________________</code></pre>
-</div>
-</div>
-<div class="callout callout-style-default callout-tip callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-Tip
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p><strong>🚀 If you finish early:</strong> <code>bptest()</code>’s null hypothesis is that variance is constant (homoscedastic). Write out, in your own words, what a <em>significant</em> Breusch-Pagan result would mean for this model — and whether that’s what you found.</p>
-<pre><code>________________________________________________________</code></pre>
-</div>
-</div>
-<hr>
-</section>
-<section id="part-5-anova-for-regression" class="level1">
-<h1>Part 5 · ANOVA for Regression</h1>
-<p><strong>▶ Run this:</strong></p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb19"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 5.1 · ANOVA for Regression ─────────────────────────────────────</span></span>
-<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>anova_table <span class="ot">&lt;-</span> <span class="fu">anova</span>(lion_model)</span>
-<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a>anova_table</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>▶ Run this</strong> — confirm the partition by hand:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb20"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 5.2 · ANOVA for Regression ─────────────────────────────────────</span></span>
-<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a>ss_total <span class="ot">&lt;-</span> <span class="fu">sum</span>((l_df<span class="sc">$</span>age_yr <span class="sc">-</span> <span class="fu">mean</span>(l_df<span class="sc">$</span>age_yr))<span class="sc">^</span><span class="dv">2</span>)</span>
-<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a>ss_residual <span class="ot">&lt;-</span> <span class="fu">sum</span>(<span class="fu">residuals</span>(lion_model)<span class="sc">^</span><span class="dv">2</span>)</span>
-<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a>ss_regression <span class="ot">&lt;-</span> ss_total <span class="sc">-</span> ss_residual</span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>lion_model <span class="ot">&lt;-</span> <span class="fu">lm</span>(age_years <span class="sc">~</span> proportion_black, <span class="at">data =</span> lion_df)</span>
+<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(lion_model)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>✏️ <strong>Your turn:</strong> Write the fitted equation, then the slope as a sentence in the units of the data.</p>
+<pre><code>age = ____________ + ____________ x proportion_black
+
+For every 0.1 more black on the nose, predicted age goes up by ______ years.</code></pre>
+<p>✏️ <strong>Your turn:</strong> The intercept is the predicted age at <code>proportion_black = 0</code>. The youngest lion measured was 1.1 years old. Is the intercept a statement about newborn lions? Why not?</p>
+<pre><code>____________________________________________________________</code></pre>
+<p><strong>▶ Run this</strong> — the line with its confidence band:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb19"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 5.2 · Fitting a regression ─────────────────────────────────────</span></span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(lion_df, <span class="fu">aes</span>(proportion_black, age_years)) <span class="sc">+</span></span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>() <span class="sc">+</span></span>
+<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_smooth</span>(<span class="at">method =</span> <span class="st">"lm"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>▶ Run this</strong> — predict a lion with a half-black nose, two ways:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb20"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 5.3 · Fitting a regression ─────────────────────────────────────</span></span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a>new_lion <span class="ot">&lt;-</span> <span class="fu">tibble</span>(<span class="at">proportion_black =</span> <span class="fl">0.50</span>)</span>
+<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a><span class="fu">predict</span>(lion_model, new_lion, <span class="at">interval =</span> <span class="st">"confidence"</span>)</span>
 <span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb20-6"><a href="#cb20-6" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span>(<span class="st">"Manual calculation of sums of squares:"</span>)</span>
-<span id="cb20-7"><a href="#cb20-7" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span>(<span class="fu">paste</span>(<span class="st">"SS Total:"</span>, <span class="fu">round</span>(ss_total, <span class="dv">2</span>)))</span>
-<span id="cb20-8"><a href="#cb20-8" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span>(<span class="fu">paste</span>(<span class="st">"SS Regression:"</span>, <span class="fu">round</span>(ss_regression, <span class="dv">2</span>)))</span>
-<span id="cb20-9"><a href="#cb20-9" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span>(<span class="fu">paste</span>(<span class="st">"SS Residual:"</span>, <span class="fu">round</span>(ss_residual, <span class="dv">2</span>)))</span>
-<span id="cb20-10"><a href="#cb20-10" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span>(<span class="fu">paste</span>(<span class="st">"SS Regression + SS Residual:"</span>, <span class="fu">round</span>(ss_regression <span class="sc">+</span> ss_residual, <span class="dv">2</span>)))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>✏️ <strong>Your turn:</strong> Does <code>ss_regression + ss_residual</code> match <code>ss_total</code>? Does <code>ss_regression</code> match the “prop_black” row’s Sum Sq in <code>anova_table</code>?</p>
-<p><code>________________________</code></p>
-<p><strong>▶ Run this</strong> — visualize the variance components for one lion:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb21"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 5.3 · ANOVA for Regression ─────────────────────────────────────</span></span>
-<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a>l_df<span class="sc">$</span>predicted <span class="ot">&lt;-</span> <span class="fu">predict</span>(lion_model)</span>
-<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a>mean_age <span class="ot">&lt;-</span> <span class="fu">mean</span>(l_df<span class="sc">$</span>age_yr)</span>
-<span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a>example_point <span class="ot">&lt;-</span> <span class="dv">10</span></span>
-<span id="cb21-5"><a href="#cb21-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb21-6"><a href="#cb21-6" aria-hidden="true" tabindex="-1"></a>variance_plot <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(l_df, <span class="fu">aes</span>(<span class="at">x =</span> prop_black, <span class="at">y =</span> age_yr)) <span class="sc">+</span></span>
-<span id="cb21-7"><a href="#cb21-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>(<span class="at">size =</span> <span class="dv">3</span>, <span class="at">alpha =</span> <span class="fl">0.5</span>) <span class="sc">+</span></span>
-<span id="cb21-8"><a href="#cb21-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_smooth</span>(<span class="at">method =</span> <span class="st">"lm"</span>, <span class="at">se =</span> <span class="cn">FALSE</span>, <span class="at">color =</span> <span class="st">"blue"</span>, <span class="at">linewidth =</span> <span class="dv">1</span>) <span class="sc">+</span></span>
-<span id="cb21-9"><a href="#cb21-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_hline</span>(<span class="at">yintercept =</span> mean_age, <span class="at">linetype =</span> <span class="st">"dashed"</span>, <span class="at">color =</span> <span class="st">"darkgreen"</span>) <span class="sc">+</span></span>
-<span id="cb21-10"><a href="#cb21-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_segment</span>(<span class="fu">aes</span>(<span class="at">x =</span> prop_black[example_point],</span>
-<span id="cb21-11"><a href="#cb21-11" aria-hidden="true" tabindex="-1"></a>                   <span class="at">y =</span> age_yr[example_point],</span>
-<span id="cb21-12"><a href="#cb21-12" aria-hidden="true" tabindex="-1"></a>                   <span class="at">xend =</span> prop_black[example_point],</span>
-<span id="cb21-13"><a href="#cb21-13" aria-hidden="true" tabindex="-1"></a>                   <span class="at">yend =</span> predicted[example_point]),</span>
-<span id="cb21-14"><a href="#cb21-14" aria-hidden="true" tabindex="-1"></a>               <span class="at">color =</span> <span class="st">"red"</span>, <span class="at">linewidth =</span> <span class="dv">1</span>) <span class="sc">+</span></span>
-<span id="cb21-15"><a href="#cb21-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_segment</span>(<span class="fu">aes</span>(<span class="at">x =</span> prop_black[example_point],</span>
-<span id="cb21-16"><a href="#cb21-16" aria-hidden="true" tabindex="-1"></a>                   <span class="at">y =</span> predicted[example_point],</span>
-<span id="cb21-17"><a href="#cb21-17" aria-hidden="true" tabindex="-1"></a>                   <span class="at">xend =</span> prop_black[example_point],</span>
-<span id="cb21-18"><a href="#cb21-18" aria-hidden="true" tabindex="-1"></a>                   <span class="at">yend =</span> mean_age),</span>
-<span id="cb21-19"><a href="#cb21-19" aria-hidden="true" tabindex="-1"></a>               <span class="at">color =</span> <span class="st">"darkgreen"</span>, <span class="at">linewidth =</span> <span class="dv">1</span>) <span class="sc">+</span></span>
-<span id="cb21-20"><a href="#cb21-20" aria-hidden="true" tabindex="-1"></a>  <span class="fu">annotate</span>(<span class="st">"text"</span>, <span class="at">x =</span> <span class="fl">0.15</span>, <span class="at">y =</span> mean_age <span class="sc">+</span> <span class="fl">0.5</span>, <span class="at">label =</span> <span class="st">"Mean"</span>, <span class="at">color =</span> <span class="st">"darkgreen"</span>) <span class="sc">+</span></span>
-<span id="cb21-21"><a href="#cb21-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">annotate</span>(<span class="st">"text"</span>, <span class="at">x =</span> l_df<span class="sc">$</span>prop_black[example_point] <span class="sc">+</span> <span class="fl">0.05</span>,</span>
-<span id="cb21-22"><a href="#cb21-22" aria-hidden="true" tabindex="-1"></a>           <span class="at">y =</span> (l_df<span class="sc">$</span>age_yr[example_point] <span class="sc">+</span> l_df<span class="sc">$</span>predicted[example_point])<span class="sc">/</span><span class="dv">2</span>,</span>
-<span id="cb21-23"><a href="#cb21-23" aria-hidden="true" tabindex="-1"></a>           <span class="at">label =</span> <span class="st">"Residual"</span>, <span class="at">color =</span> <span class="st">"red"</span>) <span class="sc">+</span></span>
-<span id="cb21-24"><a href="#cb21-24" aria-hidden="true" tabindex="-1"></a>  <span class="fu">annotate</span>(<span class="st">"text"</span>, <span class="at">x =</span> l_df<span class="sc">$</span>prop_black[example_point] <span class="sc">+</span> <span class="fl">0.05</span>,</span>
-<span id="cb21-25"><a href="#cb21-25" aria-hidden="true" tabindex="-1"></a>           <span class="at">y =</span> (l_df<span class="sc">$</span>predicted[example_point] <span class="sc">+</span> mean_age)<span class="sc">/</span><span class="dv">2</span>,</span>
-<span id="cb21-26"><a href="#cb21-26" aria-hidden="true" tabindex="-1"></a>           <span class="at">label =</span> <span class="st">"Regression"</span>, <span class="at">color =</span> <span class="st">"darkgreen"</span>) <span class="sc">+</span></span>
-<span id="cb21-27"><a href="#cb21-27" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Variance Components in Regression"</span>,</span>
-<span id="cb21-28"><a href="#cb21-28" aria-hidden="true" tabindex="-1"></a>       <span class="at">subtitle =</span> <span class="st">"Total variation = Regression + Residual"</span>,</span>
-<span id="cb21-29"><a href="#cb21-29" aria-hidden="true" tabindex="-1"></a>       <span class="at">x =</span> <span class="st">"Proportion Black"</span>, <span class="at">y =</span> <span class="st">"Age (years)"</span>) <span class="sc">+</span></span>
-<span id="cb21-30"><a href="#cb21-30" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span>
-<span id="cb21-31"><a href="#cb21-31" aria-hidden="true" tabindex="-1"></a>variance_plot</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="callout callout-style-default callout-tip callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-Tip
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p><strong>🚀 If you finish early:</strong> Change <code>example_point</code> to a different row number (try the lion with the largest residual — hint: <code>which.max(abs(residuals(lion_model)))</code>). How does the plot change?</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb22"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 5.4 · ANOVA for Regression ─────────────────────────────────────</span></span>
-<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Write your code in the R script:</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-</div>
-</div>
+<span id="cb20-6"><a href="#cb20-6" aria-hidden="true" tabindex="-1"></a><span class="fu">predict</span>(lion_model, new_lion, <span class="at">interval =</span> <span class="st">"prediction"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>✏️ <strong>Your turn:</strong> Which interval is wider, and what question does each one answer?</p>
+<pre><code>____________________________________________________________</code></pre>
 <hr>
 </section>
-<section id="part-6-comparing-multiple-datasets" class="level1">
-<h1>Part 6 · Comparing Multiple Datasets</h1>
-<p>Let’s practice regression with the prairie biodiversity data.</p>
+<section id="part-6-sums-of-squares" class="level1">
+<h1>Part 6 · Sums of squares</h1>
+<p>The lecture’s centrepiece: build the partition yourself, then let R hand you the same numbers.</p>
 <p><strong>▶ Run this:</strong></p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb23"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 6.1 · Comparing Multiple Datasets ──────────────────────────────</span></span>
-<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a>prairie_model <span class="ot">&lt;-</span> <span class="fu">lm</span>(log_stability <span class="sc">~</span> spp_n, <span class="at">data =</span> p_df)</span>
-<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(prairie_model)</span>
-<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a>prairie_plot <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(p_df, <span class="fu">aes</span>(<span class="at">x =</span> spp_n, <span class="at">y =</span> log_stability)) <span class="sc">+</span></span>
-<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>(<span class="at">alpha =</span> <span class="fl">0.5</span>) <span class="sc">+</span></span>
-<span id="cb23-7"><a href="#cb23-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_smooth</span>(<span class="at">method =</span> <span class="st">"lm"</span>)</span>
-<span id="cb23-8"><a href="#cb23-8" aria-hidden="true" tabindex="-1"></a>prairie_plot</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="callout callout-style-default callout-important callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-Important
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p><strong>Activity: compare the two regressions</strong></p>
-<p>Compare the lion and prairie regression models:</p>
-<ol type="1">
-<li><strong>Which model explains more variance?</strong> (Compare R² values)</li>
-<li><strong>Which has a stronger relationship?</strong> (Compare standardized slopes or correlation)</li>
-<li><strong>Which has more precise estimates?</strong> (Compare standard errors relative to estimates)</li>
-</ol>
-<pre><code>1. ________________________________________________________
-2. ________________________________________________________
-3. ________________________________________________________</code></pre>
-</div>
-</div>
-<div class="callout callout-style-default callout-tip callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-Tip
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p><strong>🚀 If you finish early:</strong> Run <code>plot(prairie_model)</code> (four diagnostic plots, like Part 4). With n = 161, does non-normality of residuals worry you as much as it did for the lion model (n = 32)? Why might sample size change how much assumption violations matter?</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb25"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 6.2 · Comparing Multiple Datasets ──────────────────────────────</span></span>
-<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Write your code in the R script:</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-</div>
-</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb22"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 6.1 · Sums of squares ──────────────────────────────────────────</span></span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>fitted_age <span class="ot">&lt;-</span> <span class="fu">predict</span>(lion_model)</span>
+<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a>mean_age   <span class="ot">&lt;-</span> <span class="fu">mean</span>(lion_df<span class="sc">$</span>age_years)</span>
+<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a>ss_total <span class="ot">&lt;-</span> <span class="fu">sum</span>((lion_df<span class="sc">$</span>age_years <span class="sc">-</span> mean_age)<span class="sc">^</span><span class="dv">2</span>)</span>
+<span id="cb22-6"><a href="#cb22-6" aria-hidden="true" tabindex="-1"></a>ss_reg   <span class="ot">&lt;-</span> <span class="fu">sum</span>((fitted_age <span class="sc">-</span> mean_age)<span class="sc">^</span><span class="dv">2</span>)</span>
+<span id="cb22-7"><a href="#cb22-7" aria-hidden="true" tabindex="-1"></a>ss_resid <span class="ot">&lt;-</span> <span class="fu">sum</span>((lion_df<span class="sc">$</span>age_years <span class="sc">-</span> fitted_age)<span class="sc">^</span><span class="dv">2</span>)</span>
+<span id="cb22-8"><a href="#cb22-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-9"><a href="#cb22-9" aria-hidden="true" tabindex="-1"></a><span class="fu">c</span>(<span class="at">total =</span> ss_total, <span class="at">regression =</span> ss_reg, <span class="at">residual =</span> ss_resid)</span>
+<span id="cb22-10"><a href="#cb22-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-11"><a href="#cb22-11" aria-hidden="true" tabindex="-1"></a>ss_reg <span class="sc">+</span> ss_resid</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>✏️ <strong>Your turn:</strong> Does the partition add up, and what fraction of the total does the line account for?</p>
+<pre><code>ss_reg + ss_resid = __________   ss_total = __________
+
+ss_reg / ss_total = __________   Where have you seen that number before? ______</code></pre>
+<p><strong>▶ Run this</strong> — the same three numbers from R:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb24"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 6.2 · Sums of squares ──────────────────────────────────────────</span></span>
+<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a><span class="fu">anova</span>(lion_model)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>✏️ <strong>Your turn:</strong> Match the table to what you computed.</p>
+<pre><code>Sum Sq, proportion_black row = __________   Sum Sq, Residuals row = __________
+
+Df = ______ and ______      Mean Sq = Sum Sq / ______</code></pre>
+<p><strong>▶ Run this</strong> — the t on the slope, squared:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb26"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 6.3 · Sums of squares ──────────────────────────────────────────</span></span>
+<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(lion_model)<span class="sc">$</span>coefficients</span>
+<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-4"><a href="#cb26-4" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(lion_model)<span class="sc">$</span>coefficients[<span class="dv">2</span>, <span class="dv">3</span>]<span class="sc">^</span><span class="dv">2</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>✏️ <strong>Your turn:</strong> Compare that to the F value in the ANOVA table. What does the match tell you about the two tests?</p>
+<pre><code>t squared = __________   F = __________
+
+____________________________________________________________</code></pre>
 <hr>
 </section>
-<section id="summary-and-key-takeaways" class="level1">
-<h1>Summary and Key Takeaways</h1>
-<div class="callout callout-style-default callout-tip callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-Tip
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p><strong>What we learned today</strong></p>
-<ol type="1">
-<li><strong>Correlation vs.&nbsp;regression</strong> — correlation measures association; regression predicts one variable from another.</li>
-<li><strong>Assumptions matter</strong> — always check assumptions before interpreting results, and use appropriate alternatives when they’re violated.</li>
-<li><strong>Interpretation</strong> — R² tells us the proportion of variance explained; slopes tell us the rate of change; p-values tell us if relationships are statistically significant.</li>
-<li><strong>Practical considerations</strong> — correlation ≠ causation, outliers can have major impacts, and sample size affects the power to detect relationships.</li>
-</ol>
-</div>
-</div>
-<div class="callout callout-style-default callout-warning callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-Warning
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p><strong>Common mistakes to avoid</strong></p>
-<ol type="1">
-<li>Using correlation when you mean regression (or vice versa)</li>
-<li>Ignoring assumption violations</li>
-<li>Extrapolating beyond the range of the data</li>
-<li>Confusing confidence and prediction intervals</li>
-<li>Over-interpreting R² values</li>
-<li>Forgetting about biological significance vs.&nbsp;statistical significance</li>
-</ol>
-</div>
-</div>
+<section id="part-7-regression-assumptions" class="level1">
+<h1>Part 7 · Regression assumptions</h1>
+<p>Every check from here is on the <strong>residuals</strong>, not the raw data.</p>
+<p><strong>▶ Run this</strong> — the four standard diagnostic plots:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb28"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 7.1 · Regression assumptions ───────────────────────────────────</span></span>
+<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a><span class="fu">par</span>(<span class="at">mfrow =</span> <span class="fu">c</span>(<span class="dv">2</span>, <span class="dv">2</span>))</span>
+<span id="cb28-3"><a href="#cb28-3" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(lion_model)</span>
+<span id="cb28-4"><a href="#cb28-4" aria-hidden="true" tabindex="-1"></a><span class="fu">par</span>(<span class="at">mfrow =</span> <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">1</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>▶ Run this</strong> — the formal test on the residuals:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb29"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 7.2 · Regression assumptions ───────────────────────────────────</span></span>
+<span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a><span class="fu">shapiro.test</span>(<span class="fu">residuals</span>(lion_model))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>✏️ <strong>Your turn:</strong> One line per assumption. Say what you looked at, not just pass or fail.</p>
+<pre><code>Linearity (residuals vs fitted): ____________________________
+
+Equal variance (scale-location): ____________________________
+
+Normality (QQ + Shapiro p = ______): ________________________
+
+Influential points (Cook's distance): _______________________</code></pre>
+<p>✏️ <strong>Your turn:</strong> Would you report this model as it stands? One sentence.</p>
+<pre><code>____________________________________________________________</code></pre>
+<hr>
+</section>
+<section id="part-8-the-figure-you-hand-in" class="level1">
+<h1>Part 8 · The figure you hand in</h1>
+<p>Everything above was for looking. This one is for showing, so it gets the full treatment.</p>
+<p><strong>▶ Run this:</strong></p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb32"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 8.1 · The figure you hand in ───────────────────────────────────</span></span>
+<span id="cb32-2"><a href="#cb32-2" aria-hidden="true" tabindex="-1"></a>final_plot <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(lion_df, <span class="fu">aes</span>(proportion_black, age_years)) <span class="sc">+</span></span>
+<span id="cb32-3"><a href="#cb32-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>(<span class="at">size =</span> <span class="fl">2.5</span>) <span class="sc">+</span></span>
+<span id="cb32-4"><a href="#cb32-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_smooth</span>(<span class="at">method =</span> <span class="st">"lm"</span>, <span class="at">colour =</span> <span class="st">"blue"</span>) <span class="sc">+</span></span>
+<span id="cb32-5"><a href="#cb32-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(</span>
+<span id="cb32-6"><a href="#cb32-6" aria-hidden="true" tabindex="-1"></a>    <span class="at">title =</span> <span class="st">"Nose pigmentation predicts age in male lions"</span>,</span>
+<span id="cb32-7"><a href="#cb32-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">subtitle =</span> <span class="st">"Fitted least-squares line with 95% confidence band"</span>,</span>
+<span id="cb32-8"><a href="#cb32-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">x =</span> <span class="st">"Proportion of black on nose"</span>,</span>
+<span id="cb32-9"><a href="#cb32-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">y =</span> <span class="st">"Age (years)"</span></span>
+<span id="cb32-10"><a href="#cb32-10" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">+</span></span>
+<span id="cb32-11"><a href="#cb32-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_regular</span>(<span class="at">base_size =</span> <span class="dv">12</span>)</span>
+<span id="cb32-12"><a href="#cb32-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb32-13"><a href="#cb32-13" aria-hidden="true" tabindex="-1"></a>final_plot</span>
+<span id="cb32-14"><a href="#cb32-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb32-15"><a href="#cb32-15" aria-hidden="true" tabindex="-1"></a><span class="fu">ggsave</span>(</span>
+<span id="cb32-16"><a href="#cb32-16" aria-hidden="true" tabindex="-1"></a>  <span class="st">"figures/lion_regression.pdf"</span>,</span>
+<span id="cb32-17"><a href="#cb32-17" aria-hidden="true" tabindex="-1"></a>  <span class="at">plot   =</span> final_plot,</span>
+<span id="cb32-18"><a href="#cb32-18" aria-hidden="true" tabindex="-1"></a>  <span class="at">width  =</span> <span class="dv">6</span>,</span>
+<span id="cb32-19"><a href="#cb32-19" aria-hidden="true" tabindex="-1"></a>  <span class="at">height =</span> <span class="dv">4</span>,</span>
+<span id="cb32-20"><a href="#cb32-20" aria-hidden="true" tabindex="-1"></a>  <span class="at">units  =</span> <span class="st">"in"</span></span>
+<span id="cb32-21"><a href="#cb32-21" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>✏️ <strong>Your turn:</strong> Open the PDF and check the axis labels are readable before you submit it.</p>
+<hr>
 </section>
 <section id="review-and-checkpoint" class="level1">
 <h1>Review and checkpoint</h1>
 <p>At this point you can:</p>
 <ul class="task-list">
-<li><label><input type="checkbox">Calculate and interpret a Pearson correlation coefficient and its significance test</label></li>
-<li><label><input type="checkbox">Test correlation assumptions and switch to Spearman’s when they fail</label></li>
-<li><label><input type="checkbox">Fit a simple linear regression and interpret slope, intercept, and R²</label></li>
-<li><label><input type="checkbox">Read the four standard regression diagnostic plots</label></li>
-<li><label><input type="checkbox">Explain how ANOVA partitions variance into regression and residual components</label></li>
-<li><label><input type="checkbox">Compare R² and precision across two different regression models</label></li>
+<li><label><input type="checkbox">Run and interpret <code>cor.test()</code>, and square r for the variance explained</label></li>
+<li><label><input type="checkbox">Check correlation assumptions on the raw variables and switch to Spearman when they fail</label></li>
+<li><label><input type="checkbox">Fit a line with <code>lm()</code> and state the slope in the units of the data</label></li>
+<li><label><input type="checkbox">Build <span class="math inline">\(SS_{regression}\)</span>, <span class="math inline">\(SS_{residual}\)</span> and <span class="math inline">\(SS_{total}\)</span> by hand and match them to <code>anova()</code></label></li>
+<li><label><input type="checkbox">Show that t² = F for a one-predictor model</label></li>
+<li><label><input type="checkbox">Read the four regression diagnostics off the residuals</label></li>
+<li><label><input type="checkbox">Export a labelled figure to PDF</label></li>
 </ul>
 <div class="callout callout-style-default callout-note callout-titled">
 <div class="callout-header d-flex align-content-center">
@@ -948,24 +709,19 @@ Note
 </div>
 </div>
 <div class="callout-body-container callout-body">
-<p><strong>📤 What to turn in before next class</strong></p>
-<p>Upload both of these to the course management system:</p>
+<p><strong>📤 What to turn in</strong></p>
 <ol type="1">
-<li>Your code — the <code>scripts/</code> folder (or just <code>10_correlation_linear_models.R</code>)</li>
+<li><code>10_correlation_linear_models.R</code></li>
+<li><code>figures/lion_regression.pdf</code></li>
 <li>This worksheet, with your written answers</li>
 </ol>
 </div>
 </div>
+<hr>
 </section>
-<section id="additional-resources" class="level1">
-<h1>Additional Resources</h1>
-<ul>
-<li>Whitlock &amp; Schluter, Ch. 16 (Correlation)</li>
-<li>Whitlock &amp; Schluter, Ch. 17 (Regression)</li>
-<li>Gotelli &amp; Ellison, <em>A Primer of Ecological Statistics</em>, Ch. 9 (Regression)</li>
-<li><a href="https://r4ds.had.co.nz/">R for Data Science</a></li>
-<li><a href="https://www.statmethods.net/stats/regression.html">Quick-R: Regression</a></li>
-</ul>
+<section id="homework" class="level1">
+<h1>Homework</h1>
+<p><strong>Homework 5 — Regression and the Transformation You Have to Find</strong> follows Parts 5–8 of this worksheet on a different dataset: 100 stream invertebrate species, body mass against population density. The workflow is the one you just ran. The answer it gives you the first time is wrong, and the diagnostics are the only thing that will tell you so.</p>
 
 
 </section>

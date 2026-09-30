@@ -3,7 +3,7 @@ metadata-files:
   - ../../_templates/_lectures.yml
 title: "Lecture: Correlation vs Linear Models"
 subtitle: "Relationships"
-description: "Correlation vs. regression, the Pearson and Spearman correlation coefficients, simple linear regression, testing regression assumptions, and ANOVA for regression — using the Nazca booby, lion nose-pigmentation, and prairie-biodiversity textbook examples."
+description: "Correlation and simple linear regression as two halves of one idea: Pearson's r and Spearman's rho, the least-squares line, the sums-of-squares partition that turns a fitted line into an ANOVA table, and the residual diagnostics that decide whether any of it can be believed. Uses the Nazca booby, Indian rope trick, lion nose-pigmentation, prairie-biodiversity and Galapagos species-area datasets."
 categories: [Regression, Correlation]
 order: 10
 week: 6
@@ -31,1146 +31,1486 @@ execute:
 #| warning: false
 library(knitr)
 library(patchwork)
-library(grid)
-library(gridExtra)
 library(car)
-library(boot)
 library(tidyverse)
 
-# Create sample data for demonstration, following the fish data example style
-# This simulates allometric scaling relationship seen in Chapter 17
-set.seed(123)
-fish_data <- tibble(
-  length_mm = runif(40, 180, 320),
-  mass_g = 0.00001 * length_mm^3 * runif(40, 0.9, 1.1)
-)
-fish_data$lake <- factor(rep(c("Lake A", "Lake B"), each = 20))
+# ---- the real textbook datasets, read once and reused all lecture ----
+booby_df   <- read_csv("data/booby_aggression.csv",       show_col_types = FALSE)
+rope_df    <- read_csv("data/rope_trick.csv",             show_col_types = FALSE)
+lion_df    <- read_csv("data/lion_noses.csv",             show_col_types = FALSE)
+prairie_df <- read_csv("data/prairie_stability.csv",      show_col_types = FALSE)
+galap_df   <- read_csv("data/galapagos_species_area.csv", show_col_types = FALSE)
 
-# To simulate the lion data in example 17.1
-lion_data <- tibble(
-  proportion_black = c(0.21, 0.14, 0.11, 0.13, 0.12, 0.13, 0.12, 0.18, 0.23, 0.22,
-                      0.20, 0.17, 0.15, 0.27, 0.26, 0.21, 0.30, 0.42, 0.43, 0.59,
-                      0.60, 0.72, 0.29, 0.10, 0.48, 0.44, 0.34, 0.37, 0.34, 0.74, 0.79, 0.51),
-  age_years = c(1.1, 1.5, 1.9, 2.2, 2.6, 3.2, 3.2, 2.9, 2.4, 2.1,
-               1.9, 1.9, 1.9, 1.9, 2.8, 3.6, 4.3, 3.8, 4.2, 5.4,
-               5.8, 6.0, 3.4, 4.0, 7.3, 7.3, 7.8, 7.1, 7.1, 13.1, 8.8, 5.4)
-)
+# ---- numbers quoted in the text below, computed once so the prose cannot drift ----
+booby_test <- cor.test(booby_df$visits_as_nestling, booby_df$future_aggression)
+r_booby    <- unname(booby_test$estimate)
 
-# For example 17.3 (prairie stability)
-set.seed(456)
-prairie_data <- tibble(
-  species_number = rep(c(1, 2, 4, 8, 16), times = c(32, 32, 32, 32, 33)),
-  log_stability = 1.20 + 0.033 * species_number + rnorm(161, 0, 0.35)
-)
+rope_pearson  <- cor(rope_df$years_since_seen, rope_df$impressiveness)
+rope_spearman <- suppressWarnings(
+  cor(rope_df$years_since_seen, rope_df$impressiveness, method = "spearman"))
+
+lion_model <- lm(age_years ~ proportion_black, data = lion_df)
+lion_sum   <- summary(lion_model)
+lion_b0    <- unname(coef(lion_model)[1])
+lion_b1    <- unname(coef(lion_model)[2])
+lion_r2    <- lion_sum$r.squared
+lion_t     <- lion_sum$coefficients[2, 3]
+
+lion_anova <- anova(lion_model)
+ss_reg   <- lion_anova[1, "Sum Sq"]
+ss_resid <- lion_anova[2, "Sum Sq"]
+ss_total <- ss_reg + ss_resid
+ms_reg   <- lion_anova[1, "Mean Sq"]
+ms_resid <- lion_anova[2, "Mean Sq"]
+f_lion   <- lion_anova[1, "F value"]
+
+# small p-values must print as plain text inline, not knitr's LaTeX sci-notation
+fmt_p <- function(p, digits = 3) {
+  if (p < 0.001) formatC(p, format = "e", digits = 2) else formatC(p, format = "g", digits = digits)
+}
+
+prairie_model <- lm(log(biomass_stability) ~ species_number, data = prairie_df)
+prairie_sum   <- summary(prairie_model)
+prairie_b1    <- unname(coef(prairie_model)[2])
+prairie_r2    <- prairie_sum$r.squared
+
+# ---- Galapagos, clean and with one influential point added ----
+galap_plot <- galap_df %>%
+  mutate(log_area = log10(area_km2), log_species = log10(n_species))
+galap_bad <- galap_plot %>%
+  add_row(island = "suspect", area_km2 = 1000, n_species = 4,
+          log_area = 3, log_species = 0.65)
+
+gal_clean_m <- lm(log_species ~ log_area, data = galap_plot)
+gal_bad_m   <- lm(log_species ~ log_area, data = galap_bad)
+gal_clean_r2 <- summary(gal_clean_m)$r.squared
+gal_bad_r2   <- summary(gal_bad_m)$r.squared
+gal_clean_p  <- summary(gal_clean_m)$coefficients[2, 4]
+gal_bad_p    <- summary(gal_bad_m)$coefficients[2, 4]
 ```
 
 ## Where We Left Off
 
-::::::: columns
+::::: columns
 :::: {.column width="60%"}
 Covered last time:
 
-- Study design
-- Causality in ecology
-- Experimental design: replication, controls, randomization, independence
-- Sampling in field studies
-- Power analysis: *a priori* and *post hoc*
-- Study design and analysis
+- A design has two jobs: kill **bias**, shrink **sampling error**
+- Controls, randomization and blinding; replication, balance and blocking
+- Natural versus manipulative experiments, and what each one licenses you to say
+- **Your design has already chosen your analysis**
 ::::
 
 :::: {.column width="40%"}
-```{r correlation-linear-models-02}
-#| echo: false
-#| message: false
-#| warning: false
-#| fig-width: 3.2
-#| fig-height: 2.8
-#| fig-alt: "Boxplot of grayling mass in grams by lake, colored by lake."
-grayling_df <- read_csv("data/gray_I3_I8.csv") %>%
-  filter(!is.na(mass_g)) %>%
-  filter(!is.na(length_mm))
+::: callout-note
+**✅ Where today sits on that map**
 
-grayling_df %>% ggplot(aes(lake, mass_g, color = lake)) +
-  geom_boxplot()
-```
+Last week ended with a table mapping designs onto analyses. Today is its **first row** — one continuous predictor, one continuous response.
+
+Everything after today adds predictors or changes their type. The machinery stays the same.
+:::
 ::::
-:::::::
+:::::
 
 ## Part 1 · Overview {.divider}
 
 ## Today's Objectives
 
-::::::: columns
+::::: columns
 :::: {.column width="60%"}
-This lecture covers two fundamental statistical techniques in biology: correlation and regression analysis. Based on Chapters 16–17 from Whitlock & Schluter's *The Analysis of Biological Data* (3rd edition), we'll explore:
+Two techniques, one idea — a straight line through a cloud of points:
 
-- Correlation analysis: measuring relationships between variables
-- The distinction between correlation and regression
-- Simple linear regression: predicting one variable from another
-- Estimating and interpreting regression parameters
-- Testing assumptions and handling violations
-- Analysis of variance in regression
-- Model selection and comparison
+- **Correlation** — how tightly do two variables move together?
+- **Regression** — what equation predicts Y from X?
+- Assumptions for each, and what to do when they fail
+- **Sums of squares** — how a fitted line becomes an ANOVA table
+
+This lecture runs over **two class days**: correlation first, regression second.
+
+[📥 Booby data](data/booby_aggression.csv){.btn .btn-primary download="booby_aggression.csv"} [📥 Rope trick data](data/rope_trick.csv){.btn .btn-primary download="rope_trick.csv"} [📥 Lion data](data/lion_noses.csv){.btn .btn-primary download="lion_noses.csv"} [📥 Script skeleton (.R)](data/10_correlation_linear_models.R){.btn .btn-primary download="10_correlation_linear_models.R"}
 ::::
 
 :::: {.column width="40%"}
 ::: callout-note
-**📖 Reference**
+**📖 Reading**
 
-Whitlock & Schluter, Ch. 16 (Correlation) and Ch. 17 (Regression) are the core references for this entire lecture.
+Whitlock & Schluter, Ch. 16 (Correlation) and Ch. 17 (Regression).
+
+Gotelli & Ellison, Ch. 9 (Regression).
 :::
 ::::
-:::::::
+:::::
+
+## 🗳️ How Today Works
+
+::: callout-warning
+**🗳️ Six times over the two days, you make the call**
+
+Six slides are marked **🗳️ DECIDE**. Each asks a multiple-choice question, and I will *not* tell you the answer on that slide.
+
+**How it works:** write your letter down — actually write it — then hold up fingers 1–4. If the room splits, turn to the person next to you, argue for ninety seconds, and we vote again. Nothing here is graded. The point is that you commit before you find out.
+:::
 
 ## Part 2 · Correlation vs. Regression {.divider}
 
 ## Correlation vs. Regression — What's the Difference?
 
-::::::: columns
-:::: {.column width="60%"}
-**Correlation Analysis:**
+::::: columns
+:::: {.column width="55%"}
+**Correlation**
 
-- Measures the strength and direction of a relationship between two numerical variables
-- Both X and Y are random variables (both measured, neither manipulated)
-- Variables are typically on equal footing (either could be X or Y)
-- No cause-effect relationship implied
-- Quantifies the degree to which variables are related
-- Expressed as a correlation coefficient (r) from −1 to +1
+- Measures the **strength and direction** of a relationship
+- Both X and Y are measured; neither is manipulated
+- The variables are on equal footing — swap them and *r* is unchanged
+- One number, from −1 to +1
 
-**Regression Analysis:**
+**Regression**
 
-- Predicts one variable (Y) from another (X)
-- X is often fixed or controlled (manipulated)
-- Y is the response variable of interest
-- You *assume* a direction — X → Y — when you choose which variable goes where
-- Produces an equation for prediction, with slope and intercept parameters
-
-::: callout-warning
-**⚠️ Regression does not earn you causation**
-
-Choosing which variable to call X does not make it a cause. `lm(y ~ x)` will fit a slope to any two columns you hand it, including ones with no causal link at all.
-
-What licenses a causal claim is the **study design** — manipulation, randomization, controls (Study Design & Sampling) — not the model you fit afterwards.
-:::
+- Produces an **equation** predicting Y from X
+- You *assume* a direction, X → Y, when you choose which is which
+- Swap X and Y and you get a **different line**
+- Gives you a slope, an intercept, and predictions
 ::::
 
-:::: {.column width="40%"}
-```{r correlation-linear-models-03}
+:::: {.column width="45%"}
+```{r correlation-linear-models-02}
 #| echo: false
 #| message: false
 #| warning: false
 #| fig-height: 4
-#| fig-width: 3.2
-#| fig-alt: "Two stacked scatterplots of simulated fish length versus mass: the top panel shows a correlation view with a confidence ellipse and no predictor/response distinction, the bottom panel shows a regression view with a fitted line predicting mass from length."
-p1_fish <- ggplot(fish_data, aes(x = length_mm, y = mass_g)) +
+#| fig-width: 3.6
+#| fig-alt: "Two stacked scatterplots of the same lion data: the top panel shows the correlation view with a confidence ellipse and no predictor/response distinction, the bottom shows the regression view with a fitted line predicting age from proportion black."
+p_corr_view <- ggplot(lion_df, aes(x = proportion_black, y = age_years)) +
   geom_point() +
   stat_ellipse() +
-  labs(title = "Correlation View - no dependent/independent distinction",
-       x = "Length (mm)", y = "Mass (g)") +
+  labs(title = "Correlation view - no X/Y roles",
+       x = "Proportion black", y = "Age (years)") +
   theme_minimal(base_size = 9)
 
-p2_fish <- ggplot(fish_data, aes(x = length_mm, y = mass_g)) +
+p_reg_view <- ggplot(lion_df, aes(x = proportion_black, y = age_years)) +
   geom_point() +
   geom_smooth(method = "lm", se = TRUE, color = "red") +
-  labs(title = "Regression View - predict mass from length, clear X -> Y relationship",
-       x = "Length (mm) [predictor]", y = "Mass (g) [response]") +
+  labs(title = "Regression view - predict age from black",
+       x = "Proportion black [predictor]", y = "Age (years) [response]") +
   theme_minimal(base_size = 9)
 
-p1_fish / p2_fish
+p_corr_view / p_reg_view
 ```
 ::::
-:::::::
+:::::
+
+## Choosing X Does Not Make It a Cause
+
+::::: columns
+:::: {.column width="60%"}
+::: callout-warning
+**⚠️ Regression does not earn you causation**
+
+`lm(y ~ x)` will fit a slope to any two numeric columns you hand it, including ones with no causal link at all. Putting a variable on the right-hand side is a **decision you made**, not a finding.
+
+What licenses a causal claim is the **study design** — manipulation, randomization, controls — not the model you fit afterwards.
+:::
+
+Last week's inference gradient, in one line: the same `lm()` output supports a weak claim from an observational survey and a strong claim from a randomized experiment. **The design decides which one you are allowed to write.**
+::::
+
+:::: {.column width="40%"}
+::: callout-note
+**Which do I report?**
+
+- Both variables measured, no direction implied → **correlation**
+- One variable predicts or sets the other, or you want predictions → **regression**
+- Reporting both is fine; claiming cause from either is not
+:::
+::::
+:::::
 
 ## Part 3 · Correlation Analysis {.divider}
 
 ## What Is Correlation?
 
-::::::: columns
-:::: {.column width="60%"}
-**Correlation analysis** measures the strength and direction of a relationship between two numerical variables:
+::::: columns
+:::: {.column width="55%"}
+**Correlation** measures the strength and direction of a **linear** relationship between two numerical variables. It runs from −1 to +1:
 
-- Ranges from −1 to +1
-- +1 indicates perfect positive correlation
-- 0 indicates no correlation
-- −1 indicates perfect negative correlation
+- +1 — perfect positive
+- 0 — no *linear* relationship
+- −1 — perfect negative
 
-The **Pearson correlation coefficient (r)** is defined as:
+The **Pearson correlation coefficient**:
 
 $$r = \frac{\sum_{i}(X_i - \bar{X})(Y_i - \bar{Y})}{\sqrt{\sum_{i}(X_i - \bar{X})^2 \sum_{i}(Y_i - \bar{Y})^2}}$$
 
-This can be simplified as:
+which is just
 
 $$r = \frac{\text{Covariance}(X, Y)}{s_X \cdot s_Y}$$
-
-Where $s_X$ and $s_Y$ are the standard deviations of X and Y.
 ::::
 
-:::: {.column width="40%"}
-```{r correlation-linear-models-04}
+:::: {.column width="45%"}
+```{r correlation-linear-models-03}
 #| echo: false
 #| fig-height: 4
 #| fig-width: 3
 #| message: false
 #| warning: false
-#| fig-alt: "Five stacked scatterplots illustrating correlation strength from r = 1 (perfect positive) down through strong positive, no correlation (r = 0), strong negative, to r = -1 (perfect negative), each titled with its correlation coefficient."
+#| fig-alt: "Five stacked scatterplots illustrating correlation strength from perfect positive through strong positive, none, strong negative, to perfect negative, each titled with its correlation coefficient."
 set.seed(123)
 n <- 50
-perfect_pos <- tibble(x = 1:n, y = 1:n)
-strong_pos  <- tibble(x = 1:n, y = 1:n + rnorm(n, 0, 5))
-no_corr     <- tibble(x = 1:n, y = rnorm(n, 50, 10))
-strong_neg  <- tibble(x = 1:n, y = n:1 + rnorm(n, 0, 5))
-perfect_neg <- tibble(x = 1:n, y = n:1)
+corr_demo <- list(
+  "Perfect positive" = tibble(x = 1:n, y = 1:n),
+  "Strong positive"  = tibble(x = 1:n, y = 1:n + rnorm(n, 0, 5)),
+  "No correlation"   = tibble(x = 1:n, y = rnorm(n, 50, 10)),
+  "Strong negative"  = tibble(x = 1:n, y = n:1 + rnorm(n, 0, 5)),
+  "Perfect negative" = tibble(x = 1:n, y = n:1)
+)
 
-corr_plot <- function(data, title, r_value) {
+corr_plot <- function(data, title) {
   ggplot(data, aes(x = x, y = y)) +
-    geom_point(alpha = 0.5, size = 0.2) +
-    labs(title = paste(title, "r =", round(cor(data$x, data$y), 2)),
-         x = "X Variable", y = "Y Variable") + theme_classic(base_size = 7)
+    geom_point(alpha = 0.5, size = 0.4) +
+    labs(title = paste0(title, ": r = ", round(cor(data$x, data$y), 2)),
+         x = NULL, y = NULL) +
+    theme_classic(base_size = 7)
 }
-p1_corr <- corr_plot(perfect_pos, "Perfect Positive", 1)
-p2_corr <- corr_plot(strong_pos, "Strong Positive", 0.8)
-p3_corr <- corr_plot(no_corr, "No Correlation", 0)
-p4_corr <- corr_plot(strong_neg, "Strong Negative", -0.8)
-p5_corr <- corr_plot(perfect_neg, "Perfect Negative", -1)
 
-(p1_corr + theme(axis.title.x = element_blank(), axis.text.x = element_blank()) +
-p2_corr  + theme(axis.title.x = element_blank(), axis.text.x = element_blank()) +
-p3_corr  + theme(axis.title.x = element_blank(), axis.text.x = element_blank()) +
-p4_corr  + theme(axis.title.x = element_blank(), axis.text.x = element_blank()) +
-p5_corr + plot_layout(ncol = 1))
+wrap_plots(imap(corr_demo, ~ corr_plot(.x, .y)), ncol = 1)
 ```
 ::::
-:::::::
+:::::
 
-## Example 16.1: Flipping the Bird
+## 🗳️ DECIDE · Which One Has r Closest to Zero?
 
-::::::: columns
-:::: {.column width="60%"}
-Nazca boobies (*Sula granti*) — do aggressive behaviors as a chick predict future aggressive behavior as an adult?
+::::: columns
+:::: {.column width="45%"}
+Four datasets, plotted on the right. No correlation coefficients shown — on purpose.
 
-- Correlation is r = 0.534 — a moderate positive relationship
-- p-value = 0.007 — correlation is statistically significant
+**Which panel has the Pearson correlation closest to zero?**
 
-For a Pearson correlation coefficient (r) of 0.53372:
+**(a)** Panel A
 
-- This is r (not ρ, as Spearman's below), as indicated by "cor" in your output
-- To determine the amount of variation explained, square this value: r² = 0.53372² = 0.2849 (≈ 28.49%)
-- Means about 28.49% of the variance in one variable can be explained by the other
+**(b)** Panel B
 
-Tested by a t-test: $\text{t}=\frac{r}{SE_r}$
+**(c)** Panel C
+
+**(d)** Panel D
+
+::: callout-warning
+**✍️ Write your letter down, then vote.**
+:::
 ::::
 
-:::: {.column width="40%"}
+:::: {.column width="55%"}
+```{r correlation-linear-models-04}
+#| echo: false
+#| message: false
+#| warning: false
+#| fig-height: 3.4
+#| fig-width: 4.2
+#| fig-alt: "Four unlabelled scatterplots: A a moderate positive linear cloud, B a tight symmetric arch, C a diffuse cloud, D a flat cloud with one distant high point."
+set.seed(2026)
+nn <- 60
+panel_a <- tibble(x = runif(nn, 0, 10)) %>% mutate(y = 2 + 0.6 * x + rnorm(nn, 0, 1.6))
+panel_b <- tibble(x = seq(-5, 5, length.out = nn)) %>% mutate(y = 12 - 0.45 * x^2 + rnorm(nn, 0, 0.7))
+panel_c <- tibble(x = runif(nn, 0, 10)) %>% mutate(y = 6 + 0.35 * x + rnorm(nn, 0, 2.2))
+panel_d <- tibble(x = c(runif(nn - 1, 0, 4), 12)) %>% mutate(y = c(rnorm(nn - 1, 5, 1), 16))
+
+bare <- function(d, ttl) {
+  ggplot(d, aes(x, y)) + geom_point(size = 0.9, alpha = 0.7) +
+    labs(title = ttl, x = NULL, y = NULL) +
+    theme_classic(base_size = 8) +
+    theme(axis.text = element_blank(), axis.ticks = element_blank())
+}
+
+(bare(panel_a, "A") + bare(panel_b, "B")) /
+  (bare(panel_c, "C") + bare(panel_d, "D"))
+```
+::::
+:::::
+
+## What r Can and Cannot See
+
+::::: columns
+:::: {.column width="55%"}
+::: callout-important
+**✅ The answer is (b) — Panel B.**
+
+Panel B is the most *tightly related* pair on the slide: give me x and I can tell you y almost exactly. Its correlation is near **zero** anyway, because the relationship is an arch, not a line.
+
+Panel C looks like the messiest, so most rooms vote (c). It has a weak but genuine *linear* trend, so its r sits farther from zero than B's.
+:::
+
+**r measures one thing only: how close the points lie to a straight line.** A perfect relationship with a curve in it reads as "no correlation."
+
+Panel D is the other warning — a single far-out point can manufacture a large r out of a cloud with no trend in it.
+::::
+
+:::: {.column width="45%"}
 ```{r correlation-linear-models-05}
 #| echo: false
 #| message: false
 #| warning: false
 #| fig-height: 3.4
-#| fig-width: 3.4
-booby_data <- tibble(
-  visits_as_nestling = c(1, 7, 15, 4, 11, 14, 23, 14, 9, 5, 4, 10,
-                         13, 13, 14, 12, 13, 9, 8, 18, 22, 22, 23, 31),
-  future_aggression = c(-0.80, -0.92, -0.80, -0.46, -0.47, -0.46, -0.23, -0.16,
-                        -0.23, -0.23, -0.16, -0.10, -0.10, 0.04, 0.13, 0.19,
-                        0.25, 0.23, 0.15, 0.23, 0.31, 0.18, 0.17, 0.39)
-)
-booby_test <- cor.test(booby_data$visits_as_nestling, booby_data$future_aggression)
-booby_test
+#| fig-width: 4.2
+#| fig-alt: "The same four scatterplots, now labelled with their Pearson correlation coefficients, showing the arch panel has r near zero despite being the tightest relationship."
+labelled <- function(d, ttl) {
+  ggplot(d, aes(x, y)) + geom_point(size = 0.9, alpha = 0.7) +
+    geom_smooth(method = "lm", se = FALSE, linewidth = 0.5, colour = "red") +
+    labs(title = paste0(ttl, ": r = ", round(cor(d$x, d$y), 2)), x = NULL, y = NULL) +
+    theme_classic(base_size = 8) +
+    theme(axis.text = element_blank(), axis.ticks = element_blank())
+}
+
+(labelled(panel_a, "A") + labelled(panel_b, "B")) /
+  (labelled(panel_c, "C") + labelled(panel_d, "D"))
+```
+
+**Always plot the data before you trust a correlation coefficient.**
+::::
+:::::
+
+## Example 16.1 · Flipping the Bird
+
+::::: columns
+:::: {.column width="55%"}
+Nazca boobies (*Sula granti*): do the visits a chick receives from non-parent adults predict how aggressive it is as an adult?
+
+```{r correlation-linear-models-06}
+booby_df <- read_csv("data/booby_aggression.csv")
+
+cor.test(booby_df$visits_as_nestling,
+         booby_df$future_aggression)
 ```
 ::::
-:::::::
 
-## Example 16.1: Interpretation
+:::: {.column width="45%"}
+```{r correlation-linear-models-07}
+#| echo: false
+#| fig-height: 3
+#| fig-width: 3.2
+#| message: false
+#| warning: false
+#| fig-alt: "Scatterplot of Nazca booby adult aggression score against the number of nestling visits from non-parent adults, showing a positive trend."
+ggplot(booby_df, aes(visits_as_nestling, future_aggression)) +
+  geom_point(size = 2) +
+  labs(x = "Visits as a nestling", y = "Adult aggression score") +
+  theme_minimal(base_size = 9)
+```
+::::
+:::::
 
-::::::: columns
+## Example 16.1 · Interpretation
+
+::::: columns
 :::: {.column width="60%"}
-**Interpretation:** the correlation coefficient of r = 0.534 suggests that Nazca boobies who experienced more visits from non-parent adults as nestlings tend to display more aggressive behavior as adults. This supports the hypothesis that early experiences influence adult behavior patterns in this species.
+**r = `r round(r_booby, 3)`** — a moderate positive relationship, **p = `r fmt_p(booby_test$p.value)`**.
 
-**Standard error:**
+- Square it for the variance explained: **r² = `r round(r_booby^2, 3)`**, so about **`r round(100 * r_booby^2, 1)`%** of the variation in one variable is accounted for by the other
+- Standard error: $\text{SE}_r = \sqrt{\dfrac{1-r^2}{n-2}}$ = `r round(sqrt((1 - r_booby^2) / (nrow(booby_df) - 2)), 3)`
+- Tested with a t-test: $t = r / SE_r$, df = n − 2
 
-$$\text{SE}_r = \sqrt{\frac{1-r^2}{n-2}}$$
-
-SE = 0.180
-
-Need to be sure the relationship is not curved — see below.
+**In words:** boobies visited more often as nestlings tend to be more aggressive adults. Nothing here says the visits *caused* it.
 ::::
 
 :::: {.column width="40%"}
-```{r correlation-linear-models-06}
-#| echo: false
-#| fig-height: 3.4
-#| fig-width: 3.4
-#| message: false
-#| warning: false
-#| fig-alt: "Scatterplot of Nazca booby future aggression score against number of nestling visits from non-parent adults, showing a positive trend."
-booby_data %>% ggplot(aes(visits_as_nestling, future_aggression)) + geom_point()
-```
+::: callout-note
+**🔮 Predict first**
+
+Next we run Shapiro-Wilk on both booby variables, then look at their histograms and QQ plots.
+
+If the formal test and the picture disagree at n = `r nrow(booby_df)`, which would you trust?
+:::
 ::::
-:::::::
+:::::
 
 ## Testing Assumptions for Correlation
 
-::: callout-note
-**🔮 Predict first:** We're about to run Shapiro-Wilk on both booby variables, then look at their histograms and QQ plots. If the formal test and the visual check disagree, which would you trust more for n = 24?
-:::
+::::: columns
+:::: {.column width="55%"}
+Pearson correlation assumes:
 
-::::::: columns
-:::: {.column width="60%"}
-As described in Section 16.3, correlation analysis has key assumptions:
+1. **Random sampling** from the population
+2. **Bivariate normality** — each variable normal, and normal jointly
+3. **A linear relationship** — not a curve
+4. **No extreme outliers** driving the result
 
-1. **Random sampling** — observations should be a random sample from the population
-2. **Bivariate normality** — both variables follow a normal distribution, and their joint distribution is bivariate normal
-3. **Linear relationship** — the relationship between variables is linear, not curved
-
-Let's check these assumptions with the booby data.
-::::
-
-:::: {.column width="40%"}
-```{r correlation-linear-models-07}
-#| echo: false
-#| fig-height: 3.4
-#| fig-width: 3.4
-#| message: false
-#| warning: false
-shapiro.test(booby_data$visits_as_nestling)
-shapiro.test(booby_data$future_aggression)
-```
-::::
-:::::::
-
-## Testing Assumptions for Correlation — Visually
-
-::::::: columns
-:::: {.column width="60%"}
-As described in Section 16.3, correlation analysis has key assumptions:
-
-1. **Random sampling** — observations should be a random sample from the population
-2. **Bivariate normality** — both variables follow a normal distribution, and their joint distribution is bivariate normal
-3. **Linear relationship** — the relationship between variables is linear, not curved
-
-Let's check these assumptions using the booby data.
-::::
-
-:::: {.column width="40%"}
 ```{r correlation-linear-models-08}
-#| echo: false
-#| fig-height: 3.4
-#| fig-width: 3.4
-#| message: false
-#| warning: false
-#| fig-alt: "Four-panel figure checking normality of the booby data: histograms of nestling visits and future aggression on the left, and QQ-plots of the same two variables on the right."
-p1_booby <- ggplot(booby_data, aes(x = visits_as_nestling)) +
-  geom_histogram(bins = 10, fill = "lightblue", color = "black") +
-  labs(title = "Visits", x = "Visits", y = "Frequency") +
-  theme_minimal(base_size = 7)
-
-p2_booby <- ggplot(booby_data, aes(x = future_aggression)) +
-  geom_histogram(bins = 10, fill = "lightgreen", color = "black") +
-  labs(title = "Aggression", x = "Aggression", y = "Frequency") +
-  theme_minimal(base_size = 7)
-
-p3_booby <- ggplot(booby_data, aes(sample = visits_as_nestling)) +
-  geom_qq() + geom_qq_line() +
-  labs(title = "Q-Q Plot Visits", x = "Theoretical Quantiles", y = "Sample Quantiles") +
-  theme_minimal(base_size = 7) + theme(axis.title.x = element_blank(), axis.text.x = element_blank())
-
-p4_booby <- ggplot(booby_data, aes(sample = future_aggression)) +
-  geom_qq() + geom_qq_line() +
-  labs(title = "Q-Q Plot for Aggression", x = "Theoretical Quantiles", y = "Sample Quantiles") +
-  theme_minimal(base_size = 7)
-
-(p1_booby / p2_booby) | (p3_booby / p4_booby)
+shapiro.test(booby_df$visits_as_nestling)
 ```
 ::::
-:::::::
 
-## What to Do If Assumptions Are Violated
+:::: {.column width="45%"}
+```{r correlation-linear-models-09}
+shapiro.test(booby_df$future_aggression)
+```
 
-::::::: columns
-:::: {.column width="60%"}
-- Transform one or both variables (log, square root, etc.)
-- Use a non-parametric correlation (**Spearman's rank correlation**) or Kendall's tau (τ)
-- Examine the data for outliers or influential points
+::: callout-note
+**H₀ is "these data ARE normal"**
 
-::: callout-tip
-**🖐 Notice**
+A **large** p-value is the good outcome — the same backwards logic as Levene's test.
+:::
+::::
+:::::
 
-The lion nose-pigmentation data (used here just as an example of non-normal data) shows a right-skewed `proportion_black` and clearly non-normal QQ plots — this is exactly when Spearman's is the better tool.
+## Checking the Same Assumptions by Eye
+
+::::: columns
+:::: {.column width="40%"}
+The two tests do **not** agree with each other:
+
+- visits, **p = `r round(shapiro.test(booby_df$visits_as_nestling)$p.value, 3)`** — clean
+- aggression, **p = `r round(shapiro.test(booby_df$future_aggression)$p.value, 3)`** — just under 0.05
+
+Now look at the pictures. No strong skew, points close to both QQ lines, and the scatterplot was straight rather than curved.
+
+::: callout-important
+**✅ This is the case the last slide asked you to predict**
+
+At n = `r nrow(booby_df)`, a normality p of `r round(shapiro.test(booby_df$future_aggression)$p.value, 3)` is a coin-flip verdict, not evidence of a real problem. W&S report **Pearson's r** for these data, and so do we.
+
+Compare that with the next dataset, where the test and the picture agree that something is wrong.
 :::
 ::::
 
-:::: {.column width="40%"}
-```{r correlation-linear-models-09}
-#| echo: false
-#| fig-height: 3.6
-#| fig-width: 3.6
-#| message: false
-#| warning: false
-#| fig-alt: "Four-panel figure checking normality of the lion data: histograms of proportion black and age on the left, and QQ-plots of the same two variables on the right, showing the right-skewed, non-normal shape of proportion black."
-p1_lion <- ggplot(lion_data, aes(x = proportion_black)) +
-  geom_histogram(bins = 10, fill = "lightblue", color = "black") +
-  labs(title = "Prop black", x = "Visits", y = "Frequency") +
-  theme_minimal(base_size = 7)
-
-p2_lion <- ggplot(lion_data, aes(x = age_years)) +
-  geom_histogram(bins = 10, fill = "lightgreen", color = "black") +
-  labs(title = "Age", x = "Age", y = "Frequency") +
-  theme_minimal(base_size = 7)
-
-p3_lion <- ggplot(lion_data, aes(sample = proportion_black)) +
-  geom_qq() + geom_qq_line() +
-  labs(title = "Q-Q Plot Prop Black", x = "Theoretical Quantiles", y = "Sample Quantiles") +
-  theme_minimal(base_size = 7) + theme(axis.title.x = element_blank(), axis.text.x = element_blank())
-
-p4_lion <- ggplot(lion_data, aes(sample = age_years)) +
-  geom_qq() + geom_qq_line() +
-  labs(title = "Q-Q Plot for age", x = "Theoretical Quantiles", y = "Sample Quantiles") +
-  theme_minimal(base_size = 7)
-
-(p1_lion / p2_lion) | (p3_lion / p4_lion)
-```
-::::
-:::::::
-
-## Spearman's Rho — Interpretation
-
-::::::: columns
 :::: {.column width="60%"}
-To understand the amount of variation explained, you can square the non-parametric Spearman's rho value.
-
-For your value of 0.74485:
-
-$$\rho^2 = 0.74485^2 = 0.5548$$
-
-This means approximately 55.48% of the variance in the *ranks* of one variable can be explained by the ranks of the other. This is similar to how R² works in linear regression, but specifically for ranked data.
-::::
-
-:::: {.column width="40%"}
 ```{r correlation-linear-models-10}
 #| echo: false
-#| fig-height: 3.4
-#| fig-width: 3.4
+#| fig-height: 3.2
+#| fig-width: 4.2
 #| message: false
 #| warning: false
-spearman_corr <- cor.test(
-  lion_data$proportion_black, lion_data$age_years, method = "spearman")
-spearman_corr
+#| fig-alt: "Four-panel figure for the booby data: histograms of nestling visits and adult aggression on the left, QQ plots of the same two variables on the right."
+h1 <- ggplot(booby_df, aes(x = visits_as_nestling)) +
+  geom_histogram(bins = 10, fill = "lightblue", color = "black") +
+  labs(title = "Visits", x = NULL, y = NULL) + theme_minimal(base_size = 7)
+
+h2 <- ggplot(booby_df, aes(x = future_aggression)) +
+  geom_histogram(bins = 10, fill = "lightgreen", color = "black") +
+  labs(title = "Aggression", x = NULL, y = NULL) + theme_minimal(base_size = 7)
+
+q1 <- ggplot(booby_df, aes(sample = visits_as_nestling)) +
+  geom_qq() + geom_qq_line() +
+  labs(title = "QQ - visits", x = NULL, y = NULL) + theme_minimal(base_size = 7)
+
+q2 <- ggplot(booby_df, aes(sample = future_aggression)) +
+  geom_qq() + geom_qq_line() +
+  labs(title = "QQ - aggression", x = NULL, y = NULL) + theme_minimal(base_size = 7)
+
+(h1 / h2) | (q1 / q2)
 ```
 ::::
-:::::::
+:::::
 
-## Correlation — Important Considerations
+## When the Assumption Fails — Example 16.5
 
-::::::: columns
+::::: columns
+:::: {.column width="55%"}
+W&S Example 16.5: people who had seen the Indian rope trick were asked, years later, how impressive it was — on a subjective **score**.
+
+That score is bounded and lumpy, and it fails Shapiro badly. Three options when normality fails:
+
+- **Transform** one or both variables (log, square root)
+- Switch to a **rank-based** correlation — Spearman's ρ or Kendall's τ
+- Hunt down the outlier that is doing the work
+
+```{r correlation-linear-models-11}
+rope_df <- read_csv("data/rope_trick.csv")
+
+shapiro.test(rope_df$impressiveness)
+```
+::::
+
+:::: {.column width="45%"}
+```{r correlation-linear-models-12}
+#| echo: false
+#| fig-height: 3
+#| fig-width: 3.2
+#| message: false
+#| warning: false
+#| fig-alt: "Scatterplot of the reported impressiveness score against years since the rope trick was witnessed, showing an increasing but lumpy relationship."
+ggplot(rope_df, aes(years_since_seen, impressiveness)) +
+  geom_point(size = 2) +
+  labs(x = "Years since seen", y = "Impressiveness score") +
+  theme_minimal(base_size = 9)
+```
+
+The longer ago someone saw the trick, the more impressive they remember it being.
+::::
+:::::
+
+## Spearman's Rho
+
+::::: columns
+:::: {.column width="55%"}
+```{r correlation-linear-models-13}
+#| warning: false
+cor.test(rope_df$years_since_seen,
+         rope_df$impressiveness,
+         method = "spearman")
+```
+::::
+
+:::: {.column width="45%"}
+Spearman replaces each value with its **rank** and correlates the ranks — so it needs no normality and is not thrown by one extreme value.
+
+- Pearson **r = `r round(rope_pearson, 3)`**
+- Spearman **ρ = `r round(rope_spearman, 3)`**
+
+Square ρ the same way: **ρ² = `r round(rope_spearman^2, 3)`** — about `r round(100 * rope_spearman^2, 1)`% of the variation *in the ranks*.
+
+::: callout-note
+**The cost of switching**
+
+You keep an honest p-value and lose the original units. ρ is about ranks, so it can no longer be read as "score per year."
+:::
+::::
+:::::
+
+## 🗳️ DECIDE · The Correlation That Shrank
+
+::::: columns
 :::: {.column width="60%"}
-- **The correlation coefficient depends on the range**
-  - Restricting the range of values can reduce the correlation coefficient
-  - Comparing correlations between studies requires similar ranges of values
-- **Measurement error affects correlation**
-  - Measurement error in X or Y tends to weaken observed correlation
-  - This bias is called **attenuation**
-  - True correlation is typically stronger than the observed correlation
-- **Correlation vs. Causation**
-  - Correlation does not imply causation
-  - Three possible explanations: (1) X causes Y, (2) Y causes X, (3) Z (a third variable) causes both X and Y
-- **Correlation significance test**
-  - H₀: ρ = 0 (no correlation in population); H₁: ρ ≠ 0
-  - Test statistic: t = r / SE(r), with df = n − 2
+A colleague reports **r = 0.82** between body size and fecundity across a set of populations.
+
+You repeat the study, carefully, at **one site** — where the animals are all close to the same size — and get **r = 0.31** from data that are every bit as clean.
+
+**What is the most likely explanation?**
+
+**(a)** The original result was a false positive
+
+**(b)** Your sample size was too small
+
+**(c)** Restricting the range of X shrank r, with the underlying relationship unchanged
+
+**(d)** Measurement error in your study inflated r
+
+::: callout-warning
+**✍️ One letter. Write it down.**
+:::
 ::::
 
 :::: {.column width="40%"}
-```{r correlation-linear-models-11}
+::: callout-note
+**The question to ask**
+
+*Did the relationship change — or did the slice of the world I looked at change?*
+:::
+::::
+:::::
+
+## Two Things That Move r Without Touching the Biology
+
+::::: columns
+:::: {.column width="50%"}
+::: callout-important
+**✅ The answer is (c).**
+
+**Range restriction.** r depends on the spread of X you sampled. Look at a narrow slice of a real relationship and r falls, even though the slope is unchanged. This is why correlations from studies with different ranges cannot be compared head to head.
+:::
+
+::: callout-warning
+**⚠️ Attenuation**
+
+Measurement error in X or Y pushes r **toward zero**, never away from it. The true correlation is usually **stronger** than the one you observed — so (d) has the direction backwards.
+:::
+::::
+
+:::: {.column width="50%"}
+```{r correlation-linear-models-14}
 #| echo: false
 #| message: false
 #| warning: false
-#| fig-height: 4
-#| fig-width: 3
-#| fig-alt: "Four stacked scatterplots illustrating factors that affect correlation strength: full range of data versus a restricted range (showing a weaker correlation), and true values versus measurement-error-added values (showing attenuation), each labeled with its correlation coefficient."
+#| fig-height: 3.6
+#| fig-width: 3.2
+#| fig-alt: "Four stacked scatterplots: the full range of a relationship versus a restricted range with a much lower r, and true values versus values with measurement error added, showing attenuation."
 set.seed(456)
 n <- 100
-x_full <- runif(n, 0, 10)
-y_full <- 2 + 0.5*x_full + rnorm(n, 0, 1)
-full_data <- tibble(x = x_full, y = y_full)
-restricted_data <- full_data %>% filter(x >= 4 & x <= 6)
-
-full_cor <- cor(full_data$x, full_data$y)
-restricted_cor <- cor(restricted_data$x, restricted_data$y)
-
-p1_full <- ggplot(full_data, aes(x = x, y = y)) +
-  geom_point() +
-  geom_smooth(method = "lm", se = FALSE, color = "blue") +
-  labs(title = "Full Range of Data", subtitle = paste("r =", round(full_cor, 2)),
-       x = "X Variable", y = "Y Variable") +
-  theme_minimal(base_size = 9) + theme(axis.title.x = element_blank(), axis.text.x = element_blank())
-
-p2_full <- ggplot(restricted_data, aes(x = x, y = y)) +
-  geom_point() +
-  geom_smooth(method = "lm", se = FALSE, color = "red") +
-  labs(title = "Restricted Range", subtitle = paste("r =", round(restricted_cor, 2)),
-       x = "X Variable", y = "Y Variable") +
-  theme_minimal(base_size = 9) +
-  xlim(0, 10) + ylim(min(full_data$y), max(full_data$y))
+full_data <- tibble(x = runif(n, 0, 10)) %>% mutate(y = 2 + 0.5 * x + rnorm(n, 0, 1))
+restricted_data <- full_data %>% filter(x >= 4, x <= 6)
 
 set.seed(789)
-x_true <- runif(50, 0, 10)
-y_true <- 1 + 0.8*x_true
-x_meas <- x_true + rnorm(50, 0, 1)
-y_meas <- y_true + rnorm(50, 0, 1)
-error_data <- tibble(x_true = x_true, y_true = y_true, x_meas = x_meas, y_meas = y_meas)
+error_data <- tibble(x_true = runif(50, 0, 10)) %>%
+  mutate(y_true = 1 + 0.8 * x_true,
+         x_meas = x_true + rnorm(50, 0, 1),
+         y_meas = y_true + rnorm(50, 0, 1))
 
-p3_full <- ggplot(error_data, aes(x = x_true, y = y_true)) +
-  geom_point() +
-  geom_smooth(method = "lm", se = FALSE, color = "blue") +
-  labs(title = "No Measurement Error", subtitle = paste("r =", round(cor(x_true, y_true), 2)),
-       x = "X (True Values)", y = "Y (True Values)") +
-  theme_minimal(base_size = 9) + theme(axis.title.x = element_blank(), axis.text.x = element_blank())
+rng_plot <- function(d, xv, yv, ttl, col) {
+  ggplot(d, aes(.data[[xv]], .data[[yv]])) +
+    geom_point(size = 0.8) +
+    geom_smooth(method = "lm", se = FALSE, colour = col, linewidth = 0.6) +
+    labs(title = paste0(ttl, ": r = ", round(cor(d[[xv]], d[[yv]]), 2)), x = NULL, y = NULL) +
+    theme_minimal(base_size = 7)
+}
 
-p4_full <- ggplot(error_data, aes(x = x_meas, y = y_meas)) +
-  geom_point() +
-  geom_smooth(method = "lm", se = FALSE, color = "red") +
-  labs(title = "With Measurement Error", subtitle = paste("r =", round(cor(x_meas, y_meas), 2)),
-       x = "X (Measured Values)", y = "Y (Measured Values)") +
-  theme_minimal(base_size = 9)
-
-p1_full + p2_full + p3_full + p4_full + plot_layout(ncol = 1)
+rng_plot(full_data, "x", "y", "Full range", "blue") /
+  (rng_plot(restricted_data, "x", "y", "Restricted range", "red") + xlim(0, 10)) /
+  rng_plot(error_data, "x_true", "y_true", "No measurement error", "blue") /
+  rng_plot(error_data, "x_meas", "y_meas", "With measurement error", "red")
 ```
 ::::
-:::::::
+:::::
+
+## Correlation — What to Carry Forward
+
+::::: columns
+:::: {.column width="60%"}
+- **r measures straight-line association only** — always plot first
+- **r² is the variance the two variables share**
+- **The range you sampled sets the ceiling on r**; measurement error lowers it further
+- **Correlation does not imply causation.** Three explanations always survive: X causes Y, Y causes X, or Z causes both
+- **The test:** H₀ is ρ = 0, statistic t = r / SE(r), df = n − 2
+- **When normality fails**, switch to rank-based Spearman's ρ
+::::
+
+:::: {.column width="40%"}
+::: callout-note
+**✅ End of the correlation half**
+
+You can now run `cor.test()`, check its assumptions on the raw variables, switch to Spearman when they fail, and say what r and r² mean.
+
+Next: the same cloud of points — but now we fit a **line** to it and ask what that line is made of.
+:::
+::::
+:::::
 
 ## Part 4 · Linear Regression — the Model {.divider}
 
 ## The Simple Linear Regression Model
 
-::::::: columns
+::::: columns
 :::: {.column width="60%"}
-**Simple linear regression** models the relationship between a response variable (Y) and a predictor variable (X).
+Regression models the response Y as a straight-line function of the predictor X.
 
-The **population** regression model: $Y = \alpha + \beta X + \varepsilon$
+The **population** model: $Y = \alpha + \beta X + \varepsilon$
 
-- Y is the response variable
-- X is the predictor variable
-- α (alpha) is the intercept (value of Y when X = 0)
-- β (beta) is the slope (change in Y per unit change in X)
-- ε (epsilon) is the error term (random deviation from the line)
+- α is the intercept — the value of Y when X = 0
+- β is the slope — the change in Y per one-unit change in X
+- ε is the error — the random deviation of a point from the line
 
-The **sample** regression equation: $\hat{Y} = a + bX$
+The **sample** equation: $\hat{Y} = a + bX$, where a estimates α and b estimates β.
 
-- $\hat{Y}$ is the predicted value of Y; a estimates α; b estimates β
+**Method of least squares:** of all possible lines, take the one that makes
 
-**Method of least squares:** the line is chosen to minimize the sum of squared vertical distances (residuals) between observed and predicted Y values.
+$$\sum_{i=1}^{n}(y_i - \hat{y}_i)^2$$
+
+as small as possible — the sum of the squared **vertical** distances.
+::::
+
+:::: {.column width="40%"}
+![](images/clipboard-3360244964.png){.tall-fig fig-alt="Three candidate lines through the lion data with vertical residual segments labelled large, smaller and smallest deviations." width="2.29in"}
+
+Least squares picks the third one.
+::::
+:::::
+
+## Fitting the Lion Model
+
+::::: columns
+:::: {.column width="45%"}
+Male lions accumulate black pigment on the nose as they age — so nose colour can age a lion in the field without anyone catching it.
+
+```{r correlation-linear-models-15}
+lion_df <- read_csv("data/lion_noses.csv")
+
+lion_model <- lm(age_years ~ proportion_black,
+                 data = lion_df)
+coef(lion_model)
+```
+
+Read the formula as **response ~ predictor**.
+::::
+
+:::: {.column width="55%"}
+```{r correlation-linear-models-16}
+#| echo: false
+#| message: false
+#| warning: false
+#| fig-height: 3.4
+#| fig-width: 3.8
+#| fig-alt: "Scatterplot of lion age against proportion of black on the nose with the fitted regression line, annotated with the fitted equation and one point's residual drawn in red."
+ggplot(lion_df, aes(x = proportion_black, y = age_years)) +
+  geom_point(size = 2.4) +
+  stat_smooth(method = "lm", se = FALSE, colour = "blue",
+              fullrange = TRUE, xseq = c(-0.05, 0.9)) +
+  geom_segment(aes(x = proportion_black[10], y = age_years[10],
+                   xend = proportion_black[10], yend = predict(lion_model)[10]),
+               colour = "red", linewidth = 1) +
+  annotate("text", x = lion_df$proportion_black[10] + 0.13,
+           y = mean(c(lion_df$age_years[10], predict(lion_model)[10])),
+           label = "residual", colour = "red", size = 3) +
+  annotate("text", x = 0.45, y = 12.5,
+           label = paste0("age = ", round(lion_b0, 2), " + ",
+                          round(lion_b1, 2), " x proportion black"),
+           colour = "darkblue", size = 3.2) +
+  coord_cartesian(xlim = c(0, 0.9), ylim = c(0, 14)) +
+  labs(x = "Proportion of black on nose", y = "Age (years)") +
+  theme_minimal(base_size = 9)
+```
+::::
+:::::
+
+## Reading the Model Output
+
+::::: columns
+:::: {.column width="55%"}
+```{r correlation-linear-models-17}
+summary(lion_model)
+```
+::::
+
+:::: {.column width="45%"}
+$$\widehat{\text{age}} = `r round(lion_b0, 2)` + `r round(lion_b1, 2)` \times \text{prop. black}$$
+
+- **Estimate** — the intercept and the slope
+- **Std. Error** — how precisely each is pinned down
+- **t value** — estimate ÷ SE, testing H₀: β = 0
+- **Multiple R-squared** = `r round(lion_r2, 3)` — the share of variation in age explained by nose colour
 
 ::: callout-note
-**📖 Reference**
+**Notice**
 
-Whitlock & Schluter, Ch. 17 — Regression, is the primary reference for the rest of this lecture.
+Correlating these same two variables and squaring r gives the *same* `r round(lion_r2, 3)`. Hold that thought — Part 5 explains why.
+:::
+::::
+:::::
+
+## 🗳️ DECIDE · What the Slope and Intercept Say
+
+::::: columns
+:::: {.column width="60%"}
+The fitted line is $\widehat{\text{age}} = `r round(lion_b0, 2)` + `r round(lion_b1, 2)` \times \text{prop. black}$.
+
+**Which statement is correct?**
+
+**(a)** A lion's nose darkens by `r round(lion_b1, 2)` units for every year it ages
+
+**(b)** Going from a nose 10% black to one 20% black predicts about **`r round(lion_b1 / 10, 2)` more years** of age
+
+**(c)** A newborn lion is predicted to be `r round(lion_b0, 2)` years old, so the model is wrong
+
+**(d)** `r round(lion_r2 * 100, 1)`% of lions are aged correctly by this equation
+
+::: callout-warning
+**✍️ Write your letter down, then vote.**
 :::
 ::::
 
 :::: {.column width="40%"}
-![Three stacked scatterplots of lion age versus proportion black on the nose, each with a different candidate line and vertical residual segments labeled 'Large deviations,' 'Smaller deviations,' and 'Smallest deviations,' illustrating that least squares picks the line minimizing total squared residuals.](images/clipboard-3360244964.png){width="2.29in"}
+::: callout-note
+**Ask yourself**
+
+*What are the units on this slope?*
+
+A slope is always **units of Y per one unit of X** — and here one unit of X is the whole range, from a clean nose to a fully black one.
+:::
 ::::
-:::::::
+:::::
 
-## The Simple Linear Regression Model — the Lion Data
+## Slope and Intercept, in Words
 
-::::::: columns
-:::: {.column width="60%"}
-**Simple linear regression** models the relationship between a response variable (Y) and a predictor variable (X).
+::::: columns
+:::: {.column width="55%"}
+::: callout-important
+**✅ The answer is (b).**
 
-The **population** regression model: $Y = \alpha + \beta X + \varepsilon$
+The slope is **`r round(lion_b1, 2)` years per unit of proportion black**, and one unit is the entire 0-to-1 range. A 0.1 change in blackness therefore predicts about **`r round(lion_b1 / 10, 2)` years**.
 
-The **sample** regression equation: $\hat{Y} = a + bX$
+**(a)** reverses the variables — that is the regression of blackness on age, a different line.
 
-**Method of least squares:** the line is chosen to minimize the sum of squared vertical distances (residuals) between observed and predicted Y values.
-::::
+**(c)** misreads the intercept: it is `r round(lion_b0, 2)` years at proportion black = 0, and the youngest lion measured was `r min(lion_df$age_years)` years old, so X = 0 sits **outside the data**. The intercept anchors the line; it is not a claim about newborns.
 
-:::: {.column width="40%"}
-```{r correlation-linear-models-12}
-#| echo: false
-#| message: false
-#| warning: false
-#| fig-height: 3.6
-#| fig-width: 3.6
-#| fig-alt: "Scatterplot of lion age versus proportion of black on the nose with a fitted regression line, annotated with the intercept and slope values, the fitted equation, and a red segment illustrating one point's residual."
-lion_model <- lm(age_years ~ proportion_black, data = lion_data)
-intercept <- coef(lion_model)[1]
-slope <- coef(lion_model)[2]
-predictions <- predict(lion_model)
-
-liona_plot <- ggplot(lion_data, aes(x = proportion_black, y = age_years)) +
-  geom_point(size = 3) +
-  stat_smooth(geom = "smooth", position = "identity",
-              method = "lm", se = FALSE, color = "blue", fullrange = TRUE,
-              xseq = c(-0.1, 1)) +
-  geom_segment(aes(x = proportion_black[10], y = age_years[10],
-                   xend = proportion_black[10],
-                   yend = predict(lion_model)[10]),
-               color = "red", linetype = "solid", linewidth = 1) +
-  annotate("text", x = lion_data$proportion_black[10],
-           y = (lion_data$age_years[10] + predict(lion_model)[10]),
-           label = "Residual (e)", color = "red") +
-  annotate("text", x = 0.5, y = intercept + slope * 0.3 - 2,
-           label = paste("Intercept (a) =", round(intercept, 2)), color = "blue") +
-  annotate("text", x = 0.6, y = intercept + slope * 0.6 + 2,
-           label = paste("Slope (b) =", round(slope, 2)), color = "blue") +
-  annotate("text", x = 0.4, y = 12,
-           label = paste("age=", round(intercept, 2), "+",
-                        round(slope, 2), "*prop"),
-           color = "darkblue", size = 3) +
-  coord_cartesian(ylim = c(0, 16), xlim = c(0, .9)) +
-  scale_y_continuous(breaks = seq(0, 16, 2)) +
-  labs(title = "Lion Age vs. Nose Blackness",
-       x = "Proportion of black on nose", y = "Age (years)") +
-  theme_minimal(base_size = 9)
-liona_plot
-```
-::::
-:::::::
-
-## Example 17.1 — the Lion Regression Equation
-
-::::::: columns
-:::: {.column width="40%"}
-From Example 17.1 in the textbook, the regression line for the lion data is:
-
-$$\text{age} = 0.88 + 10.65 \times \text{proportion}_{black}$$
-
-This means:
-
-- When a lion has no black on its nose (proportion = 0), its predicted age is 0.88 years
-- For each 0.1 increase in the proportion of black, age increases by 1.065 years
-- The slope (10.65) indicates that lions with more black on their noses tend to be older
+**(d)** confuses R² with an accuracy rate. R² is variance explained, not the percentage of lions got right.
+:::
 ::::
 
-:::: {.column width="60%"}
-```{r correlation-linear-models-13}
-#| echo: false
-#| message: false
-#| warning: false
-#| fig-width: 4
-#| fig-height: 3.6
-#| fig-alt: "The lion age versus nose-blackness regression plot repeated to illustrate Example 17.1's fitted equation, age = 0.88 + 10.65 x proportion black."
-liona_plot
-```
-::::
-:::::::
+:::: {.column width="45%"}
+::: callout-warning
+**⚠️ Extrapolation**
 
-## Male Lions and Nose Pigmentation
+A fitted line says nothing about X values you never sampled, and the confidence band is *widest* exactly where you have no data.
+:::
 
-::::::: columns
-:::: {.column width="60%"}
-- Male lions develop more black pigmentation on their noses as they age
-- This relationship can be used to estimate the age of lions in the field
-::::
+::: callout-tip
+**🖐 The habit to build**
 
-:::: {.column width="40%"}
-```{r correlation-linear-models-14}
-#| echo: false
-#| fig-height: 3.6
-#| fig-width: 3.6
-#| message: false
-#| warning: false
-lion_model <- lm(age_years ~ proportion_black, data = lion_data)
-summary(lion_model)
-```
+Write every slope out as a sentence in the units of the data — "for every extra ___, Y changes by ___" — before you write a word about significance.
+:::
 ::::
-:::::::
+:::::
 
 ## Calculating the Slope and Intercept by Hand
 
-::::::: columns
-:::: {.column width="60%"}
-The calculation for slope (m) is:
+::::: columns
+:::: {.column width="55%"}
+$$b = \frac{\sum_i(X_i - \bar{X})(Y_i - \bar{Y})}{\sum_i(X_i - \bar{X})^2}
+\qquad a = \bar{Y} - b\bar{X}$$
 
-$$m = \frac{\sum_i(X_i - \bar{X})(Y_i - \bar{Y})}{\sum_i(X_i - \bar{X})^2}$$
+The numerator is a **sum of cross-products**; the denominator is a **sum of squares**. Both are the same kind of quantity the ANOVA table is built from in a moment.
 
-Given:
+```{r correlation-linear-models-18}
+x <- lion_df$proportion_black
+y <- lion_df$age_years
 
-- $\bar{X} = 0.3222$
-- $\bar{Y} = 4.3094$
-- $\sum_i(X_i - \bar{X})^2 = 1.2221$
-- $\sum_i(X_i - \bar{X})(Y_i - \bar{Y}) = 13.0123$
-
-b = 13.0123 / 1.2221 = 10.647
-
-Intercept: $b = \bar{Y} - m\bar{X} = 4.3094 - 10.647(0.3222) = 0.879$
-::::
-
-:::: {.column width="40%"}
-```{r correlation-linear-models-15}
-#| echo: false
-#| fig-height: 3.4
-#| fig-width: 3.6
-#| message: false
-#| warning: false
-#| fig-alt: "Scatterplot of lion age versus proportion of black on the nose with a fitted regression line and confidence band, annotated with the fitted equation age = 0.88 + 10.65 x proportion_black, illustrating the by-hand slope and intercept calculation."
-ggplot(lion_data, aes(x = proportion_black, y = age_years)) +
-  geom_point(size = 3) +
-  geom_smooth(method = "lm", color = "blue") +
-  annotate("text", x = 0.4, y = 12,
-           label = paste("age =", round(coef(lion_model)[1], 2), "+",
-                        round(coef(lion_model)[2], 2), "x proportion_black"),
-           color = "darkblue", size = 3.2) +
-  labs(title = "Lion Age vs. Nose Blackness",
-       subtitle = "Using nose pigmentation to estimate age",
-       x = "Proportion of black on nose", y = "Age (years)") +
-  theme_minimal(base_size = 9)
+b <- sum((x - mean(x)) * (y - mean(y))) / sum((x - mean(x))^2)
+a <- mean(y) - b * mean(x)
+c(intercept = a, slope = b)
 ```
 ::::
-:::::::
+
+:::: {.column width="45%"}
+Compare that with what `lm()` reported:
+
+```{r correlation-linear-models-19}
+coef(lion_model)
+```
+
+::: callout-note
+**Same answer, no magic**
+
+`lm()` is doing this arithmetic. Everything harder than this — multiple predictors, ANOVA, mixed models — is the same idea written in matrix form.
+:::
+::::
+:::::
 
 ## Making Predictions
 
-::::::: columns
-:::: {.column width="60%"}
-To predict the age of a lion with 0.50 proportion of black on its nose:
+::::: columns
+:::: {.column width="55%"}
+```{r correlation-linear-models-20}
+new_lion <- tibble(proportion_black = 0.50)
 
-$$\hat{Y} = 0.88 + 10.65(0.50) = 6.2 \text{ years}$$
+predict(lion_model, new_lion, interval = "confidence")
 
-**Confidence intervals vs. prediction intervals:**
-
-- **Confidence interval** — range for the mean age of *all* lions with 0.50 black
-- **Prediction interval** — range for an *individual* lion with 0.50 black
-
-Both intervals are narrowest near $\bar{X}$ and widen as X moves away from the mean.
+predict(lion_model, new_lion, interval = "prediction")
+```
 ::::
 
-:::: {.column width="40%"}
-```{r correlation-linear-models-16}
+:::: {.column width="45%"}
+Both intervals sit on the same predicted age, and answer different questions:
+
+- **Confidence interval** — where the *mean* age of all lions with 50% black noses lies
+- **Prediction interval** — where a *single* new lion's age lies
+
+The prediction interval is always wider: it carries the scatter of individual lions **plus** the uncertainty in the line itself.
+
+Both are narrowest at $\bar{X}$ and flare out toward the edges of the data.
+::::
+:::::
+
+## Example 17.3 · Prairie Biodiversity and Stability
+
+::::: columns
+:::: {.column width="55%"}
+Tilman et al. (2006): does a more diverse plant community produce **more stable** biomass? 161 plots, seeded with 1 to 16 species.
+
+```{r correlation-linear-models-21}
+prairie_df <- read_csv("data/prairie_stability.csv")
+
+prairie_model <- lm(log(biomass_stability) ~ species_number,
+                    data = prairie_df)
+summary(prairie_model)$coefficients
+```
+::::
+
+:::: {.column width="45%"}
+```{r correlation-linear-models-22}
 #| echo: false
-#| fig-height: 3.4
-#| fig-width: 3.6
 #| message: false
 #| warning: false
-#| fig-alt: "Scatterplot of lion age versus proportion of black on the nose with a fitted regression line and confidence band, annotated with the fitted equation, shown as context for predicting age from a given proportion black."
-ggplot(lion_data, aes(x = proportion_black, y = age_years)) +
-  geom_point(size = 3) +
-  geom_smooth(method = "lm", color = "blue") +
-  annotate("text", x = 0.4, y = 12,
-           label = paste("age =", round(coef(lion_model)[1], 2), "+",
-                        round(coef(lion_model)[2], 2), "x proportion_black"),
-           color = "darkblue", size = 3.2) +
-  labs(title = "Lion Age vs. Nose Blackness",
-       subtitle = "Using nose pigmentation to estimate age",
-       x = "Proportion of black on nose", y = "Age (years)") +
+#| fig-height: 3
+#| fig-width: 3.2
+#| fig-alt: "Scatterplot of log biomass stability against the number of plant species with a fitted regression line and confidence band, showing stability increasing with diversity."
+ggplot(prairie_df, aes(species_number, log(biomass_stability))) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "lm", colour = "blue") +
+  labs(x = "Number of plant species", y = "Log biomass stability") +
   theme_minimal(base_size = 9)
 ```
 ::::
-:::::::
-
-## Example: the Prairie Home Companion
-
-::::::: columns
-:::: {.column width="60%"}
-- Does biodiversity affect ecosystem stability?
-- Tilman et al. (2006) investigated this using experimental plots varying in plant species number
-::::
-
-:::: {.column width="40%"}
-```{r correlation-linear-models-17}
-#| echo: false
-#| message: false
-#| warning: false
-#| fig-height: 3.4
-#| fig-width: 3.6
-#| paged-print: false
-prairie_model <- lm(log_stability ~ species_number, data = prairie_data)
-summ_model <- summary(prairie_model)
-summ_model
-rsquared <- summ_model$r.squared
-anova(prairie_model)
-```
-::::
-:::::::
+:::::
 
 ## The Prairie Model — Interpretation
 
-::::::: columns
+::::: columns
 :::: {.column width="60%"}
-The hypothesis test asks whether the slope equals zero:
+The hypothesis test is about the slope:
 
-- H₀: β = 0 (species number does not affect stability)
-- H₁: β ≠ 0 (species number does affect stability)
+- H₀: β = 0 — species number has no effect on stability
+- H₁: β ≠ 0
 
-t = estimate / SE
+**Slope = `r round(prairie_b1, 4)`** — log stability rises by about `r round(prairie_b1, 3)` per extra species, so a 16-species plot sits roughly `r round(prairie_b1 * 15, 2)` log units above a monoculture.
 
-**Interpretation:**
+**p = `r fmt_p(prairie_sum$coefficients[2, 4])`** — strong evidence against a zero slope.
 
-The slope estimate is 0.033, indicating that log stability increases by 0.033 units for each additional plant species in the plot.
-
-The p-value is very small (2.73e-10), providing strong evidence to reject the null hypothesis that species number has no effect on ecosystem stability.
-
-R² = 0.222, meaning approximately 22.2% of the variation in log stability is explained by the number of plant species.
-
-This supports the biodiversity-stability hypothesis: more diverse plant communities have more stable biomass production over time.
+**R² = `r round(prairie_r2, 3)`** — diversity explains about `r round(100 * prairie_r2, 1)`% of the variation in stability. Real, and nowhere near the whole story.
 ::::
 
 :::: {.column width="40%"}
-```{r correlation-linear-models-18}
+::: callout-note
+**Significant ≠ large**
+
+A tiny p-value alongside R² = `r round(prairie_r2, 2)` is completely ordinary in ecology.
+
+The p-value says the slope is not zero. **R² says how much of the world it accounts for.** Report both.
+:::
+::::
+:::::
+
+## Part 5 · Sums of Squares — the Engine of Everything After This {.divider}
+
+## Where the Variation Goes
+
+::::: columns
+:::: {.column width="55%"}
+Take **one** data point. Its distance from the overall mean $\bar{y}$ splits, exactly, into two pieces:
+
+$$\underbrace{(y_i - \bar{y})}_{\text{total}} = \underbrace{(\hat{y}_i - \bar{y})}_{\text{explained}} + \underbrace{(y_i - \hat{y}_i)}_{\text{left over}}$$
+
+Square those deviations and add them up over every point, and the same split holds for the whole dataset:
+
+$$SS_{total} = SS_{regression} + SS_{residual}$$
+
+- $SS_{regression}$ — variation the line accounts for; **df = 1**
+- $SS_{residual}$ — variation it does not; **df = n − 2**
+- $SS_{total}$ — all of it; **df = n − 1**
+::::
+
+:::: {.column width="45%"}
+```{r correlation-linear-models-23}
 #| echo: false
 #| message: false
 #| warning: false
-#| fig-height: 3.4
-#| fig-width: 3.6
-#| fig-alt: "Scatterplot of log ecosystem stability versus number of plant species, with a fitted regression line and confidence band, showing stability increasing with species number."
-ggplot(prairie_data, aes(x = species_number, y = log_stability)) +
-  geom_point() +
-  geom_smooth(method = "lm", se = TRUE, color = "blue") +
-  labs(title = "Biodiversity and Ecosystem Stability",
-       subtitle = paste("R2 =", round(rsquared, 3)),
-       x = "Number of plant species", y = "Log stability") +
-  theme_minimal(base_size = 9)
+#| fig-height: 3.9
+#| fig-width: 4.3
+#| fig-alt: "Lion scatterplot with the fitted line and a dashed line at the mean age; for one highlighted point a green segment runs from the mean to the fitted value and a red segment from the fitted value to the observation."
+i <- 20
+lion_parts <- lion_df %>% mutate(fitted = predict(lion_model))
+ybar <- mean(lion_df$age_years)
+pt <- lion_parts[i, ]
+
+ggplot(lion_parts, aes(proportion_black, age_years)) +
+  geom_point(alpha = 0.35, size = 1.8) +
+  geom_hline(yintercept = ybar, linetype = "dashed", colour = "grey30") +
+  geom_smooth(method = "lm", se = FALSE, colour = "blue", linewidth = 0.8) +
+  geom_segment(data = pt, aes(x = proportion_black, xend = proportion_black,
+                              y = ybar, yend = fitted),
+               colour = "darkgreen", linewidth = 1.4) +
+  geom_segment(data = pt, aes(x = proportion_black, xend = proportion_black,
+                              y = fitted, yend = age_years),
+               colour = "red", linewidth = 1.4) +
+  geom_point(data = pt, size = 3) +
+  annotate("text", x = 0.06, y = ybar + 0.8, label = "mean", colour = "grey30",
+           size = 3, hjust = 0) +
+  annotate("text", x = pt$proportion_black - 0.05,
+           y = mean(c(ybar, pt$fitted)), label = "explained", colour = "darkgreen",
+           size = 3, hjust = 1) +
+  annotate("text", x = pt$proportion_black + 0.03,
+           y = mean(c(pt$fitted, pt$age_years)), label = "residual", colour = "red",
+           size = 3, hjust = 0) +
+  coord_cartesian(xlim = c(0.05, 0.95)) +
+  labs(x = "Proportion black", y = "Age (years)") +
+  theme_minimal(base_size = 11)
 ```
 ::::
-:::::::
+:::::
 
-## Part 5 · Testing Regression Assumptions {.divider}
+## 🗳️ DECIDE · Which Fit Has the Bigger Sums of Squares?
+
+::::: columns
+:::: {.column width="50%"}
+Four fitted regressions, on the right.
+
+**Which statement is true?**
+
+**(a)** $SS_{regression}$ is larger in **(d)** than in **(c)**
+
+**(b)** $SS_{residual}$ is larger in **(b)** than in **(a)**
+
+**(c)** $SS_{total}$ is larger in **(a)** than in **(b)**
+
+**(d)** $SS_{residual}$ is zero in **(c)**
+
+::: callout-warning
+**✍️ One letter. Write it down, then argue it with your neighbour.**
+:::
+::::
+
+:::: {.column width="50%"}
+![](images/clipboard-217151541.png){fig-alt="Four scatterplots with fitted regression lines of differing steepness and scatter, each marked with an observed point, its prediction, and the mean of Y." width="3.12in"}
+::::
+:::::
+
+## Reading the Partition Off a Picture
+
+::::: columns
+:::: {.column width="55%"}
+::: callout-important
+**✅ The answer is (b).**
+
+$SS_{residual}$ is the scatter **around the line**, and the points in (b) sit farther off their line than those in (a).
+
+**(a)** is backwards: $SS_{regression}$ grows with how steeply the fitted line climbs, and (c) is steeper than (d).
+
+**(c)** is the trap — $SS_{total}$ does not depend on the fit at all. It is the spread of Y around its own mean, and the line has nothing to do with it.
+
+**(d)** would require every point to sit exactly on the line.
+:::
+::::
+
+:::: {.column width="45%"}
+::: callout-note
+**The three pictures to keep**
+
+- $SS_{total}$ → distance from the **flat mean line**
+- $SS_{regression}$ → how far the **fitted line climbs away** from that flat line
+- $SS_{residual}$ → how far the **points sit off** the fitted line
+:::
+
+A fit is good when the line does a lot of climbing and the points stay close to it.
+::::
+:::::
+
+## Computing the Three Sums of Squares
+
+::::: columns
+:::: {.column width="55%"}
+```{r correlation-linear-models-24}
+fitted_age <- predict(lion_model)
+mean_age   <- mean(lion_df$age_years)
+
+ss_total <- sum((lion_df$age_years - mean_age)^2)
+ss_reg   <- sum((fitted_age - mean_age)^2)
+ss_resid <- sum((lion_df$age_years - fitted_age)^2)
+
+c(total = ss_total, regression = ss_reg, residual = ss_resid)
+
+ss_reg + ss_resid          # does it add back up?
+```
+::::
+
+:::: {.column width="45%"}
+**`r round(ss_reg, 1)` + `r round(ss_resid, 1)` = `r round(ss_total, 1)`** — exactly.
+
+And the share the line accounts for:
+
+$$R^2 = \frac{SS_{regression}}{SS_{total}} = \frac{`r round(ss_reg, 1)`}{`r round(ss_total, 1)`} = `r round(lion_r2, 3)`$$
+
+::: callout-important
+**✅ This is where R² comes from**
+
+R² is not a separate statistic. It is the **regression sum of squares as a fraction of the total** — and with one predictor it is exactly the correlation coefficient squared.
+:::
+::::
+:::::
+
+## The Same Numbers, Straight from R
+
+::::: columns
+:::: {.column width="55%"}
+```{r correlation-linear-models-25}
+anova(lion_model)
+```
+::::
+
+:::: {.column width="45%"}
+Every number in that table you have now built by hand:
+
+- **Sum Sq** — the two sums of squares, `r round(ss_reg, 1)` and `r round(ss_resid, 1)`
+- **Df** — 1 for the predictor, n − 2 = `r nrow(lion_df) - 2` for the residual
+- **Mean Sq** — Sum Sq ÷ Df
+- **F value** — the ratio of those two mean squares
+
+::: callout-note
+**This table has a shape, not a topic**
+
+The identical five columns show up for one-way ANOVA, two-way ANOVA, nested ANOVA and ANCOVA. Only the **rows** change.
+:::
+::::
+:::::
+
+## From Sums of Squares to Mean Squares
+
+::::: columns
+:::: {.column width="60%"}
+A sum of squares keeps growing as you add data, so it cannot be compared across studies. Divide by degrees of freedom and you get a **mean square** — a variance, which does not grow with n:
+
+$$MS = \frac{SS}{df} \qquad F = \frac{MS_{regression}}{MS_{residual}}$$
+
+- $MS_{residual}$ = `r round(ms_resid, 3)` — estimates the background variance σ²
+- $MS_{regression}$ = `r round(ms_reg, 2)` — estimates that **same** σ², *plus* whatever the X–Y relationship adds
+- **If the slope is truly zero, both estimate the same thing and F ≈ 1.** Here F = **`r round(f_lion, 2)`**
+
+Sums of squares add up. **Mean squares do not.**
+::::
+
+:::: {.column width="40%"}
+![](images/clipboard-77063277.png){fig-alt="ANOVA table for simple linear regression listing regression, residual and total rows with sum-of-squares, degrees-of-freedom, mean-square and expected-mean-square formulas." width="3.12in"}
+::::
+:::::
+
+## 🗳️ DECIDE · You Double the Sample Size
+
+::::: columns
+:::: {.column width="60%"}
+You repeat the lion study and come back with **64 lions instead of 32**. The relationship is identical — same slope, same scatter around the line.
+
+**Compared with the original analysis, what happens?**
+
+**(a)** $SS_{total}$ roughly doubles, and $MS_{residual}$ roughly doubles with it
+
+**(b)** $SS_{total}$ roughly doubles, but $MS_{residual}$ stays about the same
+
+**(c)** Both stay about the same — doubling n changes neither
+
+**(d)** $SS_{total}$ stays about the same and $MS_{residual}$ halves
+
+::: callout-warning
+**✍️ Write your letter down. This one decides whether you can read the table.**
+:::
+::::
+
+:::: {.column width="40%"}
+::: callout-note
+**The question to ask**
+
+*Which of these is a total, and which is an average?*
+:::
+::::
+:::::
+
+## Why Mean Squares Exist At All
+
+::::: columns
+:::: {.column width="55%"}
+::: callout-important
+**✅ The answer is (b).**
+
+$SS_{total}$ is a **sum** over every observation, so twice the data is roughly twice the sum. $MS_{residual}$ is that sum **divided by its degrees of freedom** — an average squared deviation — so it estimates the same σ² no matter how many lions you measure.
+
+That is exactly why the table converts sums of squares into mean squares before testing anything. You cannot compare two sums built from different amounts of data; you can compare two variances.
+:::
+::::
+
+:::: {.column width="45%"}
+::: callout-tip
+**🖐 What doubling n actually buys**
+
+σ² does not change, but the **standard error of the slope** shrinks with √n — so F rises and the confidence band tightens.
+
+More data does not reduce the scatter in nature. It reduces your uncertainty about the line running through it.
+:::
+::::
+:::::
+
+## The Bridge · One Table, Every Model From Here
+
+::::: columns
+:::: {.column width="55%"}
+For the lion model, all of these are **the same test**:
+
+::: {.compact-table}
+| Route | Value |
+|-------------------------------|------------------------|
+| t on the slope | `r round(lion_t, 3)` |
+| t² | `r round(lion_t^2, 2)` |
+| F from `anova()` | `r round(f_lion, 2)` |
+| p, either way | `r fmt_p(lion_anova[1, "Pr(>F)"])` |
+:::
+
+**t² = F.** The t-test on a slope and the F-test in the ANOVA table are one test asked two ways — and $r^2 = SS_{reg}/SS_{total}$ ties both back to the correlation half of this lecture.
+::::
+
+:::: {.column width="45%"}
+::: callout-important
+**✅ Why this is the most important slide today**
+
+Every analysis for the rest of the course is this same partition with more rows:
+
+- **One-way ANOVA** — groups instead of a slope
+- **Two-way ANOVA** — a row per factor, plus interaction
+- **Nested ANOVA** — a row per level of nesting
+- **ANCOVA** — a slope row *and* a group row
+
+Learn to read this table once and you can read all of them.
+:::
+::::
+:::::
+
+## Part 6 · Testing Regression Assumptions {.divider}
 
 ## Testing Regression Assumptions — Overview
 
-::::::: columns
-:::: {.column width="60%"}
-Linear regression has four key assumptions:
+::::: columns
+:::: {.column width="55%"}
+Simple linear regression assumes:
 
-1. **Linearity** — the relationship between X and Y is linear
-2. **Independence** — observations are independent
-3. **Homoscedasticity** — equal variance across all values of X
-4. **Normality** — residuals are normally distributed
+1. **Linearity** — the true relationship is a straight line
+2. **Independence** — observations do not depend on each other
+3. **Homoscedasticity** — equal scatter at every value of X
+4. **Normality** — the residuals are normally distributed
 
-Let's check these assumptions for the lion regression model.
-
-Assume that error $\varepsilon_i$ is normally distributed for each x_i, has the same variance, and has a mean of 0 at each x_i.
+Stated formally: the error $\varepsilon_i$ is normal, with a mean of 0 and the **same variance**, at every value of x.
 ::::
 
-:::: {.column width="40%"}
-![Diagram of the regression line mu_yi = beta0 + beta1*xi running through X-Y space, with small normal-distribution curves drawn at two X values (x1 and x2) around the line to show that Y is assumed to be normally distributed around the true regression line at every value of X.](images/clipboard-2092034232.png){width="3.12in" height="3.22in"}
+:::: {.column width="45%"}
+![](images/clipboard-2092034232.png){.tall-fig fig-alt="Diagram of a regression line with small normal distributions drawn around it at two X values, showing Y is assumed normal with constant variance at every X." width="3.12in" height="3.22in"}
 ::::
-:::::::
+:::::
 
-## Testing Regression Assumptions — Residuals
+## Every Check Is About the Residuals
 
-::::::: columns
-:::: {.column width="60%"}
-Every assumption check from here on is about the **residuals**, not the raw data. That is the single most common mix-up in regression.
+::::: columns
+:::: {.column width="55%"}
+Every assumption check from here on uses the **residuals**, not the raw data. That is the single most common mix-up in regression.
 
-The error $\varepsilon_i$ is estimated as the residual: $e_i = y_i - \hat{y}_i$
+The error $\varepsilon_i$ is estimated by the residual $e_i = y_i - \hat{y}_i$ — the same red segment you have seen on every lion plot today, and the same quantity that got squared and summed to build $SS_{residual}$.
 
-Ordinary least squares estimates a and b (intercept and slope) to minimize the sum of the residuals squared:
-
-$$\sum_{i=1}^{n} (y_i - \hat{y}_i)^2$$
+Least squares already made these as small as possible. The diagnostics ask whether what is left over looks like random noise.
 ::::
 
-:::: {.column width="40%"}
-![Scatterplot with a fitted least-squares regression line, labeled to show an observed point y_i, its predicted value y-hat_i on the line directly below it, and the vertical gap between them marked as the residual (y_i minus y-hat_i), with dashed lines also marking the means x-bar and y-bar.](images/clipboard-1411052425.png){width="3.12in"}
+:::: {.column width="45%"}
+![](images/clipboard-1411052425.png){fig-alt="Scatterplot with a fitted least-squares line marking one observed point, its predicted value on the line, and the vertical residual between them." width="3.12in"}
 ::::
-:::::::
+:::::
 
 ## Checking Linearity — Residuals vs. Fitted
 
-::::::: columns
-:::: {.column width="60%"}
-**Residuals vs. fitted** is the linearity check.
-
+::::: columns
+:::: {.column width="55%"}
 **What you want:** a shapeless cloud, scattered evenly above and below the horizontal line at zero.
 
-**What is a problem:** any *curve* in the red trend line. A U-shape or arch means the relationship is not straight, and a straight-line model is the wrong shape for the data.
+**What is a problem:** any *curve* in the trend line. A U-shape or an arch means a straight line is the wrong shape for these data — the exact failure Panel B showed back in the correlation half.
 
-The plot also doubles as a **homoscedasticity** check — if the cloud fans out or funnels in as you move right, the variance is not constant.
+The plot doubles as a **homoscedasticity** check: if the cloud fans out or funnels in from left to right, the variance is not constant.
 ::::
 
-:::: {.column width="40%"}
-```{r correlation-linear-models-19}
+:::: {.column width="45%"}
+```{r correlation-linear-models-26}
 #| echo: false
 #| message: false
 #| warning: false
 #| paged-print: false
-#| fig-height: 3.4
-#| fig-width: 3.6
-#| fig-alt: "Residuals-versus-fitted-values plot for the lion age regression model, used to check the linearity assumption."
+#| fig-height: 3.2
+#| fig-width: 3.4
+#| fig-alt: "Residuals versus fitted values plot for the lion regression, used to check linearity and constant variance."
 plot(lion_model, which = 1)
 ```
 ::::
-:::::::
+:::::
 
 ## Checking Normality — QQ Plot of Residuals
 
-::::::: columns
-:::: {.column width="60%"}
-**The QQ plot** compares your residuals to what perfectly normal residuals would look like.
+::::: columns
+:::: {.column width="55%"}
+The QQ plot compares your residuals with what perfectly normal residuals would look like.
 
-**What you want:** points hugging the diagonal line.
+**What you want:** points hugging the diagonal.
 
-**What is a problem:** systematic curvature, or points peeling away at the ends — the tails are where non-normality shows up first, and the tails are what p-values depend on.
+**What is a problem:** systematic curvature, or points peeling away at the ends. Tails are where non-normality shows up first, and tails are what p-values depend on.
 
-Note we check the residuals here, **not** `age_years` itself. The raw ages are right-skewed; that is allowed. It is the residuals that must behave.
+Note we check the residuals, **not** `age_years` itself. The raw ages are right-skewed, and that is allowed. It is the residuals that have to behave.
 ::::
 
-:::: {.column width="40%"}
-```{r correlation-linear-models-20}
+:::: {.column width="45%"}
+```{r correlation-linear-models-27}
 #| echo: false
 #| message: false
 #| warning: false
 #| paged-print: false
-#| fig-height: 3.4
-#| fig-width: 3.6
-#| fig-alt: "Normal Q-Q plot of residuals from the lion age regression model, used to check the normality assumption."
+#| fig-height: 3.2
+#| fig-width: 3.4
+#| fig-alt: "Normal QQ plot of residuals from the lion regression, used to check the normality assumption."
 plot(lion_model, which = 2)
 ```
 ::::
-:::::::
+:::::
 
 ## Checking Normality — Shapiro-Wilk on Residuals
 
-::::::: columns
-:::: {.column width="60%"}
-The formal test to go with the QQ plot. Note what goes inside it:
-
-``` r
+::::: columns
+:::: {.column width="55%"}
+```{r correlation-linear-models-28}
 shapiro.test(residuals(lion_model))
 ```
 
-**`residuals(model)`** — not `lion_data$age_years`. Testing the raw response is a different (and usually wrong) question.
+**`residuals(model)`** — not `lion_df$age_years`. Testing the raw response is a different, and usually wrong, question.
+::::
 
-**H₀ is "the residuals ARE normal",** so here a **large** p-value is the good outcome — the same backwards logic as Levene's test.
+:::: {.column width="45%"}
+::: callout-note
+**H₀ is "the residuals ARE normal"**
+
+So a **large** p-value is the good outcome.
+:::
 
 ::: callout-warning
 **⚠️ Do not let this test overrule your eyes**
 
-At small n it has almost no power to detect a problem; at large n it flags departures too small to matter. Read the QQ plot first and use the test to support it, not replace it.
+At small n it has almost no power to detect a real problem; at large n it flags departures far too small to matter. Read the QQ plot first and use the test to support it — not to replace it.
 :::
 ::::
+:::::
 
+## What Violations Actually Look Like
+
+::::: columns
 :::: {.column width="40%"}
-```{r correlation-linear-models-21}
+When an assumption fails:
+
+1. **Transform** one or both variables (W&S §17.6) — a log on a curved or fanning relationship fixes both problems more often than not
+2. **Weighted least squares** for heteroscedasticity
+3. A **non-linear model** (§17.8), or a GLM in Week 11
+::::
+
+:::: {.column width="60%"}
+```{r correlation-linear-models-29}
 #| echo: false
-#| message: false
-#| warning: false
 #| fig-height: 3.4
-#| fig-width: 3.6
-#| paged-print: false
-shapiro.test(residuals(lion_model))
-```
-::::
-:::::::
-
-## When Assumptions Are Violated
-
-::::::: columns
-:::: {.column width="40%"}
-Linear regression has four key assumptions: linearity, independence, homoscedasticity, and normality.
-
-If assumptions are violated:
-
-1. Transform the data (Section 17.6)
-2. Use weighted least squares for heteroscedasticity
-3. Consider non-linear models (Section 17.8)
-::::
-
-:::: {.column width="60%"}
-```{r correlation-linear-models-22}
-#| echo: false
-#| fig-height: 4
-#| fig-width: 4
+#| fig-width: 3.8
 #| message: false
 #| warning: false
-#| fig-alt: "Three stacked scatterplots each showing one regression-assumption violation: non-linearity (linear fit versus the true curved trend), heteroscedasticity (variance increasing with x), and non-normal, right-skewed residuals."
+#| fig-alt: "Three stacked scatterplots showing one assumption violation each: a curved relationship fitted with a straight line, variance increasing with x, and right-skewed residuals."
 set.seed(123)
-n <- 50
-x <- seq(1, 10, length.out = n)
+nv <- 50
+xv <- seq(1, 10, length.out = nv)
 
-nonlinear_data <- tibble(x = x, y = 5 + 2*x + 0.3*x^2 + rnorm(n, 0, 3))
-hetero_data <- tibble(x = x, y = 5 + 2*x + rnorm(n, 0, 0.5*x))
-nonnormal_data <- tibble(x = x, y = 5 + 2*x + rexp(n, 1))
-
-p1_rel <- ggplot(nonlinear_data, aes(x = x, y = y)) +
-  geom_point() +
-  geom_smooth(method = "lm", se = FALSE, color = "red") +
-  geom_smooth(se = FALSE, color = "blue") +
-  labs(title = "Violation: Non-linearity, Red = linear model / Blue = true") +
+v1 <- ggplot(tibble(x = xv, y = 5 + 2 * xv + 0.3 * xv^2 + rnorm(nv, 0, 3)), aes(x, y)) +
+  geom_point(size = 0.9) +
+  geom_smooth(method = "lm", se = FALSE, colour = "red", linewidth = 0.6) +
+  geom_smooth(se = FALSE, colour = "blue", linewidth = 0.6) +
+  labs(title = "Non-linearity - red = fitted line, blue = truth", x = NULL, y = NULL) +
   theme_minimal(base_size = 7)
 
-p2_rel <- ggplot(hetero_data, aes(x = x, y = y)) +
-  geom_point() +
-  geom_smooth(method = "lm", se = FALSE) +
-  labs(title = "Violation: Heteroscedasticity - variance increases with x") +
+v2 <- ggplot(tibble(x = xv, y = 5 + 2 * xv + rnorm(nv, 0, 0.5 * xv)), aes(x, y)) +
+  geom_point(size = 0.9) +
+  geom_smooth(method = "lm", se = FALSE, linewidth = 0.6) +
+  labs(title = "Heteroscedasticity - scatter grows with x", x = NULL, y = NULL) +
   theme_minimal(base_size = 7)
 
-p3_rel <- ggplot(nonnormal_data, aes(x = x, y = y)) +
-  geom_point() +
-  geom_smooth(method = "lm", se = FALSE) +
-  labs(title = "Violation: Non-normal residuals - skewed distribution") +
+v3 <- ggplot(tibble(x = xv, y = 5 + 2 * xv + rexp(nv, 1)), aes(x, y)) +
+  geom_point(size = 0.9) +
+  geom_smooth(method = "lm", se = FALSE, linewidth = 0.6) +
+  labs(title = "Non-normal residuals - right-skewed", x = NULL, y = NULL) +
   theme_minimal(base_size = 7)
 
-p1_rel +
-  theme(axis.title.x = element_blank(), axis.text.x = element_blank()) +
-  p2_rel +
-  theme(axis.title.x = element_blank(), axis.text.x = element_blank()) +
-  p3_rel +
-  plot_layout(ncol = 1)
+v1 / v2 / v3
 ```
 ::::
-:::::::
+:::::
 
-## Part 6 · Regression Inference & ANOVA {.divider}
+## 🗳️ DECIDE · One Island
 
-## Estimates of Error and Significance
+::::: columns
+:::: {.column width="55%"}
+Gotelli & Ellison's Galápagos data: **`r nrow(galap_df)` islands**, plant species richness against island area, both log-transformed. The fit is solid — R² = `r round(gal_clean_r2, 3)`, p = `r fmt_p(gal_clean_p)`.
 
-::::::: columns
-:::: {.column width="60%"}
-- Estimates of standard error and confidence intervals for slope and intercept determine confidence bands
-- The 95% confidence band will contain the true population line 95/100 times under repeated sampling
-- This is usually done in R
-::::
+Now **one** more point arrives: a large island reported with very few species (red).
 
-:::: {.column width="40%"}
-![Table of formulas for the ordinary least squares estimates and standard errors of the slope (beta1), intercept (beta0), and error term (epsilon) in simple linear regression, each row giving the OLS estimate formula and its corresponding standard error formula.](images/clipboard-934594306.png){width="3.12in"}
-::::
-:::::::
+**What does that single point do?**
 
-## From Estimates to Hypothesis Tests
+**(a)** Very little — one point in `r nrow(galap_df) + 1` cannot matter much
 
-::::::: columns
-:::: {.column width="60%"}
-In addition to getting estimates of population parameters (β₀, β₁), we want to test hypotheses about them.
+**(b)** It raises R², because the range of X just got wider
 
-- This is accomplished by analysis of variance
-- Partition variance in Y: due to variation in X, and due to other things (error)
+**(c)** It roughly **halves** R² and pushes p to the edge of significance
 
-::: callout-note
-**📖 Reference**
+**(d)** It can change R² but not the slope
 
-Gotelli & Ellison, *A Primer of Ecological Statistics*, Ch. 9 — Regression, covers this variance-partitioning approach to testing a regression slope.
+::: callout-warning
+**✍️ One letter, before the next slide.**
 :::
 ::::
 
-:::: {.column width="40%"}
-![Two side-by-side scatterplots (a) and (b) each with a fitted regression line and one point marked with its observed value y_i and predicted value y-hat_i, illustrating how the residual (the gap between them) varies from point to point and feeds into partitioning total variation.](images/clipboard-2817787184.png){width="3.12in"}
+:::: {.column width="45%"}
+```{r correlation-linear-models-30}
+#| echo: false
+#| message: false
+#| warning: false
+#| fig-height: 3
+#| fig-width: 3.2
+#| fig-alt: "Log-log scatterplot of Galapagos island plant species richness against island area with a fitted line, plus one red point sitting far below the line at a large area."
+ggplot(galap_plot, aes(log_area, log_species)) +
+  geom_point(size = 2) +
+  geom_smooth(method = "lm", se = FALSE, colour = "blue") +
+  geom_point(data = tibble(log_area = 3, log_species = 0.65),
+             colour = "red", size = 3.5) +
+  labs(x = "log10 island area", y = "log10 species") +
+  theme_minimal(base_size = 9)
+```
 ::::
-:::::::
+:::::
 
-## Partitioning the Variance
+## What One Point Did
 
-::::::: columns
-:::: {.column width="60%"}
-Total variation in Y is "partitioned" into 3 components:
+::::: columns
+:::: {.column width="55%"}
+```{r correlation-linear-models-31}
+galap_plot <- galap_df %>%
+  mutate(log_area = log10(area_km2),
+         log_species = log10(n_species))
 
-- $SS_{regression}$: variation explained by regression — difference between predicted values ($\hat{y}_i$) and mean y ($\bar{y}$); df = 1 for simple linear (parameters − 1)
-- $SS_{residual}$: variation not explained by regression — difference between observed ($y_i$) and predicted ($\hat{y}_i$) values; df = n − 2
-- $SS_{total}$: total variation — sum of squared deviations of each observation ($y_i$) from the mean ($\bar{y}$); df = n − 1
-::::
+# a big island reported with very few species
+galap_bad <- galap_plot %>%
+  add_row(log_area = 3, log_species = 0.65)
 
-:::: {.column width="40%"}
-![Two side-by-side scatterplots (a) and (b) each with a fitted regression line and one point marked with its observed value y_i and predicted value y-hat_i, illustrating how the residual (the gap between them) varies from point to point and feeds into partitioning total variation.](images/clipboard-2817787184.png){width="3.12in"}
-::::
-:::::::
+clean_model <- lm(log_species ~ log_area, galap_plot)
+bad_model   <- lm(log_species ~ log_area, galap_bad)
 
-## Partitioning the Variance — Visually
-
-::::::: columns
-:::: {.column width="60%"}
-Total variation in Y is "partitioned" into 3 components:
-
-- $SS_{regression}$: variation explained by regression — df = 1 for simple linear
-- $SS_{residual}$: variation not explained by regression — df = n − 2
-- $SS_{total}$: total variation — df = n − 1
-::::
-
-:::: {.column width="40%"}
-![ANOVA table for simple linear regression listing Regression, Residual, and Total sources of variation with their sum-of-squares, degrees of freedom (1, n-2, n-1), mean-square, and expected-mean-square formulas.](images/clipboard-77063277.png){width="3.12in"}
-::::
-:::::::
-
-## Comparing Regression Fits
-
-::::::: columns
-:::: {.column width="60%"}
-Total variation in Y is "partitioned" into 3 components:
-
-- $SS_{regression}$: **greater in C than D**
-- $SS_{residual}$: **greater in B than A**
-- $SS_{total}$: total variation
+tibble(data  = c("17 islands", "plus the suspect point"),
+       slope = c(coef(clean_model)[2], coef(bad_model)[2]),
+       r2    = c(summary(clean_model)$r.squared,
+                 summary(bad_model)$r.squared))
+```
 ::::
 
-:::: {.column width="40%"}
-![Four scatterplots (a)-(d) with fitted regression lines of differing steepness and fit quality, each annotated with an observed point y_i, its prediction y-hat_i, and the mean y-bar, used to compare how much regression sum-of-squares and residual sum-of-squares differ between a strong fit (a, c) and a weak fit (d).](images/clipboard-217151541.png){width="3.12in"}
-::::
-:::::::
+:::: {.column width="45%"}
+::: callout-important
+**✅ The answer is (c).**
 
-## Sums of Squares and Degrees of Freedom
+One point out of `r nrow(galap_df) + 1` cuts R² from `r round(gal_clean_r2, 2)` to `r round(gal_bad_r2, 2)` and moves p from `r fmt_p(gal_clean_p)` to `r fmt_p(gal_bad_p)` — from convincing to barely publishable. The slope drops too, so (d) is out.
 
-::::::: columns
-:::: {.column width="60%"}
-$$SS_{regression} + SS_{residual} = SS_{total}$$
-$$df_{regression} + df_{residual} = df_{total}$$
-
-- Sums of squares depend on n
-- We need a different estimate of variance
-::::
-
-:::: {.column width="40%"}
-![ANOVA table for simple linear regression (same layout as the earlier version) listing Regression, Residual, and Total sources of variation with their sum-of-squares, degrees of freedom, mean-square, and expected-mean-square formulas, used here to show how sums of squares convert to mean squares.](images/clipboard-2758972276.png){width="3.12in"}
-::::
-:::::::
-
-## From Sums of Squares to Mean Squares
-
-::::::: columns
-:::: {.column width="60%"}
-Sums of squares converted to mean squares:
-
-- Sums of squares divided by degrees of freedom — does not depend on n
-- $MS_{residual}$: estimates population variation
-- $MS_{regression}$: estimates population variation *and* variation due to the X-Y relationship
-- Mean squares are **not** additive
-
-::: callout-note
-**✅ Key idea**
-
-The F-ratio in a regression ANOVA table is exactly $MS_{regression} / MS_{residual}$ — the same logic you'll see again when we get to ANOVA for group comparisons.
+It is **influential** because it lies far out in X *and* far off the trend. Cook's distance flags it at once — that is what panel 4 of `plot(model)` is for.
 :::
-::::
 
-:::: {.column width="40%"}
-![ANOVA table for simple linear regression (same layout as the earlier version) listing Regression, Residual, and Total sources of variation with their sum-of-squares, degrees of freedom, mean-square, and expected-mean-square formulas, used here to show how sums of squares convert to mean squares.](images/clipboard-2758972276.png){width="3.12in"}
+**No diagnostic can tell you whether it is a typo or a real island.** That takes going back to the data sheet.
 ::::
-:::::::
+:::::
+
+## Part 7 · Wrap-up {.divider}
 
 ## Wrap-up
 
-::::::: columns
+::::: columns
 :::: {.column width="60%"}
-Today you:
+Over the two days you:
 
-- Separated **correlation** (how tightly two variables move together) from **regression** (an equation predicting Y from X) — and saw that neither one earns you causation
-- Computed and interpreted **Pearson's r**, squared it to get the variance explained, and tested it with `cor.test()`
-- Switched to **Spearman's ρ** when the normality assumption failed
-- Fitted a straight line with `lm()`, and read its **slope** and **intercept** as biology, not just numbers
-- Checked all four regression assumptions **on the residuals** — residuals vs. fitted, QQ plot, Shapiro-Wilk
-- Partitioned the variance into $SS_{regression}$ and $SS_{residual}$, and turned those into mean squares and an F-ratio
-
-::: callout-note
-**✅ The one idea to keep**
-
-A regression line can be fitted to *any* two numeric columns. Everything that makes it trustworthy — linearity, independent observations, constant variance, normal residuals — lives in the **diagnostics**, not in the p-value.
-:::
+- Separated **correlation** from **regression**, and saw that neither earns causation
+- Computed **Pearson's r**, squared it for variance explained, and tested it with `cor.test()`
+- Switched to **Spearman's ρ** when normality failed
+- Fitted a line with `lm()` and read the slope **in the units of the data**
+- Built $SS_{regression}$ and $SS_{residual}$ by hand, watched them add to $SS_{total}$, and turned them into mean squares and an F
+- Confirmed **t² = F** and **r² = SS_reg / SS_total**
+- Checked all four assumptions **on the residuals**, and watched one influential island halve an R²
 ::::
 
 :::: {.column width="40%"}
+::: callout-important
+**✅ The one idea to keep**
+
+A line can be fitted to *any* two numeric columns. What makes it trustworthy lives in the **residuals**; what makes it interpretable lives in the **sums of squares**. Neither lives in the p-value.
+:::
+
 ::: callout-note
 **Up next — Multiple Regression**
 
-- More than one predictor at a time
-- What happens when predictors are correlated with *each other*
-- Choosing between competing models
-:::
-
-::: callout-tip
-**🖐 Before next class**
-
-Finish the worksheet, and for your own model write one sentence interpreting the slope **in the units of the data** — "for every extra X, Y changes by ___" — not just "it was significant."
+More than one predictor, predictors correlated with each other, and choosing between competing models. Same table, more rows.
 :::
 ::::
-:::::::
+:::::
+
+## Readings
+
+- **Whitlock & Schluter**, Ch. 16 — Correlation (§16.3 assumptions; §16.5 Spearman's rank correlation), and Ch. 17 — Regression (§17.6 transformations; §17.8 non-linear relationships).
+- **Gotelli & Ellison**, Ch. 9 — Regression, for the variance-partitioning treatment and the Galápagos species–area example.
+- Tilman, D., Reich, P. B., & Knops, J. M. H. (2006). Biodiversity and ecosystem stability in a decade-long grassland experiment. *Nature*, 441, 629–632.
 
 ## Getting unstuck
 

@@ -3,7 +3,7 @@ order: 11
 week: 7
 title: "Activity: Multiple Regression"
 subtitle: "Several predictors"
-description: "Hands-on activity: multicollinearity, variable transformations, model diagnostics, model comparison, and predictor importance on the Michaletz et al. (2014) global forest NPP dataset."
+description: "In-class activity on Loyn's Victorian forest-bird data: fit predictors alone and together, diagnose collinearity, simplify the model, and set a factor's reference level with fct_relevel()."
 author: "Bill Perry"
 metadata-files:
   - ../../_templates/activities.yml
@@ -12,444 +12,308 @@ format:
   docx: default
 ---
 
-# Worksheet: Multiple Regression — Forest Net Primary Production
+# Worksheet: Multiple Regression
 
-# Part 1 · Setup and Data
+[📥 Bird data](data/loyn_birds.csv){.btn .btn-primary download="loyn_birds.csv"} [📥 Tools script (.R)](themes_functions/r_themes_and_functions.R){.btn .btn-primary download="r_themes_and_functions.R"} [📥 Script skeleton (.R)](data/11_multiple_regression.R){.btn .btn-primary download="11_multiple_regression.R"}
 
-**▶ Run this in your Script:**
+The lecture's dataset: **56 remnant forest patches** in Victoria, Australia, from Loyn (1987). Bird `abundance` is the response, and six patch characteristics are the candidate predictors.
 
-``` r
-# ── Part 1.1 · Setup and Data ───────────────────────────────────────────
-library(tidyverse)    # For data manipulation and visualization
-library(car)           # For regression diagnostics (VIF, etc.)
-library(corrplot)      # For correlation plots
-library(GGally)        # For pairs plots
-library(broom)         # For tidy model outputs
-
-forest_df <- read_csv("data/michaletz_etal_2014_clean.csv")
-head(forest_df)
-```
-
-✏️ **Your turn:** Run `glimpse(forest_df)`. Which columns look continuous, and which look categorical?
-
-`________________________`
+You will do four things, in this order: fit the predictors **one at a time**, fit them **all at once** and see what happens, work out **why** it happened, and then decide what to keep.
 
 ------------------------------------------------------------------------
 
-# Part 2 · Exploring Multicollinearity
+# Part 1 · Setup and the data
 
-**▶ Run this** — a correlation matrix, and a visual version of it:
+**▶ Run this:**
 
 ``` r
-# ── Part 2.1 · Exploring Multicollinearity ──────────────────────────────
-num_vars <- forest_df %>%
-  select_if(is.numeric)
+# ── Part 1.1 · Setup and the data ───────────────────────────────────────
+library(tidyverse)
+library(car)
 
-cor_matrix <- cor(num_vars, use = "complete.obs")
-cor_matrix
+source("themes_functions/r_themes_and_functions.R")
 
-corrplot(cor_matrix, method = "color", type = "upper",
-         addCoef.col = "grey45", tl.cex = 0.8, number.cex = 0.7)
+bird_df <- read_csv("data/loyn_birds.csv") %>%
+  mutate(log_area        = log10(area_ha),
+         log_dist        = log10(dist_m),
+         log_dist_larger = log10(dist_larger_m))
+
+bird_df
 ```
 
-**▶ Run this** — a pairs plot for a fuller picture:
+✏️ **Your turn:** Why are area and the two distances logged? Look at the range of `area_ha`.
 
-``` r
-# ── Part 2.2 · Exploring Multicollinearity ──────────────────────────────
-forest_df %>%
-  select(-leaf) %>%  # Exclude categorical variable for pairs plot
-  ggpairs(
-    upper = list(continuous = wrap("cor", size = 5)),
-    lower = list(continuous = wrap("points", alpha = 0.6, size = 0.8))
-  ) +
-  theme_minimal()
+```
+____________________________________________________________
 ```
 
-✏️ **Your turn:** From the correlation matrix, which two predictors look most strongly correlated with each other?
+------------------------------------------------------------------------
 
-`________________________`
+# Part 2 · One predictor at a time
 
-**▶ Run this** — fit the full model with every predictor:
+**▶ Run this** — three separate simple regressions:
 
 ``` r
-# ── Part 2.3 · Exploring Multicollinearity ──────────────────────────────
-model_init <- lm(npp ~ age + biomass + season + temp +
-             precip + teb + leaf, data = forest_df)
-summary(model_init)
+# ── Part 2.1 · One predictor at a time ──────────────────────────────────
+summary(lm(abundance ~ log_area, data = bird_df))
+
+summary(lm(abundance ~ grazing, data = bird_df))
+
+summary(lm(abundance ~ year_isolated, data = bird_df))
 ```
 
-**▶ Run this** — check Variance Inflation Factors:
+✏️ **Your turn:** Record each one.
+
+```
+log_area:      slope = __________  p = __________
+
+grazing:       slope = __________  p = __________
+
+year_isolated: slope = __________  p = __________
+
+How many are significant? __________
+```
+
+------------------------------------------------------------------------
+
+# Part 3 · All of them at once
+
+**▶ Run this:**
 
 ``` r
-# ── Part 2.4 · Exploring Multicollinearity ──────────────────────────────
-vif_values <- vif(model_init)
-vif_values
+# ── Part 3.1 · All of them at once ──────────────────────────────────────
+full_model <- lm(abundance ~ log_area + log_dist +
+                   log_dist_larger + year_isolated +
+                   grazing + altitude_m,
+                 data = bird_df)
 
-vif_df <- data.frame(
-  Variable = names(vif_values),
-  VIF = as.numeric(vif_values)
-) %>%
-  arrange(desc(VIF))
+summary(full_model)
+```
 
-ggplot(vif_df, aes(x = reorder(Variable, VIF), y = VIF)) +
-  geom_col(fill = "darkblue", alpha = 0.7) +
-  geom_hline(yintercept = 10, color = "red", linetype = "dashed", linewidth = 1) +
-  geom_hline(yintercept = 5, color = "orange", linetype = "dashed", linewidth = 1) +
-  coord_flip() +
+✏️ **Your turn:** Which predictors are still significant?
+
+```
+Still significant: _________________________________________
+
+grazing slope alone = __________   in this model = __________
+```
+
+✏️ **Your turn:** Both grazing slopes came from the same 56 patches. Is one of them wrong? Explain what each one is actually measuring.
+
+```
+____________________________________________________________
+
+____________________________________________________________
+```
+
+------------------------------------------------------------------------
+
+# Part 4 · Why it happened
+
+**▶ Run this:**
+
+``` r
+# ── Part 4.1 · Why it happened ──────────────────────────────────────────
+bird_df %>%
+  select(log_area, log_dist, log_dist_larger,
+         year_isolated, grazing, altitude_m) %>%
+  cor() %>%
+  round(2)
+
+vif(full_model)
+```
+
+✏️ **Your turn:** Find the two most strongly correlated predictors, and say in one sentence what that correlation means on the ground.
+
+```
+Pair: __________ and __________   r = __________
+
+On the ground: ______________________________________________
+```
+
+✏️ **Your turn:** All the VIFs are small. Does that mean collinearity is not a problem here?
+
+```
+____________________________________________________________
+```
+
+------------------------------------------------------------------------
+
+# Part 5 · Simplify the model
+
+**▶ Run this** — drop the four predictors that earned nothing, then test whether dropping them cost anything:
+
+``` r
+# ── Part 5.1 · Simplify the model ───────────────────────────────────────
+reduced_model <- lm(abundance ~ log_area + grazing, data = bird_df)
+
+anova(reduced_model, full_model)
+```
+
+**▶ Run this** — compare the two models the other way:
+
+``` r
+# ── Part 5.2 · Simplify the model ───────────────────────────────────────
+tibble(
+  model  = c("six predictors", "log_area + grazing"),
+  adj_r2 = c(summary(full_model)$adj.r.squared,
+             summary(reduced_model)$adj.r.squared),
+  AIC    = c(AIC(full_model), AIC(reduced_model))
+)
+```
+
+✏️ **Your turn:** Do the two methods agree? Which model do you keep?
+
+```
+anova p = __________   lower AIC = __________
+
+Model I keep: _______________________________________________
+```
+
+------------------------------------------------------------------------
+
+# Part 6 · Check the assumptions
+
+**▶ Run this:**
+
+``` r
+# ── Part 6.1 · Check the assumptions ────────────────────────────────────
+par(mfrow = c(2, 2))
+plot(reduced_model)
+par(mfrow = c(1, 1))
+
+shapiro.test(residuals(reduced_model))
+```
+
+✏️ **Your turn:** One line per assumption.
+
+```
+Linearity: __________________________________________________
+
+Equal variance: _____________________________________________
+
+Normality (Shapiro p = ______): _____________________________
+
+Influential points: _________________________________________
+```
+
+------------------------------------------------------------------------
+
+# Part 7 · Grazing as a factor
+
+Grazing has been a number, 1 to 5, which forces every step to cost the same. Now let it be a **category** so each level is estimated separately.
+
+**▶ Run this** — make it a factor and look at the order R chose:
+
+``` r
+# ── Part 7.1 · Grazing as a factor ──────────────────────────────────────
+bird_df <- bird_df %>%
+  mutate(grazing_class = factor(grazing_class))
+
+levels(bird_df$grazing_class)
+
+summary(lm(abundance ~ log_area + grazing_class, data = bird_df))
+```
+
+✏️ **Your turn:** Which level is R using as the reference, and why did it pick that one?
+
+```
+Reference level: __________   Why: _________________________
+```
+
+**▶ Run this** — put the least-grazed level first instead:
+
+``` r
+# ── Part 7.2 · Grazing as a factor ──────────────────────────────────────
+bird_df <- bird_df %>%
+  mutate(grazing_class = fct_relevel(grazing_class,
+                                     "minimal", "light", "moderate",
+                                     "heavy", "intense"))
+
+levels(bird_df$grazing_class)
+
+grazing_model <- lm(abundance ~ log_area + grazing_class, data = bird_df)
+
+summary(grazing_model)
+```
+
+✏️ **Your turn:** Write down the four grazing coefficients and their p-values.
+
+```
+light:    __________  p = __________
+
+moderate: __________  p = __________
+
+heavy:    __________  p = __________
+
+intense:  __________  p = __________
+```
+
+✏️ **Your turn:** Compare the R² and F-statistic of the two models in 7.1 and 7.2. What changed, and what did not?
+
+```
+Changed: ____________________________________________________
+
+Did not change: _____________________________________________
+```
+
+✏️ **Your turn:** Fitting grazing as the number 1–5 gave one slope of about −2.9 birds per step. What does the factor version show that the number version hid?
+
+```
+____________________________________________________________
+```
+
+------------------------------------------------------------------------
+
+# Part 8 · The figure you hand in
+
+**▶ Run this:**
+
+``` r
+# ── Part 8.1 · The figure you hand in ───────────────────────────────────
+final_plot <- ggplot(bird_df, aes(log_area, abundance,
+                                  colour = grazing_class)) +
+  geom_point(size = 2.5) +
+  geom_smooth(method = "lm", se = FALSE) +
   labs(
-    title = "Variance Inflation Factors",
-    subtitle = "Red line: VIF = 10 (serious concern), Orange line: VIF = 5 (moderate concern)",
-    x = "Variables", y = "VIF"
+    title = "Bird abundance rises with patch area and falls under intense grazing",
+    subtitle = "56 remnant forest patches, Victoria, Australia (Loyn 1987)",
+    x = "log10 patch area (ha)",
+    y = "Bird abundance",
+    colour = "Grazing"
   ) +
-  theme_minimal()
-```
+  theme_regular(base_size = 12)
 
-✏️ **Your turn:** Which predictor(s) have VIF > 10? Does that match what you flagged from the correlation matrix?
+final_plot
 
-`________________________`
-
-::: callout-tip
-**🚀 If you finish early:** Recompute VIF using only 3 predictors of your choice (drop the rest from the model formula). Do the remaining VIFs change? Why would dropping a correlated predictor lower the VIFs of the ones that are left?
-
-``` r
-# ── Part 2.5 · Exploring Multicollinearity ──────────────────────────────
-# Write your code in the R script:
-```
-:::
-
-------------------------------------------------------------------------
-
-# Part 3 · Addressing Multicollinearity
-
-Season and temperature are highly correlated. Let's remove season.
-
-**▶ Run this:**
-
-``` r
-# ── Part 3.1 · Addressing Multicollinearity ─────────────────────────────
-model_2 <- lm(npp ~ age + biomass + temp + precip + teb + leaf,
-             data = forest_df)
-summary(model_2)
-
-vif_values2 <- vif(model_2)
-vif_values2
-```
-
-✏️ **Your turn:** Did removing `season` fix the VIF problem?
-
-`________________________`
-
-------------------------------------------------------------------------
-
-# Part 4 · Checking the Shape of Relationships
-
-**▶ Run this** — Added Variable (partial regression) plots:
-
-``` r
-# ── Part 4.1 · Checking the Shape of Relationships ──────────────────────
-par(mfrow = c(2, 3))
-avPlots(model_2, main = "Partial Regression Plots")
-par(mfrow = c(1, 1))
-```
-
-The original analysis found `age` showed a curvy relationship. Let's try a log transformation. (Really, you should try transforming the *response* variable first — we're doing `age` here to see the AV-plot difference clearly.)
-
-**▶ Run this:**
-
-``` r
-# ── Part 4.2 · Checking the Shape of Relationships ──────────────────────
-forest_df <- forest_df %>%
-  mutate(log_age = log10(age))
-
-model_3 <- lm(npp ~ log_age + biomass + temp + precip + teb + leaf,
-             data = forest_df)
-summary(model_3)
-
-par(mfrow = c(2, 3))
-avPlots(model_3, main = "Partial Regression Plots (Log age)")
-par(mfrow = c(1, 1))
-```
-
-✏️ **Your turn:** Compare the AV plot for `age` before and after the log transform. Does the relationship look straighter now?
-
-`________________________`
-
-------------------------------------------------------------------------
-
-# Part 5 · Model Diagnostics
-
-**▶ Run this** — the four standard diagnostic plots:
-
-``` r
-# ── Part 5.1 · Model Diagnostics ────────────────────────────────────────
-par(mfrow = c(2, 2))
-plot(model_3)
-par(mfrow = c(1, 1))
-```
-
-**▶ Run this** — a closer look at residuals vs. fitted:
-
-``` r
-# ── Part 5.2 · Model Diagnostics ────────────────────────────────────────
-residuals_data <- data.frame(
-  Fitted = fitted(model_3),
-  Residuals = residuals(model_3),
-  Standardized_Residuals = rstandard(model_3)
+ggsave(
+  "figures/bird_regression.pdf",
+  plot   = final_plot,
+  width  = 7,
+  height = 4.5,
+  units  = "in"
 )
-
-ggplot(residuals_data, aes(x = Fitted, y = Residuals)) +
-  geom_point(alpha = 0.6) +
-  geom_smooth(method = "lm", color = "red") +
-  geom_hline(yintercept = 0, linetype = "dashed") +
-  labs(title = "Residuals vs Fitted Values", x = "Fitted Values", y = "Residuals") +
-  theme_minimal()
 ```
 
-Let's also try a cube-root transformation of the response, `npp`:
-
-**▶ Run this:**
-
-``` r
-# ── Part 5.3 · Model Diagnostics ────────────────────────────────────────
-forest_df <- forest_df %>%
-  mutate(npp_cuberoot = npp^(1/3))
-
-model_4 <- lm(npp_cuberoot ~ log_age + biomass + temp + precip +
-             teb + leaf, data = forest_df)
-summary(model_4)
-
-par(mfrow = c(2, 2))
-plot(model_4)
-par(mfrow = c(1, 1))
-```
-
-✏️ **Your turn:** Do the residual plots for `model_4` look better than for `model_3`? What specifically improved (or didn't)?
-
-`________________________`
-
-::: callout-tip
-**🚀 If you finish early:** Try a square-root transform of `npp` instead of cube-root (`sqrt(npp)`). Refit the model and compare its residual plots to `model_4`'s.
-
-``` r
-# ── Part 5.4 · Model Diagnostics ────────────────────────────────────────
-# Write your code in the R script:
-```
-:::
+✏️ **Your turn:** Open the PDF and check the legend order runs minimal → intense, not alphabetically.
 
 ------------------------------------------------------------------------
-
-# Part 6 · Model Simplification and Comparison
-
-**▶ Run this** — drop the non-significant `precip` term:
-
-``` r
-# ── Part 6.1 · Model Simplification and Comparison ──────────────────────
-model_5 <- lm(npp_cuberoot ~ log_age + biomass + temp + teb + leaf,
-             data = forest_df)
-summary(model_5)
-```
-
-**▶ Run this** — compare `model_4` and `model_5` by AIC:
-
-``` r
-# ── Part 6.2 · Model Simplification and Comparison ──────────────────────
-model_comparison <- data.frame(
-  Model = c("Model 4 (Full)", "Model 5 (No precip)"),
-  AIC = c(AIC(model_4), AIC(model_5)),
-  R_squared = c(summary(model_4)$r.squared, summary(model_5)$r.squared),
-  Adj_R_squared = c(summary(model_4)$adj.r.squared, summary(model_5)$adj.r.squared)
-)
-model_comparison
-
-summary(model_5, conf.int = TRUE)
-```
-
-✏️ **Your turn:** Does `model_5` have a lower AIC than `model_4`? Given the "penalize complexity" logic from lecture, what does that tell you about dropping `precip`?
-
-`________________________`
-
-------------------------------------------------------------------------
-
-# Part 7 · Predictor Importance
-
-**▶ Run this** — partial R² for every predictor at once, using `sensemakr`:
-
-``` r
-# ── Part 7.1 · Predictor Importance ─────────────────────────────────────
-library(sensemakr)
-partial_r2_sensemakr <- partial_r2(model_5)
-partial_r2_sensemakr
-```
-
-**▶ Run this** — the same idea, computed by hand from a Type III ANOVA table:
-
-``` r
-# ── Part 7.2 · Predictor Importance ─────────────────────────────────────
-anova_type3 <- Anova(model_5, type = "III")
-anova_type3
-
-f_stats <- anova_type3$`F value`[!is.na(anova_type3$`F value`)]
-df_num <- anova_type3$Df[!is.na(anova_type3$`F value`)]
-df_den <- anova_type3$Df[nrow(anova_type3)]  # Residual df
-
-partial_r2_from_f <- f_stats * df_num / (f_stats * df_num + df_den)
-
-results_table <- data.frame(
-  Variable = rownames(anova_type3)[!is.na(anova_type3$`F value`)],
-  F_statistic = f_stats,
-  p_value = anova_type3$`Pr(>F)`[!is.na(anova_type3$`F value`)],
-  Partial_R_squared = partial_r2_from_f
-)
-results_table
-```
-
-✏️ **Your turn:** Do the `sensemakr` partial R² values roughly match your by-hand `Partial_R_squared` column?
-
-`________________________`
-
-::: callout-tip
-**🚀 If you finish early:** Which single predictor has the highest partial R² in `model_5`? Does that match which predictor had the smallest p-value in `summary(model_5)`?
-
-``` r
-# ── Part 7.3 · Predictor Importance ─────────────────────────────────────
-# Write your code in the R script:
-```
-:::
-
-------------------------------------------------------------------------
-
-# Part 8 · An Alternative: Standardized Variables
-
-**▶ Run this** — refit with every numeric predictor standardized (mean 0, SD 1), including a temp × precip interaction:
-
-``` r
-# ── Part 8.1 · An Alternative ───────────────────────────────────────────
-forest_standardized <- forest_df %>%
-  mutate(
-    npp_sqrt_scaled = scale(sqrt(npp))[,1],
-    log_age_scaled = scale(log10(age))[,1],
-    biomass_scaled = scale(biomass)[,1],
-    temp_scaled = scale(temp)[,1],
-    precip_scaled = scale(precip)[,1],
-    teb_scaled = scale(teb)[,1]
-  )
-
-model_std <- lm(npp_sqrt_scaled ~ log_age_scaled + biomass_scaled +
-                temp_scaled * precip_scaled + teb_scaled,
-                data = forest_standardized)
-summary(model_std)
-```
-
-✏️ **Your turn:** In `model_std`, which predictor has the largest absolute standardized coefficient? Is that the same predictor that had the highest partial R² in Part 7?
-
-`________________________`
-
-------------------------------------------------------------------------
-
-# Key Findings
-
-1. **Multicollinearity** — growing season length and temperature were highly correlated; removed season to address it.
-2. **Variable transformations** — log transformation of age improved model fit; cube-root transformation of npp addressed assumption violations.
-3. **Final model results** — significant predictors: age (negative), biomass (positive), temp (positive); teb had a negative effect; leaf type differences were significant.
-4. **Biological interpretation** — younger stands had higher npp (for a given biomass); higher biomass was associated with higher npp; temperature was positively related to npp; coniferous forests had lower npp than broadleaf forests.
-
-::: callout-note
-**Reference**
-
-Michaletz, S.T., Cheng, D., Kerkhoff, A.J. & Enquist, B.J. (2014). Convergence of terrestrial plant production across global climate gradients. *Nature*, 512, 39–43.
-:::
 
 # Review and checkpoint
 
 At this point you can:
 
-- [ ] Detect multicollinearity with a correlation matrix and VIFs, and address it by dropping a redundant predictor
-- [ ] Use Added Variable plots to check whether a predictor's relationship with Y is linear
-- [ ] Apply and evaluate predictor and response transformations
-- [ ] Read the standard four-panel regression diagnostic plots
-- [ ] Compare nested models with AIC and adjusted R²
-- [ ] Quantify predictor importance with partial R² and standardized coefficients
+- [ ] Fit several predictors one at a time and then together, and explain why the slopes differ
+- [ ] Read a correlation matrix and `vif()` output
+- [ ] Say what a dataset cannot separate, rather than that a predictor "has no effect"
+- [ ] Drop predictors and test whether it cost anything, with `anova()` and with AIC
+- [ ] Turn a categorical predictor into a factor and set its reference level with `fct_relevel()`
+- [ ] Export a labelled figure to PDF
 
 ::: callout-note
-**📤 What to turn in before next class**
+**📤 What to turn in**
 
-Upload both of these to the course management system:
-
-1. Your code — the `scripts/` folder (or just `11_multiple_regression.R`)
-2. This worksheet, with your written answers
-:::
-
-------------------------------------------------------------------------
-
-# Part 9 · Take-Home Extension — Nutrients and Chlorophyll in New Zealand Lakes
-
-*Due Monday, October 19 — before the Analysis of Variance class.*
-
-Same workflow as Parts 1–6 — correlation/multicollinearity check, fit the model, diagnose, transform if needed, interpret — new dataset, new question. This time you decide what (if anything) needs fixing before you trust the model; nobody walks you through it step by step.
-
-## Background
-
-Abell et al. (2010) studied nutrient limitation in New Zealand lakes. Chlorophyll-a is a standard proxy for algal biomass, and both phosphorus and nitrogen can drive it up. Below are measurements from 111 New Zealand lakes.
-
-**▶ Run this:**
-
-``` r
-# ── Part 9.1 · Take-Home Extension ──────────────────────────────────────
-nz_df <- read_csv("data/abel_et_al_lakes_data.csv")
-head(nz_df)
-```
-
-## Your Task
-
-**Question:** How do total phosphorus and total nitrogen jointly predict chlorophyll-a concentration across these lakes?
-
-✏️ **Your turn:** State your hypotheses. Check for multicollinearity between the two predictors and decide whether it's a problem here. Look at the shape of each relationship and decide whether a transformation is needed before you trust a linear model (hint: nutrient–chlorophyll relationships are rarely linear on the raw scale). Justify whatever choices you make, then fit the model, interpret it, and report the result properly.
-
-```
-H0 =
-________________________________________________________
-Ha =
-________________________________________________________
-Model/transformation I will use and why:
-________________________________________________________
-________________________________________________________
-```
-
-``` r
-# ── Part 9.2 · Take-Home Extension ──────────────────────────────────────
-# Write your code in the R script:
-```
-
-```
-Interpretation:
-________________________________________________________
-________________________________________________________
-```
-
-## Final Figure
-
-Produce one publication-quality figure showing the relationship between chlorophyll-a and the predictor(s) that mattered most — proper axis labels, no default `ggplot` grey background — and export it with `ggsave()`.
-
-``` r
-# ── Part 9.3 · Take-Home Extension ──────────────────────────────────────
-# Write your code in the R script:
-```
-
-::: callout-note
-**📤 What to turn in — due Oct 19**
-
-Your write-up should include:
-
-- [ ] The question
-- [ ] Your hypotheses
-- [ ] Which model/transformation you used, and your justification for choosing it
-- [ ] The code and its output
-- [ ] Your interpretation of the result
-- [ ] A final figure showing the result
-:::
-
-::: callout-note
-**Reference**
-
-Abell, J.M., Özkundakci, D. & Hamilton, D.P. (2010). Nitrogen and phosphorus limitation of phytoplankton growth in New Zealand lakes. *Ecosystems*, 13, 966–977.
+1. `11_multiple_regression.R`
+2. `figures/bird_regression.pdf`
+3. This worksheet, with your written answers
 :::

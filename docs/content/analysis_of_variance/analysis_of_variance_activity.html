@@ -7,9 +7,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="author" content="Bill Perry">
-<meta name="description" content="Hands-on activity: fitting a one-way ANOVA, assumption diagnostics, estimated marginal means and post-hoc comparisons, reporting, and non-parametric alternatives (Kruskal-Wallis, Dunn’s test) on a circadian-rhythm light-treatment dataset.">
+<meta name="description" content="In-class activity on the fiddler crab claw-radiator experiment: build the sums of squares by hand, run the ANOVA, check its assumptions, set the reference level with fct_relevel(), and find which groups actually differ with Tukey HSD.">
 
-<title>Activity: Analysis of Variance (ANOVA) – UMD Biostatistics</title>
+<title>Activity: Analysis of Variance – UMD Biostatistics</title>
 <style>
 /* Default styles provided by pandoc.
 ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
@@ -116,11 +116,40 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   }
 }</script>
 
+  <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
+  <script defer="" src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-chtml.js" type="text/javascript"></script>
+
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN" && texText && texText.data) {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
 
 <link rel="stylesheet" href="../../css/main.css">
 <link rel="stylesheet" href="../../css/main.css">
-<meta property="og:title" content="Activity: Analysis of Variance (ANOVA) – UMD Biostatistics">
-<meta property="og:description" content="Hands-on activity: fitting a one-way ANOVA, assumption diagnostics, estimated marginal means and post-hoc comparisons, reporting, and non-parametric alternatives (Kruskal-Wallis, Dunn’s test) on a circadian-rhythm light-treatment dataset.">
+<meta property="og:title" content="Activity: Analysis of Variance – UMD Biostatistics">
+<meta property="og:description" content="In-class activity on the fiddler crab claw-radiator experiment: build the sums of squares by hand, run the ANOVA, check its assumptions, set the reference level with fct_relevel(), and find which groups actually differ with Tukey HSD.">
 <meta property="og:site_name" content="UMD Biostatistics">
 </head>
 
@@ -295,7 +324,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
       <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
         <i class="bi bi-layout-text-sidebar-reverse"></i>
       </button>
-        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item">Activity: Analysis of Variance (ANOVA)</li></ol></nav>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item">Activity: Analysis of Variance</li></ol></nav>
         <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
         </a>
       <button type="button" class="btn quarto-search-button" aria-label="Search" onclick="window.quartoOpenSearch();">
@@ -407,13 +436,13 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 <header id="title-block-header" class="quarto-title-block default">
 <div class="quarto-title">
-<h1 class="title">Activity: Analysis of Variance (ANOVA)</h1>
-<p class="subtitle lead">One-way ANOVA</p>
+<h1 class="title">Activity: Analysis of Variance</h1>
+<p class="subtitle lead">Single-factor ANOVA</p>
 </div>
 
 <div>
   <div class="description">
-    Hands-on activity: fitting a one-way ANOVA, assumption diagnostics, estimated marginal means and post-hoc comparisons, reporting, and non-parametric alternatives (Kruskal-Wallis, Dunn’s test) on a circadian-rhythm light-treatment dataset.
+    In-class activity on the fiddler crab claw-radiator experiment: build the sums of squares by hand, run the ANOVA, check its assumptions, set the reference level with fct_relevel(), and find which groups actually differ with Tukey HSD.
   </div>
 </div>
 
@@ -436,322 +465,205 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </header>
 
 
-<section id="worksheet-analysis-of-variance-anova" class="level1">
-<h1>Worksheet: Analysis of Variance (ANOVA)</h1>
-</section>
-<section id="part-1-setup-and-data" class="level1">
-<h1>Part 1 · Setup and Data</h1>
-<p><strong>▶ Run this in your Script:</strong></p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 1.1 · Setup and Data ───────────────────────────────────────────</span></span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(performance)</span>
-<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(FSA)</span>
-<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(car)         <span class="co"># functions for regression diagnostics, ANOVA, and VIF</span></span>
-<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(emmeans)     <span class="co"># calculates and compares adjusted means from statistical models</span></span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tidyverse)   <span class="co"># includes ggplot2, dplyr, tidyr, etc.</span></span>
-<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>c_df <span class="ot">&lt;-</span> <span class="fu">tibble</span>(</span>
-<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>  <span class="at">treatment =</span> <span class="fu">rep</span>(<span class="fu">c</span>(<span class="st">"Control"</span>, <span class="st">"Knees"</span>, <span class="st">"Eyes"</span>), <span class="at">times =</span> <span class="fu">c</span>(<span class="dv">8</span>, <span class="dv">7</span>, <span class="dv">7</span>)),</span>
-<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>  <span class="at">phase_shift =</span> <span class="fu">c</span>(<span class="fl">0.53</span>, <span class="fl">0.36</span>, <span class="fl">0.20</span>, <span class="sc">-</span><span class="fl">0.37</span>, <span class="sc">-</span><span class="fl">0.60</span>, <span class="sc">-</span><span class="fl">0.64</span>, <span class="sc">-</span><span class="fl">0.68</span>, <span class="sc">-</span><span class="fl">1.27</span>,  <span class="co"># Control</span></span>
-<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>                 <span class="fl">0.73</span>, <span class="fl">0.31</span>, <span class="fl">0.03</span>, <span class="sc">-</span><span class="fl">0.29</span>, <span class="sc">-</span><span class="fl">0.56</span>, <span class="sc">-</span><span class="fl">0.96</span>, <span class="sc">-</span><span class="fl">1.61</span>,          <span class="co"># Knees</span></span>
-<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>                 <span class="sc">-</span><span class="fl">0.78</span>, <span class="sc">-</span><span class="fl">0.86</span>, <span class="sc">-</span><span class="fl">1.35</span>, <span class="sc">-</span><span class="fl">1.48</span>, <span class="sc">-</span><span class="fl">1.52</span>, <span class="sc">-</span><span class="fl">2.04</span>, <span class="sc">-</span><span class="fl">2.83</span>)       <span class="co"># Eyes</span></span>
-<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>c_df</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>▶ Run this</strong> — visualize the data:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 1.2 · Setup and Data ───────────────────────────────────────────</span></span>
-<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>c_plot <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(c_df, <span class="fu">aes</span>(<span class="at">x =</span> treatment, <span class="at">y =</span> phase_shift, <span class="at">color =</span> treatment)) <span class="sc">+</span></span>
-<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>(<span class="at">position =</span> <span class="fu">position_jitter</span>(<span class="at">width =</span> <span class="fl">0.1</span>)) <span class="sc">+</span></span>
-<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">stat_summary</span>(<span class="at">fun =</span> mean, <span class="at">geom =</span> <span class="st">"point"</span>, <span class="at">size =</span> <span class="dv">5</span>, <span class="at">shape =</span> <span class="dv">18</span>) <span class="sc">+</span></span>
-<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">stat_summary</span>(<span class="at">fun.data =</span> <span class="st">"mean_se"</span>, <span class="at">geom =</span> <span class="st">"errorbar"</span>, <span class="at">width =</span> <span class="fl">0.2</span>)</span>
-<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>c_plot</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>▶ Run this</strong> — fit the ANOVA (as a linear model, exactly like a regression) and get the ANOVA table:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 1.3 · Setup and Data ───────────────────────────────────────────</span></span>
-<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>model_aov <span class="ot">&lt;-</span> <span class="fu">lm</span>(phase_shift <span class="sc">~</span> treatment, <span class="at">data =</span> c_df)</span>
-<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(model_aov)</span>
-<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="fu">Anova</span>(model_aov)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>✏️ <strong>Your turn:</strong> What is the F-statistic and p-value? At α = 0.05, do we reject H₀?</p>
-<p><code>________________________</code></p>
-<div class="callout callout-style-default callout-tip callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-Tip
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p><strong>🚀 If you finish early:</strong> Compute group means, SDs, and n by hand with <code>group_by()</code> + <code>summarize()</code>, and confirm they match what you’d expect from <code>c_plot</code>.</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 1.4 · Setup and Data ───────────────────────────────────────────</span></span>
-<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Write your code in the R script:</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-</div>
-</div>
+<section id="worksheet-one-way-anova" class="level1">
+<h1>Worksheet: One-Way ANOVA</h1>
+<p><a href="data/fiddler_crabs.csv" class="btn btn-primary" download="fiddler_crabs.csv">📥 Crab data</a> <a href="themes_functions/r_themes_and_functions.R" class="btn btn-primary" download="r_themes_and_functions.R">📥 Tools script (.R)</a> <a href="data/12_analysis_of_variance.R" class="btn btn-primary" download="12_analysis_of_variance.R">📥 Script skeleton (.R)</a></p>
+<p>The lecture’s dataset: <strong>84 fiddler crabs</strong>, 21 in each of four groups, with body temperature above ambient measured in the field. Does the male’s oversized major claw act as a <strong>heat radiator</strong>?</p>
+<ul>
+<li><code>intact male</code> — the control</li>
+<li><code>male major removed</code> — the big claw taken off</li>
+<li><code>male minor removed</code> — a small claw taken off, the procedural control</li>
+<li><code>female</code> — never had a major claw</li>
+</ul>
+<p>If the claw sheds heat, removing it should make males <strong>hotter</strong>.</p>
 <hr>
 </section>
-<section id="part-2-assumptions-and-diagnostics" class="level1">
-<h1>Part 2 · Assumptions and Diagnostics</h1>
-<p>ANOVA has the same assumptions as the two-sample t-test, but applied to all k groups: random samples, normality of Y in each population, homogeneity of variance, and independence.</p>
-<p><strong>▶ Run this</strong> — the base R diagnostic plots:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 2.1 · Assumptions and Diagnostics ──────────────────────────────</span></span>
-<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="fu">par</span>(<span class="at">mfrow =</span> <span class="fu">c</span>(<span class="dv">2</span>, <span class="dv">2</span>))</span>
-<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(model_aov)</span>
-<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a><span class="fu">par</span>(<span class="at">mfrow =</span> <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">1</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>▶ Run this</strong> — the <code>performance</code> package’s all-in-one diagnostics:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 2.2 · Assumptions and Diagnostics ──────────────────────────────</span></span>
-<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="fu">check_model</span>(model_aov)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>▶ Run this</strong> — Levene’s test (H₀: variances are homogeneous — you <em>want</em> a non-significant result):</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 2.3 · Assumptions and Diagnostics ──────────────────────────────</span></span>
-<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>levene_test <span class="ot">&lt;-</span> <span class="fu">leveneTest</span>(phase_shift <span class="sc">~</span> treatment, <span class="at">data =</span> c_df)</span>
-<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>levene_test</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>▶ Run this</strong> — Shapiro-Wilk on the residuals (H₀: normally distributed — you <em>want</em> a non-significant result):</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 2.4 · Assumptions and Diagnostics ──────────────────────────────</span></span>
-<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>shapiro_test <span class="ot">&lt;-</span> <span class="fu">shapiro.test</span>(<span class="fu">residuals</span>(model_aov))</span>
-<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>shapiro_test</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>✏️ <strong>Your turn:</strong> Do these three groups pass both the normality and equal-variance checks?</p>
-<p><code>________________________</code></p>
-<div class="callout callout-style-default callout-tip callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-Tip
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p><strong>🚀 If you finish early:</strong> In the base R diagnostic plots, which panel would you check first for equal variance, and which for normality? Name the two panels.</p>
-<pre><code>________________________________________________________</code></pre>
-</div>
-</div>
-<hr>
-</section>
-<section id="part-3-estimated-marginal-means-and-post-hoc-testing" class="level1">
-<h1>Part 3 · Estimated Marginal Means and Post-Hoc Testing</h1>
-<p>When ANOVA rejects H₀, we need to determine <em>which</em> groups differ. First, we calculate estimated marginal means (EMMs).</p>
+<section id="part-1-setup-and-the-data" class="level1">
+<h1>Part 1 · Setup and the data</h1>
 <p><strong>▶ Run this:</strong></p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 3.1 · Estimated Marginal Means and Post-Hoc Testing ────────────</span></span>
-<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>emmeans_df <span class="ot">&lt;-</span> <span class="fu">emmeans</span>(model_aov, <span class="st">"treatment"</span>)</span>
-<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>emmeans_df</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>Estimated Marginal Means (EMMs)</strong>, also called least-squares means, are model-based predictions of group means from your fitted model rather than directly from raw data. In a one-way ANOVA with balanced data and no covariates, <strong>EMMs = group means</strong> exactly — but the <code>emmeans</code> package’s approach generalizes cleanly to two-way ANOVA, ANCOVA, and more complex designs, and gives you built-in standard errors, confidence intervals, and comparisons for free.</p>
-<p><strong>▶ Run this</strong> — verify EMMs equal the simple group means:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 3.2 · Estimated Marginal Means and Post-Hoc Testing ────────────</span></span>
-<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>group_means <span class="ot">&lt;-</span> c_df <span class="sc">%&gt;%</span></span>
-<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(treatment) <span class="sc">%&gt;%</span></span>
-<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarize</span>(</span>
-<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">sample_mean =</span> <span class="fu">mean</span>(phase_shift),</span>
-<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a>    <span class="at">sample_sd =</span> <span class="fu">sd</span>(phase_shift),</span>
-<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">n =</span> <span class="fu">n</span>()</span>
-<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a>  )</span>
-<span id="cb11-9"><a href="#cb11-9" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb11-10"><a href="#cb11-10" aria-hidden="true" tabindex="-1"></a>emm_df <span class="ot">&lt;-</span> <span class="fu">as.data.frame</span>(emmeans_df)</span>
-<span id="cb11-11"><a href="#cb11-11" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb11-12"><a href="#cb11-12" aria-hidden="true" tabindex="-1"></a>comparison <span class="ot">&lt;-</span> group_means <span class="sc">%&gt;%</span></span>
-<span id="cb11-13"><a href="#cb11-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(emm_df <span class="sc">%&gt;%</span> <span class="fu">select</span>(treatment, emmean, SE),</span>
-<span id="cb11-14"><a href="#cb11-14" aria-hidden="true" tabindex="-1"></a>            <span class="at">by =</span> <span class="st">"treatment"</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb11-15"><a href="#cb11-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
-<span id="cb11-16"><a href="#cb11-16" aria-hidden="true" tabindex="-1"></a>    <span class="at">difference =</span> <span class="fu">round</span>(sample_mean <span class="sc">-</span> emmean, <span class="dv">10</span>)  <span class="co"># Round to show they're identical</span></span>
-<span id="cb11-17"><a href="#cb11-17" aria-hidden="true" tabindex="-1"></a>  )</span>
-<span id="cb11-18"><a href="#cb11-18" aria-hidden="true" tabindex="-1"></a>comparison</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>✏️ <strong>Your turn:</strong> Is <code>difference</code> zero (or extremely close to it, within rounding error) for every row?</p>
-<p><code>________________________</code></p>
-<p><strong>▶ Run this</strong> — pairwise comparisons with a Sidak adjustment:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 3.3 · Estimated Marginal Means and Post-Hoc Testing ────────────</span></span>
-<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>pairwise_comparisons <span class="ot">&lt;-</span> <span class="fu">pairs</span>(emmeans_df, <span class="at">adjust =</span> <span class="st">"sidak"</span>)</span>
-<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>pairwise_comparisons</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>The <strong>estimate</strong> is the difference between two group means. The <strong>SE</strong> is the standard error of that difference — it depends on the within-group variability and the sample sizes being compared. The t-ratio = estimate / SE tells you how many standard errors away from zero the difference is.</p>
-<p><strong>▶ Run this</strong> — letters showing which groups are (not) significantly different:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb13"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 3.4 · Estimated Marginal Means and Post-Hoc Testing ────────────</span></span>
-<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>letter_groups <span class="ot">&lt;-</span> multcomp<span class="sc">::</span><span class="fu">cld</span>(emmeans_df, <span class="at">Letters =</span> letters, <span class="at">adjust =</span> <span class="st">"sidak"</span>)</span>
-<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>letter_groups</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>▶ Run this</strong> — the same thing in one pipeline:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb14"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 3.5 · Estimated Marginal Means and Post-Hoc Testing ────────────</span></span>
-<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>cld_result <span class="ot">&lt;-</span> <span class="fu">emmeans</span>(model_aov, <span class="st">"treatment"</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>  multcomp<span class="sc">::</span><span class="fu">cld</span>(<span class="at">Letters =</span> letters, <span class="at">adjust =</span> <span class="st">"sidak"</span>)</span>
-<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>cld_result</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>▶ Run this</strong> — visualize the EMMs:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb15"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 3.6 · Estimated Marginal Means and Post-Hoc Testing ────────────</span></span>
-<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(emmeans_df)</span>
-<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a><span class="fu">emmip</span>(model_aov, <span class="sc">~</span> treatment, <span class="at">CIs =</span> <span class="cn">TRUE</span>) <span class="sc">+</span></span>
-<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>() <span class="sc">+</span></span>
-<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Estimated Marginal Means with 95% CIs"</span>,</span>
-<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a>       <span class="at">x =</span> <span class="st">"Treatment"</span>, <span class="at">y =</span> <span class="st">"Estimated Phase Shift"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>✏️ <strong>Your turn:</strong> Which two treatments share a compact-letter-display letter (meaning they’re <em>not</em> significantly different)?</p>
-<p><code>________________________</code></p>
-<div class="callout callout-style-default callout-tip callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-Tip
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p><strong>🚀 If you finish early:</strong> Rerun <code>pairs(emmeans_df, adjust = ...)</code> with <code>"bonferroni"</code> and <code>"tukey"</code> instead of <code>"sidak"</code>. Do the p-values change much for this dataset?</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb16"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 3.7 · Estimated Marginal Means and Post-Hoc Testing ────────────</span></span>
-<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Write your code in the R script:</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-</div>
-</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 1.1 · Setup and the data ───────────────────────────────────────</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tidyverse)</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(car)</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="fu">source</span>(<span class="st">"themes_functions/r_themes_and_functions.R"</span>)</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>crab_df <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="st">"data/fiddler_crabs.csv"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">crab_type =</span> <span class="fu">factor</span>(crab_type))</span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a><span class="fu">count</span>(crab_df, crab_type)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>▶ Run this</strong> — look at the data before you test it:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 1.2 · Setup and the data ───────────────────────────────────────</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(crab_df, <span class="fu">aes</span>(crab_type, body_temp_c)) <span class="sc">+</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_boxplot</span>() <span class="sc">+</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_jitter</span>(<span class="at">width =</span> <span class="fl">0.15</span>, <span class="at">alpha =</span> <span class="fl">0.5</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>✏️ <strong>Your turn:</strong> Which group looks warmest, and does the picture match the radiator prediction?</p>
+<pre><code>____________________________________________________________</code></pre>
 <hr>
 </section>
-<section id="part-4-planned-comparisons" class="level1">
-<h1>Part 4 · Planned Comparisons</h1>
-<p>Instead of comparing every possible pair, sometimes you have specific, planned comparisons in mind.</p>
+<section id="part-2-build-the-sums-of-squares" class="level1">
+<h1>Part 2 · Build the sums of squares</h1>
 <p><strong>▶ Run this:</strong></p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb17"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 4.1 · Planned Comparisons ──────────────────────────────────────</span></span>
-<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a><span class="fu">levels</span>(c_df<span class="sc">$</span>treatment)  <span class="co"># See the order</span></span>
-<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a>emm <span class="ot">&lt;-</span> <span class="fu">emmeans</span>(model_aov, <span class="st">"treatment"</span>)</span>
-<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a>planned_contrasts <span class="ot">&lt;-</span> <span class="fu">contrast</span>(emm,</span>
-<span id="cb17-7"><a href="#cb17-7" aria-hidden="true" tabindex="-1"></a>                              <span class="at">method =</span> <span class="fu">list</span>(</span>
-<span id="cb17-8"><a href="#cb17-8" aria-hidden="true" tabindex="-1"></a>                                <span class="st">"control vs eyes"</span> <span class="ot">=</span> <span class="fu">c</span>(<span class="dv">1</span>, <span class="sc">-</span><span class="dv">1</span>,  <span class="dv">0</span>),</span>
-<span id="cb17-9"><a href="#cb17-9" aria-hidden="true" tabindex="-1"></a>                                <span class="st">"control vs knees"</span> <span class="ot">=</span> <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">0</span>, <span class="sc">-</span><span class="dv">1</span>)))</span>
-<span id="cb17-10"><a href="#cb17-10" aria-hidden="true" tabindex="-1"></a>planned_contrasts</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>▶ Run this</strong> — the significance-groups plot:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb18"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 4.2 · Planned Comparisons ──────────────────────────────────────</span></span>
-<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(c_df, <span class="fu">aes</span>(<span class="at">x =</span> treatment, <span class="at">y =</span> phase_shift, <span class="at">color =</span> treatment)) <span class="sc">+</span></span>
-<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_jitter</span>(<span class="at">width =</span> <span class="fl">0.2</span>, <span class="at">alpha =</span> <span class="fl">0.7</span>) <span class="sc">+</span></span>
-<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">stat_summary</span>(<span class="at">fun =</span> mean, <span class="at">geom =</span> <span class="st">"point"</span>, <span class="at">size =</span> <span class="dv">4</span>, <span class="at">shape =</span> <span class="dv">18</span>) <span class="sc">+</span></span>
-<span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">stat_summary</span>(<span class="at">fun.data =</span> <span class="st">"mean_cl_normal"</span>, <span class="at">geom =</span> <span class="st">"errorbar"</span>, <span class="at">width =</span> <span class="fl">0.2</span>) <span class="sc">+</span></span>
-<span id="cb18-6"><a href="#cb18-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_text</span>(<span class="at">data =</span> <span class="fu">as.data.frame</span>(cld_result),</span>
-<span id="cb18-7"><a href="#cb18-7" aria-hidden="true" tabindex="-1"></a>            <span class="fu">aes</span>(<span class="at">x =</span> treatment, <span class="at">y =</span> <span class="sc">-</span><span class="fl">2.5</span>, <span class="at">label =</span> .group),</span>
-<span id="cb18-8"><a href="#cb18-8" aria-hidden="true" tabindex="-1"></a>            <span class="at">vjust =</span> <span class="fl">0.5</span>, <span class="at">size =</span> <span class="dv">5</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>✏️ <strong>Your turn:</strong> The contrast vector <code>c(1, -1, 0)</code> picks out “Control minus Eyes.” Write the contrast vector for “Knees minus Eyes” instead (hint: check the order from <code>levels(c_df$treatment)</code>).</p>
-<pre><code>________________________________________________________</code></pre>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 2.1 · Build the sums of squares ────────────────────────────────</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>grand_mean <span class="ot">&lt;-</span> <span class="fu">mean</span>(crab_df<span class="sc">$</span>body_temp_c)</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>crab_parts <span class="ot">&lt;-</span> crab_df <span class="sc">%&gt;%</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(crab_type) <span class="sc">%&gt;%</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">group_mean =</span> <span class="fu">mean</span>(body_temp_c)) <span class="sc">%&gt;%</span></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ungroup</span>()</span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>ss_total  <span class="ot">&lt;-</span> <span class="fu">sum</span>((crab_parts<span class="sc">$</span>body_temp_c <span class="sc">-</span> grand_mean)<span class="sc">^</span><span class="dv">2</span>)</span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>ss_among  <span class="ot">&lt;-</span> <span class="fu">sum</span>((crab_parts<span class="sc">$</span>group_mean  <span class="sc">-</span> grand_mean)<span class="sc">^</span><span class="dv">2</span>)</span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a>ss_within <span class="ot">&lt;-</span> <span class="fu">sum</span>((crab_parts<span class="sc">$</span>body_temp_c <span class="sc">-</span> crab_parts<span class="sc">$</span>group_mean)<span class="sc">^</span><span class="dv">2</span>)</span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a><span class="fu">c</span>(<span class="at">total =</span> ss_total, <span class="at">among =</span> ss_among, <span class="at">within =</span> ss_within)</span>
+<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a>ss_among <span class="sc">+</span> ss_within</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>✏️ <strong>Your turn:</strong> Does the partition add up, and what fraction does the grouping explain?</p>
+<pre><code>ss_among + ss_within = __________   ss_total = __________
+
+ss_among / ss_total = __________</code></pre>
 <hr>
 </section>
-<section id="part-5-reporting-the-results" class="level1">
-<h1>Part 5 · Reporting the Results</h1>
-<p><strong>Formal scientific writing example:</strong></p>
-<p>“The effect of light treatment on circadian rhythm phase shift was analyzed using a one-way ANOVA. There was a significant effect of treatment on phase shift (F(2, 19) = 7.29, p = 0.004, η² = 0.43). Post-hoc comparisons using Tukey’s HSD test indicated that the mean phase shift for the Eyes treatment (M = -1.55 h, SD = 0.71) was significantly different from both the Control treatment (M = -0.31 h, SD = 0.62) and the Knees treatment (M = -0.34 h, SD = 0.79). However, the Control and Knees treatments did not significantly differ from each other.”</p>
-<p>✏️ <strong>Your turn:</strong> Using your own output from Parts 1–3, write a results sentence for the Sidak-adjusted pairwise comparisons instead of Tukey’s.</p>
-<pre><code>________________________________________________________</code></pre>
+<section id="part-3-the-anova" class="level1">
+<h1>Part 3 · The ANOVA</h1>
+<p><strong>▶ Run this:</strong></p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 3.1 · The ANOVA ────────────────────────────────────────────────</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>crab_model <span class="ot">&lt;-</span> <span class="fu">lm</span>(body_temp_c <span class="sc">~</span> crab_type, <span class="at">data =</span> crab_df)</span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a><span class="fu">anova</span>(crab_model)</span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(crab_model)<span class="sc">$</span>r.squared</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>✏️ <strong>Your turn:</strong> Match the table to what you computed in Part 2.</p>
+<pre><code>Sum Sq, crab_type = __________   Sum Sq, Residuals = __________
+
+Df = ______ and ______      F = __________   p = __________
+
+R squared = __________  (compare it with ss_among / ss_total)</code></pre>
+<p>✏️ <strong>Your turn:</strong> Write down exactly what this p-value licenses you to say — and one thing it does <strong>not</strong>.</p>
+<pre><code>It says: ____________________________________________________
+
+It does not say: ____________________________________________</code></pre>
 <hr>
 </section>
-<section id="part-6-non-parametric-anova" class="level1">
-<h1>Part 6 · Non-Parametric ANOVA</h1>
-<p><strong>▶ Run this</strong> — build a version of the data that clearly violates ANOVA’s assumptions:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb21"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 6.1 · Non-Parametric ANOVA ─────────────────────────────────────</span></span>
-<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">42</span>)</span>
-<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a>v_circ_df <span class="ot">&lt;-</span> c_df <span class="sc">%&gt;%</span></span>
-<span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
-<span id="cb21-5"><a href="#cb21-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">phase_shift_violated =</span> <span class="fu">case_when</span>(</span>
-<span id="cb21-6"><a href="#cb21-6" aria-hidden="true" tabindex="-1"></a>      <span class="co"># Control: very tight, almost no variance</span></span>
-<span id="cb21-7"><a href="#cb21-7" aria-hidden="true" tabindex="-1"></a>      treatment <span class="sc">==</span> <span class="st">"Control"</span> <span class="sc">~</span> phase_shift <span class="sc">*</span> <span class="fl">0.15</span>,</span>
-<span id="cb21-8"><a href="#cb21-8" aria-hidden="true" tabindex="-1"></a>      <span class="co"># Knees: also tight variance</span></span>
-<span id="cb21-9"><a href="#cb21-9" aria-hidden="true" tabindex="-1"></a>      treatment <span class="sc">==</span> <span class="st">"Knees"</span> <span class="sc">~</span> phase_shift <span class="sc">*</span> <span class="fl">1.3</span>,</span>
-<span id="cb21-10"><a href="#cb21-10" aria-hidden="true" tabindex="-1"></a>      <span class="co"># Eyes: extreme spread - compress middle values, huge outliers</span></span>
-<span id="cb21-11"><a href="#cb21-11" aria-hidden="true" tabindex="-1"></a>      treatment <span class="sc">==</span> <span class="st">"Eyes"</span> <span class="sc">~</span> {</span>
-<span id="cb21-12"><a href="#cb21-12" aria-hidden="true" tabindex="-1"></a>        n <span class="ot">&lt;-</span> <span class="fu">length</span>(phase_shift)</span>
-<span id="cb21-13"><a href="#cb21-13" aria-hidden="true" tabindex="-1"></a>        <span class="fu">c</span>(phase_shift[<span class="dv">1</span><span class="sc">:</span>(n<span class="dv">-3</span>)] <span class="sc">*</span> <span class="fl">1.2</span>,      <span class="co"># Very compressed normal values</span></span>
-<span id="cb21-14"><a href="#cb21-14" aria-hidden="true" tabindex="-1"></a>          phase_shift[(n<span class="dv">-2</span>)] <span class="sc">*</span> <span class="dv">2</span>,          <span class="co"># Moderate outlier</span></span>
-<span id="cb21-15"><a href="#cb21-15" aria-hidden="true" tabindex="-1"></a>          phase_shift[(n<span class="dv">-1</span>)] <span class="sc">*</span> <span class="fl">2.4</span>,        <span class="co"># Extreme outlier 1</span></span>
-<span id="cb21-16"><a href="#cb21-16" aria-hidden="true" tabindex="-1"></a>          phase_shift[n] <span class="sc">*</span> <span class="dv">4</span>)              <span class="co"># Extreme outlier 2</span></span>
-<span id="cb21-17"><a href="#cb21-17" aria-hidden="true" tabindex="-1"></a>      }</span>
-<span id="cb21-18"><a href="#cb21-18" aria-hidden="true" tabindex="-1"></a>    )</span>
-<span id="cb21-19"><a href="#cb21-19" aria-hidden="true" tabindex="-1"></a>  )</span>
-<span id="cb21-20"><a href="#cb21-20" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb21-21"><a href="#cb21-21" aria-hidden="true" tabindex="-1"></a>violated_model <span class="ot">&lt;-</span> <span class="fu">lm</span>(phase_shift_violated <span class="sc">~</span> treatment,</span>
-<span id="cb21-22"><a href="#cb21-22" aria-hidden="true" tabindex="-1"></a>                     <span class="at">data =</span> v_circ_df)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>▶ Run this</strong> — visualize and check assumptions on the violated data:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb22"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 6.2 · Non-Parametric ANOVA ─────────────────────────────────────</span></span>
-<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(v_circ_df,</span>
-<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a>       <span class="fu">aes</span>(<span class="at">x =</span> treatment, <span class="at">y =</span> phase_shift_violated,</span>
-<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a>           <span class="at">color =</span> treatment)) <span class="sc">+</span></span>
-<span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_jitter</span>(<span class="at">width =</span> <span class="fl">0.2</span>, <span class="at">alpha =</span> <span class="fl">0.7</span>, <span class="at">size =</span> <span class="dv">3</span>) <span class="sc">+</span></span>
-<span id="cb22-6"><a href="#cb22-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_boxplot</span>(<span class="at">alpha =</span> <span class="fl">0.3</span>, <span class="at">outlier.shape =</span> <span class="cn">NA</span>) <span class="sc">+</span></span>
-<span id="cb22-7"><a href="#cb22-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_jitter</span>(<span class="at">width =</span> <span class="fl">0.2</span>, <span class="at">alpha =</span> <span class="fl">0.7</span>, <span class="at">size =</span> <span class="dv">3</span>) <span class="sc">+</span></span>
-<span id="cb22-8"><a href="#cb22-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>() <span class="sc">+</span></span>
-<span id="cb22-9"><a href="#cb22-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Modified Data with Violations"</span>,</span>
-<span id="cb22-10"><a href="#cb22-10" aria-hidden="true" tabindex="-1"></a>       <span class="at">subtitle =</span> <span class="st">"Median with IQR"</span>,</span>
-<span id="cb22-11"><a href="#cb22-11" aria-hidden="true" tabindex="-1"></a>       <span class="at">x =</span> <span class="st">"Light Treatment"</span>, <span class="at">y =</span> <span class="st">"Phase Shift (hours)"</span>)</span>
-<span id="cb22-12"><a href="#cb22-12" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-13"><a href="#cb22-13" aria-hidden="true" tabindex="-1"></a><span class="fu">shapiro.test</span>(<span class="fu">resid</span>(violated_model))</span>
-<span id="cb22-14"><a href="#cb22-14" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-15"><a href="#cb22-15" aria-hidden="true" tabindex="-1"></a><span class="fu">qqnorm</span>(<span class="fu">resid</span>(violated_model), <span class="at">main =</span> <span class="st">"Q-Q Plot: Violated Data"</span>)</span>
-<span id="cb22-16"><a href="#cb22-16" aria-hidden="true" tabindex="-1"></a><span class="fu">qqline</span>(<span class="fu">resid</span>(violated_model), <span class="at">col =</span> <span class="st">"red"</span>, <span class="at">lwd =</span> <span class="dv">2</span>)</span>
-<span id="cb22-17"><a href="#cb22-17" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-18"><a href="#cb22-18" aria-hidden="true" tabindex="-1"></a><span class="fu">leveneTest</span>(phase_shift_violated <span class="sc">~</span> treatment,</span>
-<span id="cb22-19"><a href="#cb22-19" aria-hidden="true" tabindex="-1"></a>           <span class="at">data =</span> v_circ_df)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>✏️ <strong>Your turn:</strong> Do the Shapiro-Wilk and Levene’s tests confirm this data violates ANOVA’s assumptions?</p>
-<p><code>________________________</code></p>
-<p><strong>▶ Run this</strong> — the Kruskal-Wallis test, on both the original and violated data:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb23"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 6.3 · Non-Parametric ANOVA ─────────────────────────────────────</span></span>
-<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a>kruskal_original_result <span class="ot">&lt;-</span> <span class="fu">kruskal.test</span>(</span>
-<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a>  phase_shift <span class="sc">~</span> treatment,</span>
-<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">data =</span> c_df</span>
-<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a>kruskal_original_result</span>
-<span id="cb23-7"><a href="#cb23-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb23-8"><a href="#cb23-8" aria-hidden="true" tabindex="-1"></a><span class="fu">anova</span>(model_aov)  <span class="co"># for comparison</span></span>
-<span id="cb23-9"><a href="#cb23-9" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb23-10"><a href="#cb23-10" aria-hidden="true" tabindex="-1"></a>kruskal_violated_result <span class="ot">&lt;-</span> <span class="fu">kruskal.test</span>(</span>
-<span id="cb23-11"><a href="#cb23-11" aria-hidden="true" tabindex="-1"></a>  phase_shift_violated <span class="sc">~</span> treatment,</span>
-<span id="cb23-12"><a href="#cb23-12" aria-hidden="true" tabindex="-1"></a>  <span class="at">data =</span> v_circ_df</span>
-<span id="cb23-13"><a href="#cb23-13" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb23-14"><a href="#cb23-14" aria-hidden="true" tabindex="-1"></a>kruskal_violated_result</span>
-<span id="cb23-15"><a href="#cb23-15" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb23-16"><a href="#cb23-16" aria-hidden="true" tabindex="-1"></a><span class="fu">anova</span>(violated_model)  <span class="co"># for comparison</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>✏️ <strong>Your turn:</strong> Does the parametric ANOVA’s conclusion on the violated data agree with the Kruskal-Wallis conclusion? If they disagree, which would you trust more, and why?</p>
-<p><code>________________________</code></p>
-<p><strong>▶ Run this</strong> — post-hoc tests: pairwise Wilcoxon, and the more appropriate Dunn’s test:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb24"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 6.4 · Non-Parametric ANOVA ─────────────────────────────────────</span></span>
-<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a>pairwise_result <span class="ot">&lt;-</span> <span class="fu">pairwise.wilcox.test</span>(</span>
-<span id="cb24-3"><a href="#cb24-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">x =</span> v_circ_df<span class="sc">$</span>phase_shift_violated,</span>
-<span id="cb24-4"><a href="#cb24-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">g =</span> v_circ_df<span class="sc">$</span>treatment,</span>
-<span id="cb24-5"><a href="#cb24-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">p.adjust.method =</span> <span class="st">"bonferroni"</span></span>
-<span id="cb24-6"><a href="#cb24-6" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb24-7"><a href="#cb24-7" aria-hidden="true" tabindex="-1"></a>pairwise_result</span>
-<span id="cb24-8"><a href="#cb24-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-9"><a href="#cb24-9" aria-hidden="true" tabindex="-1"></a>dunn_result <span class="ot">&lt;-</span> <span class="fu">dunnTest</span>(</span>
-<span id="cb24-10"><a href="#cb24-10" aria-hidden="true" tabindex="-1"></a>  phase_shift_violated <span class="sc">~</span> treatment,</span>
-<span id="cb24-11"><a href="#cb24-11" aria-hidden="true" tabindex="-1"></a>  <span class="at">data =</span> v_circ_df,</span>
-<span id="cb24-12"><a href="#cb24-12" aria-hidden="true" tabindex="-1"></a>  <span class="at">method =</span> <span class="st">"bonferroni"</span></span>
-<span id="cb24-13"><a href="#cb24-13" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb24-14"><a href="#cb24-14" aria-hidden="true" tabindex="-1"></a>dunn_result</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="callout callout-style-default callout-note callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-Note
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p><strong>Which post-hoc test should you use after Kruskal-Wallis?</strong></p>
-<p>Use <strong>Dunn’s test</strong> — it’s the proper follow-up to Kruskal-Wallis, uses the <em>same</em> overall ranking from the omnibus test, and is standard in published research. Pairwise Wilcoxon re-ranks separately for each pair, throwing away that shared-ranking information.</p>
-</div>
-</div>
-<div class="callout callout-style-default callout-tip callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-Tip
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p><strong>🚀 If you finish early:</strong> Run Dunn’s test with <code>method = "holm"</code> instead of <code>"bonferroni"</code>. Do any conclusions change? Which method is more conservative?</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb25"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 6.5 · Non-Parametric ANOVA ─────────────────────────────────────</span></span>
-<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Write your code in the R script:</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-</div>
-</div>
+<section id="part-4-check-the-assumptions" class="level1">
+<h1>Part 4 · Check the assumptions</h1>
+<p><strong>▶ Run this:</strong></p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 4.1 · Check the assumptions ────────────────────────────────────</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="fu">par</span>(<span class="at">mfrow =</span> <span class="fu">c</span>(<span class="dv">2</span>, <span class="dv">2</span>))</span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(crab_model)</span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a><span class="fu">par</span>(<span class="at">mfrow =</span> <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">1</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>▶ Run this</strong> — the two formal tests:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 4.2 · Check the assumptions ────────────────────────────────────</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="fu">shapiro.test</span>(<span class="fu">residuals</span>(crab_model))</span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a><span class="fu">leveneTest</span>(body_temp_c <span class="sc">~</span> crab_type, <span class="at">data =</span> crab_df)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>✏️ <strong>Your turn:</strong> Both tests have a null hypothesis you <em>want</em> to keep. Fill in.</p>
+<pre><code>Shapiro H0 = ________________  p = __________  pass? ______
+
+Levene  H0 = ________________  p = __________  pass? ______</code></pre>
+<p>✏️ <strong>Your turn:</strong> The third assumption is independence. Why can no plot or test on this slide check it?</p>
+<pre><code>____________________________________________________________</code></pre>
+<hr>
+</section>
+<section id="part-5-set-the-reference-level" class="level1">
+<h1>Part 5 · Set the reference level</h1>
+<p><strong>▶ Run this</strong> — see the order R chose for you:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb13"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 5.1 · Set the reference level ──────────────────────────────────</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a><span class="fu">levels</span>(crab_df<span class="sc">$</span>crab_type)</span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(crab_model)<span class="sc">$</span>coefficients</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>✏️ <strong>Your turn:</strong> Which level is the reference, why did R pick it, and what is each coefficient comparing?</p>
+<pre><code>Reference: __________   Why: _______________________________
+
+Each coefficient is "degrees hotter than a ______________"</code></pre>
+<p><strong>▶ Run this</strong> — put the control first and refit:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb15"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 5.2 · Set the reference level ──────────────────────────────────</span></span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>crab_df <span class="ot">&lt;-</span> crab_df <span class="sc">%&gt;%</span></span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">crab_type =</span> <span class="fu">fct_relevel</span>(crab_type, <span class="st">"intact male"</span>))</span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>crab_model <span class="ot">&lt;-</span> <span class="fu">lm</span>(body_temp_c <span class="sc">~</span> crab_type, <span class="at">data =</span> crab_df)</span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(crab_model)<span class="sc">$</span>coefficients</span>
+<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a><span class="fu">anova</span>(crab_model)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>✏️ <strong>Your turn:</strong> Compare the two coefficient tables, and the two ANOVA tables.</p>
+<pre><code>What changed: _______________________________________________
+
+What did not change: ________________________________________
+
+Why does the F-test not care which level is first?
+
+____________________________________________________________</code></pre>
+<hr>
+</section>
+<section id="part-6-which-groups-actually-differ" class="level1">
+<h1>Part 6 · Which groups actually differ?</h1>
+<p><strong>▶ Run this:</strong></p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb17"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 6.1 · Which groups actually differ? ────────────────────────────</span></span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a><span class="fu">TukeyHSD</span>(<span class="fu">aov</span>(crab_model))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>✏️ <strong>Your turn:</strong> Fill in the adjusted p-values for the three comparisons with the control.</p>
+<pre><code>female - intact male             = __________
+
+male major removed - intact male = __________
+
+male minor removed - intact male = __________</code></pre>
+<p>✏️ <strong>Your turn:</strong> The radiator hypothesis predicts that removing the <strong>major</strong> claw makes males hotter. Does the Tukey output support it? Answer in one sentence, using the number.</p>
+<pre><code>____________________________________________________________</code></pre>
+<p>✏️ <strong>Your turn:</strong> Females <em>are</em> significantly hotter than every male group. Why does that not rescue the hypothesis?</p>
+<pre><code>____________________________________________________________</code></pre>
+<hr>
+</section>
+<section id="part-7-report-it" class="level1">
+<h1>Part 7 · Report it</h1>
+<p>✏️ <strong>Your turn:</strong> Write the results sentence you would put in a paper. It needs the test, F with <strong>both</strong> degrees of freedom, the p-value, R², and the post-hoc method — including the comparison that was <em>not</em> significant.</p>
+<pre><code>____________________________________________________________
+
+____________________________________________________________
+
+____________________________________________________________</code></pre>
+<hr>
+</section>
+<section id="part-8-the-figure-you-hand-in" class="level1">
+<h1>Part 8 · The figure you hand in</h1>
+<p><strong>▶ Run this:</strong></p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb22"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 8.1 · The figure you hand in ───────────────────────────────────</span></span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>crab_summary <span class="ot">&lt;-</span> crab_df <span class="sc">%&gt;%</span></span>
+<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(crab_type) <span class="sc">%&gt;%</span></span>
+<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">reframe</span>(<span class="fu">summary_stats</span>(body_temp_c))</span>
+<span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-6"><a href="#cb22-6" aria-hidden="true" tabindex="-1"></a>final_plot <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(crab_summary, <span class="fu">aes</span>(crab_type, mean)) <span class="sc">+</span></span>
+<span id="cb22-7"><a href="#cb22-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_col</span>(<span class="at">fill =</span> <span class="st">"grey70"</span>, <span class="at">width =</span> <span class="fl">0.6</span>) <span class="sc">+</span></span>
+<span id="cb22-8"><a href="#cb22-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_errorbar</span>(<span class="fu">aes</span>(<span class="at">ymin =</span> mean <span class="sc">-</span> se, <span class="at">ymax =</span> mean <span class="sc">+</span> se), <span class="at">width =</span> <span class="fl">0.15</span>) <span class="sc">+</span></span>
+<span id="cb22-9"><a href="#cb22-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(</span>
+<span id="cb22-10"><a href="#cb22-10" aria-hidden="true" tabindex="-1"></a>    <span class="at">title =</span> <span class="st">"Female fiddler crabs run warmer than males"</span>,</span>
+<span id="cb22-11"><a href="#cb22-11" aria-hidden="true" tabindex="-1"></a>    <span class="at">subtitle =</span> <span class="st">"Mean ± 1 SE; removing the major claw did not raise male temperature"</span>,</span>
+<span id="cb22-12"><a href="#cb22-12" aria-hidden="true" tabindex="-1"></a>    <span class="at">x =</span> <span class="st">"Crab type"</span>,</span>
+<span id="cb22-13"><a href="#cb22-13" aria-hidden="true" tabindex="-1"></a>    <span class="at">y =</span> <span class="st">"Body temperature above ambient (C)"</span></span>
+<span id="cb22-14"><a href="#cb22-14" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">+</span></span>
+<span id="cb22-15"><a href="#cb22-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_regular</span>(<span class="at">base_size =</span> <span class="dv">12</span>)</span>
+<span id="cb22-16"><a href="#cb22-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-17"><a href="#cb22-17" aria-hidden="true" tabindex="-1"></a>final_plot</span>
+<span id="cb22-18"><a href="#cb22-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-19"><a href="#cb22-19" aria-hidden="true" tabindex="-1"></a><span class="fu">ggsave</span>(</span>
+<span id="cb22-20"><a href="#cb22-20" aria-hidden="true" tabindex="-1"></a>  <span class="st">"figures/crab_anova.pdf"</span>,</span>
+<span id="cb22-21"><a href="#cb22-21" aria-hidden="true" tabindex="-1"></a>  <span class="at">plot   =</span> final_plot,</span>
+<span id="cb22-22"><a href="#cb22-22" aria-hidden="true" tabindex="-1"></a>  <span class="at">width  =</span> <span class="dv">7</span>,</span>
+<span id="cb22-23"><a href="#cb22-23" aria-hidden="true" tabindex="-1"></a>  <span class="at">height =</span> <span class="fl">4.5</span>,</span>
+<span id="cb22-24"><a href="#cb22-24" aria-hidden="true" tabindex="-1"></a>  <span class="at">units  =</span> <span class="st">"in"</span></span>
+<span id="cb22-25"><a href="#cb22-25" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>✏️ <strong>Your turn:</strong> Open the PDF and check the bars run in the order you releveled to, not alphabetically.</p>
 <hr>
 </section>
 <section id="review-and-checkpoint" class="level1">
 <h1>Review and checkpoint</h1>
 <p>At this point you can:</p>
 <ul class="task-list">
-<li><label><input type="checkbox">Fit a one-way ANOVA with <code>lm()</code> and read its <code>Anova()</code> table</label></li>
-<li><label><input type="checkbox">Check ANOVA’s assumptions with diagnostic plots, Levene’s test, and Shapiro-Wilk</label></li>
-<li><label><input type="checkbox">Compute and interpret estimated marginal means with <code>emmeans()</code></label></li>
-<li><label><input type="checkbox">Run and interpret pairwise post-hoc comparisons and planned contrasts</label></li>
-<li><label><input type="checkbox">Write a properly formatted ANOVA results sentence</label></li>
-<li><label><input type="checkbox">Recognize when to use Kruskal-Wallis and Dunn’s test instead, and run both</label></li>
+<li><label><input type="checkbox">Build <span class="math inline">\(SS_{among}\)</span>, <span class="math inline">\(SS_{within}\)</span> and <span class="math inline">\(SS_{total}\)</span> by hand and match them to <code>anova()</code></label></li>
+<li><label><input type="checkbox">Say what a significant F does and does not tell you</label></li>
+<li><label><input type="checkbox">Check normality and equal variance on the residuals, and name the assumption no test can check</label></li>
+<li><label><input type="checkbox">Set a factor’s reference level with <code>fct_relevel()</code> and explain what it does and does not change</label></li>
+<li><label><input type="checkbox">Read a Tukey HSD table and answer a specific biological prediction with it</label></li>
+<li><label><input type="checkbox">Write a results sentence with both degrees of freedom and an effect size</label></li>
 </ul>
 <div class="callout callout-style-default callout-note callout-titled">
 <div class="callout-header d-flex align-content-center">
@@ -763,88 +675,16 @@ Note
 </div>
 </div>
 <div class="callout-body-container callout-body">
-<p><strong>📤 What to turn in before next class</strong></p>
-<p>Upload both of these to the course management system:</p>
+<p><strong>📤 What to turn in</strong></p>
 <ol type="1">
-<li>Your code — the <code>scripts/</code> folder (or just <code>12_analysis_of_variance.R</code>)</li>
+<li><code>12_analysis_of_variance.R</code></li>
+<li><code>figures/crab_anova.pdf</code></li>
 <li>This worksheet, with your written answers</li>
 </ol>
 </div>
 </div>
-<hr>
-</section>
-<section id="part-7-take-home-extension-crayfish-growth-across-lakes" class="level1">
-<h1>Part 7 · Take-Home Extension — Crayfish Growth Across Lakes</h1>
-<p><em>Due Monday, October 26 — before the Two-Way ANOVA class.</em></p>
-<p>Same workflow as Parts 1–3 — fit, check assumptions, compare groups — new dataset, new question. This time you decide whether the standard ANOVA route or the Kruskal-Wallis route is the right call, and you pick the post-hoc test yourself; nobody walks you through it step by step.</p>
-<section id="background" class="level2">
-<h2 class="anchored" data-anchor-id="background">Background</h2>
-<p>Sargent &amp; Lodge (2014) reared young-of-year rusty crayfish (<em>Orconectes rusticus</em>) in enclosures across three northern Wisconsin lakes. Below are their daily growth rate measurements.</p>
-<p><strong>▶ Run this:</strong></p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb26"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 7.1 · Take-Home Extension ──────────────────────────────────────</span></span>
-<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a>cray_df <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="st">"data/sargent_lodge_crayfish.csv"</span>)</span>
-<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a><span class="fu">head</span>(cray_df)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-</section>
-<section id="your-task" class="level2">
-<h2 class="anchored" data-anchor-id="your-task">Your Task</h2>
-<p><strong>Question:</strong> Does crayfish growth rate (<code>growth_per_day</code>) differ among the three lakes (<code>lake</code>)?</p>
-<p>✏️ <strong>Your turn:</strong> State your hypotheses. Check the assumptions yourself and decide whether a standard one-way ANOVA is appropriate here, or whether you should reach for Kruskal-Wallis instead. If groups differ, pick and justify a post-hoc test. Justify your choices, run the analysis, interpret it, and report the result properly.</p>
-<pre><code>H0 =
-________________________________________________________
-Ha =
-________________________________________________________
-Test I will use and why:
-________________________________________________________</code></pre>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb28"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 7.2 · Take-Home Extension ──────────────────────────────────────</span></span>
-<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Write your code in the R script:</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<pre><code>Interpretation:
-________________________________________________________
-________________________________________________________</code></pre>
-</section>
-<section id="final-figure" class="level2">
-<h2 class="anchored" data-anchor-id="final-figure">Final Figure</h2>
-<p>Produce one publication-quality figure comparing growth rate across lakes, with post-hoc groupings shown (e.g.&nbsp;a compact letter display) — proper axis labels, no default <code>ggplot</code> grey background — and export it with <code>ggsave()</code>.</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb30"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 7.3 · Take-Home Extension ──────────────────────────────────────</span></span>
-<span id="cb30-2"><a href="#cb30-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Write your code in the R script:</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="callout callout-style-default callout-note callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-Note
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p><strong>📤 What to turn in — due Oct 26</strong></p>
-<p>Your write-up should include:</p>
-<ul class="task-list">
-<li><label><input type="checkbox">The question</label></li>
-<li><label><input type="checkbox">Your hypotheses</label></li>
-<li><label><input type="checkbox">Which test you used, and your justification for choosing it</label></li>
-<li><label><input type="checkbox">The code and its output</label></li>
-<li><label><input type="checkbox">Your interpretation of the result</label></li>
-<li><label><input type="checkbox">A final figure showing the result</label></li>
-</ul>
-</div>
-</div>
-<div class="callout callout-style-default callout-note callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-Note
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p><strong>Reference</strong></p>
-<p>Sargent, L.W. &amp; Lodge, D.M. (2014). Evolution of invasive traits in nonindigenous species: increased survival and faster growth in invasive populations of rusty crayfish (<em>Orconectes rusticus</em>). <em>Evolutionary Applications</em>, 7, 949–961.</p>
-</div>
-</div>
 
 
-</section>
 </section>
 
 </main> <!-- /main -->

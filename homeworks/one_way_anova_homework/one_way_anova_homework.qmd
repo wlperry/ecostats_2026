@@ -1,259 +1,255 @@
 ---
 order: 12
-week: 7
+week: 8
 title: "Homework 7 — One-Way ANOVA"
-subtitle: "One-way ANOVA"
-description: "One-way analysis of variance."
+subtitle: "A dose series R puts in the wrong order"
+description: "Thirty-two Daphnia across three cyanobacteria densities: the same ANOVA workflow from class on an unbalanced design whose group labels sort into nonsense, and a response that may not want to be a factor at all."
 author: "Bill Perry"
-
 ---
 
-```{r setup_libraries}
-library(skimr)
+# Worksheet: A Dose Series R Puts in the Wrong Order
+
+[📥 Daphnia data](data/daphnia_resistance.csv){.btn .btn-primary download="daphnia_resistance.csv"} [📥 Tools script (.R)](themes_functions/r_themes_and_functions.R){.btn .btn-primary download="r_themes_and_functions.R"} [📥 Script skeleton (.R)](12_one_way_anova_homework.R){.btn .btn-primary download="12_one_way_anova_homework.R"}
+
+**The study.** *Daphnia* were raised at three densities of toxic cyanobacteria — `low`, `med` and `high` — and their **resistance** to the toxin was measured. Does exposure density change resistance?
+
+**How this relates to class.** You are running the crab worksheet again, in the same order. Two things are different, and both will bite if you do not notice them:
+
+- the design is **unbalanced**, so the shortcuts that worked on 21-per-group do not apply
+- the three group labels sort into an order that is **biologically meaningless**
+
+Columns: `cyanobacteria_density` and `resistance`.
+
+::: callout-note
+**Before you start**
+
+There is no hidden right answer to find. You are graded on whether your conclusions follow from your output, and on whether you notice what R did to your factor before you interpret anything.
+:::
+
+------------------------------------------------------------------------
+
+# Part 1 · Setup and the data
+
+**▶ Run this:**
+
+``` r
+# ── Part 1.1 · Setup and the data ───────────────────────────────────────
 library(tidyverse)
-library(janitor)
-library(readxl)
 library(car)
-library(broom)
-library(ggplot2)
 
-theme_set(theme_light())
+source("themes_functions/r_themes_and_functions.R")
+
+daphnia_df <- read_csv("data/daphnia_resistance.csv") %>%
+  mutate(cyanobacteria_density = factor(cyanobacteria_density))
+
+count(daphnia_df, cyanobacteria_density)
+
+levels(daphnia_df$cyanobacteria_density)
 ```
 
-# Assignment Overview
-
-This homework assignment analyzes crayfish growth data from Sargent and Lodge (2014) to examine differences in growth rates between native and invasive populations of rusty crayfish (*Orconectes rusticus*) using one-way ANOVA.
-
-## Learning Objectives
-
-By completing this assignment, you will be able to:
-
-1.  **Understand one-way ANOVA concepts and applications**
-2.  **Perform exploratory data analysis for group comparisons**
-3.  **Conduct one-way ANOVA analysis**
-4.  **Test statistical assumptions for ANOVA**
-5.  **Interpret ANOVA results and effect sizes**
-6.  **Create publication-quality figures**
-7.  **Write scientific methods and results sections**
-
-## Data Description
-
-The dataset contains growth measurements from a common garden experiment where young-of-year (YOY) rusty crayfish from native (Ohio) and invasive (Wisconsin) populations were grown in enclosures in northern Wisconsin lakes during summer 2011.
-
-**Key variables:**
-
-- \- `range`: Population origin (Native vs Invasive)
-
-- \- predictor variable - `growth_per_day`: Daily growth rate (mm/day)
-
-- \- response variable - `lake`: Lake location (Big, High, Papoose)
-
-- \- `initial_length`: Starting length (mm)
-
-- \- `final_length`: Ending length (mm)
-
-- \- `days`: Duration of experiment
-
-------------------------------------------------------------------------
-
-# Part 1: Data Loading and Preparation
-
-## 1.1 Load and Clean the Data
-
-```{r load_crayfish_data}
+✏️ **Your turn:** Record the design, then the order R chose.
 
 ```
+n per group:  low = ______   med = ______   high = ______
 
-```{r clean_crayfish_data}
-# df <- df %>%  
-#   mutate(
-#     range = factor(range, levels = c("Native", "Invasive")),
-#     lake = factor(lake, levels = c("Big", "High", "Papoose"))
-#   )
-# 
-# head(cray_df)
+Balanced? ______
+
+Levels, in R's order: _______________________________________
+
+Is that the order the experiment was designed in? ______
 ```
 
 ------------------------------------------------------------------------
 
-# Part 2: Statistical Analysis Setup
+# Part 2 · Fix the order first
 
-## 2.1 Analysis Type and Model
+In class the reference level was a *control*. Here there is no control — but there **is** a natural low-to-high sequence, and R has not used it.
 
-We are going to do a one way ANOVA on invasive and native growth rates. I am interested in seeing this overall... Is it the right test? Whats wrong?
+**▶ Your turn to write it:** put the levels in dose order, lowest first, then check.
 
-**Type of Analysis:** One-way ANOVA
-
-**Model Equation:** Growth Rate = X+X+X
-
-Where:
-
-- \- Response variable
-
-- \- μ
-
-- \- Range
-
-- \- ε
-
-**Hypotheses:**
-
-- \- H₀:
-
-- \- H₁:
-
-**Variables:**
-
-- \- Response: growth_per_day (continuous, mm/day)
-
-- \- Factor: range (categorical, 2 levels: Native, Invasive)
-
-**Biological Rationale:** We expect invasive populations to
-
-------------------------------------------------------------------------
-
-# Part 3: Exploratory Data Analysis
-
-## 3.1 Summary Statistics
-
-```{r summary_statistics}
-#| paged-print: false
-# cray_df %>%
-#   group_by(range) %>% 
-#   skim()
-
-
+``` r
+# ── Part 2.1 · Fix the order first ──────────────────────────────────────
+# Use fct_relevel() to order the levels low, med, high.
+# Then print levels() again to confirm.
 ```
 
-## 3.2 Exploratory Visualizations
+✏️ **Your turn:** Why does the order matter here even though it will not change the F-test?
 
-```{r histogram_initial}
+```
+____________________________________________________________
 
+____________________________________________________________
 ```
 
 ------------------------------------------------------------------------
 
-# Part 4: One-Way ANOVA Analysis
+# Part 3 · Look, then fit
 
-## 4.1 Fit the ANOVA Model
+**▶ Your turn to write it:** a boxplot of `resistance` by density with the raw points jittered on top, then the ANOVA.
 
-```{r anova_model}
-
+``` r
+# ── Part 3.1 · Look, then fit ───────────────────────────────────────────
+# Plot the data, then fit daphnia_model with lm() and print anova().
 ```
 
-Note using a Type 3 Sums of Squares shows a slight difference due to the unbalanced design
-
-```{r car_ANOVA}
- 
-```
-
-## 4.2 Effect Size Calculation
-
-```{r effect_size}
+✏️ **Your turn:** Report the test.
 
 ```
+F = __________   df = ______ and ______   p = __________
 
-**Eta-squared** represents the **proportion of total variance explained** by the factor (range).
-
-- Formula: η² = SS_between / SS_total
-- Range: 0 to 1
-- Interpretation: If η² = 0.21, then 21% of the variance in growth rate is explained by population range
-
-**Omega-squared** is a **less biased estimate** of effect size than eta-squared.
-
-- Formula: ω² = (SS_between - df_between × MS_within) / (SS_total + MS_within)
-- Range: 0 to 1 (but can be slightly negative)
-- More conservative than η² because it adjusts for bias in small samples
-
-## Why Calculate Both?
-
-- **Eta-squared (η²)**: Easier to calculate and interpret, but slightly **overestimates** effect size
-- **Omega-squared (ω²)**: More accurate, **unbiased estimate** of population effect size
-
-## Effect Size Interpretation Guidelines:
-
-```         
-Effect Size     η² / ω²       Interpretation
-Small           0.01          1% of variance explained
-Medium          0.06          6% of variance explained
-Large           0.14          14% of variance explained
+R squared = __________
 ```
 
-## Example Output Interpretation:
-
-If your results show:
-
-```         
-  eta_squared omega_squared
-1        0.21          0.20
-```
-
-This means:
-
-- **21%** of the variance in crayfish growth rate is explained by population range (η²)
-- **20%** is the unbiased estimate of variance explained (ω²)
-- This represents a **large effect size** (much larger than 0.14)
-- Population range is a strong predictor of growth rate
-
-**Bottom line**: Both metrics tell you how much of the differences in crayfish growth can be attributed to whether they're from native vs. invasive populations, with omega-squared being the more conservative (and accurate) estimate.
-
-------------------------------------------------------------------------
-
-# Part 5: Assumption Testing
-
-## 5.1 Check ANOVA Assumptions
-
-The easy way
-
-```{r assumption_testing_base}
-# # Create diagnostic plots
-# par(mfrow = c(2, 2))
-# plot(growth_anova_model)
-# par(mfrow = c(1, 1))
+✏️ **Your turn:** In class, df for the error term was 4(21 − 1) = 80. Why can you not use that shortcut here, and what is the general formula?
 
 ```
-
-## 5.2 Formal Assumption Tests
-
-```{r normality_test}
-# shapiro_test_result <- shapiro.test(residuals(model))
-# shapiro_test_result
-```
-
-```{r homogeneity_test}
-# levene_test_result <- leveneTest(response ~ factor, data = cradfy_df)
-# levene_test_result
+____________________________________________________________
 ```
 
 ------------------------------------------------------------------------
 
-# Part 6: Publication Figure
+# Part 4 · Check the assumptions
 
-## 6.1 Create Publication-Quality Figure
+**▶ Your turn to write it:** the four diagnostic plots, the Shapiro test on the residuals, and Levene's test.
 
-```{r publication_figure}
+``` r
+# ── Part 4.1 · Check the assumptions ────────────────────────────────────
+```
 
+✏️ **Your turn:** Fill in, and say whether you may proceed with the parametric test.
+
+```
+Shapiro p = __________   Levene p = __________
+
+Proceed with ANOVA? ______  Because: __________________________
 ```
 
 ------------------------------------------------------------------------
 
-# 
+# Part 5 · Read the coefficients
 
-# Submission Guidelines
+**▶ Your turn to write it:** print the coefficient table of your model.
 
-## What to turn in -
+``` r
+# ── Part 5.1 · Read the coefficients ────────────────────────────────────
+```
 
-1.  a quarto markdown file and dataframe if you modified the original. All of the code should be able to run with what you turn in. **(2 points)**
+✏️ **Your turn:** Write each coefficient out as a sentence in the units of the data.
 
-2.  a self-contained html file showing the code and output **(2 points)**
+```
+Intercept = __________ , which is the mean resistance of the ______ group
 
-3.  annotations in the quarto file that shows or tells what is being done in the r code chunks describing what you are trying to do - credit will be given even if it does not work as long as you detail what you are doing. As we start to move into more statistics you will be expected to interpret the results. **(2 points)**
+med  = __________ , meaning ________________________________
 
-## Points
+high = __________ , meaning ________________________________
+```
 
-- summary stats - 2 point
-- assumptions and hypotheses - 3 points
-- exploratory graphs - 2 point
-- interpretation - 4 points
-- Final figure - 1 point
-- Results - 2 points
+✏️ **Your turn:** Refit the model **without** your relevel — using R's alphabetical order — and look at the coefficient table again. Do not change anything else.
+
+```
+Which level is the reference now? ______
+
+Write out the "low" coefficient as a sentence:
+
+____________________________________________________________
+
+Which of the two tables would a reader understand faster, and why?
+
+____________________________________________________________
+```
+
+------------------------------------------------------------------------
+
+# Part 6 · Which densities differ?
+
+**▶ Your turn to write it:** Tukey's HSD on the releveled model.
+
+``` r
+# ── Part 6.1 · Which densities differ? ──────────────────────────────────
+```
+
+✏️ **Your turn:** Fill in all three adjusted p-values.
+
+```
+med - low  = __________
+
+high - low = __________
+
+high - med = __________
+```
+
+✏️ **Your turn:** Describe the pattern in one sentence. Is resistance a steady climb across the three densities, or something else?
+
+```
+____________________________________________________________
+```
+
+------------------------------------------------------------------------
+
+# Part 7 · The question the ANOVA cannot answer
+
+`low`, `med` and `high` are not three unrelated categories. They are three points on a **dose** scale, and ANOVA has thrown that ordering away — it would give exactly the same F if you shuffled the labels.
+
+✏️ **Your turn:** What would you gain by coding density as a **number** and running a regression instead? What would you lose?
+
+```
+Gain: ______________________________________________________
+
+Lose: ______________________________________________________
+```
+
+✏️ **Your turn:** Using your Part 6 answer, which of the two approaches better describes what these data actually show? Defend it in two sentences.
+
+```
+____________________________________________________________
+
+____________________________________________________________
+```
+
+------------------------------------------------------------------------
+
+# Part 8 · Report it, and hand in a figure
+
+✏️ **Your turn:** Write the results sentence — test, F with both df, p, R², post-hoc method, and the pattern.
+
+```
+____________________________________________________________
+
+____________________________________________________________
+```
+
+**▶ Your turn to write it:** one publication-quality figure, saved as a PDF.
+
+``` r
+# ── Part 8.1 · Report it, and hand in a figure ──────────────────────────
+# Group means with standard-error bars, in dose order. Title, subtitle,
+# axis labels with units, theme_regular(). Save to
+# figures/daphnia_anova.pdf with ggsave() at 6 x 4 inches.
+```
+
+✏️ **Your turn:** Check the bars run low → med → high in the PDF. If they do not, what did you forget?
+
+```
+____________________________________________________________
+```
+
+------------------------------------------------------------------------
+
+# Review and checkpoint
+
+At this point you can:
+
+- [ ] Recognise when R's alphabetical factor order is not the experiment's order, and fix it
+- [ ] Explain what the reference level does and does not change
+- [ ] Give the general degrees-of-freedom formula for an unbalanced one-way design
+- [ ] Check ANOVA's assumptions and decide whether to proceed
+- [ ] Read a Tukey table as a pattern rather than a list of p-values
+- [ ] Say when a categorical predictor is throwing away information
+
+::: callout-note
+**📤 What to turn in**
+
+1. `12_one_way_anova_homework.R`
+2. `figures/daphnia_anova.pdf`
+3. This worksheet, with your written answers
+:::

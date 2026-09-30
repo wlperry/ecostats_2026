@@ -3,7 +3,7 @@ metadata-files:
   - ../../_templates/_lectures.yml
 title: "Lecture: Analysis of Variance (ANOVA)"
 subtitle: "Single-factor ANOVA"
-description: "One-way ANOVA and its connection to regression: partitioning sums of squares, the F-ratio, assumptions and diagnostics, post-hoc testing, reporting, and non-parametric alternatives (Kruskal-Wallis, Dunn's test) — on a circadian-rhythm light-treatment dataset."
+description: "One-way ANOVA as regression with a categorical predictor: partitioning sums of squares, the F-ratio, assumptions and diagnostics, setting the reference level with fct_relevel(), post-hoc testing, reporting, and the non-parametric route when assumptions genuinely fail. Uses the fiddler crab claw-radiator experiment and a nematode lifespan dataset."
 categories: [ANOVA]
 order: 12
 week: 8
@@ -31,1524 +31,1187 @@ execute:
 #| warning: false
 library(performance)
 library(FSA)
-library(ggfortify)
-library(car)         # functions for regression diagnostics, ANOVA, and VIF
-library(emmeans)     # calculates and compares adjusted means from statistical models
-library(patchwork)   # Combines multiple ggplot2 plots into a single composite figure
-library(broom)       # Converts statistical model outputs into tidy data frames
-library(tidyverse)   # includes ggplot2, dplyr, tidyr, etc.
+library(car)
+library(emmeans)
+library(patchwork)
+library(tidyverse)
 
-# ============================================================================
-# CORE DATA CREATION - Used throughout the lecture
-# ============================================================================
+# ---- the two datasets, read once and reused all lecture ----
+# read exactly as a student would: factor() gives alphabetical levels.
+# Part 7 is about fixing that, so the lecture keeps the default until then.
+crab_df <- read_csv("data/fiddler_crabs.csv", show_col_types = FALSE) %>%
+  mutate(crab_type = factor(crab_type))
 
-# Create nitrate standard curve data for regression example
-nitrate_data <- tibble(
-  nitrate_n_mg_L = seq(0, 20, by = 2.5),
-  absorbance = c(0.02, 0.15, 0.28, 0.41, 0.54, 0.67, 0.80, 0.93, 0.98)
-)
+crab_relevel_df <- crab_df %>%
+  mutate(crab_type = fct_relevel(crab_type, "intact male"))
 
-# Create circadian rhythm ANOVA data - PRIMARY DATASET
-circ_data <- tibble(
-  treatment = rep(c("Control", "Knees", "Eyes"), times = c(8, 7, 7)),
-  phase_shift = c(0.53, 0.36, 0.20, -0.37, -0.60, -0.64, -0.68, -1.27,  # Control
-                 0.73, 0.31, 0.03, -0.29, -0.56, -0.96, -1.61,          # Knees
-                 -0.78, -0.86, -1.35, -1.48, -1.52, -2.04, -2.83)       # Eyes
-)
-circ_data <- circ_data %>% mutate(treatment = as.factor(treatment))
+worm_df <- read_csv("data/nematode_lifespan.csv", show_col_types = FALSE) %>%
+  mutate(treatment = fct_relevel(treatment, "water"))
 
-# Create subset with only 2 groups for t-test vs F-test comparison
-circ_data_two_groups <- circ_data %>%
-  filter(treatment %in% c("Control", "Knees"))
+# ---- numbers quoted in the text below, computed once so the prose cannot drift ----
+crab_model <- lm(body_temp_c ~ crab_type, data = crab_df)
+crab_anova <- anova(crab_model)
+crab_F  <- crab_anova[1, "F value"]
+crab_p  <- crab_anova[1, "Pr(>F)"]
+crab_r2 <- summary(crab_model)$r.squared
+ss_among  <- crab_anova[1, "Sum Sq"]
+ss_within <- crab_anova[2, "Sum Sq"]
+ss_total  <- ss_among + ss_within
 
-# ============================================================================
-# CORE MODELS - Fit once and reuse throughout
-# ============================================================================
+crab_two <- crab_df %>%
+  filter(crab_type %in% c("intact male", "female")) %>%
+  droplevels()
+t_two <- t.test(body_temp_c ~ crab_type, data = crab_two, var.equal = TRUE)
+f_two <- anova(lm(body_temp_c ~ crab_type, data = crab_two))[1, "F value"]
 
-circ_model <- lm(phase_shift ~ treatment, data = circ_data)
-anova_result <- anova(circ_model)
+worm_model <- lm(lifespan_days ~ treatment, data = worm_df)
+worm_shapiro <- shapiro.test(residuals(worm_model))$p.value
+worm_levene  <- leveneTest(lifespan_days ~ treatment, data = worm_df)[1, 3]
+worm_kw <- kruskal.test(lifespan_days ~ treatment, data = worm_df)
 
-circ_model_two_groups <- lm(phase_shift ~ treatment, data = circ_data_two_groups)
-anova_result_two_groups <- anova(circ_model_two_groups)
+crab_model_rl <- lm(body_temp_c ~ crab_type, data = crab_relevel_df)
+tukey_crab <- TukeyHSD(aov(crab_model_rl))$crab_type
 
-t_result_circ <- t.test(phase_shift ~ treatment, data = circ_data_two_groups, var.equal = TRUE)
-
-nonparam_circ_df <- circ_data
+# small p-values must print as plain text inline, not knitr's LaTeX sci-notation
+fmt_p <- function(p, digits = 3) {
+  if (p < 0.001) formatC(p, format = "e", digits = 2) else formatC(p, format = "g", digits = digits)
+}
 ```
 
 ## Where We Left Off
 
-::::::: columns
+::::: columns
 :::: {.column width="60%"}
 Covered last time — Multiple Regression:
 
-- The MLR model, regression parameters
-- Analysis of variance for regression
-- Null hypotheses, explained variance
-- Assumptions and diagnostics
-- Collinearity, interactions, dummy variables
-- Model selection, importance of predictors
+- Partial slopes, and why they are conditional
+- Collinearity, and saying "these data cannot separate them"
+- Interactions
+- **Factors, dummy variables, and `fct_relevel()`**
+- Model comparison with adjusted R² and AIC
+::::
 
+:::: {.column width="40%"}
 ::: callout-note
 **✅ Key idea from last lecture**
 
-You already built an ANOVA table for a regression — you just called it "analysis of variance for regression." Today we apply the exact same machinery to categorical predictors.
+You already built an ANOVA table for a regression, and you already turned a categorical predictor into dummy variables.
+
+Today every predictor is categorical. **The machinery does not change at all** — only the name on the front does.
 :::
 ::::
+:::::
 
-:::: {.column width="40%"}
-![XKCD comic 'Linear Regression': a scatterplot of scattered points with a nearly flat fitted regression line labeled R-squared = 0.06 next to the same points connected into a constellation-like stick figure labeled 'Rexthor, the Dog-Bearer', captioned 'I don't trust linear regressions when it's harder to guess the direction of the correlation from the scatter plot than to find new constellations on it.'](images/clipboard-2698541257.png){width="3.12in"}
-::::
-:::::::
-
-## Part 1 · ANOVA Overview {.divider}
+## Part 1 · Overview {.divider}
 
 ## Today's Objectives
 
-::::::: columns
+::::: columns
 :::: {.column width="60%"}
-**ANOVA:** analysis of variance, single-factor today, multi-factor to come.
+One-way ANOVA, end to end:
 
-- Predictor variables: fixed
-- The ANOVA model
-- Analysis and partitioning of variance
-- Null hypothesis
+- Why ANOVA *is* regression with a categorical predictor
+- Partitioning variance, and the F-ratio
 - Assumptions and diagnostics
-- Post-hoc tests — Tukey and others
-- Reporting the results
-- Mixed-model ANOVA — random effects
+- Setting the reference level on purpose
+- Post-hoc tests — which pairs actually differ
+- Reporting results
+- What to do when the assumptions genuinely fail
 
-::: callout-note
-**📖 Reference**
-
-Gotelli & Ellison, *A Primer of Ecological Statistics*, Ch. 10 — The Analysis of Variance, is the core reference for this lecture.
-:::
+[📥 Crab data](data/fiddler_crabs.csv){.btn .btn-primary download="fiddler_crabs.csv"} [📥 Nematode data](data/nematode_lifespan.csv){.btn .btn-primary download="nematode_lifespan.csv"}
 ::::
 
 :::: {.column width="40%"}
-What if the response is continuous and the predictor(s) categorical?
+::: callout-note
+**📖 Reading**
+
+Whitlock & Schluter, Ch. 15 — Comparing Means of More Than Two Groups.
+
+Gotelli & Ellison, Ch. 10 — The Analysis of Variance.
+:::
 
 |  | Continuous X | Categorical X |
 |:---|:---|:---|
-| **Continuous Y** | Regression | ANOVA |
-| **Categorical Y** | Logistic regression |  |
+| **Continuous Y** | Regression | **ANOVA** |
+| **Categorical Y** | Logistic | Contingency |
 ::::
-:::::::
+:::::
 
-## Part 2 · ANOVA and Regression Connection {.divider}
+## The Study · Does a Big Claw Act as a Radiator?
 
-## ANOVA and Regression Connection
+::::: columns
+:::: {.column width="55%"}
+A male fiddler crab has one hugely enlarged claw. Darnell & Munguia asked whether it doubles as a **heat radiator**, dumping heat so the crab can stay out foraging in the sun.
 
-::::::: columns
-:::: {.column width="60%"}
-**Both regression and ANOVA:**
+Four groups of **21 crabs each**, body temperature above ambient measured in the field:
 
-- Partition the total variation in Y
-- Use F-tests for significance, where one MS is divided by another
+- `intact male` — the control
+- `male major removed` — the big claw taken off
+- `male minor removed` — a small claw taken off, the **procedural control**
+- `female` — never had a major claw at all
 
-**Regression:**
-
-- Form: $Y = \beta_0 + \beta_1X + \varepsilon$ — Y is the response, β₀ the intercept, β₁ the slope, X the predictor, ε the error
-- Test: $H_0: \beta_1 = 0$ — rejecting means X significantly predicts Y
-::::
-
-:::: {.column width="40%"}
-**ANOVA:**
-
-- Form: $Y_{ij} = \mu + A_i + \varepsilon_{ij}$ — $Y_{ij}$ is observation j in group i, μ the grand mean, $A_i$ the effect of group i, ε the error
-- Test: $H_0: \mu_1 = \mu_2 = ... = \mu_k$ — rejecting means at least one group differs
-::::
-:::::::
-
-## The Same Partitioning, Two Kinds of Predictor
-
-::::::: columns
-:::: {.column width="60%"}
-General method for partitioning variation in a continuous dependent variable:
-
-- One or more continuous (and categorical) predictors → **regression**
-- One or more categorical predictors → **ANOVA**
-- Categorical predictor variables represent groups or experimental treatments
+If the big claw sheds heat, removing it should make males **hotter**.
 ::::
 
-:::: {.column width="40%"}
+:::: {.column width="45%"}
 ```{r analysis-of-variance-02}
-#| echo: false
-#| message: false
-#| warning: false
-#| paged-print: false
-#| fig-width: 3.6
-#| fig-height: 3.4
-#| fig-alt: "Two stacked plots: a scatterplot of absorbance versus nitrate concentration with a fitted regression line and equation, above a jittered scatterplot of phase shift by light treatment group with mean points and confidence-interval error bars, illustrating that regression and ANOVA both partition variation but with a continuous versus categorical predictor."
-nitrate_regression_plot <- ggplot(nitrate_data, aes(x = nitrate_n_mg_L, y = absorbance)) +
-  geom_point(size = 3, color = "#2E86AB") +
-  geom_smooth(method = "lm", se = TRUE, color = "#A23B72", fill = "#A23B72", alpha = 0.2) +
-  theme_minimal(base_size = 8) +
-  labs(x = "Nitrate-N (mg/L)", y = "Absorbance")
+crab_df <- read_csv("data/fiddler_crabs.csv") %>%
+  mutate(crab_type = factor(crab_type))
 
-lm_model <- lm(absorbance ~ nitrate_n_mg_L, data = nitrate_data)
-r_squared <- summary(lm_model)$r.squared
-equation <- paste0("y = ", round(coef(lm_model)[1], 3), " + ",
-                   round(coef(lm_model)[2], 3), "x\n",
-                   "R2 = ", round(r_squared, 3))
-
-nitrate_regression_plot <- nitrate_regression_plot +
-  annotate("text", x = 5, y = 0.85, label = equation, size = 2.6, hjust = 0)
-
-circadian_anova_plot <- ggplot(circ_data, aes(x = treatment, y = phase_shift, color = treatment)) +
-  geom_jitter(width = 0.2, alpha = 0.7, size = 2) +
-  stat_summary(fun = mean, geom = "point", size = 5, shape = 18) +
-  stat_summary(fun.data = "mean_cl_normal", geom = "errorbar", width = 0.2, linewidth = 1) +
-  theme_minimal(base_size = 8) +
-  labs(x = "Light Treatment", y = "Phase Shift (hours)") +
-  theme(legend.position = "none")
-
-nitrate_regression_plot / circadian_anova_plot
+count(crab_df, crab_type)
 ```
+
+::: callout-note
+**A balanced design**
+
+Equal n in every group — which makes the degrees-of-freedom arithmetic below clean, and the test robust.
+:::
 ::::
-:::::::
+:::::
 
-## ANOVA as Regression
+## 🗳️ How Today Works
 
-::: callout-tip
-**ANOVA as regression**
+::: callout-warning
+**🗳️ Six times today, you make the call**
 
-With one categorical variable, ANOVA is equivalent to regression with dummy variables. In fact, when we run ANOVAs we use the same code as for regression!
+Six slides are marked **🗳️ DECIDE**. Each asks a multiple-choice question, and I will *not* tell you the answer on that slide.
 
-`regression: model <- lm(response ~ predictor, data = df)`
-`anova: model <- lm(response ~ factor, data = df)`
-
-```{r analysis-of-variance-03}
-#| echo: false
-#| fig-height: 3.4
-#| fig-width: 3.4
-#| fig-alt: "Jittered scatterplot of a simulated response variable by three nutrient treatment groups (No, Low, High), with diamond points marking each group's mean and confidence-interval error bars, illustrating a one-way ANOVA setup."
-set.seed(123)
-anova_data <- tibble(
-  group = rep(c("No Nut.", "Low Nut.", "High Nut."), each = 10),
-  value = c(rnorm(10, 10, 2), rnorm(10, 13, 2), rnorm(10, 16, 2))
-) %>%
-  mutate(group = factor(group, levels = c("No Nut.", "Low Nut.", "High Nut.")))
-
-ggplot(anova_data, aes(x = group, y = value, color = group)) +
-  geom_jitter(width = 0.2, alpha = 0.7) +
-  stat_summary(fun = mean, geom = "point", size = 4, shape = 18) +
-  stat_summary(fun.data = "mean_cl_normal", geom = "errorbar", width = 0.2) +
-  theme_minimal(base_size = 8) +
-  labs(x = "Treatment Group", y = "Response Variable") +
-  theme(legend.position = "none")
-```
+**How it works:** write your letter down — actually write it — then hold up fingers 1–4. If the room splits, turn to the person next to you, argue for ninety seconds, and we vote again. Nothing here is graded. The point is that you commit before you find out.
 :::
 
-## Part 3 · ANOVA Goals and Logic {.divider}
+## Part 2 · ANOVA Is Regression {.divider}
 
-## ANOVA Goals
+## Same Machinery, Different Predictor
 
-::::::: columns
-:::: {.column width="60%"}
-ANOVA aims to compare means of groups:
+::::: columns
+:::: {.column width="50%"}
+**Regression**
 
-- Attributes contribution of predictors + "error" to variability
-- Tests H₀ that population (random effects) or group (fixed effects) means are equal
-- Single factor (1-way) and multifactor (2-, 3-way designs)
-  - Single factor: one factor with more than two levels
-- Multifactor: two or three factors with two or more levels each — examines variation due to factors **AND** their interaction
+$$Y_i = \beta_0 + \beta_1X_i + \varepsilon_i$$
+
+- X is continuous
+- H₀: β₁ = 0
+- One slope
+
+**ANOVA**
+
+$$Y_{ij} = \mu + A_i + \varepsilon_{ij}$$
+
+- $A_i$ is the effect of group i
+- H₀: μ₁ = μ₂ = … = μₖ
+- One coefficient per group, minus one
 ::::
 
-:::: {.column width="40%"}
-```{r analysis-of-variance-04}
-#| echo: false
-#| fig-width: 3
-#| fig-height: 2.6
-#| fig-alt: "Jittered scatterplot of circadian phase shift by light treatment (Control, Knees, Eyes), with diamond points marking each group's mean and confidence-interval error bars."
-circadian_anova_plot
+:::: {.column width="50%"}
+Both:
+
+- Partition total variation into **explained** and **left over**
+- Divide each sum of squares by its degrees of freedom
+- Test with an **F-ratio** of the two mean squares
+
+::: callout-important
+**✅ The same `lm()` call**
+
+``` r
+# regression
+lm(absorbance ~ nitrate, data = df)
+
+# ANOVA
+lm(body_temp_c ~ crab_type, data = df)
 ```
+
+The only difference is that `crab_type` is a factor, so R builds dummy variables for you — exactly as it did last week.
+:::
 ::::
-:::::::
+:::::
 
-## Analysis of Variance
+## 🗳️ DECIDE · Why Not Just Run All the t-tests?
 
-::::::: columns
+::::: columns
 :::: {.column width="60%"}
-*Analysis of variance* is the most powerful approach known for simultaneously testing if the means of k groups are equal — it works by assessing whether individuals chosen from different groups are, on average, more different than individuals chosen from the same group.
+With four crab groups there are **six** possible pairwise t-tests. Suppose every group really has the same mean, and you run all six at α = 0.05.
 
-The null hypothesis of ANOVA is that the population means μᵢ are the same for all treatments.
+**What is the chance you get at least one "significant" result?**
 
-- **H₀:** μ₁ = μ₂ = ... = μₖ
-- **H₁:** at least one μᵢ is different from the others
+**(a)** 5% — that is what α = 0.05 means
 
-Rejecting H₀ in ANOVA is evidence that the mean of at least one group is different from the others — it does **not** indicate *which* means differ.
+**(b)** About 12%
+
+**(c)** About 26%
+
+**(d)** 30% — 6 × 5%
+
+::: callout-warning
+**✍️ Write your letter down, then vote.**
+:::
 ::::
 
 :::: {.column width="40%"}
-```{r analysis-of-variance-05}
-#| echo: false
-#| fig-width: 3
-#| fig-height: 2.6
-#| fig-alt: "The circadian phase shift by light treatment plot repeated, shown alongside the ANOVA null and alternative hypothesis statements."
-circadian_anova_plot
-```
+::: callout-note
+**The question to ask**
+
+*What is the chance of getting no false positives in six independent tries?*
+:::
 ::::
-:::::::
+:::::
 
-## ANOVA Logic
+## The Multiple-Comparisons Problem
 
-::::::: columns
-:::: {.column width="60%"}
-Even if all groups had the same true mean, the data would likely show different sample means for each group due to sampling error.
+::::: columns
+:::: {.column width="55%"}
+::: callout-important
+**✅ The answer is (c) — about 26%.**
 
-The key insight of ANOVA: we can estimate how much variation among group means ought to be present from sampling error alone if H₀ is true. ANOVA lets us determine whether there is more variance among the sample means than expected by chance alone. If so, we infer real differences among the population means.
+$$1 - (1 - 0.05)^6 = `r round(1 - 0.95^6, 3)`$$
 
-Two key measures of variation are calculated and compared:
+Each test has a 95% chance of behaving. Six in a row behave only `r round(100 * 0.95^6, 1)`% of the time, so you have roughly a **one in four** chance of at least one false positive — before you have learned anything.
 
-1. **Group mean square ($MS_{groups}$)** — variation among subjects from different groups
-2. **Error mean square ($MS_{error}$)** — variation among subjects within the same group
-
-$$F = \frac{MS_{groups}}{MS_{error}}$$
+**(d)** is the common guess. Adding probabilities overshoots, because the ways of being wrong overlap.
+:::
 ::::
 
-:::: {.column width="40%"}
-```{r analysis-of-variance-06}
+:::: {.column width="45%"}
+**ANOVA's job is to ask one question first:** *is there any difference at all among these groups?*
+
+One test, one α, one p-value. Only if it rejects do you go looking for **which** groups differ — and then you use a post-hoc method that controls the error rate across that whole family of comparisons.
+
+With 10 groups there are 45 pairs, and the chance of at least one false positive is over **90%**.
+::::
+:::::
+
+## Part 3 · The Logic {.divider}
+
+## ANOVA's Question
+
+::::: columns
+:::: {.column width="55%"}
+Even if every group had the same true mean, the sample means would differ, just from sampling error.
+
+ANOVA asks whether the sample means differ **more than sampling error alone would produce**:
+
+- **$MS_{among}$** — how spread out the group means are
+- **$MS_{within}$** — how spread out individuals are inside their own group
+
+$$F = \frac{MS_{among}}{MS_{within}}$$
+
+- **H₀:** μ₁ = μ₂ = μ₃ = μ₄
+- **H₁:** at least one mean differs
+::::
+
+:::: {.column width="45%"}
+```{r analysis-of-variance-03}
 #| echo: false
 #| message: false
 #| warning: false
-#| paged-print: false
-#| fig-width: 3.4
-#| fig-height: 3.8
-#| fig-alt: "Three stacked plots illustrating ANOVA's variance partitioning: total variation as each point's deviation from the grand mean, among-groups variation as each group mean's deviation from the grand mean, and within-groups variation as each point's deviation from its own group mean."
-grand_mean <- mean(circ_data$phase_shift)
-
-group_means_df <- circ_data %>%
-  group_by(treatment) %>%
-  summarize(mean = mean(phase_shift))
-
-df_within <- circ_data %>%
-  left_join(group_means_df, by = "treatment")
-
-set.seed(123)
-jitter_amount <- 0.15
-df_within <- df_within %>%
-  mutate(x_jitter = as.numeric(factor(treatment)) +
-           runif(n(), -jitter_amount, jitter_amount))
-
-p1_anova_plot <- ggplot(circ_data, aes(x = treatment, y = phase_shift, color = treatment)) +
-  geom_errorbar(data = group_means_df,
-                aes(x = treatment, y = mean, ymin = mean, ymax = mean),
-                width = 0.8, linewidth = 1) +
-  geom_point(aes(x = circ_data$treatment, y = circ_data$phase_shift, color = treatment),
-             size = 2, position = position_jitter(width = 0.15)) +
-  geom_hline(yintercept = grand_mean, linetype = "dashed", color = "black") +
-  geom_segment(aes(x = treatment, xend = treatment, y = phase_shift, yend = grand_mean),
-               linetype = "solid",
-               position = position_jitter(width = 0.15)) +
-  labs(title = "Total Variation - Deviation from grand mean", y = "", x = "Treatment") +
-  theme_minimal(base_size = 7) +
-  theme(legend.position = "none")
-
-p2_anova_plot <- ggplot(df_within, aes(color = treatment)) +
-  geom_point(aes(x = as.numeric(factor(circ_data$treatment)), y = circ_data$phase_shift, color = treatment), alpha = 0.3,
-             size = 2, position = position_jitter(width = 0.15)) +
-  geom_segment(data = group_means_df,
-               aes(x = as.numeric(factor(treatment)) - 0.4,
-                   xend = as.numeric(factor(treatment)) + 0.4,
-                   y = mean, yend = mean, color = treatment),
-               linewidth = 1) +
-  geom_hline(yintercept = grand_mean, linetype = "dashed", color = "black") +
-  geom_segment(aes(x = x_jitter, xend = x_jitter, y = mean, yend = grand_mean),
-               linetype = "solid") +
-  labs(title = "Among Groups - Group means vs. grand mean",
-       y = "Phase Shift (hours)", x = "Treatment") +
-  ylim(range(circ_data$phase_shift)) +
-  scale_x_continuous(breaks = 1:3, labels = c("Control", "Knees", "Eyes")) +
-  theme_minimal(base_size = 7) +
-  theme(legend.position = "none")
-
-p3_anova_plot <- ggplot(df_within, aes(color = treatment)) +
-  geom_hline(yintercept = grand_mean, linetype = "dashed", color = "black") +
-  geom_segment(data = group_means_df,
-               aes(x = as.numeric(factor(treatment)) - 0.4,
-                   xend = as.numeric(factor(treatment)) + 0.4,
-                   y = mean, yend = mean, color = treatment),
-               linewidth = 1) +
-  geom_point(aes(x = x_jitter, y = phase_shift), size = 2) +
-  geom_segment(aes(x = x_jitter, xend = x_jitter, y = phase_shift, yend = mean),
-               linetype = "solid") +
-  labs(title = "Within Groups - Points vs. group mean", y = "", x = "Treatment") +
-  scale_x_continuous(breaks = 1:3, labels = c("Control", "Knees", "Eyes")) +
-  theme_minimal(base_size = 7) +
-  theme(legend.position = "none")
-
-anova_visualization_plot <- p1_anova_plot +
-  theme(axis.title.x = element_blank(), axis.text.x = element_blank()) +
-  p2_anova_plot +
-  theme(axis.title.x = element_blank(), axis.text.x = element_blank()) +
-  p3_anova_plot +
-  plot_layout(ncol = 1)
-
-anova_visualization_plot
+#| fig-height: 3
+#| fig-width: 3.2
+#| fig-alt: "Jittered scatterplot of fiddler crab body temperature by crab type, with a large diamond marking each group mean and error bars showing the confidence interval of the mean."
+ggplot(crab_df, aes(crab_type, body_temp_c, colour = crab_type)) +
+  geom_jitter(width = 0.18, alpha = 0.6, size = 1.6) +
+  stat_summary(fun = mean, geom = "point", size = 4, shape = 18) +
+  stat_summary(fun.data = mean_cl_normal, geom = "errorbar", width = 0.2) +
+  labs(x = NULL, y = "Body temp above ambient (C)") +
+  theme_minimal(base_size = 8) +
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = 30, hjust = 1))
 ```
 ::::
-:::::::
+:::::
+
+## Where the Variation Goes
+
+::::: columns
+:::: {.column width="45%"}
+Every point's distance from the **grand mean** splits into two pieces, exactly as in regression:
+
+$$\underbrace{(Y_{ij} - \bar{Y})}_{\text{total}} = \underbrace{(\bar{Y}_i - \bar{Y})}_{\text{among}} + \underbrace{(Y_{ij} - \bar{Y}_i)}_{\text{within}}$$
+
+Square and sum over every observation:
+
+$$SS_{total} = SS_{among} + SS_{within}$$
+
+The dashed line is the grand mean; the coloured bars are the group means.
+::::
+
+:::: {.column width="55%"}
+```{r analysis-of-variance-04}
+#| echo: false
+#| message: false
+#| warning: false
+#| fig-height: 3.8
+#| fig-width: 3.8
+#| fig-alt: "Three stacked panels showing the ANOVA partition on the crab data: total variation as each point's deviation from the grand mean, among-group variation as each group mean's deviation from the grand mean, and within-group variation as each point's deviation from its own group mean."
+set.seed(42)
+grand_mean <- mean(crab_df$body_temp_c)
+
+# jitter each point ONCE so the segments actually join the points they belong to
+plot_df <- crab_df %>%
+  group_by(crab_type) %>%
+  mutate(group_mean = mean(body_temp_c)) %>%
+  ungroup() %>%
+  mutate(x = as.numeric(crab_type) + runif(n(), -0.18, 0.18))
+
+means_df <- plot_df %>% distinct(crab_type, group_mean) %>%
+  mutate(x = as.numeric(crab_type))
+
+base <- function(p) {
+  p +
+    geom_hline(yintercept = grand_mean, linetype = "dashed", colour = "grey20") +
+    geom_segment(data = means_df,
+                 aes(x = x - 0.35, xend = x + 0.35, y = group_mean, yend = group_mean,
+                     colour = crab_type), linewidth = 1) +
+    scale_x_continuous(breaks = 1:4, labels = levels(crab_df$crab_type)) +
+    theme_minimal(base_size = 7) +
+    theme(legend.position = "none")
+}
+
+p1 <- base(ggplot(plot_df, aes(colour = crab_type)) +
+  geom_segment(aes(x = x, xend = x, y = body_temp_c, yend = grand_mean), alpha = 0.6) +
+  geom_point(aes(x, body_temp_c), size = 1.2)) +
+  labs(title = "Total: points to the grand mean", x = NULL, y = NULL)
+
+p2 <- base(ggplot(plot_df, aes(colour = crab_type)) +
+  geom_point(aes(x, body_temp_c), size = 1.2, alpha = 0.25) +
+  geom_segment(aes(x = x, xend = x, y = group_mean, yend = grand_mean), alpha = 0.6)) +
+  labs(title = "Among: group means to the grand mean", x = NULL, y = "Body temp (C)")
+
+p3 <- base(ggplot(plot_df, aes(colour = crab_type)) +
+  geom_segment(aes(x = x, xend = x, y = body_temp_c, yend = group_mean), alpha = 0.6) +
+  geom_point(aes(x, body_temp_c), size = 1.2)) +
+  labs(title = "Within: points to their own group mean", x = NULL, y = NULL)
+
+(p1 + theme(axis.text.x = element_blank())) /
+  (p2 + theme(axis.text.x = element_blank())) /
+  (p3 + theme(axis.text.x = element_text(angle = 30, hjust = 1)))
+```
+::::
+:::::
 
 ## Part 4 · Partitioning the Sum of Squares {.divider}
 
-## Partitioning the Sum of Squares
+## The Sums of Squares
 
-::::::: columns
-:::: {.column width="60%"}
-The total variation in Y can be expressed as a sum of squares:
+::::: columns
+:::: {.column width="55%"}
+$$SS_{total} = \sum_{i}\sum_{j}(Y_{ij} - \bar{Y})^2$$
 
-$$SS_{total} = \sum_{i=1}^{a}\sum_{j=1}^{n}(Y_{ij} - \bar{Y})^2$$
+$$SS_{among} = \sum_{i} n_i(\bar{Y}_i - \bar{Y})^2$$
 
-This can be partitioned into two components:
+$$SS_{within} = \sum_{i}\sum_{j}(Y_{ij} - \bar{Y}_i)^2$$
 
-1. **Among Groups (Treatment):** $SS_{among} = n\sum_{i=1}^{a}(\bar{Y}_i - \bar{Y})^2$
-2. **Within Groups (Error):** $SS_{within} = \sum_{i=1}^{a}\sum_{j=1}^{n}(Y_{ij} - \bar{Y}_i)^2$
+with **a** groups and $n_i$ observations in group i:
 
-These components are additive: $SS_{total} = SS_{among} + SS_{within}$
+- $df_{among} = a - 1$ = `r nlevels(crab_df$crab_type) - 1`
+- $df_{within} = N - a$ = `r nrow(crab_df) - nlevels(crab_df$crab_type)`
+- $df_{total} = N - 1$ = `r nrow(crab_df) - 1`
 ::::
 
-:::: {.column width="40%"}
-```{r analysis-of-variance-07}
-#| echo: false
-#| message: false
-#| warning: false
-#| paged-print: false
-#| fig-width: 3.4
-#| fig-height: 3.8
-#| fig-alt: "The three-panel total/among/within variance partitioning figure repeated, shown alongside the sum-of-squares formulas it illustrates."
-anova_visualization_plot
-```
-::::
-:::::::
+:::: {.column width="45%"}
+::: callout-tip
+**🖐 Note the $n_i$**
 
-## A Worked Sum-of-Squares Example
+Each group mean's deviation is weighted by that group's **own** sample size. With a balanced design every $n_i$ is the same and it simplifies to $n\sum(\bar{Y}_i - \bar{Y})^2$ — but only then.
 
-::::::: columns
-:::: {.column width="60%"}
-```{r analysis-of-variance-08}
-#| echo: false
-#| paged-print: false
-summary_lm_anova_model <- summary(circ_model)
-summary_lm_anova_model
-anova_result
-```
-::::
-
-:::: {.column width="40%"}
-::: callout-important
-**Key connection to regression**
-
-This is the same partitioning we saw in regression analysis:
-
-$$SS_{total} = SS_{regression} + SS_{residual}$$
-
-- $SS_{among}$ in ANOVA = $SS_{regression}$ in regression
-- $SS_{within}$ in ANOVA = $SS_{residual}$ in regression
-
-Both measure how much variation is explained by our model vs. unexplained (error).
+Our design is balanced at n = `r nrow(crab_df)/nlevels(crab_df$crab_type)`, so both forms agree here.
 :::
 ::::
-:::::::
+:::::
 
-## The ANOVA Table
+## Computing Them by Hand
 
-::::::: columns
+::::: columns
+:::: {.column width="55%"}
+```{r analysis-of-variance-05}
+grand_mean <- mean(crab_df$body_temp_c)
+
+crab_parts <- crab_df %>%
+  group_by(crab_type) %>%
+  mutate(group_mean = mean(body_temp_c)) %>%
+  ungroup()
+
+ss_total  <- sum((crab_parts$body_temp_c - grand_mean)^2)
+ss_among  <- sum((crab_parts$group_mean  - grand_mean)^2)
+ss_within <- sum((crab_parts$body_temp_c - crab_parts$group_mean)^2)
+
+c(total = ss_total, among = ss_among, within = ss_within)
+
+ss_among + ss_within
+```
+::::
+
+:::: {.column width="45%"}
+**`r round(ss_among, 3)` + `r round(ss_within, 3)` = `r round(ss_total, 3)`** — exactly, as it must.
+
+::: callout-important
+**✅ The same identity as regression**
+
+- $SS_{among}$ here is $SS_{regression}$ there
+- $SS_{within}$ here is $SS_{residual}$ there
+
+Different names, same partition, same arithmetic.
+:::
+::::
+:::::
+
+## The ANOVA Table from R
+
+::::: columns
+:::: {.column width="55%"}
+```{r analysis-of-variance-06}
+crab_model <- lm(body_temp_c ~ crab_type, data = crab_df)
+
+anova(crab_model)
+```
+::::
+
+:::: {.column width="45%"}
+Every number is one you just built:
+
+- **Sum Sq** — `r round(ss_among, 2)` and `r round(ss_within, 2)`
+- **Df** — a − 1 = `r nlevels(crab_df$crab_type)-1`, N − a = `r nrow(crab_df)-nlevels(crab_df$crab_type)`
+- **Mean Sq** — Sum Sq ÷ Df
+- **F value** — the ratio of those two mean squares
+
+**F = `r round(crab_F, 2)`, p = `r fmt_p(crab_p)`.**
+::::
+:::::
+
+## 🗳️ DECIDE · What Does That F Tell You?
+
+::::: columns
 :::: {.column width="60%"}
-The ANOVA table organizes all computations leading to a test of the null hypothesis of no differences among population means.
+The ANOVA returns **F = `r round(crab_F, 2)`, p = `r fmt_p(crab_p)`**.
 
-- **Source of variation** — what is being tested
-- **Sum of squares** — total variation for each source
-- **df** — degrees of freedom for each source
-- **Mean squares** — sum of squares divided by df
-- **F-ratio** — ratio of mean squares, used to test significance
-- **P-value** — probability of observing our results if H₀ is true
+**What have you just learned?**
 
-**Example:** for a one-way ANOVA with 3 groups and 4 replicates per group: df(treatments) = a − 1 = 2, df(error) = a(n − 1) = 3(4 − 1) = 9, df(total) = an − 1 = 11
+**(a)** All four crab types have different mean temperatures
+
+**(b)** At least one crab type differs from at least one other
+
+**(c)** Removing the major claw raises body temperature
+
+**(d)** The major claw explains `r round(100*crab_r2, 1)`% of the variation in temperature, so the radiator hypothesis is supported
+
+::: callout-warning
+**✍️ One letter. Write it down.**
+:::
 ::::
 
 :::: {.column width="40%"}
-```{r analysis-of-variance-09}
-#| echo: false
-#| message: false
-#| warning: false
-#| paged-print: false
-summary_lm_anova_model
-anova_result
+::: callout-note
+**The question to ask**
 
-group_means <- circ_data %>%
-  group_by(treatment) %>%
-  summarize(
-    Mean = mean(phase_shift),
-    SD = sd(phase_shift),
-    N = n()
-  )
-group_means
-```
-::::
-:::::::
+*What was the null hypothesis, exactly?*
 
-## Comparing ANOVA and Regression Tables
-
-::: callout-important
-**ANOVA table:**
-
-| Source | df | SS | MS | F | p |
-|---|---|---|---|---|---|
-| Treatment | a-1 | SS_treatment | MS_treatment | F | p |
-| Error | a(n-1) | SS_error | MS_error |  |  |
-| Total | a*n-1 | SS_total |  |  |  |
-
-**Is equivalent to an ANOVA table from a regression model:**
-
-| Source | df | SS | MS | F | p |
-|---|---|---|---|---|---|
-| Regression | k | SS_regression | MS_regression | F | p |
-| Error | n-k-1 | SS_residual | MS_residual |  |  |
-| Total | n-1 | SS_total |  |  |  |
-
-Where k = number of predictor/dummy variables = a − 1, and a = treatment groups/levels of factors.
+A test can only tell you about the hypothesis it tested.
 :::
+::::
+:::::
+
+## What F Does and Does Not Say
+
+::::: columns
+:::: {.column width="55%"}
+::: callout-important
+**✅ The answer is (b).**
+
+H₀ was "all four means are equal." Rejecting it says **at least one** differs — not which, not how many, and not in which direction.
+
+**(a)** claims far more than the test supports.
+**(c)** is a directional claim about one specific pair; that needs a post-hoc comparison, and Part 8 shows it is not even true.
+**(d)** misreads R²: `r round(crab_r2, 3)` is the variance explained by **crab type**, which bundles sex and two surgeries together, not by the claw alone.
+:::
+::::
+
+:::: {.column width="45%"}
+::: callout-warning
+**⚠️ The most common ANOVA mistake**
+
+Reporting a significant F and then describing whichever group means look farthest apart, as though the F test had said so.
+
+**It did not.** The F test is an entry ticket, not an answer.
+:::
+::::
+:::::
 
 ## Part 5 · The F-Ratio {.divider}
 
-## The F-Ratio
+## What F Actually Is
 
-::::::: columns
-:::: {.column width="60%"}
-$$F = \frac{MS_{among}}{MS_{error}}$$
+::::: columns
+:::: {.column width="55%"}
+$$F = \frac{MS_{among}}{MS_{within}}$$
 
-- Under H₀ (all means equal): the F-ratio should be approximately 1
-- Larger F-ratios suggest among-group variance exceeds what's expected by chance
-- With the circadian rhythm data: F = 7.29, p = 0.004 — we reject H₀
-- The F-ratio follows an F-distribution with (a − 1) and a(n − 1) df
+- $MS_{within}$ estimates the background variance σ² — pooled from inside the groups, where the treatment cannot reach
+- $MS_{among}$ estimates that **same** σ², *plus* anything real that separates the group means
+- **If H₀ is true, both estimate σ² and F ≈ 1**
 
+Here F = **`r round(crab_F, 2)`** — the group means are `r round(crab_F, 0)` times further apart than within-group noise alone can explain.
+::::
+
+:::: {.column width="45%"}
+::: callout-tip
+**🖐 Why F is never negative**
+
+It is a ratio of two variances, and a variance is a sum of **squares**. The direction of a difference disappears the moment you square it — which is why a significant F cannot tell you which way anything went.
+:::
+::::
+:::::
+
+## F and t Are the Same Test
+
+::::: columns
+:::: {.column width="55%"}
+Take just two of the four groups — intact males and females — and test them both ways:
+
+```{r analysis-of-variance-07}
+crab_two <- crab_df %>%
+  filter(crab_type %in% c("intact male", "female")) %>%
+  droplevels()
+
+t.test(body_temp_c ~ crab_type,
+       data = crab_two, var.equal = TRUE)$statistic
+
+anova(lm(body_temp_c ~ crab_type,
+         data = crab_two))[1, "F value"]
+```
+::::
+
+:::: {.column width="45%"}
+**t = `r round(t_two$statistic, 3)`**, so **t² = `r round(t_two$statistic^2, 2)`** — and **F = `r round(f_two, 2)`**.
+
+Identical, with identical p-values.
+
+::: callout-important
+**✅ ANOVA generalises the t-test**
+
+With two groups they are the same test. With three or more, the t-test has nowhere to go and ANOVA does.
+
+This is the same **t² = F** identity you proved on a regression slope in Week 6.
+:::
+::::
+:::::
+
+## Variance Explained
+
+::::: columns
+:::: {.column width="55%"}
+$$R^2 = \frac{SS_{among}}{SS_{total}} = \frac{`r round(ss_among, 2)`}{`r round(ss_total, 2)`} = `r round(crab_r2, 3)`$$
+
+Crab type accounts for about **`r round(100*crab_r2, 1)`%** of the variation in body temperature. The rest is individual crabs being individual crabs.
+
+```{r analysis-of-variance-08}
+summary(crab_model)$r.squared
+```
+::::
+
+:::: {.column width="45%"}
+::: callout-note
+**Significant and partial, at the same time**
+
+p = `r fmt_p(crab_p)` says the group differences are not noise. R² = `r round(crab_r2, 2)` says they explain under half of what is going on.
+
+Both are true, and a results section should carry both.
+:::
+::::
+:::::
+
+## Part 6 · Assumptions and Diagnostics {.divider}
+
+## The Three Assumptions
+
+::::: columns
+:::: {.column width="55%"}
+One-way ANOVA assumes:
+
+1. **Independence** — observations do not depend on each other. This one comes from the **design**, and no plot can rescue it
+2. **Normality** — of the **residuals**, not of the raw response
+3. **Equal variance** (homoscedasticity) across groups
+
+ANOVA is fairly robust to mild departures from 2 and 3 **when the design is balanced**, which is one more reason to plan for equal n.
+::::
+
+:::: {.column width="45%"}
+::: callout-warning
+**⚠️ Normality of what?**
+
+Not `body_temp_c`. Not each group separately. **The residuals of the fitted model** — exactly as in regression.
+
+A response that looks bimodal because the groups differ is perfectly fine; that is the effect you are testing.
+:::
+::::
+:::::
+
+## The Four Diagnostic Plots
+
+::::: columns
+:::: {.column width="45%"}
+The same four panels you read for a regression:
+
+1. **Residuals vs fitted** — with a factor, the points stack in vertical columns, one per group. You are looking for **equal spread** in each column
+2. **QQ plot** — residuals against normal
+3. **Scale-location** — same check, easier to see
+4. **Residuals vs leverage** — influential points
+::::
+
+:::: {.column width="55%"}
+```{r analysis-of-variance-09}
+#| echo: false
+#| fig-height: 3.4
+#| fig-width: 3.6
+#| fig-alt: "Four standard diagnostic plots for the crab ANOVA model: residuals versus fitted values, normal QQ plot, scale-location, and residuals versus leverage."
+par(mfrow = c(2, 2), mar = c(4, 4, 2, 1))
+plot(crab_model)
+par(mfrow = c(1, 1))
+```
+::::
+:::::
+
+## Levene's Test — Equal Variances
+
+::::: columns
+:::: {.column width="55%"}
 ```{r analysis-of-variance-10}
-#| echo: false
-f_observed <- anova_result$`F value`[1]
-f_critical <- qf(0.95, df1 = 2, df2 = 19)
-
-results_df <- tibble(
-  Metric = c("F-observed", "F-critical (alpha = 0.05)"),
-  Value = c(f_observed, f_critical)
-)
-results_df
+leveneTest(body_temp_c ~ crab_type, data = crab_df)
 ```
+
+H₀ is **"the variances are equal"**, so a **large** p-value is the good outcome — the same backwards logic as Shapiro-Wilk.
 ::::
 
-:::: {.column width="40%"}
+:::: {.column width="45%"}
+p = `r round(leveneTest(body_temp_c ~ crab_type, data = crab_df)[1,3], 3)` — nothing to worry about.
+
+::: callout-tip
+**🖐 Levene vs Bartlett**
+
+Bartlett's test is more powerful but assumes normality itself. Levene's works on absolute deviations from the group median, so it is far more robust. Use Levene.
+:::
+::::
+:::::
+
+## Shapiro-Wilk — Normality of the Residuals
+
+::::: columns
+:::: {.column width="55%"}
 ```{r analysis-of-variance-11}
-#| echo: false
-#| message: false
-#| warning: false
-#| paged-print: false
-#| fig-width: 3.4
-#| fig-height: 3
-#| fig-alt: "F-distribution curve with 2 and 19 degrees of freedom, with the rejection region beyond the critical F-value shaded red and a dashed blue line marking the critical F-value."
-x <- seq(0, 10, by = 0.1)
-y <- df(x, df1 = 2, df2 = 19)
-f_data <- tibble(x = x, y = y)
-f_crit <- qf(0.95, df1 = 2, df2 = 19)
-
-ggplot(f_data, aes(x = x, y = y)) +
-  geom_line() +
-  geom_area(data = subset(f_data, x >= f_crit), aes(x = x, y = y), fill = "red", alpha = 0.3) +
-  geom_vline(xintercept = f_crit, linetype = "dashed", color = "blue") +
-  geom_text(aes(x = f_crit + 0.7, y = 0.15, label = paste("F-crit =", round(f_crit, 2))), color = "blue", size = 3) +
-  geom_text(aes(x = 7.5, y = 0.05, label = "alpha = 0.05"), color = "red", size = 3) +
-  labs(title = "F-Distribution (2, 19 df)", x = "F Value", y = "Density") +
-  theme_minimal(base_size = 8)
+shapiro.test(residuals(crab_model))
 ```
-::::
-:::::::
 
-## Connection of an F-Test to a T-Test
-
-::::::: columns
-:::: {.column width="60%"}
-An ANOVA with two groups (a = 2) is equivalent to a t-test — why F = t²? Both test the same hypothesis: are the means of two groups different?
-
-- **The t-statistic:** $t = \frac{\bar{X}_1 - \bar{X}_2}{SE_{difference}}$ — measures how many standard errors apart the two means are, and can be + or −
-- **The F-statistic:** $F = \frac{MS_B}{MS_W}$ — the ratio of variance *between* groups to variance *within* groups
-- Unlike t, F is always non-negative (it's a ratio of squared quantities)
+Note what goes inside: **`residuals(crab_model)`**.
 ::::
 
-:::: {.column width="40%"}
-**The mathematical connection:**
+:::: {.column width="45%"}
+p = `r round(shapiro.test(residuals(crab_model))$p.value, 3)` — the residuals are consistent with normal.
 
-- Both measure the same signal-to-noise ratio — numerators capture the difference between groups (signal), denominators capture variability within groups (noise)
-- With two groups: $MS_B$ relates directly to $(\bar{X}_1 - \bar{X}_2)^2$, and $MS_W$ relates to the pooled variance
-- **Degrees of freedom match up too:** t-test df = n₁ + n₂ − 2; F-test df₁ = 1 (numerator), df₂ = n₁ + n₂ − 2 (denominator)
-- An F-distribution with df₁ = 1 is the square of a t-distribution with df₂
+::: callout-warning
+**⚠️ Do not let the test overrule the plot**
+
+At small n it cannot detect real problems; at large n it flags departures too small to matter. The QQ plot is the primary evidence.
+:::
 ::::
-:::::::
+:::::
 
-## Why This Matters — ANOVA Generalizes the T-Test
+## One Call for All of It
 
-::::::: columns
-:::: {.column width="60%"}
-- Shows ANOVA is actually a *generalization* of the t-test
-- When a = 2, you get the same result either way
-- But ANOVA extends naturally to comparing three or more groups — you can't do that directly with a t-test without running into multiple-comparison problems
+::::: columns
+:::: {.column width="45%"}
+`performance::check_model()` draws every assumption check in one labelled panel, with a plain-English caption on each.
+
+``` r
+check_model(crab_model)
+```
+
+Useful for a quick look. Still worth knowing what each panel is, which is why we did them one at a time first.
 ::::
 
-:::: {.column width="40%"}
+:::: {.column width="55%"}
 ```{r analysis-of-variance-12}
 #| echo: false
 #| message: false
 #| warning: false
-#| paged-print: false
-t_statistic <- t_result_circ$statistic
-f_statistic <- anova_result_two_groups$`F value`[1]
-
-cat("Using circ_data (Control vs Knees groups):\n",
-    "t-statistic:", round(t_statistic, 4), "\n",
-    "t^2:", round(t_statistic^2, 4), "\n",
-    "F-statistic:", round(f_statistic, 4), "\n",
-    "Difference (should be ~0):", round(abs(t_statistic^2 - f_statistic), 6), "\n")
+#| fig-height: 3.6
+#| fig-width: 4
+#| fig-alt: "The performance package's check_model output for the crab ANOVA, showing posterior predictive check, linearity, homogeneity of variance, influential observations and normality of residuals in one labelled panel."
+check_model(crab_model, check = c("qq", "homogeneity", "normality", "outliers"))
 ```
 ::::
-:::::::
+:::::
 
-## F-Ratio, Confirmed on the Full Model
+## Part 7 · The Reference Level, Again {.divider}
 
-::::::: columns
-:::: {.column width="60%"}
-$$F = \frac{MS_{among}}{MS_{error}}$$
+## R Sorts Alphabetically — Still
 
-- Under H₀ (all means equal), the F-ratio should be ≈ 1
-- Larger F-ratios suggest among-group variance exceeds chance
-- With the circadian rhythm data: F₂,₁₉ = 7.29, p = 0.004 — we reject H₀
-- The F-ratio follows an F-distribution with (a − 1) and a(n − 1) df
+::::: columns
+:::: {.column width="55%"}
+Read the file without thinking about it and the four crab types become a factor in **alphabetical** order:
 
 ```{r analysis-of-variance-13}
-#| echo: false
-#| message: false
-#| warning: false
-#| paged-print: false
-summary(circ_model)
-Anova(circ_model)
+levels(crab_df$crab_type)
 ```
+
+So the reference is **female** — and every coefficient in the model becomes "compared with a female crab."
 ::::
 
-:::: {.column width="40%"}
-```{r analysis-of-variance-14}
-#| echo: false
-#| message: false
-#| warning: false
-#| paged-print: false
-#| fig-width: 3
-#| fig-height: 2.6
-#| fig-alt: "The circadian phase shift by light treatment plot repeated once more, shown alongside the F-ratio result confirmed on the full three-group model."
-circadian_anova_plot
-```
-::::
-:::::::
+:::: {.column width="45%"}
+::: callout-warning
+**⚠️ That is the wrong baseline for this experiment**
 
-## Part 6 · Variance Explained — R² {.divider}
+The question is what happens when you **remove a claw from a male**. The comparison that answers it is against an **intact male**, not against a female.
 
-## Variance Explained: R²
-
-::::::: columns
-:::: {.column width="60%"}
-R² summarizes the contribution of group differences to total variation:
-
-$$R^2 = \frac{SS_{among}}{SS_{total}}$$
-
-This is interpreted as the "fraction of the variation in Y that is explained by groups." For the circadian rhythm data:
-
-$$R^2 = \frac{7.224}{16.639} = 0.43$$
-
-43% of the total variation in phase shift is explained by differences in light treatment, with the remaining 57% unexplained.
-
-**Connection to regression:** this is exactly the same calculation as R² in regression, $R^2 = SS_{regression}/SS_{total}$.
-::::
-
-:::: {.column width="40%"}
-```{r analysis-of-variance-15}
-#| echo: false
-#| message: false
-#| warning: false
-#| paged-print: false
-#| fig-width: 3.4
-#| fig-height: 3.8
-#| fig-alt: "Two stacked plots: a filled-rectangle diagram showing the percentage of variance explained (blue) versus unexplained (grey) by treatment, and a scatterplot of phase shift against treatment group coded as a number with a fitted regression line and R-squared label, showing ANOVA as a regression view."
-total_ss <- sum((circ_data$phase_shift - mean(circ_data$phase_shift))^2)
-among_ss <- anova_result$`Sum Sq`[1]
-r_squared <- among_ss / total_ss
-
-variance_explained_plot <- ggplot() +
-  geom_rect(aes(xmin = 0, xmax = 10, ymin = 0, ymax = 10), fill = "lightgrey") +
-  geom_rect(aes(xmin = 0, xmax = 10, ymin = 0, ymax = 10 * r_squared), fill = "darkblue") +
-  annotate("text", x = 5, y = 10 * r_squared / 2,
-           label = paste0("Explained\n", round(r_squared * 100, 1), "%"),
-           color = "white", size = 3) +
-  annotate("text", x = 5, y = 10 * r_squared + (10 * (1 - r_squared) / 2),
-           label = paste0("Unexplained\n", round((1 - r_squared) * 100, 1), "%"),
-           size = 3) +
-  coord_fixed(ratio = 1) +
-  labs(title = "Variance Explained by Treatment", subtitle = "R2 Visualization") +
-  theme_void(base_size = 8) +
-  theme(plot.title = element_text(hjust = 0.5),
-        plot.subtitle = element_text(hjust = 0.5))
-
-anova_regression_output_plot <- ggplot(circ_data, aes(x = as.numeric(as.factor(treatment)), y = phase_shift)) +
-  geom_point() +
-  geom_smooth(method = "lm", se = FALSE, formula = y ~ x) +
-  annotate("text", x = 2, y = min(circ_data$phase_shift),
-           label = paste("R2 =", round(r_squared, 3)),
-           hjust = 0.5, vjust = 0, size = 3) +
-  labs(title = "Regression View of ANOVA",
-       x = "Treatment Group (as numeric)", y = "Phase Shift (hours)") +
-  theme_minimal(base_size = 8)
-
-variance_explained_plot + anova_regression_output_plot + plot_layout(ncol = 1)
-```
-::::
-:::::::
-
-## Part 7 · Assumptions and Diagnostics {.divider}
-
-## ANOVA Assumptions
-
-::::::: columns
-:::: {.column width="60%"}
-ANOVA has the same assumptions as the two-sample t-test, but applied to all k groups:
-
-- **Random samples** from corresponding populations
-- **Normality** — Y values are normally distributed in each population
-- **Homogeneity of variance** — variance is the same in all populations
-- **Independence** — observations are independent
-::::
-
-:::: {.column width="40%"}
-**Checking assumptions:**
-
-- Normality: QQ plots, histogram of residuals, Shapiro-Wilk test
-- Homogeneity: plot residuals vs. predicted values or x-values
-- Independence: examine the experimental design
-
-**If assumptions are violated:** transform Y (e.g., log, square root), use robust or non-parametric alternatives, or use generalized linear models (GLMs).
-::::
-:::::::
-
-## The Four Standard Diagnostic Plots
-
-::::::: columns
-:::: {.column width="60%"}
-```{r analysis-of-variance-16}
-#| echo: false
-#| message: false
-#| warning: false
-#| paged-print: false
-#| fig-width: 3.6
-#| fig-height: 3.6
-#| fig-alt: "Four standard regression diagnostic plots for the ANOVA model, hand-built with ggplot2: residuals vs. fitted, normal Q-Q, scale-location, and residuals vs. leverage."
-model_data <- fortify(circ_model)
-
-p1 <- ggplot(model_data, aes(x = .fitted, y = .resid)) +
-  geom_point(alpha = 0.6) +
-  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
-  geom_smooth(se = FALSE, color = "blue", linewidth = 0.5) +
-  labs(title = "Residuals vs Fitted", x = "Fitted values", y = "Residuals") +
-  theme_minimal(base_size = 7)
-
-p2 <- ggplot(model_data, aes(sample = .stdresid)) +
-  stat_qq() +
-  stat_qq_line(color = "red", linetype = "dashed") +
-  labs(title = "Normal Q-Q", x = "Theoretical Quantiles", y = "Standardized Residuals") +
-  theme_minimal(base_size = 7)
-
-p3 <- ggplot(model_data, aes(x = .fitted, y = sqrt(abs(.stdresid)))) +
-  geom_point(alpha = 0.6) +
-  geom_smooth(se = FALSE, color = "red", linewidth = 0.5) +
-  labs(title = "Scale-Location", x = "Fitted values", y = "sqrt(|Std. resid.|)") +
-  theme_minimal(base_size = 7)
-
-p4 <- ggplot(model_data, aes(x = .hat, y = .stdresid)) +
-  geom_point(alpha = 0.6) +
-  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
-  labs(title = "Residuals vs Leverage", x = "Leverage", y = "Standardized Residuals") +
-  theme_minimal(base_size = 7)
-
-print((p1 | p2) / (p3 | p4))
-```
-::::
-
-:::: {.column width="40%"}
-::: callout-tip
-**🖐 Notice**
-
-These are the same four diagnostic views R gives you automatically from `plot(model)` — here built by hand with `ggplot2` + `broom::fortify()` so we can style them consistently.
+The model fits identically either way. The output only answers your question if you tell it what your question was.
 :::
 ::::
-:::::::
+:::::
 
-## A Newer Way to Check — the `performance` Package
+## 🗳️ DECIDE · Which Crab Is the Control?
 
-::::::: columns
+::::: columns
 :::: {.column width="60%"}
-```{r analysis-of-variance-17}
-#| echo: false
-#| message: false
-#| warning: false
-#| output: false
-diag_plots_2 <- check_model(circ_model)
-p <- plot(diag_plots_2)
-# Saved at a larger canvas so check_model()'s several sub-panels stay
-# readable, but displayed below at a fixed 4in width regardless of format.
-ggsave("diagnostics_2.png", p, width = 7, height = 6, dpi = 300)
-```
+You are about to set the reference level deliberately.
 
-![Multi-panel model diagnostic figure generated by performance::check_model(), including residual, normality, homogeneity of variance, and collinearity panels with built-in reference bands.](diagnostics_2.png){width="4in"}
+**Which level should it be, and why?**
+
+**(a)** `female` — keep R's default; the model fit is identical anyway
+
+**(b)** `intact male` — the untouched version of the animals that were manipulated
+
+**(c)** `male minor removed` — it is the procedural control, so it accounts for the surgery
+
+**(d)** It makes no difference, because the F-test and R² do not change
+
+::: callout-warning
+**✍️ Careful — two of these are true statements. Only one is the right decision.**
+:::
 ::::
 
 :::: {.column width="40%"}
 ::: callout-note
-**✅ Key idea**
+**The question to ask**
 
-`check_model()` from the `performance` package builds all the standard diagnostic panels — plus a few extra (e.g., collinearity) — in one call, with built-in guidance on what "good" looks like for each panel.
+*Which single comparison do I most want to read straight off the coefficient table?*
 :::
 ::::
-:::::::
+:::::
 
-## Levene's Test
+## `fct_relevel()` · Saying What You Meant
 
-::::::: columns
+::::: columns
+:::: {.column width="55%"}
+::: callout-important
+**✅ The answer is (b).**
+
+(d) is *true* — F, R², and the ANOVA table are identical whichever level is the reference. That is not a reason to accept a default chosen by spelling.
+
+(c) is tempting and it is the right **comparison** to make eventually — but as the baseline it hides the very contrast the experiment was built around.
+:::
+
+```{r analysis-of-variance-14}
+crab_df <- crab_df %>%
+  mutate(crab_type = fct_relevel(crab_type, "intact male"))
+
+crab_model <- lm(body_temp_c ~ crab_type, data = crab_df)
+
+summary(crab_model)$coefficients %>% round(3)
+```
+::::
+
+:::: {.column width="45%"}
+Now every row reads as "**degrees hotter than an intact male**":
+
+- `female` **+`r round(coef(crab_model_rl)[2], 2)`** — clearly hotter
+- `male major removed` **+`r round(coef(crab_model_rl)[3], 2)`**
+- `male minor removed` **`r round(coef(crab_model_rl)[4], 2)`**
+
+::: callout-tip
+**🖐 The habit**
+
+Set the reference in the same line that creates the factor. `fct_relevel(x, "control")` moves one level to the front and leaves the rest alone.
+:::
+::::
+:::::
+
+## Part 8 · Post-Hoc Testing {.divider}
+
+## What Post-Hoc Tests Are For
+
+::::: columns
+:::: {.column width="55%"}
+The F-test said *something* differs. Post-hoc tests say **what**, while keeping the family-wide error rate at α.
+
+- **Planned (a priori) comparisons** — a small number of contrasts you committed to **before** seeing the data. More powerful, because there are fewer of them
+- **Unplanned (post-hoc) comparisons** — all pairs, after the fact. Safer, less powerful
+
+**Tukey's HSD** is the standard for all pairwise comparisons with equal n.
+::::
+
+:::: {.column width="45%"}
+::: callout-warning
+**⚠️ Deciding after you look is not a plan**
+
+Choosing which comparisons to make *because they looked big* re-introduces exactly the multiple-comparisons problem the correction exists to solve.
+:::
+::::
+:::::
+
+## Tukey's HSD
+
+::::: columns
+:::: {.column width="55%"}
+```{r analysis-of-variance-15}
+TukeyHSD(aov(crab_model))
+```
+::::
+
+:::: {.column width="45%"}
+Each row is one pair: the difference in means, a confidence interval, and a p-value **already adjusted** for the whole family of six comparisons.
+
+A pair differs when its interval excludes zero.
+::::
+:::::
+
+## 🗳️ DECIDE · Reading the Tukey Output
+
+::::: columns
 :::: {.column width="60%"}
-Levene's test of homogeneity of variance.
+The radiator hypothesis predicts that a male whose **major claw was removed** should run **hotter** than an intact male.
 
-- Null hypothesis: variances are homogeneous
-- So you *want* a non-significant result here
+Tukey gives `male major removed − intact male` a difference of **+`r round(tukey_crab["male major removed-intact male","diff"], 3)`** with an adjusted **p = `r round(tukey_crab["male major removed-intact male","p adj"], 3)`**.
+
+**What should you conclude?**
+
+**(a)** The hypothesis is supported — the difference is in the predicted direction
+
+**(b)** The hypothesis fails — removing the major claw did not significantly change temperature
+
+**(c)** The hypothesis is supported, because females are significantly hotter than every male group
+
+**(d)** Nothing can be concluded, because the overall ANOVA was significant
+
+::: callout-warning
+**✍️ One letter, then argue it with your neighbour.**
+:::
 ::::
 
 :::: {.column width="40%"}
+::: callout-note
+**The question to ask**
+
+*Which comparison does the hypothesis actually make a prediction about?*
+:::
+::::
+:::::
+
+## What Tukey Actually Found
+
+::::: columns
+:::: {.column width="55%"}
+::: callout-important
+**✅ The answer is (b).**
+
+Removing the major claw moved temperature by `r round(tukey_crab["male major removed-intact male","diff"], 2)` °C, adjusted p = `r round(tukey_crab["male major removed-intact male","p adj"], 2)` — not distinguishable from zero. The direction is right and the evidence is not there.
+
+**(c)** is the trap: females *are* hotter than every male group, but females differ from males in many ways besides the claw. That comparison cannot test a claw-removal hypothesis.
+:::
+::::
+
+:::: {.column width="45%"}
+**What did differ** (adjusted p):
+
+::: {.compact-table}
+| Comparison | p |
+|:---|---:|
+| female − intact male | `r round(tukey_crab["female-intact male","p adj"], 4)` |
+| major removed − intact | `r round(tukey_crab["male major removed-intact male","p adj"], 3)` |
+| minor removed − intact | `r round(tukey_crab["male minor removed-intact male","p adj"], 3)` |
+| major − minor removed | `r round(tukey_crab["male minor removed-male major removed","p adj"], 3)` |
+:::
+
+The big effect in this dataset is **sex**, not surgery.
+::::
+:::::
+
+## Estimated Marginal Means
+
+::::: columns
+:::: {.column width="55%"}
+`emmeans` gives the same comparisons with more control — any contrast you like, any adjustment method:
+
+```{r analysis-of-variance-16}
+emmeans(crab_model, pairwise ~ crab_type,
+        adjust = "tukey")$contrasts
+```
+::::
+
+:::: {.column width="45%"}
+::: callout-tip
+**🖐 Why `emmeans` and not just `TukeyHSD()`**
+
+`TukeyHSD()` only does all-pairs on a balanced `aov`. `emmeans` handles unbalanced designs, covariates, several factors and **planned contrasts** — and it is what you will use from Week 9 onward.
+:::
+::::
+:::::
+
+## Part 9 · Reporting {.divider}
+
+## Reporting an ANOVA
+
+::::: columns
+:::: {.column width="55%"}
+A results sentence needs the **test, the statistic with both df, the p-value, and the direction** — then the post-hoc detail.
+
+> Body temperature differed among crab types (one-way ANOVA, F~`r crab_anova[1,"Df"]`,`r crab_anova[2,"Df"]`~ = `r round(crab_F, 2)`, p `r ifelse(crab_p < 0.001, "< 0.001", paste("=", round(crab_p,3)))`, R² = `r round(crab_r2, 2)`). Females were warmer than intact males by `r round(tukey_crab["female-intact male","diff"], 2)` °C (Tukey HSD, adjusted p < 0.001), but removing the major claw did not detectably change male temperature (`r round(tukey_crab["male major removed-intact male","diff"], 2)` °C, adjusted p = `r round(tukey_crab["male major removed-intact male","p adj"], 2)`).
+::::
+
+:::: {.column width="45%"}
+::: callout-note
+**✅ What that sentence does**
+
+- Names the test
+- Gives **both** degrees of freedom
+- Reports effect size, not just p
+- States the post-hoc method **and** that its p-values are adjusted
+- Reports the non-significant comparison the hypothesis was about, rather than quietly dropping it
+:::
+::::
+:::::
+
+## Part 10 · When the Assumptions Fail {.divider}
+
+## A Second Dataset · Nematode Lifespan
+
+::::: columns
+:::: {.column width="55%"}
+The crab data behaved. Most data do not.
+
+Here are **200 nematodes**, 50 in each of four treatments, exposed to a parasite as larvae, as adults, as both, or to **water** as a control. The response is lifespan in days.
+
+```{r analysis-of-variance-17}
+worm_df <- read_csv("data/nematode_lifespan.csv") %>%
+  mutate(treatment = fct_relevel(treatment, "water"))
+
+count(worm_df, treatment)
+```
+::::
+
+:::: {.column width="45%"}
 ```{r analysis-of-variance-18}
 #| echo: false
 #| message: false
 #| warning: false
-#| paged-print: false
-levene_test <- leveneTest(phase_shift ~ treatment, data = circ_data)
-levene_test
+#| fig-height: 3
+#| fig-width: 3.2
+#| fig-alt: "Boxplots with jittered points of nematode lifespan by treatment, showing unequal spread between groups and a long tail in the larva-plus-adult group."
+ggplot(worm_df, aes(treatment, lifespan_days, colour = treatment)) +
+  geom_boxplot(outlier.shape = NA, alpha = 0.3) +
+  geom_jitter(width = 0.18, alpha = 0.4, size = 1) +
+  labs(x = NULL, y = "Lifespan (days)") +
+  theme_minimal(base_size = 8) +
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = 30, hjust = 1))
 ```
+
+Note that the **`water` control sorts last alphabetically** — another reason to relevel on purpose.
 ::::
-:::::::
+:::::
 
-## Shapiro-Wilk Test
+## These Assumptions Genuinely Fail
 
-::::::: columns
-:::: {.column width="60%"}
-Shapiro-Wilk normality test.
-
-- Null hypothesis: the data are normally distributed
-- So you *want* a non-significant result here
-::::
-
-:::: {.column width="40%"}
+::::: columns
+:::: {.column width="55%"}
 ```{r analysis-of-variance-19}
-#| echo: false
-#| message: false
-#| warning: false
-#| paged-print: false
-shapiro_test <- shapiro.test(residuals(circ_model))
-shapiro_test
-```
-::::
-:::::::
+worm_model <- lm(lifespan_days ~ treatment, data = worm_df)
 
-## Shared Assumptions with Regression
+shapiro.test(residuals(worm_model))
 
-::: callout-note
-**ANOVA and regression share virtually identical assumptions, because they are both linear models:**
-
-| Assumption | ANOVA | Regression |
-|---|---|---|
-| Linearity | Each group has its own mean; effects are additive (no interaction in one-way ANOVA) | Relationship between X and Y is linear |
-| Normality | Residuals are normal | Residuals are normal |
-| Equal variance | Variance is the same across all groups | Variance is the same across all X values |
-| Independence | Observations are independent | Observations are independent |
-:::
-
-## Part 8 · Post-Hoc Testing {.divider}
-
-## ANOVA Post-Hoc Testing — Overview
-
-::::::: columns
-:::: {.column width="50%"}
-When ANOVA rejects H₀, we need to determine which groups differ.
-
-- **Unplanned (post hoc) comparisons:** used when no specific comparisons were planned; must adjust for multiple testing. Common methods: Tukey-Kramer, Bonferroni, Scheffé, Sidak
-- **Planned comparisons:** have strong prior justification, use pooled variance from all groups, have higher precision than separate t-tests
-- **Example:** Tukey's HSD to compare all pairs of treatments in the circadian rhythm data
-::::
-
-:::: {.column width="50%"}
-```{r analysis-of-variance-20}
-#| echo: false
-#| message: false
-#| warning: false
-#| paged-print: false
-tukey_result <- emmeans(circ_model, "treatment") |>
-  pairs(adjust = "tukey")
-tukey_result
-
-tukey_cld <- emmeans(circ_model, "treatment") |>
-  multcomp::cld(Letters = letters, adjust = "tukey")
-tukey_cld
-```
-::::
-:::::::
-
-## Post-Hoc Testing — Planned Comparisons
-
-::::::: columns
-:::: {.column width="50%"}
-When ANOVA rejects H₀, we need to determine which groups differ.
-
-- **Unplanned (post hoc) comparisons:** used when no specific comparisons were planned; must adjust for multiple testing. Common methods: Tukey-Kramer, Bonferroni, Scheffé
-- **Planned comparisons:** have strong prior justification, use pooled variance from all groups, have higher precision than separate t-tests
-- **Example:** using Tukey's HSD to compare all pairs of treatments
-::::
-
-:::: {.column width="50%"}
-```{r analysis-of-variance-21}
-#| echo: false
-#| message: false
-#| warning: false
-#| paged-print: false
-levels(circ_data$treatment)
-
-emm <- emmeans(circ_model, "treatment")
-
-planned_contrasts <- contrast(emm,
-                              method = list(
-                                "control vs eyes" = c(1, -1,  0),
-                                "control vs knees" = c(1, 0, -1)
-                              ))
-planned_contrasts
-```
-::::
-:::::::
-
-## Comparison of Post-Hoc Tests
-
-::::::: columns
-:::: {.column width="60%"}
-**The main post-hoc tests:**
-
-- **Tukey-Kramer (HSD):** compares all possible pairs of group means, controls family-wise error rate, most powerful when comparing ALL pairwise combinations
-- **Bonferroni:** adjusts α by dividing by the number of comparisons (α/k); very conservative; best for a small number of *planned* comparisons
-- **Sidak:** similar to Bonferroni but slightly less conservative: 1−(1−α)^(1/k); gives slightly more power
-- **Dunnett's Test:** specifically for comparing treatment groups to a control; more powerful than the others for that specific job
-
-The key tradeoff is between power (detecting real differences) and Type I error control (avoiding false positives). More conservative tests give better error control but less power.
-::::
-
-:::: {.column width="40%"}
-```{r analysis-of-variance-22}
-#| fig-width: 3
-#| fig-height: 2.6
-tukey_result <- emmeans(circ_model, "treatment") |>
-  pairs(adjust = "tukey")
-
-bonferroni_result <- emmeans(circ_model, "treatment") |>
-  pairs(adjust = "bonferroni")
-
-sidak_result <- emmeans(circ_model, "treatment") |>
-  pairs(adjust = "sidak")
-
-dunnett_result <- emmeans(circ_model, "treatment") |>
-  contrast(method = "trt.vs.ctrl", ref = 1, adjust = "dunnett")
-
-all_methods <- bind_rows(
-  summary(tukey_result) |>
-    as_tibble() |>
-    select(contrast, estimate, SE, p.value) |>
-    mutate(Method = "Tukey"),
-
-  summary(bonferroni_result) |>
-    as_tibble() |>
-    select(contrast, estimate, SE, p.value) |>
-    mutate(Method = "Bonferroni"),
-
-  summary(sidak_result) |>
-    as_tibble() |>
-    select(contrast, estimate, SE, p.value) |>
-    mutate(Method = "Sidak")
-)
-
-all_methods |>
-  select(contrast, Method, p.value) |>
-  pivot_wider(names_from = Method, values_from = p.value) |>
-  arrange(Tukey)
-```
-::::
-:::::::
-
-## Post-Hoc Visualization
-
-::::::: columns
-:::: {.column width="50%"}
-When ANOVA rejects H₀, we need to determine which groups differ.
-
-- **Unplanned comparisons:** used when no specific comparisons were planned; must adjust for multiple testing. Common methods: Tukey-Kramer, Bonferroni, Scheffé
-- **Planned comparisons:** have strong prior justification, use pooled variance, higher precision than separate t-tests
-- **Example:** Tukey's HSD to compare all pairs of treatments
-::::
-
-:::: {.column width="50%"}
-```{r analysis-of-variance-23}
-#| echo: false
-#| message: false
-#| warning: false
-#| paged-print: false
-#| fig-width: 3.4
-#| fig-height: 2.8
-#| fig-alt: "Estimated marginal mean phase shift by treatment with 95% confidence interval error bars, connected by a line."
-emmip(circ_model, ~ treatment, CIs = TRUE) +
-  theme_minimal(base_size = 8) +
-  labs(title = "Estimated Marginal Means with 95% CIs",
-       x = "Treatment", y = "Estimated Phase Shift")
-```
-::::
-:::::::
-
-## Significance Groups Plot
-
-::::::: columns
-:::: {.column width="60%"}
-When ANOVA rejects H₀, we need to determine which groups differ.
-
-- **Unplanned comparisons:** used when no specific comparisons were planned; must adjust for multiple testing. Common methods: Tukey-Kramer, Bonferroni, Scheffé
-- **Planned comparisons:** have strong prior justification, use pooled variance, higher precision than separate t-tests
-- **Example:** Tukey's HSD to compare all pairs of treatments
-::::
-
-:::: {.column width="40%"}
-```{r analysis-of-variance-24}
-#| echo: false
-#| fig-width: 3.4
-#| fig-height: 3
-#| fig-alt: "Jittered scatterplot of phase shift by treatment with mean points and confidence-interval error bars, and Tukey compact-letter-display labels below each group showing which groups share a letter (not significantly different)."
-ggplot(circ_data, aes(x = treatment, y = phase_shift, color = treatment)) +
-  geom_jitter(width = 0.2, alpha = 0.7) +
-  stat_summary(fun = mean, geom = "point", size = 4, shape = 18) +
-  stat_summary(fun.data = "mean_cl_normal", geom = "errorbar", width = 0.2) +
-  geom_text(data = as.data.frame(tukey_cld),
-            aes(x = treatment, y = -2.5, label = .group),
-            vjust = 0.5, size = 4) +
-  theme_minimal(base_size = 8) +
-  labs(title = "Treatment Means with Significance Groups",
-       subtitle = "Groups sharing the same letter are not significantly different",
-       x = "Light Treatment", y = "Phase Shift (hours)") +
-  theme(legend.position = "none")
-```
-::::
-:::::::
-
-## Part 9 · Reporting Results {.divider}
-
-## Reporting ANOVA Results
-
-::::::: columns
-:::: {.column width="60%"}
-**Formal scientific writing example:**
-
-"The effect of light treatment on circadian rhythm phase shift was analyzed using a one-way ANOVA. There was a significant effect of treatment on phase shift (F(2, 19) = 7.29, p = 0.004, η² = 0.43). Post-hoc comparisons using Tukey's HSD test indicated that the mean phase shift for the Eyes treatment (M = −1.55 h, SD = 0.71) was significantly different from both the Control treatment (M = −0.31 h, SD = 0.62) and the Knees treatment (M = −0.34 h, SD = 0.79). However, the Control and Knees treatments did not significantly differ from each other. These results suggest that light exposure to the eyes, but not to the knees, impacts circadian rhythm phase shifts."
-::::
-
-:::: {.column width="40%"}
-::: callout-note
-**Key ANOVA principles**
-
-1. Compares means across multiple groups simultaneously
-2. Both ANOVA and regression are special cases of the General Linear Model — ANOVA with categorical predictors = regression with dummy variables
-3. Both partition variance into explained and unexplained components: $SS_{Total} = SS_{Between} + SS_{Within}$
-4. Fixed effects target specific groups of interest (most common); random effects sample from a larger population
-:::
-::::
-:::::::
-
-## Part 10 · Non-Parametric Alternatives {.divider}
-
-## Overview of Non-Parametric Tests
-
-::::::: columns
-:::: {.column width="60%"}
-**Common non-parametric alternatives to ANOVA** — these make fewer assumptions about the data distribution.
-
-1. **Kruskal-Wallis test** — non-parametric alternative to one-way ANOVA; tests for differences in median ranks; works with ordinal or continuous data. Assumptions: independent observations, similar distribution shapes
-2. **Mood's median test** (not covered here) — tests whether medians differ across groups; more robust but less powerful than Kruskal-Wallis; good for highly skewed data
-::::
-
-:::: {.column width="40%"}
-**When to use non-parametric tests:**
-
-- Small sample sizes
-- Heavily skewed data
-- Legitimate outliers present
-- Very unequal variances
-- Ordinal (ranked) data
-- Assumption checks clearly fail
-
-**Trade-offs:** fewer assumptions and more robust to outliers, but less statistical power and testing medians/ranks rather than means.
-::::
-:::::::
-
-## The Kruskal-Wallis H Test
-
-::::::: columns
-:::: {.column width="60%"}
-The most common non-parametric alternative to one-way ANOVA.
-
-**What it does:** ranks all observations from smallest to largest, compares the sum of ranks between groups, tests if groups come from the same distribution.
-
-**Hypotheses:** H₀ — all groups have the same distribution (same median); H₁ — at least one group differs.
-
-**Test statistic:**
-
-$$H = \frac{12}{N(N+1)} \sum_{i=1}^{k} n_i (\bar{R}_i - \bar{R})^2 - 3(N+1)$$
-
-Where N = total sample size, k = number of groups, $\bar{R}_i$ = mean rank for group i, $\bar{R}$ = overall mean rank = (N+1)/2, nᵢ = sample size for group i. Distribution approximated by χ² with (k−1) df.
-::::
-
-:::: {.column width="40%"}
-**Assumptions of Kruskal-Wallis — much more relaxed than parametric ANOVA:**
-
-- **Independence** — same as parametric ANOVA, still critical
-- **Similar distribution shapes** — groups should have similar spread/variance; if violated, interpret as differences in distributions generally, not just medians
-- **Ordinal or continuous data**
-
-**What's NOT assumed:** normal distribution, equal variances (though it helps interpretation), a specific distribution shape.
-::::
-:::::::
-
-## Demonstrating Assumption Violations
-
-::::::: columns
-:::: {.column width="60%"}
-**Creating a modified dataset with clear violations:**
-
-```{r analysis-of-variance-25}
-#| echo: true
-set.seed(42)
-violated_circ_df <- circ_data %>%
-  mutate(
-    phase_shift_violated = case_when(
-      treatment == "Control" ~ phase_shift,
-      treatment == "Knees" ~ phase_shift * 3.25,
-      treatment == "Eyes" ~ {
-        n <- length(phase_shift)
-        c(phase_shift[1:(n-2)], phase_shift[(n-1):n] - 7)
-      }
-    )
-  )
-
-violated_model <- lm(phase_shift_violated ~ treatment,
-                     data = violated_circ_df)
-```
-
-**What we changed:** increased variance in the Knees group, added extreme outliers to the Eyes group, creating unequal variances and non-normality.
-::::
-
-:::: {.column width="40%"}
-```{r analysis-of-variance-26}
-#| echo: false
-#| fig-width: 3.4
-#| fig-height: 3
-#| fig-alt: "Jittered scatterplot with boxplots of a modified phase-shift dataset with deliberately introduced unequal variance and outliers, by light treatment group."
-ggplot(violated_circ_df,
-       aes(x = treatment, y = phase_shift_violated,
-           color = treatment)) +
-  geom_jitter(width = 0.2, alpha = 0.7, size = 3) +
-  geom_boxplot(alpha = 0.3, outlier.shape = NA) +
-  geom_jitter(width = 0.2, alpha = 0.7, size = 3) +
-  theme_minimal(base_size = 8) +
-  labs(title = "Modified Data with Violations",
-       subtitle = "Median with IQR",
-       x = "Light Treatment", y = "Phase Shift (hours)")
-```
-::::
-:::::::
-
-## Checking Violated-Data Assumptions — Normality
-
-::::::: columns
-:::: {.column width="50%"}
-**Clear violation:** p < 0.05, points deviate from the line.
-
-```{r analysis-of-variance-27}
-#| echo: false
-shapiro.test(resid(violated_model))
+leveneTest(lifespan_days ~ treatment, data = worm_df)
 ```
 ::::
 
-:::: {.column width="50%"}
-```{r analysis-of-variance-28}
-#| echo: false
-#| fig-width: 3.4
-#| fig-height: 3
-#| fig-alt: "Normal Q-Q plot of residuals from the deliberately violated ANOVA model, with points visibly curving away from the reference line, showing a clear departure from normality."
-qqnorm(resid(violated_model), main = "Q-Q Plot: Violated Data")
-qqline(resid(violated_model), col = "red", lwd = 2)
-```
-::::
-:::::::
+:::: {.column width="45%"}
+- Shapiro-Wilk **p = `r fmt_p(worm_shapiro)`** — residuals are not normal
+- Levene **p = `r fmt_p(worm_levene)`** — variances are nowhere near equal
 
-## Checking Violated-Data Assumptions — Variance
-
-::::::: columns
-:::: {.column width="50%"}
-**Clear violation:** p < 0.05, unequal variances evident.
-
-```{r analysis-of-variance-29}
-#| echo: false
-leveneTest(phase_shift_violated ~ treatment,
-           data = violated_circ_df)
-```
-::::
-
-:::: {.column width="50%"}
-```{r analysis-of-variance-30}
-#| echo: false
-#| fig-width: 3.4
-#| fig-height: 3
-#| fig-alt: "Scale-location plot for the deliberately violated ANOVA model, showing an uneven spread of standardized residuals across fitted values consistent with unequal variance."
-plot(violated_model, which = 3,
-     main = "Scale-Location: Violated Data")
-```
-::::
-:::::::
-
-## Performing the Kruskal-Wallis Test — Original Data
-
-::::::: columns
-:::: {.column width="60%"}
-**Even though assumptions are met, let's compare results:**
-
-```{r analysis-of-variance-31}
-#| echo: true
-kruskal_original_result <- kruskal.test(
-  phase_shift ~ treatment,
-  data = circ_data)
-kruskal_original_result
-```
-
-**Interpretation:** H = test statistic (χ² approximation); df = k − 1 = 2; **p = 0.009** (significant at α = 0.05); conclusion: at least one group differs.
-
-**Compare to parametric ANOVA:**
-
-```{r analysis-of-variance-32}
-#| echo: false
-anova(circ_model)
-```
-::::
-
-:::: {.column width="40%"}
-**How Kruskal-Wallis works:**
-
-```{r analysis-of-variance-33}
-#| echo: false
-#| fig-width: 3.2
-#| fig-height: 2.6
-#| fig-alt: "Jittered scatterplot of rank-transformed phase shift by treatment, with diamond points marking each group's mean rank, illustrating the ranks the Kruskal-Wallis test compares."
-kruskal_ranks_df <- nonparam_circ_df %>%
-  mutate(rank = rank(phase_shift))
-
-rank_summary_df <- kruskal_ranks_df %>%
-  group_by(treatment) %>%
-  summarise(
-    mean_rank = mean(rank),
-    sum_rank = sum(rank),
-    n = n(),
-    .groups = "drop"
-  )
-
-ggplot(kruskal_ranks_df,
-       aes(x = treatment, y = rank, color = treatment)) +
-  geom_jitter(width = 0.2, alpha = 0.7, size = 3) +
-  stat_summary(fun = mean, geom = "point",
-               size = 5, shape = 18) +
-  theme_minimal(base_size = 8) +
-  labs(title = "Ranks by Treatment Group", x = "Light Treatment", y = "Rank") +
-  theme(legend.position = "none")
-```
-
-```{r analysis-of-variance-34}
-#| echo: false
-rank_summary_df
-```
-::::
-:::::::
-
-## Kruskal-Wallis on Violated Data
-
-::::::: columns
-:::: {.column width="60%"}
-**Non-parametric test handles violations:**
-
-```{r analysis-of-variance-35}
-#| echo: true
-kruskal_violated_result <- kruskal.test(
-  phase_shift_violated ~ treatment,
-  data = violated_circ_df)
-kruskal_violated_result
-```
-
-```{r analysis-of-variance-36}
-#| echo: false
-anova(violated_model)
-```
-
-**This is the whole argument, in four numbers:**
-
-| Data | ANOVA (parametric) | Kruskal-Wallis |
-|------------------|--------------------|------------------|
-| Original | F = 7.29, **p = 0.004** ✅ | H = 9.42, **p = 0.009** ✅ |
-| Violated | F = 2.84, **p = 0.084** ❌ | H = 6.85, **p = 0.033** ✅ |
-
-::: callout-important
-**The parametric test lost the effect. The rank test kept it.**
-
-Nothing about the biology changed — we only inflated one group's variance and pushed two points out into the tail. That was enough to drag the F-test's p-value from 0.004 to 0.084, across the α = 0.05 line.
-
-Kruskal-Wallis barely noticed, because ranks don't care *how far* out an outlier is, only that it is out there.
-:::
-::::
-
-:::: {.column width="40%"}
-```{r analysis-of-variance-37}
-#| echo: false
-#| fig-width: 3.2
-#| fig-height: 2.6
-#| fig-alt: "Jittered scatterplot of rank-transformed phase shift by treatment for the deliberately violated dataset, with diamond points marking each group's mean rank, illustrating why Kruskal-Wallis stays valid when raw values are heavily skewed or contain outliers."
-violated_ranks_df <- violated_circ_df %>%
-  mutate(rank = rank(phase_shift_violated))
-
-ggplot(violated_ranks_df,
-       aes(x = treatment, y = rank, color = treatment)) +
-  geom_jitter(width = 0.2, alpha = 0.7, size = 3) +
-  stat_summary(fun = mean, geom = "point",
-               size = 5, shape = 18) +
-  theme_minimal(base_size = 8) +
-  labs(title = "Ranks for Violated Data",
-       subtitle = "Kruskal-Wallis uses ranks, not raw values",
-       x = "Light Treatment", y = "Rank") +
-  theme(legend.position = "none")
-```
-
-**Why Kruskal-Wallis is robust:** uses ranks instead of raw values, outliers affect ranks minimally, unequal variances are less problematic, no distribution assumptions are needed.
-::::
-:::::::
-
-## Post-Hoc Tests for Kruskal-Wallis — Pairwise Wilcoxon
-
-::::::: columns
-:::: {.column width="60%"}
-**Just like ANOVA, we need post-hoc tests to identify which groups differ:**
-
-```{r analysis-of-variance-38}
-#| echo: false
-pairwise_original_result <- pairwise.wilcox.test(
-  x = nonparam_circ_df$phase_shift,
-  g = nonparam_circ_df$treatment,
-  p.adjust.method = "bonferroni"
-)
-pairwise_original_result
-```
-
-**Interpretation of p-values:** Control vs Eyes: p = 0.004 (significant); Control vs Knees: p = 1.000 (not significant); Eyes vs Knees: p = 0.079 (not significant).
-
-**Common adjustment methods:** `"bonferroni"` (most conservative), `"holm"` (less conservative), `"BH"` (Benjamini-Hochberg, controls false discovery rate), `"none"` (not recommended).
-::::
-
-:::: {.column width="40%"}
-```{r analysis-of-variance-39}
-#| echo: true
-pairwise_violated_result <- pairwise.wilcox.test(
-  x = violated_circ_df$phase_shift_violated,
-  g = violated_circ_df$treatment,
-  p.adjust.method = "bonferroni"
-)
-pairwise_violated_result
-```
-
-```{r analysis-of-variance-40}
-#| echo: false
-# Pull the numbers straight out of the two test objects, so this summary
-# can never drift away from the output printed above it.
-grab <- function(res) {
-  p <- res$p.value
-  c(p["Eyes", "Control"], p["Knees", "Control"], p["Knees", "Eyes"])
-}
-
-tibble(
-  comparison    = c("Control vs Eyes", "Control vs Knees", "Eyes vs Knees"),
-  original_data = round(grab(pairwise_original_result), 4),
-  violated_data = round(grab(pairwise_violated_result), 4)
-)
-```
-::::
-:::::::
-
-## Dunn's Test — an Alternative Post-Hoc
-
-::::::: columns
-:::: {.column width="60%"}
-**Dunn's test is specifically designed for Kruskal-Wallis post-hoc comparisons:**
-
-```{r analysis-of-variance-41}
-#| echo: true
-#| message: false
-#| warning: false
-dunn_original_result <- dunnTest(
-  phase_shift ~ treatment,
-  data = circ_data,
-  method = "bonferroni")
-dunn_original_result
-```
-
-**Advantages:** designed specifically for Kruskal-Wallis, provides Z-statistics in addition to p-values, multiple adjustment methods available, more appropriate than multiple Wilcoxon tests. A Z-statistic tells you how many standard deviations a difference is from the expected value (usually zero, "no difference").
-::::
-
-:::: {.column width="40%"}
-```{r analysis-of-variance-42}
-#| echo: true
-#| paged-print: false
-dunn_violated_result <- dunnTest(
-  phase_shift_violated ~ treatment,
-  data = violated_circ_df,
-  method = "bonferroni"
-)
-dunn_violated_result
-```
-
-**Interpreting Z-statistics:** large |Z| values indicate bigger differences; Z > 1.96 is approximately equivalent to p < 0.05; the sign indicates the direction of the difference.
-::::
-:::::::
-
-## Which Post-Hoc Test Should You Use?
-
-::::::: columns
-:::: {.column width="60%"}
-- **Use Dunn's test** because it's the proper follow-up to Kruskal-Wallis, maintains consistency with the overall K-W ranking, is more statistically appropriate for the omnibus test you ran, and is standard in published research
-- Wilcoxon is fine for simple two-group comparisons, but once you've run Kruskal-Wallis (a 3+ group test), Dunn's is the standard choice
-::::
-
-:::: {.column width="40%"}
-::: callout-tip
-**🖐 Notice**
-
-Kruskal-Wallis ranks ALL your data once. Dunn's test uses those same ranks. Pairwise Wilcoxon throws away that information and re-ranks separately for each pair.
-:::
-::::
-:::::::
-
-## Reporting Non-Parametric Results
-
-::::::: columns
-:::: {.column width="60%"}
-**Essential elements to include:** test name and purpose, sample sizes per group, medians and IQRs (not means and SDs!), test statistic (H) and degrees of freedom, p-value, effect size, post-hoc test results, conclusion.
-
-**Example write-up:** "A Kruskal-Wallis test was conducted to compare the effect of light treatment on circadian rhythm phase shift across three groups: Control (n = 8), Knees (n = 7), and Eyes (n = 7). Median phase shifts were −0.48 hours (IQR = 0.89) for Control, −0.29 hours (IQR = 0.93) for Knees, and −1.48 hours (IQR = 0.68) for Eyes. The test revealed a statistically significant difference in phase shift between the groups, H(2) = 9.42, p = 0.009, ε² = 0.45. Post-hoc pairwise comparisons using Dunn's test with Bonferroni correction indicated that the Eyes treatment differed significantly from both Control (p = 0.016) and Knees (p = 0.032), while Control and Knees did not differ (p = 1.000)."
-
-::: callout-note
-**📖 Where ε² comes from**
-
-$$\varepsilon^2 = \frac{H}{(n^2-1)/(n+1)}$$
-
-Here $9.42 / 21 = 0.45$ — the rank-based analogue of R². Watch out: some software reports $\eta^2_H = (H-k+1)/(n-k)$ instead, which gives 0.39 for these data. **Say which one you used.**
-:::
-::::
-
-:::: {.column width="40%"}
-**In-text citation format:**
-
-> The Kruskal-Wallis test revealed significant differences between treatment groups, H(2) = 9.42, p = .009.
+Look back at the boxplots: group SDs run from `r round(min(tapply(worm_df$lifespan_days, worm_df$treatment, sd)), 1)` to `r round(max(tapply(worm_df$lifespan_days, worm_df$treatment, sd)), 1)` days.
 
 ::: callout-warning
-**⚠️ Common mistakes to avoid**
+**⚠️ Nothing here is simulated**
 
-- Reporting means instead of medians, using SD instead of IQR
-- Not mentioning it's a non-parametric test
-- Not justifying why a non-parametric test was used
+This is the published dataset, unmodified. Real data fails these tests routinely.
 :::
 ::::
-:::::::
+:::::
 
-## Reporting — the Table Format
+## 🗳️ DECIDE · What Do You Do Now?
 
-```{r analysis-of-variance-43}
-#| echo: false
-#| message: false
-#| warning: false
-#| paged-print: false
-reporting_summary_df <- nonparam_circ_df %>%
-  group_by(treatment) %>%
-  summarise(
-    n = n(),
-    Median = median(phase_shift),
-    IQR = IQR(phase_shift),
-    Min = min(phase_shift),
-    Max = max(phase_shift),
-    .groups = "drop"
-  )
+::::: columns
+:::: {.column width="60%"}
+An ANOVA on these data returns **F = `r round(anova(worm_model)[1,"F value"], 2)`, p = `r fmt_p(anova(worm_model)[1,"Pr(>F)"])`** — but the residuals are non-normal and the variances are unequal.
 
-# Read H and p straight off the test object rather than typing them in,
-# so the caption can never disagree with the analysis.
-cat("Table 1. Descriptive Statistics for Phase Shift by Treatment\n\n",
-    sprintf("\n\nNote. IQR = interquartile range.\nKruskal-Wallis H(%d) = %.2f, p = %.3f\n",
-            kruskal_original_result$parameter,
-            kruskal_original_result$statistic,
-            kruskal_original_result$p.value))
-reporting_summary_df
+**What is the right next step?**
+
+**(a)** Report the ANOVA — it is significant, and ANOVA is robust
+
+**(b)** Drop the group with the biggest variance and re-run
+
+**(c)** Try a transformation, and if that fails use a rank-based test such as Kruskal-Wallis
+
+**(d)** Report nothing — the data cannot be analysed
+
+::: callout-warning
+**✍️ Write your letter down, then vote.**
+:::
+::::
+
+:::: {.column width="40%"}
+::: callout-note
+**The question to ask**
+
+*Is the problem with the data, or with the test I chose for it?*
+:::
+::::
+:::::
+
+## The Kruskal-Wallis Test
+
+::::: columns
+:::: {.column width="55%"}
+::: callout-important
+**✅ The answer is (c).**
+
+Transform first — a log or square root often fixes both problems at once, and keeps you in a framework that extends to more factors. If it does not, move to a rank-based test.
+
+**(b)** is data deletion to make a test pass, which is not a repair.
+:::
+
+```{r analysis-of-variance-20}
+kruskal.test(lifespan_days ~ treatment, data = worm_df)
 ```
+::::
+
+:::: {.column width="45%"}
+Kruskal-Wallis replaces every value by its **rank** and asks whether the rank totals differ more than chance — so it needs no normality and is not thrown by unequal spread.
+
+**χ² = `r round(worm_kw$statistic, 2)`, df = `r worm_kw$parameter`, p = `r fmt_p(worm_kw$p.value)`.**
+
+The conclusion survives. What changes is that you can now defend it.
+::::
+:::::
+
+## Dunn's Test — the Post-Hoc for Ranks
+
+::::: columns
+:::: {.column width="55%"}
+Kruskal-Wallis has the same limit as F: it says *something* differs, not what. **Dunn's test** is its post-hoc.
+
+```{r analysis-of-variance-21}
+#| message: false
+dunnTest(lifespan_days ~ treatment,
+         data = worm_df, method = "bh")$res %>%
+  mutate(across(where(is.numeric), ~ signif(.x, 3)))
+```
+::::
+
+:::: {.column width="45%"}
+::: callout-note
+**Which adjustment?**
+
+`"bonferroni"` is the strictest and costs the most power. `"bh"` (Benjamini-Hochberg) controls the **false discovery rate** instead, and is the usual choice when you have more than a handful of comparisons.
+:::
+
+`pairwise.wilcox.test()` does a similar job; Dunn's is preferred because it uses the same ranking as the Kruskal-Wallis it follows.
+::::
+:::::
+
+## Which Test Should You Use?
+
+::: {.compact-table}
+| Situation | Parametric route | Non-parametric route |
+|:---|:---|:---|
+| Compare 2 groups | t-test | Mann-Whitney U / Wilcoxon rank-sum |
+| Compare 3+ groups | **one-way ANOVA** | **Kruskal-Wallis** |
+| Post-hoc, all pairs | Tukey HSD, `emmeans` | Dunn's test, pairwise Wilcoxon |
+| What it compares | means | mean ranks (≈ medians) |
+| Needs | normal residuals, equal variance | neither |
+| Costs you | nothing, when assumptions hold | power, and the original units |
+:::
+
+**Try a transformation before you give up the parametric route** — it keeps your effect sizes interpretable and extends to the multi-factor designs coming in Week 9.
+
+## Reporting a Non-Parametric Result
+
+::::: columns
+:::: {.column width="55%"}
+> Nematode lifespan differed among parasite-exposure treatments (Kruskal-Wallis χ²~`r worm_kw$parameter`~ = `r round(worm_kw$statistic, 2)`, p `r ifelse(worm_kw$p.value < 0.001, "< 0.001", paste("=", signif(worm_kw$p.value,3)))`). A Kruskal-Wallis test was used because the residuals of the equivalent ANOVA were non-normal (Shapiro-Wilk p = `r fmt_p(worm_shapiro)`) and variances were unequal (Levene p = `r fmt_p(worm_levene)`). Dunn's tests with Benjamini-Hochberg adjustment showed that larva-exposed worms outlived worms exposed as adults or as both.
+::::
+
+:::: {.column width="45%"}
+::: callout-important
+**✅ Say *why* you went non-parametric**
+
+A reader cannot tell whether you chose a rank test because your data required it or because it gave you the answer you wanted — unless you show the assumption checks that made the decision.
+
+Report the numbers that drove the choice, not just the choice.
+:::
+::::
+:::::
 
 ## Wrap-up
 
-::::::: columns
-:::: {.column width="60%"}
 Today you:
 
-- Saw that **ANOVA *is* regression** with a categorical predictor — same partitioning, same F-ratio, different-looking output
-- Split $SS_{total}$ into $SS_{among}$ and $SS_{within}$, and turned them into mean squares
-- Built the **F-ratio** as signal ÷ noise, and confirmed that with two groups **F = t²** exactly
-- Checked the assumptions — Levene's for equal variance, Shapiro-Wilk on the **residuals**, and the four diagnostic plots
-- Used **Tukey's HSD** to find *which* groups differ, after the omnibus test said *some* group does
-- Reported the result the way a journal expects, with an effect size
-- Switched to **Kruskal-Wallis** and **Dunn's test** when assumptions fail
+- Saw that ANOVA **is** regression with a categorical predictor — the same `lm()`, the same partition, the same F
+- Worked out why six t-tests carry a **`r round(100*(1-0.95^6))`%** chance of a false positive, and what ANOVA does about it
+- Built $SS_{among}$ and $SS_{within}$ by hand and matched them to `anova()`
+- Confirmed **t² = F** on a two-group subset, for the second time this term
+- Checked independence, normality and equal variance — the last two **on the residuals**
+- Set the reference level with **`fct_relevel()`** so the coefficients answered the experiment's question
+- Used **Tukey HSD** to find which pairs differ, and learned that the claw-removal comparison was not one of them
+- Moved to **Kruskal-Wallis and Dunn's test** on a dataset whose assumptions genuinely failed
 
+## The Three Things to Carry Out of Here
+
+::::: columns
+:::: {.column width="50%"}
 ::: callout-important
-**⚠️ The order matters**
+**⚠️ A significant F is an entry ticket**
 
-A significant F says *at least one* group differs — it does not say which. Post-hoc tests answer that, and they only make sense **after** a significant omnibus test. Running all pairwise t-tests instead inflates your Type I error with every comparison.
+It says at least one group differs. It never says which, how many, or in which direction. Everything past that comes from post-hoc comparisons you planned or corrected for.
+:::
+
+::: callout-note
+**✅ Assumptions live in the residuals**
+
+Except independence, which lives in the **design** — and no plot will ever show it to you.
 :::
 ::::
 
-:::: {.column width="40%"}
-::: callout-note
-**✅ The one idea to keep**
+:::: {.column width="50%"}
+::: callout-important
+**✅ Set the reference level**
 
-We deliberately broke the assumptions and watched the parametric p-value slide from **0.004 to 0.084** while the rank-based one held at **0.033**.
-
-The data's biology never changed. Only its shape did. That is what "assumption violation" costs you, in one number.
+`fct_relevel(x, "control")`, in the line that makes the factor. The fit never changes; the readability always does.
 :::
 
 ::: callout-note
 **Up next — Two-Way ANOVA**
 
-- Two categorical predictors at once
-- Interaction: when the effect of one factor depends on the other
+Two factors at once, and the thing that only exists when you have two: the **interaction**.
 :::
 ::::
-:::::::
+:::::
+
+## Readings
+
+- **Whitlock & Schluter**, Ch. 15 — Comparing Means of More Than Two Groups (§15.4 assumptions and transformations; §15.5 planned and unplanned comparisons; §15.6 the Kruskal-Wallis test).
+- **Gotelli & Ellison**, Ch. 10 — The Analysis of Variance.
+- Darnell, M. Z., & Munguia, P. (2011). Thermoregulation as an alternate function of the sexually dimorphic fiddler crab claw. *The American Naturalist*, 178(3), 419–428.
 
 ## Getting unstuck
 
 When code breaks — and it will, that is normal:
 
 1.  Read the **error message** out loud; it usually names the line
-2.  Check the usual suspects: is your grouping variable a **factor** (`as.factor()`)? Did you pass the model to `TukeyHSD()` via `aov()`, not `lm()`? Is `car` loaded for `leveneTest()`, `FSA` for `dunnTest()`?
+2.  Check the usual suspects: is your grouping column a **factor**? Did you pass `residuals(model)` to `shapiro.test()` rather than the raw response? Is `car` loaded for `leveneTest()`, `FSA` for `dunnTest()`?
 3.  `?function_name` opens the help page
 4.  Bring the **exact error** (copy-paste it) to class or office hours
 
