@@ -1,0 +1,251 @@
+---
+title: "Common Code 13 — Writing Functions"
+subtitle: "From copy-paste to reusable, tested functions"
+author: "Bill Perry"
+date: today
+
+topic_number: "13"
+type: common_code
+description: >
+  Making functions or your own short commands
+categories: [packages, setup]
+
+format:
+  html: default
+  docx: default
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+# Writing your own functions
+
+If you copy-paste the same block of code more than twice, write a function. Functions reduce errors, make your intent clear, and let you update logic in one place rather than hunting through twenty scripts.
+
+> ⬇️ **Download the companion R script:** [`16_functions.R`](16_functions.R)
+
+``` r
+library(tidyverse)
+library(palmerpenguins)
+library(broom)
+```
+
+------------------------------------------------------------------------
+
+# 1 · The basic structure
+
+``` r
+my_function <- function(argument1, argument2) {
+  # body — code that uses the arguments
+  result <- argument1 + argument2
+  return(result)   # optional — R returns the last evaluated expression
+}
+
+my_function(3, 4)   # 7
+```
+
+::: callout-note
+## `return()` is optional
+
+R automatically returns the last expression in the function body. Most tidyverse-style functions omit `return()` and just end with the value they want to return. Use `return()` when you want to exit a function early.
+:::
+
+------------------------------------------------------------------------
+
+# 2 · A useful first function — standard error
+
+You have written `sd(x, na.rm = TRUE) / sqrt(sum(!is.na(x)))` in every script. Write it once:
+
+``` r
+std_error <- function(x) {
+  sd(x, na.rm = TRUE) / sqrt(sum(!is.na(x)))
+}
+
+std_error(penguins$body_mass_g)    # 37.2
+std_error(c(4, 3, 5, NA, 7))       # 0.85
+```
+
+------------------------------------------------------------------------
+
+# 3 · Default arguments
+
+Provide defaults so callers can skip arguments they rarely change:
+
+``` r
+describe_var <- function(x, digits = 2) {
+  tibble(
+    n    = sum(!is.na(x)),
+    mean = round(mean(x,   na.rm = TRUE), digits),
+    sd   = round(sd(x,     na.rm = TRUE), digits),
+    se   = round(std_error(x),            digits),
+    min  = round(min(x,    na.rm = TRUE), digits),
+    max  = round(max(x,    na.rm = TRUE), digits)
+  )
+}
+
+describe_var(penguins$body_mass_g)            # uses digits = 2
+describe_var(penguins$flipper_length_mm, 1)   # override to 1 decimal
+```
+
+------------------------------------------------------------------------
+
+# 4 · Functions that return a ggplot
+
+Wrap a standard exploratory plot so you can reuse it for any pair of columns:
+
+``` r
+plot_by_group <- function(df, x_var, y_var,
+                           x_lab = x_var, y_lab = y_var,
+                           title = NULL) {
+  ggplot(df, aes(x = .data[[x_var]], y = .data[[y_var]],
+                 fill = .data[[x_var]])) +
+    geom_boxplot(alpha = 0.6, outlier.shape = NA) +
+    geom_jitter(width = 0.15, alpha = 0.3, size = 1.5) +
+    stat_summary(fun.data = mean_se, geom = "pointrange",
+                 color = "tomato", size = 0.7) +
+    labs(x = x_lab, y = y_lab, title = title) +
+    theme_classic() +
+    theme(legend.position = "none")
+}
+
+plot_by_group(penguins |> drop_na(),
+              x_var = "species", y_var = "body_mass_g",
+              x_lab = "Species", y_lab = "Body mass (g)")
+
+plot_by_group(penguins |> drop_na(),
+              x_var = "island", y_var = "flipper_length_mm")
+```
+
+::: callout-note
+## `.data[[var]]` — the tidy-eval trick
+
+Inside `aes()`, you cannot use a string variable directly (`aes(x = x_var)` would look for a column literally called `x_var`). Use `.data[[x_var]]` to tell ggplot to look up the column whose name is stored in `x_var`.
+:::
+
+------------------------------------------------------------------------
+
+# 5 · Input validation with `stop()`
+
+Give clear error messages when someone passes the wrong type of input:
+
+``` r
+std_error_safe <- function(x) {
+  if (!is.numeric(x)) {
+    stop("x must be numeric, not ", class(x), call. = FALSE)
+  }
+  if (sum(!is.na(x)) < 2) {
+    stop("Need at least 2 non-NA values to compute SE.", call. = FALSE)
+  }
+  sd(x, na.rm = TRUE) / sqrt(sum(!is.na(x)))
+}
+```
+
+::: callout-tip
+## `call. = FALSE` in `stop()`
+
+Adding `call. = FALSE` prevents R from printing the internal function call in the error message — the output is cleaner and more user-friendly.
+:::
+
+------------------------------------------------------------------------
+
+# 6 · Using your function with `across()`
+
+Once defined, your function plugs straight into `summarise(across(...))`:
+
+``` r
+penguins |>
+  drop_na() |>
+  group_by(species) |>
+  summarise(
+    across(
+      c(bill_length_mm, flipper_length_mm, body_mass_g),
+      list(mean = ~ mean(.x, na.rm = TRUE),
+           se   = ~ std_error(.x))
+    ),
+    .groups = "drop"
+  )
+```
+
+------------------------------------------------------------------------
+
+# 7 · A complete analysis function
+
+Wrap the entire pipeline — summarise, plot, optionally save:
+
+``` r
+penguin_summary_plot <- function(df, group_var, response_var,
+                                  output_path = NULL) {
+  smry <- df |>
+    drop_na(all_of(c(group_var, response_var))) |>
+    group_by(.data[[group_var]]) |>
+    summarise(
+      n    = sum(!is.na(.data[[response_var]])),
+      mean = mean(.data[[response_var]], na.rm = TRUE),
+      se   = std_error(.data[[response_var]]),
+      .groups = "drop"
+    )
+
+  p <- ggplot(smry, aes(x = .data[[group_var]], y = mean,
+                         fill = .data[[group_var]])) +
+    geom_col(alpha = 0.7, width = 0.6) +
+    geom_errorbar(aes(ymin = mean - se, ymax = mean + se),
+                  width = 0.2, linewidth = 0.8) +
+    labs(x = group_var, y = paste0("Mean ", response_var, " ± SE")) +
+    theme_classic() +
+    theme(legend.position = "none")
+
+  if (!is.null(output_path)) {
+    ggsave(output_path, plot = p, width = 6, height = 5, units = "in")
+    message("Saved to: ", output_path)
+  }
+  return(p)
+}
+
+penguin_summary_plot(penguins, "species", "body_mass_g")
+penguin_summary_plot(penguins, "island",  "flipper_length_mm",
+                     output_path = "figures/island_flipper.pdf")
+```
+
+------------------------------------------------------------------------
+
+# 8 · Organising functions in a project
+
+::: callout-tip
+## Store functions in `functions/utils.R`, source at the top
+
+```         
+my_project/
+├── functions/
+│   └── utils.R          ← your reusable functions live here
+├── themes/
+│   └── r_themes_for_3_sizes.R
+├── scripts/
+│   └── 01_analysis.R
+└── figures/
+```
+
+At the top of every analysis script:
+
+``` r
+source("functions/utils.R")
+source("themes/r_themes_for_3_sizes.R")
+```
+
+One file to update, every script benefits.
+:::
+
+------------------------------------------------------------------------
+
+# Quick reference
+
+| Task | Code |
+|------------------------------------|------------------------------------|
+| Define a function | `my_fn <- function(x, digits = 2) { ... }` |
+| Use string as column name in aes | `.data[[var_name]]` |
+| Validate input type | `if (!is.numeric(x)) stop("message", call. = FALSE)` |
+| Apply function across cols | `summarise(across(cols, list(mean = ~mean(.x, na.rm=TRUE), se = ~std_error(.x))))` |
+| Source from file | `source("functions/utils.R")` |
+| Optional argument | `function(x, path = NULL)` → `if (!is.null(path)) { ... }` |
+
+*End of Common Code 13 — Writing Functions.* *Next: Common Code 14 — Iteration with purrr.*

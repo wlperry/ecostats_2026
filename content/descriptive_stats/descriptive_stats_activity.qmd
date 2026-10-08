@@ -1,0 +1,561 @@
+---
+order: 3
+week: 2
+title: "Activity: Describing Your Data"
+subtitle: "Mean, spread, counting correctly, and group summaries"
+description: "Hands-on worksheet: mean, median, variance, SD, SE, quantiles/range/IQR, the n() trap, a fast skimr overview, group_by() + summarize(), and a boxplot with stat_summary() mean ± SE."
+author: "Bill Perry"
+metadata-files:
+  - ../../_templates/activities.yml
+format:
+  html: default
+  docx:
+    reference-doc: ../../ms_templates/custom-reference-compact.docx
+    fig-width: 2.5
+    fig-height: 2.5
+    fig-dpi: 300
+    dpi: 300            # tell Pandoc the real render dpi so it sizes figures correctly
+---
+
+# Worksheet: Describing Your Data
+
+[📥 Download the data (.csv)](data/pine_data.csv){.btn .btn-primary download="pine_data.csv"} [📥 Download the data (.xlsx)](data/pine_data.xlsx){.btn .btn-primary download="pine_data.xlsx"} [📥 Script skeleton (.R)](data/03_descriptive_stats.R){.btn .btn-primary download="03_descriptive_stats.R"}
+
+::: callout-important
+## Column names in `pine_data.csv` / `pine_data.xlsx`
+
+Both files hold the **same six columns, with exactly these names**. Type them
+exactly as written — R is case-sensitive, and `Needle_Length` or `needle_length`
+will not work:
+
+| Column             | What it is                                     |
+|--------------------|------------------------------------------------|
+| `source_file`      | the raw team file the row came from             |
+| `team`             | field team — one team = **one tree**            |
+| `replicate`        | needle number within a tree side (1-8)          |
+| `side`             | sun exposure — `"shady"` or `"sunny"`           |
+| `needle_length_mm` | needle length, millimetres                      |
+| `needle_width_mm`  | needle width, millimetres                       |
+
+After you read the file in, run `names(pine_df)` and check the names on your
+screen against this table before you write any other code.
+:::
+
+------------------------------------------------------------------------
+
+# Part 1 · Load and split the data
+
+**▶ Run this in your Script:**
+
+``` r
+# ── Part 1.1 · Load and split the data ──────────────────────────────────
+library(tidyverse)
+
+pine_df <- read_csv("data/pine_data.csv")
+
+shady_df <- pine_df |> filter(side == "shady")
+sunny_df <- pine_df |> filter(side == "sunny")
+
+shady_df
+```
+
+`filter()` picks **rows** and hands back a data frame — same six columns, fewer
+rows. Everything from here on stays a data frame, summarized with the pipe.
+
+✏️ **Your turn:** How many needles are in `shady_df`?
+
+`________________________`
+
+In `sunny_df`?
+
+`________________________`
+
+------------------------------------------------------------------------
+
+# Part 2 · Mean and median
+
+> 📖 **Read more:** Whitlock & Schluter Ch. 3 (Describing Data) and Gotelli & Ellison Ch. 3 (Summary Statistics) on Canvas.
+
+**▶ Run this:**
+
+``` r
+# ── Part 2.1 · Mean and median ──────────────────────────────────────────
+shady_df |>
+  summarize(mean_mm = mean(needle_length_mm),
+            med_mm  = median(needle_length_mm))
+
+sunny_df |>
+  summarize(mean_mm = mean(needle_length_mm),
+            med_mm  = median(needle_length_mm))
+```
+
+✏️ **Your turn:** For each side, is the mean close to the median, or far from it? What would a big gap suggest about the shape of the data?
+
+```         
+
+Shady — mean vs. median: ________________________
+
+Sunny — mean vs. median: ________________________
+```
+
+------------------------------------------------------------------------
+
+# Part 3 · Variance and standard deviation
+
+> 📖 **Read more:** Whitlock & Schluter Ch. 3 on variance and standard deviation; Gotelli & Ellison Ch. 3 on measures of spread.
+
+**▶ Run this:**
+
+``` r
+# ── Part 3.1 · Variance and standard deviation ──────────────────────────
+shady_df |>
+  summarize(var_mm = var(needle_length_mm),
+            sd_mm  = sd(needle_length_mm))
+
+sunny_df |>
+  summarize(var_mm = var(needle_length_mm),
+            sd_mm  = sd(needle_length_mm))
+```
+
+✏️ **Your turn:** Which side has more spread in its needle lengths — shady or sunny?\
+How do you know?\
+
+`______________________________________________________________________`
+
+------------------------------------------------------------------------
+
+# Part 3b · Quantiles, range, and IQR
+
+> 📖 **Read more:** Whitlock & Schluter Ch. 2 (Displaying Data) — the box in a boxplot *is* the IQR.
+
+**▶ Run this:**
+
+``` r
+# ── Part 3b.1 · Quantiles, range, and IQR ───────────────────────────────
+shady_df |>
+  summarize(
+    min_mm   = min(needle_length_mm),
+    q25_mm   = quantile(needle_length_mm, 0.25),
+    med_mm   = median(needle_length_mm),
+    q75_mm   = quantile(needle_length_mm, 0.75),
+    max_mm   = max(needle_length_mm),
+    range_mm = max_mm - min_mm,
+    iqr_mm   = IQR(needle_length_mm)
+  )
+```
+
+✏️ **Your turn:** Compute the same seven numbers for `sunny_df`. Which side has the wider IQR?
+
+``` r
+# ── Part 3b.2 · Quantiles, range, and IQR ───────────────────────────────
+# Write your code in the R script:
+
+```
+
+```         
+
+Wider IQR: ________________________
+```
+
+::: callout-tip
+**🚀 If you finish early:** In the table you just made, check that `iqr_mm` equals `q75_mm - q25_mm`. That is all `IQR()` ever does — the width of the middle 50%.
+:::
+
+------------------------------------------------------------------------
+
+# Part 4 · The `length()` trap
+
+> 📖 **Read more:** [R4DS §18 — Missing values](https://r4ds.hadley.nz/missing-values.html).
+
+**▶ Run this:**
+
+``` r
+# ── Part 4.1 · The `length()` trap ──────────────────────────────────────
+na_demo_df <- tibble(length_mm = c(4, 3, NA, 7, NA))
+
+na_demo_df |>
+  summarize(
+    rows        = n(),                     # every row, missing values included
+    missing     = sum(is.na(length_mm)),
+    real_values = sum(!is.na(length_mm))   # the n you actually want
+  )
+```
+
+✏️ **Your turn:** Explain in your own words why `n()` gives the wrong answer for a sample size when there are missing values.
+
+```         
+
+________________________________________________________
+```
+
+**▶ Run this:**
+
+``` r
+# ── Part 4.2 · The `length()` trap ──────────────────────────────────────
+na_demo_df |>
+  summarize(
+    wrong_n  = n(),
+    right_n  = sum(!is.na(length_mm)),
+    sd_mm    = sd(length_mm, na.rm = TRUE),
+    wrong_se = sd_mm / sqrt(wrong_n),
+    right_se = sd_mm / sqrt(right_n)
+  )
+```
+
+✏️ **Your turn:** Are `wrong_se` and `right_se` the same number? Why or why not?
+
+`________________________`
+
+::: callout-tip
+**🚀 If you finish early:** Add a third `NA` to `length_mm` when you build `na_demo_df`, then rerun. What happens to `wrong_se` and `right_se` this time?
+:::
+
+------------------------------------------------------------------------
+
+# Part 5 · Standard error, on real data
+
+> 📖 **Read more:** Whitlock & Schluter Ch. 4 (Estimating with Uncertainty) — the chapter for the standard error.
+
+**▶ Run this:**
+
+``` r
+# ── Part 5.1 · Standard error, on real data ─────────────────────────────
+shady_df |>
+  summarize(
+    n     = sum(!is.na(needle_length_mm)),
+    sd_mm = sd(needle_length_mm, na.rm = TRUE),
+    se_mm = sd_mm / sqrt(n)
+  )
+
+sunny_df |>
+  summarize(
+    n     = sum(!is.na(needle_length_mm)),
+    sd_mm = sd(needle_length_mm, na.rm = TRUE),
+    se_mm = sd_mm / sqrt(n)
+  )
+```
+
+✏️ **Your turn:** In one sentence, explain the difference between what SD tells you and what SE tells you.
+
+```         
+
+________________________________________________________
+```
+
+------------------------------------------------------------------------
+
+# Part 6 · All stats, one group, one `summarize()`
+
+> 📖 **Read more:** [R4DS §3.5 — Groups and `summarize()`](https://r4ds.hadley.nz/data-transform.html#sec-summarize).
+
+**▶ Run this:**
+
+``` r
+# ── Part 6.1 · All stats, one group, one `summarize()` ──────────────────
+shady_df |>
+  summarize(
+    n       = sum(!is.na(needle_length_mm)),
+    mean_mm = round(mean(needle_length_mm, na.rm = TRUE), 2),
+    med_mm  = round(median(needle_length_mm, na.rm = TRUE), 2),
+    sd_mm   = round(sd(needle_length_mm, na.rm = TRUE), 2),
+    se_mm   = round(sd(needle_length_mm, na.rm = TRUE) / sqrt(n), 2)
+  )
+```
+
+✏️ **Your turn:** Copy this block and adapt it to compute the same five numbers for `sunny_df`.
+
+``` r
+# ── Part 6.2 · All stats, one group, one `summarize()` ──────────────────
+# Write your code in the R script:
+
+```
+
+------------------------------------------------------------------------
+
+# Part 6b · `skimr` — a fast full-dataset overview
+
+> 📖 **Read more:** [R4DS §10 — Exploratory data analysis](https://r4ds.hadley.nz/EDA.html).
+
+**▶ Run this** (run `install.packages("skimr")` first, one time only, if you haven't already):
+
+``` r
+# ── Part 6b.1 · `skimr` ─────────────────────────────────────────────────
+library(skimr)
+
+skim(pine_df)
+```
+
+✏️ **Your turn:** Find `needle_length_mm` in the `skim()` output. Its mean and SD are for **all 64 needles at once** — how do they compare with the per-side numbers you computed in Parts 2 and 3? \
+\
+`Y / N`
+
+✏️ **Your turn:** What does `skim()` show you for a character column (like `team` or `side`) that it doesn't show for a numeric one?
+
+`____________________________________`
+
+------------------------------------------------------------------------
+
+# Part 7 · Tidy group stats — `group_by()` + `summarize()`
+
+> 📖 **Read more:** [R4DS §3.5 — Groups](https://r4ds.hadley.nz/data-transform.html#sec-summarize).
+
+You just wrote the same `summarize()` twice — once for `shady_df`, once for
+`sunny_df`. `group_by()` removes that duplication: it splits the **whole**
+data frame by a column, and `summarize()` then returns one row per group. No
+`filter()`, no two objects to keep in step.
+
+**▶ Run this:**
+
+``` r
+# ── Part 7.1 · Tidy group stats ─────────────────────────────────────────
+side_stats_df <- pine_df |>
+  group_by(side) |>
+  summarize(
+    n       = sum(!is.na(needle_length_mm)),
+    mean_mm = round(mean(needle_length_mm, na.rm = TRUE), 2),
+    med_mm  = round(median(needle_length_mm, na.rm = TRUE), 2),
+    sd_mm   = round(sd(needle_length_mm, na.rm = TRUE), 2),
+    se_mm   = round(sd(needle_length_mm, na.rm = TRUE) / sqrt(n), 2)
+  )
+
+side_stats_df
+```
+
+> ⚠️ **Watch out!** Compute `se_mm` from the **raw** `sd()`, not from the
+> `sd_mm` column above it — that one has already been rounded, and the SE would
+> inherit the rounding error. Round only what you print.
+
+✏️ **Your turn:** Do the `mean_mm` and `se_mm` values match the ones you calculated one side at a time in Parts 2 and 5?
+
+`Y / N`
+
+✏️ **Your turn:** Now group by `team` (the field team) instead of `side`, and compute the same five statistics.
+
+``` r
+# ── Part 7.2 · Tidy group stats ─────────────────────────────────────────
+# Write your code in the R script:
+
+```
+
+::: callout-tip
+**🚀 If you finish early:** Group by *both* `team` and `side` at once (`group_by(team, side)`). How many rows does the result have, and why?
+:::
+
+------------------------------------------------------------------------
+
+# Part 7c · The `n` you report is a choice
+
+> 📖 **Read more:** Gotelli & Ellison Ch. 6 (Designing Successful Field Studies) on replication and pseudoreplication; Whitlock & Schluter Ch. 4 on what the standard error is an estimate *of*.
+
+Your side summary said **n = 32 per side**. But we sampled only **4 trees** — 8 needles from each. Counting needles as independent is the **pseudoreplication** from Getting Started.
+
+**▶ Run this — stage 1, collapse each tree to one number:**
+
+``` r
+# ── Part 7c.1 · The `n` you report is a choice ──────────────────────────
+team_means_df <- pine_df |>
+  group_by(team, side) |>
+  summarize(team_mean_mm = mean(needle_length_mm, na.rm = TRUE),
+            .groups = "drop")
+
+team_means_df
+```
+
+**▶ Run this — stage 2, summarize those team means:**
+
+``` r
+# ── Part 7c.2 · The `n` you report is a choice ──────────────────────────
+side_correct_df <- team_means_df |>
+  group_by(side) |>
+  summarize(
+    n_trees = sum(!is.na(team_mean_mm)),
+    mean_mm = round(mean(team_mean_mm), 2),
+    se_mm   = round(sd(team_mean_mm) / sqrt(n_trees), 2)
+  )
+
+side_correct_df
+```
+
+✏️ **Your turn:** Fill in the comparison.
+
+```         
+                 naive (n = 32)      correct (n = 4)
+mean, shady:     ______              ______
+mean, sunny:     ______              ______
+SE, shady:       ______              ______
+SE, sunny:       ______              ______
+```
+
+✏️ **Your turn:** Which changed — the means, the standard errors, or both? What does that tell you about what pseudoreplication actually damages?
+
+`________________________`
+
+------------------------------------------------------------------------
+
+# Part 7b · See it — boxplot with mean ± SE
+
+> 📖 **Read more:** Whitlock & Schluter Ch. 2 (Displaying Data), and [R4DS §10 — Exploratory data analysis](https://r4ds.hadley.nz/EDA.html).
+
+Every number you computed today has a picture. This is the figure you will
+build for the rest of the term, so it is worth getting the layers straight.
+
+**▶ Run this:**
+
+``` r
+# ── Part 7b.1 · See it — boxplot with mean ± SE ─────────────────────────
+side_plot <- ggplot(pine_df, aes(x = side, y = needle_length_mm)) +
+
+  # layer 1 — the spread of all 64 needles
+  geom_boxplot(width = 0.5, fill = NA, outlier.shape = NA) +
+
+  # layer 2 — each team's mean, faded, behind the summary
+  geom_point(data = team_means_df,
+             aes(y = team_mean_mm, color = team),
+             position = position_dodge(width = 0.5),
+             size = 3, alpha = 0.5) +
+
+  # layer 3 — the mean and its standard error, on top
+  stat_summary(fun = mean, geom = "point", size = 3) +
+  stat_summary(fun.data = mean_se, geom = "errorbar", width = 0.15) +
+
+  labs(x = "Sun exposure",
+       y = "Needle length (mm)",
+       color = "Field team") +
+  theme_bw()
+
+side_plot
+```
+
+`stat_summary()` computes a statistic *while plotting* — you never have to
+build a summary table first. `fun = mean` draws the mean as a point;
+`fun.data = mean_se` draws the mean ± 1 standard error as an error bar.
+
+✏️ **Your turn:** The box and the error bar show different things. Which one describes the spread of individual needles, and which describes how precisely we know the mean?
+
+```         
+Box:          ________________________________________
+
+Error bar:    ________________________________________
+```
+
+✏️ **Your turn:** Look at the four faded team means on each side. Do all four teams agree, or is one tree pulling its side around?
+
+`________________________`
+
+**▶ Run this — save it:**
+
+``` r
+# ── Part 7b.2 · See it — boxplot with mean ± SE ─────────────────────────
+ggsave("figures/pine_side_mean_se.png",
+       plot   = side_plot,
+       width  = 5,
+       height = 4,
+       units  = "in",
+       dpi    = 300)
+```
+
+::: callout-important
+**⚠️ Those error bars are the naive ones.** `stat_summary()` used all 32
+needles per side, so it drew the **n = 32** standard error — the
+pseudoreplicated one from Part 7c. The honest error bar uses the **4 team
+means**.
+
+✏️ **Your turn:** Build the same plot from `team_means_df` instead, so the
+error bars come from n = 4. Start from
+`ggplot(team_means_df, aes(x = side, y = team_mean_mm))`, keep the two
+`stat_summary()` layers, and compare the error bar widths with the plot above.
+
+``` r
+# ── Part 7b.3 · See it — boxplot with mean ± SE ─────────────────────────
+# Write your code in the R script:
+
+```
+
+Which error bars are wider, and why is that the more honest picture?
+
+`________________________`
+:::
+
+------------------------------------------------------------------------
+
+# Part 8 · Save your summary table
+
+> 📖 **Read more:** [R4DS §7.5 — Writing to a file](https://r4ds.hadley.nz/data-import.html#sec-writing-to-a-file).
+
+**▶ Run this:**
+
+``` r
+# ── Part 8.1 · Save your summary table ──────────────────────────────────
+write_csv(side_stats_df, "output/pine_side_stats.csv")
+```
+
+Check your `output/` folder — the summary table should be there, and `data/` should be untouched.
+
+------------------------------------------------------------------------
+
+# Part 9 · Review and checkpoint
+
+At this point you can:
+
+- [ ] Compute mean and median with `summarize()`, and explain when they disagree
+- [ ] Compute variance and SD for a group with `summarize()`
+- [ ] Compute quantiles, range, and IQR, and explain how IQR relates to a boxplot
+- [ ] Explain why `n()` overcounts when values are missing, and fix it with `sum(!is.na())`
+- [ ] Compute SE and explain how it differs from SD
+- [ ] Get a full-dataset overview with `skimr::skim()`
+- [ ] Use `group_by()` + `summarize()` to get n, mean, SD, and SE for every group at once
+- [ ] Draw a boxplot with `stat_summary()` mean ± SE layered on top, and say what each element shows
+- [ ] Save a summary table to `output/` with `write_csv()`
+
+✏️ **Your turn — before you move on:** Run your whole script top to bottom. \
+\
+Ran cleanly? `Y / N` \
+\
+— if not, the error was:
+
+`________________________`
+
+::: callout-note
+**📤 What to turn in before next class**
+
+Upload both of these to the course management system:
+
+1.  Your code — the `scripts/` folder (or just `03_descriptive_stats.R`)
+2.  This worksheet, with your written answers
+:::
+
+------------------------------------------------------------------------
+
+# Readings
+
+**Before next class** — chapter PDFs are posted on **Canvas**:
+
+- **Whitlock & Schluter**, *The Analysis of Biological Data* — **Ch. 3**, Describing Data (mean, median, variance, SD, quantiles) and **Ch. 4**, Estimating with Uncertainty (the standard error, and what it does *not* measure)
+- **Gotelli & Ellison**, *A Primer of Ecological Statistics* — **Ch. 3**, Summary Statistics: Measures of Location and Spread
+
+**If you want more:**
+
+- Whitlock & Schluter, Ch. 2 — Displaying Data, for the boxplot and the five-number summary behind it
+- Gotelli & Ellison, Ch. 6 — Designing Successful Field Studies, for the "n of what?" question in Part 7c
+
+**R for Data Science (2nd ed.)** — free online at [r4ds.hadley.nz](https://r4ds.hadley.nz/):
+
+| Chapter | Covers | Worksheet part |
+|---------|--------|----------------|
+| [§3.5 — Groups and `summarize()`](https://r4ds.hadley.nz/data-transform.html#sec-summarize) | `group_by()`, `summarize()`, `n()` | Parts 6, 7, 7c |
+| [§10 — Exploratory data analysis](https://r4ds.hadley.nz/EDA.html) | looking at a variable before you test it | Parts 3b, 6b, 7b |
+| [§13 — Numbers](https://r4ds.hadley.nz/numbers.html) | counts, `mean()`, `median()`, rounding | Parts 2-5 |
+| [§18 — Missing values](https://r4ds.hadley.nz/missing-values.html) | `NA`, `na.rm`, and why `n()` lies | Part 4 |
+| [§7.5 — Writing to a file](https://r4ds.hadley.nz/data-import.html#sec-writing-to-a-file) | `write_csv()` | Part 8 |
+
+------------------------------------------------------------------------
+
+------------------------------------------------------------------------
+
+# Homework
+
+**[Homework 2 — Descriptive Statistics](../../homeworks/descriptive_stats_homework/descriptive_stats_homework.qmd)**
+
+The same summarising and wrangling workflow, on **lake trout from two Toolik Lake lakes** — Island Lake, which has forage fish, and NE-12, which does not. You run it first on length and then repeat the whole thing on mass, which is the point: the second pass should be faster than the first.
+
+**Data:** [`lake_trout.csv`](../../homeworks/descriptive_stats_homework/data/lake_trout.csv) — collected by Mike McDonald's lab at Toolik Lake, Alaska. A real field dataset, not a textbook one.

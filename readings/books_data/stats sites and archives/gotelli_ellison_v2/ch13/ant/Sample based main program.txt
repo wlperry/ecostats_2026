@@ -1,0 +1,52 @@
+## Programed by Shang-Yi Lin &  Tsung-Chen Hsieh
+## Phd student, Institute of Statistics, National Tsing Hua University
+## Date: 2011, August
+## Main program for calculateing rarefied species richness
+
+#Step0. Specify the source path and input filename (only support .csv file for convenient.)
+#setwd("D:/Sample-based rarefaction and extrapolation")		
+input_filename="Data.csv"			#make sure the input file in the setting path.
+source("Sample-based Subroutine.txt")		#make sure the source file in the setting path.
+dat=read.csv(input_filename, header=TRUE)
+
+T=c(11,12,5)   ## insert numbers of quadrats for each community
+tt=26 					     ## insert how many extrapolated quadrats you want
+div=10  					     ## divided length of the original quadrat
+
+summary.dat(dat,T)
+
+
+#Step1. 	Calculate species richness and confidence interval.
+#		And then save outputs as .csv files
+out=array(0,c(div+tt,5,ncol(dat)))
+for(i in 1:ncol(dat)){
+	out[,,i]=as.matrix(RareExtro(dat[,i],T[i],round(seq(1,T[i],length=div)),tt))
+	dimnames(out)[[2]]=c("m","Richness","sd","95% LCL","95% UCL")
+	write.csv(round(out[,,i],2),paste("out",i,".csv",sep=""))
+}
+
+
+#Step2.  Draw rarefaction curves and save figures as .png files
+pdf(onefile=FALSE,paper="special",width=6,height=6)
+plot(1,type="n",xlim=c(1,max(out[,1,])),ylim=c(1,max(out[,5,])),xlab="m",ylab="Richness",,main="Rarefaction and Extrapolation Curve")
+cols=rainbow(ncol(dat), alpha = 1)
+for(i in 1:ncol(dat)){
+	lines(out[,1,i],out[,2,i],lwd=1,lty=i,col=cols[i])
+	points(out[div,1,i],out[div,2,i],lwd=2,pch=19,cex=0.5)
+}
+legend("bottomright",colnames(dat),lwd=2,lty=1:ncol(dat),col=cols)
+
+plot(1,type="n",xlim=c(1,max(out[,1,])),ylim=c(1,max(out[,5,])),xlab="m",ylab="Richness",,main="Rarefaction and Extrapolation Curve")
+cols=rainbow(ncol(dat), alpha = 1)
+cols.bg=rainbow(ncol(dat), alpha = 0.2)
+for(i in 1:ncol(dat)){
+	lines(out[,1,i],out[,2,i],lwd=2,lty=i,col=cols[i])
+	points(out[div,1,i],out[div,2,i],lwd=1,pch=19,cex=0.5)
+	conf.reg(out[,1,i],out[,4,i],out[,5,i],col=cols.bg[i],border=NA)
+}
+legend("bottomright",colnames(dat),lwd=2,lty=1:ncol(dat),col=cols)
+
+dev.off()
+
+
+

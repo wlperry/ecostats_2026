@@ -1,0 +1,449 @@
+---
+order: 2
+week: 1
+title: "Activity: Wrangling Your Data"
+subtitle: "Importing more than one way, reshaping columns, and saving what you make"
+description: "Hands-on worksheet: reading CSV and Excel files, filter/select/mutate/arrange, the full boolean-operator toolkit (%in%, is.na(), AND vs. OR), recoding with case_when(), log and unit transforms, catching duplicate rows, and write_csv()."
+author: "Bill Perry"
+metadata-files:
+  - ../../_templates/activities.yml
+format:
+  html: default
+  docx:
+    reference-doc: ../../ms_templates/custom-reference-compact.docx
+    fig-width: 2.5
+    fig-height: 2.5
+    fig-dpi: 300
+    dpi: 300            # tell Pandoc the real render dpi so it sizes figures correctly
+---
+
+# Worksheet: Wrangling Your Data
+
+[📥 Download the data (.csv)](data/pine_data.csv){.btn .btn-primary download="pine_data.csv"} [📥 Download the data (.xlsx)](data/pine_data.xlsx){.btn .btn-primary download="pine_data.xlsx"} [📥 Download the messy file](data/pine_needles_error.csv){.btn .btn-secondary download="pine_needles_error.csv"}
+
+[📥 Script skeleton (.R)](data/02_wrangling_data.R){.btn .btn-primary download="02_wrangling_data.R"}
+
+::: callout-important
+## Column names in `pine_data.csv` / `pine_data.xlsx`
+
+Both files hold the **same six columns, with exactly these names**. Type them
+exactly as written — R is case-sensitive, and `Needle_Length` or `needle_length`
+will not work:
+
+| Column             | What it is                                     |
+|--------------------|------------------------------------------------|
+| `source_file`      | the raw team file the row came from             |
+| `team`             | field team — one team = **one tree**            |
+| `replicate`        | needle number within a tree side (1-8)          |
+| `side`             | sun exposure — `"shady"` or `"sunny"`           |
+| `needle_length_mm` | needle length, millimetres                      |
+| `needle_width_mm`  | needle width, millimetres                       |
+
+After you read the file in, run `names(pine_df)` and check the names on your
+screen against this table before you write any other code.
+:::
+
+------------------------------------------------------------------------
+
+# Part 1 · Import the same data two ways
+
+> 📖 **Read more:** [R4DS §7 — Data import](https://r4ds.hadley.nz/data-import.html) and [§20 — Spreadsheets](https://r4ds.hadley.nz/spreadsheets.html).
+
+**▶ Run this in your Script:**
+
+``` r
+# ── Part 1.1 · Import the same data two ways ────────────────────────────
+library(tidyverse)
+library(readxl)
+
+pine_csv_df   <- read_csv("data/pine_data.csv")
+pine_excel_df <- read_excel("data/pine_data.xlsx")
+```
+
+> 💡 **You do not need `glimpse()`.** Click `pine_csv_df` in the **Variables** pane in Positron — it lists every column name, its type, and how many rows, right there.
+
+✏️ **Your turn:** List the six column names and, for each, its type (`<chr>`, `<dbl>`, etc.):
+
+```         
+Column:              Type:
+
+Column:              Type:
+Column:              Type:
+
+Column:              Type:
+
+Column:              Type:
+
+Column:              Type:
+
+```
+
+------------------------------------------------------------------------
+
+# Part 2 · `filter()` — picking rows
+
+> 📖 **Read more:** [R4DS §3.2 — `filter()`](https://r4ds.hadley.nz/data-transform.html).
+
+**▶ Run this:**
+
+``` r
+# ── Part 2.1 · `filter()` ───────────────────────────────────────────────
+pine_csv_df |> filter(side == "shady") |> head()
+pine_csv_df |> filter(needle_length_mm > 17) |> head()
+```
+
+✏️ **Your turn:** Write a `filter()` that keeps only sunny (`side == "sunny"`) needles longer than 15 mm.
+
+``` r
+# ── Part 2.2 · `filter()` ───────────────────────────────────────────────
+# Write your code in the R script:
+
+```
+
+> ⚠️ **Watch out!** `filter(side = "shady")` (one `=`) is an error. You need `==` to test equality.
+
+------------------------------------------------------------------------
+
+# Part 2b · `filter()` — OR, `%in%`, and missing values
+
+> 📖 **Read more:** [R4DS §12 — Logical vectors](https://r4ds.hadley.nz/logicals.html) and [§18 — Missing values](https://r4ds.hadley.nz/missing-values.html).
+
+**▶ Run this:**
+
+``` r
+# ── Part 2b.1 · `filter()` ──────────────────────────────────────────────
+# OR: shady side, OR any exceptionally long needle
+pine_csv_df |> filter(side == "shady" | needle_length_mm > 18)
+
+# %in%: match one of several named teams
+pine_csv_df |> filter(team %in% c("botany", "waterbugs"))
+```
+
+✏️ **Your turn:** Rewrite the `%in%` line above as a chain of `|` conditions instead — same result, longer code.
+
+``` r
+# ── Part 2b.2 · `filter()` ──────────────────────────────────────────────
+# Write your code in the R script:
+
+```
+
+**▶ Run this:**
+
+``` r
+# ── Part 2b.3 · `filter()` ──────────────────────────────────────────────
+survey_df <- tibble(
+  site  = c("A", "B", "C", "D"),
+  count = c(12, NA, 8, NA)
+)
+
+survey_df |> filter(is.na(count))
+survey_df |> filter(!is.na(count))
+```
+
+✏️ **Your turn:** Write a `filter()` on `pine_csv_df` that keeps sunny (`side == "sunny"`) needles **that are also** longer than 14mm — think about whether you need `,`/`&` or `|`.
+
+``` r
+# ── Part 2b.4 · `filter()` ──────────────────────────────────────────────
+# Write your code in the R script:
+
+```
+
+------------------------------------------------------------------------
+
+# Part 3 · `select()` — picking columns
+
+> 📖 **Read more:** [R4DS §3.3 — `select()`](https://r4ds.hadley.nz/data-transform.html#sec-select).
+
+**▶ Run this:**
+
+``` r
+# ── Part 3.1 · `select()` ───────────────────────────────────────────────
+pine_csv_df |> select(side, needle_length_mm) |> head()
+pine_csv_df |> select(-source_file) |> head()
+```
+
+✏️ **Your turn:** Write a `select()` that keeps every column *except* `replicate`.
+
+``` r
+# ── Part 3.2 · `select()` ───────────────────────────────────────────────
+# Write your code in the R script:
+
+```
+
+------------------------------------------------------------------------
+
+# Part 4 · `mutate()` — new and changed columns
+
+> 📖 **Read more:** [R4DS §3.3 — `mutate()`](https://r4ds.hadley.nz/data-transform.html#sec-mutate) and [§13 — Numbers](https://r4ds.hadley.nz/numbers.html).
+
+**▶ Run this:**
+
+``` r
+# ── Part 4.1 · `mutate()` ───────────────────────────────────────────────
+pine_csv_df |>
+  mutate(needle_length_cm = needle_length_mm / 10) |>
+  head()
+
+pine_csv_df |>
+  mutate(log_length = log(needle_length_mm)) |>
+  head()
+```
+
+✏️ **Your turn:** Add a column called `size_class` that is `"long"` when `needle_length_mm > 15` and `"short"` otherwise. Use `if_else()`.
+
+``` r
+# ── Part 4.2 · `mutate()` ───────────────────────────────────────────────
+# Write your code in the R script:
+
+```
+
+✏️ **Your turn:** Does `mutate()` change how many *rows* your data frame has? How many *columns* did each example above add?
+
+`________________________`
+
+::: callout-tip
+**🚀 If you finish early:** Add a second transformed column — a square-root transform (`sqrt(needle_length_mm)`) alongside your log transform. Which one looks like it changes the spread of the values more?
+:::
+
+------------------------------------------------------------------------
+
+# Part 4b · `case_when()` — recoding and binning
+
+> 📖 **Read more:** [R4DS §12.5 — Conditional transformations](https://r4ds.hadley.nz/logicals.html#conditional-transformations).
+
+**▶ Run this:**
+
+``` r
+# ── Part 4b.1 · `case_when()` ───────────────────────────────────────────
+pine_csv_df |>
+  mutate(
+    size_class = case_when(
+      needle_length_mm < 13 ~ "short",
+      needle_length_mm < 16 ~ "medium",
+      TRUE                  ~ "long"
+    )
+  ) |>
+  count(size_class)
+```
+
+✏️ **Your turn:** Change the two cutoffs (13 and 16) to different values of your choosing. How do the counts in each bin shift?
+
+``` r
+# ── Part 4b.2 · `case_when()` ───────────────────────────────────────────
+# Write your code in the R script:
+
+```
+
+✏️ **Your turn:** What happens if you delete the `TRUE ~ "long"` line and rerun? Try it, then explain why that's dangerous.
+
+```         
+
+____________________________________________________________________________________
+
+```
+
+**▶ Run this:**
+
+``` r
+# ── Part 4b.3 · `case_when()` ───────────────────────────────────────────
+pine_csv_df |>
+  mutate(
+    team_code = case_when(
+      team == "botany"     ~ "BOT",
+      team == "grace_jace" ~ "GRJ",
+      team == "one"        ~ "ONE",
+      team == "waterbugs"  ~ "WBG",
+      TRUE                 ~ "UNK"
+    )
+  ) |>
+  distinct(team, team_code)
+```
+
+✏️ **Your turn:** Add a `size_class` column (as above) to `pine_wrangled_df`'s recipe — you'll build the full pipeline with it in Part 6.
+
+::: callout-tip
+**🚀 If you finish early:** Write a `case_when()` that uses **two** conditions per row (e.g., `side == "shady" & needle_length_mm > 17 ~ "long shady"`) to build a combined category.
+:::
+
+------------------------------------------------------------------------
+
+# Part 5 · `arrange()` — sorting rows
+
+> 📖 **Read more:** [R4DS §3.2 — `arrange()`](https://r4ds.hadley.nz/data-transform.html#arrange).
+
+**▶ Run this:**
+
+``` r
+# ── Part 5.1 · `arrange()` ──────────────────────────────────────────────
+pine_csv_df |> arrange(needle_length_mm)
+pine_csv_df |> arrange(desc(needle_length_mm))
+```
+
+✏️ **Your turn:** Sort the data by `side`, and within each side, by `needle_length_mm` from longest to shortest.
+
+``` r
+# ── Part 5.2 · `arrange()` ──────────────────────────────────────────────
+# Write your code in the R script:
+
+```
+
+------------------------------------------------------------------------
+
+# Part 6 · The full pipeline
+
+**▶ Run this:**
+
+``` r
+# ── Part 6.1 · The full pipeline ────────────────────────────────────────
+pine_wrangled_df <- pine_csv_df |>
+  filter(needle_length_mm > 0) |>
+  select(team, side, needle_length_mm, needle_width_mm) |>
+  mutate(
+    needle_length_cm  = needle_length_mm / 10,
+    log_length = log(needle_length_mm),
+    size_class = case_when(
+      needle_length_mm < 13 ~ "short",
+      needle_length_mm < 16 ~ "medium",
+      TRUE                  ~ "long"
+    )
+  ) |>
+  arrange(side, desc(needle_length_mm))
+
+head(pine_wrangled_df)
+```
+
+✏️ **Your turn:** In your own words, read this pipeline out loud, step by step, the way we did in lecture.
+
+```         
+Take pine_csv_df, then ______________________, then ______________________,
+
+then ______________________, then ______________________.
+```
+
+------------------------------------------------------------------------
+
+# Part 7 · Finding duplicate rows
+
+> 📖 **Read more:** [R4DS §14 — Strings](https://r4ds.hadley.nz/strings.html) for the text cleanup, and Gotelli & Ellison Ch. 8 (Managing and Curating Data) on Canvas for why this matters.
+
+**▶ Run this:**
+
+``` r
+# ── Part 7.1 · Finding duplicate rows ───────────────────────────────────
+needle_check_df <- read_csv("data/pine_needles_error.csv")
+
+nrow(needle_check_df)
+n_distinct(needle_check_df)
+```
+
+✏️ **Your turn:** Do `nrow()` and `n_distinct()` match? \
+What does that tell you? \
+
+`_______________________________________________________________________`
+
+**▶ Run this:**
+
+``` r
+# ── Part 7.2 · Finding duplicate rows ───────────────────────────────────
+needle_check_df |> filter(duplicated(needle_check_df))
+
+needle_clean_df <- needle_check_df |> distinct()
+
+nrow(needle_clean_df)
+```
+
+✏️ **Your turn:** How many rows did `distinct()` remove? Why does this matter for the sample size you'd report? \
+
+`_________________________________________________________________________`
+
+> ⚠️ **Watch out!** `distinct()` only catches *exact* duplicate rows — a mistiped name won't be caught. Always look at your data too.
+
+------------------------------------------------------------------------
+
+# Part 8 · Saving your work with `write_csv()`
+
+Everything runs one way: **`data/` (raw, read-only) → `scripts/` (your code) → `output/` (results).**
+
+> 📖 **Read more:** [R4DS §7.5 — Writing to a file](https://r4ds.hadley.nz/data-import.html#sec-writing-to-a-file).
+
+Before you save, trim to the columns worth keeping:
+
+**▶ Run this:**
+
+``` r
+# ── Part 8.1 · Saving your work with `write_csv()` ──────────────────────
+pine_out_df <- pine_wrangled_df |>
+  select(team, side, needle_length_mm, needle_width_mm)
+
+write_csv(pine_out_df, "output/pine_data_wrangled.csv")
+```
+
+Check your `output/` folder — the new CSV should be there, and `data/pine_data.csv` should be exactly as it was.
+
+> ⚠️ **Watch out!** `write_csv()` overwrites without asking. That is fine in `output/`, because your script can rebuild anything in there. It would be a disaster in `data/`.
+
+✏️ **Your turn:** Save your cleaned `needle_clean_df` from Part 7 to `output/pine_needles_cleaned.csv`.
+
+``` r
+# ── Part 8.2 · Saving your work with `write_csv()` ──────────────────────
+# Write your code in the R script:
+
+```
+
+> ⚠️ **Watch out!** Never give a wrangled file the same name as the raw file. If your script's output can overwrite your raw data, one accidental re-run destroys it permanently.
+
+------------------------------------------------------------------------
+
+# Part 9 · Review and checkpoint
+
+At this point you can:
+
+- [ ] Read the same dataset from a `.csv` and an `.xlsx`
+- [ ] Use `filter()`, `select()`, `mutate()`, and `arrange()` on real data
+- [ ] Filter with `%in%`, `is.na()`/`!is.na()`, and both AND (`,`) and OR (`|`)
+- [ ] Recode or bin a column with `case_when()`, including a `TRUE ~` catch-all
+- [ ] Add a unit-converted column and a log-transformed column with `mutate()`
+- [ ] Chain multiple verbs into one pipeline with `|>`
+- [ ] Check for duplicate rows with `nrow()` / `n_distinct()`, and remove them with `distinct()`
+- [ ] Save a new file to `output/` with `write_csv()`, leaving `data/` untouched
+
+✏️ **Your turn — before you move on:** Run your whole script top to bottom. \
+\
+Ran cleanly? `Y / N` — if not, the error was: \
+
+`____________________________________________________________`
+
+::: callout-note
+**📤 What to turn in before next class**
+
+Upload both of these to the course management system:
+
+1.  Your code — the `scripts/` folder (or just `02_wrangling_data.R`)
+2.  This worksheet, with your written answers
+:::
+
+------------------------------------------------------------------------
+
+# Readings
+
+**Before next class** — chapter PDFs are posted on **Canvas**:
+
+- **Gotelli & Ellison**, *A Primer of Ecological Statistics* — **Ch. 8**, Managing and Curating Data (raw vs. processed data, and the audit trail from field sheet to analysis)
+- **Whitlock & Schluter**, *The Analysis of Biological Data* — **Ch. 1**, Statistics and Samples, §1.4 on types of variables — the categorical/numerical distinction behind `case_when()` and every `group_by()` to come
+
+Neither statistics text teaches `dplyr`. Read them for *why* a clean, documented dataset matters; read R4DS for *how*.
+
+**R for Data Science (2nd ed.)** — free online at [r4ds.hadley.nz](https://r4ds.hadley.nz/):
+
+| Chapter | Covers | Worksheet part |
+|---------|--------|----------------|
+| [§3 — Data transformation](https://r4ds.hadley.nz/data-transform.html) | `filter()`, `select()`, `mutate()`, `arrange()`, the pipe | Parts 2-6 |
+| [§5 — Data tidying](https://r4ds.hadley.nz/data-tidy.html) | one row per observation — the shape we are aiming for | Part 6 |
+| [§7 — Data import](https://r4ds.hadley.nz/data-import.html) | `read_csv()`, `write_csv()` | Parts 1, 8 |
+| [§12 — Logical vectors](https://r4ds.hadley.nz/logicals.html) | `&`, `\|`, `%in%`, `is.na()`, `case_when()` | Parts 2b, 4b |
+| [§13 — Numbers](https://r4ds.hadley.nz/numbers.html) | unit conversions, logs, `as.numeric()` | Part 4 |
+| [§14 — Strings](https://r4ds.hadley.nz/strings.html) | `str_to_lower()`, `str_squish()`, fixing typo'd categories | Part 7 |
+| [§18 — Missing values](https://r4ds.hadley.nz/missing-values.html) | `NA`, `na_if()`, sentinel codes like `-999` | Parts 2b, 7 |
+| [§20 — Spreadsheets](https://r4ds.hadley.nz/spreadsheets.html) | reading `.xlsx` with `readxl` | Part 1 |
+
+------------------------------------------------------------------------

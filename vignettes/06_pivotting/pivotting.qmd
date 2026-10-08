@@ -1,0 +1,234 @@
+---
+title: "Common Code 06 — Pivoting Data"
+subtitle: "pivot_longer() and pivot_wider() — reshaping between wide and long format"
+author: "Bill Perry"
+date: today
+
+topic_number: "06"
+type: common_code
+description: >
+  how to switch from wide to long and long to wide data
+categories: [packages, setup]
+
+format:
+  html: default
+  docx: default
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+# Reshaping data
+
+Most tidyverse functions — especially `ggplot2` — want data in **long (tidy) format**: one row per observation, one column per variable. Real data, especially from Excel, often arrives in **wide format**: one column per group or time point. `pivot_longer()` and `pivot_wider()` move data between these two shapes.
+
+> ⬇️ **Download the companion R script:** [`06_pivot.R`](06_pivot.R)
+
+```r
+library(tidyverse)
+library(palmerpenguins)
+```
+
+::: {.callout-note}
+## Wide vs long — a quick mental model
+
+**Wide** (one column per species, year, or treatment — common in Excel):
+
+| site | trout_2022 | trout_2023 | bass_2022 | bass_2023 |
+|---|---|---|---|---|
+| A | 12 | 14 | 4 | 5 |
+
+**Long** (one row per observation — what ggplot needs):
+
+| site | species | year | count |
+|---|---|---|---|
+| A | trout | 2022 | 12 |
+| A | trout | 2023 | 14 |
+| A | bass | 2022 | 4 |
+:::
+
+---
+
+# 1 · `pivot_longer()` — wide to long
+
+This is the direction you need most often. `cols` names the columns to
+collapse; `names_to` is what to call the new key column; `values_to` is
+what to call the new value column.
+
+### Plot all numeric measurements in one call
+
+Without pivoting you need four separate `ggplot()` calls — one per measurement.
+With `pivot_longer()` you write one and use `facet_wrap()`:
+
+```r
+penguins |>
+  drop_na() |>
+  pivot_longer(
+    cols      = c(bill_length_mm, bill_depth_mm,
+                  flipper_length_mm, body_mass_g),
+    names_to  = "measurement",
+    values_to = "value"
+  ) |>
+  ggplot(aes(x = value, fill = species)) +
+  geom_histogram(bins = 20, alpha = 0.6, position = "identity") +
+  facet_wrap(~ measurement, scales = "free") +
+  labs(x = NULL, y = "Count", fill = "Species") +
+  theme_minimal()
+```
+
+### Select columns by type or prefix
+
+```r
+# All numeric columns at once
+penguins |>
+  pivot_longer(cols = where(is.numeric),
+               names_to = "measurement", values_to = "value")
+
+# Columns that start with "bill"
+penguins |>
+  pivot_longer(cols = starts_with("bill"),
+               names_to = "bill_dim", values_to = "mm")
+```
+
+### Strip a shared prefix or suffix from new names
+
+```r
+penguins |>
+  pivot_longer(
+    cols         = c(bill_length_mm, bill_depth_mm),
+    names_to     = "dimension",
+    values_to    = "mm",
+    names_prefix = "bill_"    # removes "bill_" so names read "length_mm", "depth_mm"
+  )
+```
+
+### Classic wide dataset — `relig_income`
+
+`tidyr` ships this dataset: rows are religions, columns are income brackets:
+
+```r
+head(relig_income)
+
+relig_long <- relig_income |>
+  pivot_longer(
+    cols      = -religion,     # everything except the religion column
+    names_to  = "income",
+    values_to = "count"
+  )
+relig_long
+```
+
+### Split compound column names into two new columns
+
+When column names encode two pieces of information like `trout_2022`:
+
+```r
+field_wide <- tibble(
+  site       = c("A","B","C","D"),
+  trout_2022 = c(12,8,15,5),  trout_2023 = c(14,9,13,7),
+  bass_2022  = c(4,11,6,9),   bass_2023  = c(5,12,7,8)
+)
+
+field_long <- field_wide |>
+  pivot_longer(
+    cols      = -site,
+    names_to  = c("species", "year"),
+    names_sep = "_",              # split on the underscore
+    values_to = "count"
+  )
+field_long
+```
+
+::: {.callout-tip}
+## `names_sep` vs `names_pattern`
+
+`names_sep = "_"` splits on a literal character. `names_pattern = "(.*)_(\\d{4})"` uses a regular expression — more flexible when separators vary.
+:::
+
+---
+
+# 2 · `pivot_wider()` — long to wide
+
+Use this direction for publication summary tables or when a function expects
+wide format.
+
+### Summary table — one stat per column
+
+```r
+penguins |>
+  drop_na(body_mass_g) |>
+  group_by(species) |>
+  summarise(
+    mean = round(mean(body_mass_g), 1),
+    sd   = round(sd(body_mass_g),   1),
+    n    = sum(!is.na(body_mass_g)),
+    .groups = "drop"
+  ) |>
+  pivot_longer(cols = c(mean, sd, n),
+               names_to = "stat", values_to = "value") |>
+  pivot_wider(names_from = stat, values_from = value)
+```
+
+### Species × island presence matrix
+
+```r
+penguins |>
+  drop_na() |>
+  count(species, island) |>
+  pivot_wider(names_from  = island,
+              values_from = n,
+              values_fill = 0)    # replace NA with 0 where species absent
+```
+
+::: {.callout-warning}
+## `values_fill` prevents confusing NAs
+
+Without `values_fill = 0`, missing combinations appear as `NA` in the wide output. For a presence/absence or count matrix, `values_fill = 0` is almost always what you want.
+:::
+
+### Side-by-side group comparison
+
+```r
+penguins |>
+  drop_na(sex, body_mass_g) |>
+  group_by(species, sex) |>
+  summarise(mean_mass = round(mean(body_mass_g), 1), .groups = "drop") |>
+  pivot_wider(names_from = sex, values_from = mean_mass)
+```
+
+---
+
+# 3 · Complete pipeline — field data to plot
+
+```r
+field_long <- field_wide |>
+  pivot_longer(
+    cols = -site,
+    names_to  = c("species", "year"),
+    names_sep = "_",
+    values_to = "count"
+  )
+
+ggplot(field_long, aes(x = site, y = count, fill = year)) +
+  geom_col(position = "dodge", alpha = 0.8) +
+  facet_wrap(~ species) +
+  labs(x = "Site", y = "Fish count", fill = "Year") +
+  theme_minimal()
+```
+
+---
+
+# Quick reference
+
+| Task | Code |
+|---|---|
+| Wide → long (named cols) | `pivot_longer(cols = c(a, b, c), names_to = "key", values_to = "val")` |
+| Wide → long (all numeric) | `pivot_longer(cols = where(is.numeric), ...)` |
+| Wide → long (by prefix) | `pivot_longer(cols = starts_with("x"), ...)` |
+| Strip prefix from names | `names_prefix = "bill_"` inside `pivot_longer()` |
+| Split compound names | `names_to = c("sp","yr"), names_sep = "_"` |
+| Long → wide | `pivot_wider(names_from = key, values_from = val)` |
+| Fill missing combinations | `values_fill = 0` inside `pivot_wider()` |
+
+*End of Common Code 06 — Pivoting Data.* *Next: Common Code 07 — Advanced Plotting.*

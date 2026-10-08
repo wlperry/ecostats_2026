@@ -1,0 +1,398 @@
+---
+title: "Common Code 02 — Reading and Writing Files"
+subtitle: "CSV, Excel, janitor cleaning, and a complete pipeline"
+author: "Bill Perry"
+date: today
+
+topic_number: "02"
+type: common_code
+description: >
+  Read and write CSV and Excel files, clean names with janitor, and
+  save a tidy copy — the full raw-to-clean pipeline in one script.
+categories: [import-export, data-cleaning]
+
+format:
+  html: default
+  docx: default
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+
+# Reading and Writing Files
+
+Nearly every analysis in this course starts the same way: read a raw data file,
+clean it up, and save a tidy copy. This vignette covers the full pipeline from
+raw file to clean data ready for analysis.
+
+> ⬇️ **Download the companion R script** — all examples in one file ready to copy into your project:
+> [`02_reading_writing.R`](02_reading_writing.R)
+
+---
+
+### Packages you might need
+
+Install these once if you have not already (see [Common Code 01](../01_libraries/01_libraries.html)):
+
+```r
+install.packages("tidyverse")   # includes read_csv() and write_csv()
+install.packages("readxl")      # read_excel()
+install.packages("writexl")     # write_xlsx()
+install.packages("janitor")     # clean_names(), remove_empty(), tabyl()
+install.packages("lubridate")   # date parsing — ymd(), mdy(), dmy()
+install.packages("skimr")       # skim() for quick data summaries
+```
+
+Load them at the top of every script:
+
+```r
+library(tidyverse)
+library(readxl)
+library(writexl)
+library(janitor)
+library(lubridate)
+```
+
+---
+
+# 1 · Reading CSV Files
+
+`read_csv()` from the tidyverse is preferred over base R's `read.csv()` — it is faster, never converts strings to factors automatically, and gives cleaner column-type messages.
+
+### Basic read
+
+```r
+my_data <- read_csv("data_raw/my_file.csv")
+```
+
+> 💡 **Key idea:** Always use a relative path starting from your project folder root — `"data_raw/my_file.csv"` not `"C:/Users/..."`. Relative paths work on any computer that has the same project folder structure.
+
+### Skip header rows
+
+Some files have a title or metadata row above the actual column names:
+
+```r
+my_data <- read_csv("data_raw/my_file.csv", skip = 2)
+```
+
+### Specify column types
+
+Let R know what each column should be rather than guessing:
+
+```r
+my_data <- read_csv(
+  "data_raw/my_file.csv",
+  col_types = cols(
+    site      = col_character(),
+    date      = col_date(format = "%Y-%m-%d"),
+    length_mm = col_double(),
+    count     = col_integer()
+  )
+)
+```
+
+### Handle custom NA strings
+
+Field data often uses `.`, `-999`, or `N/A` to mark missing values. Tell R about them at import so they become proper `NA`:
+
+```r
+my_data <- read_csv(
+  "data_raw/my_file.csv",
+  na = c("", "NA", "N/A", ".", "-999")
+)
+```
+
+> ⚠️ **Watch out!** If you do not declare your NA strings at import, `-999` will be read as a real number and will silently skew your means and plots.
+
+---
+
+# 2 · Reading Excel Files
+
+`read_excel()` from the `readxl` package handles both `.xlsx` and `.xls` files without needing Excel or Java installed.
+
+### Basic read
+
+```r
+my_data <- read_excel("data_raw/my_file.xlsx")
+```
+
+### Read a specific sheet
+
+```r
+# By name
+my_data <- read_excel("data_raw/my_file.xlsx", sheet = "Data")
+
+# By position
+my_data <- read_excel("data_raw/my_file.xlsx", sheet = 2)
+```
+
+### Check what sheets exist first
+
+```r
+excel_sheets("data_raw/my_file.xlsx")
+```
+
+### Skip rows and limit the range
+
+```r
+my_data <- read_excel(
+  "data_raw/my_file.xlsx",
+  sheet = "Data",
+  skip  = 3,           # skip 3 rows before the header row
+  range = "A4:F200"    # or give an explicit cell range
+)
+```
+
+### Handle custom NA strings from Excel
+
+```r
+my_data <- read_excel(
+  "data_raw/my_file.xlsx",
+  na = c("", "NA", "N/A", ".", "-999")
+)
+```
+
+> 💡 **Coming from Excel?** `read_excel()` treats your first data row as column names — exactly like Excel's freeze-pane header row. Everything below becomes rows in R.
+
+---
+
+# 3 · Cleaning Names with janitor
+
+Column names from Excel files are often messy: spaces, capital letters, special characters, and units mixed into the name. `janitor::clean_names()` converts everything to tidy `lower_snake_case` in one call.
+
+### clean_names()
+
+```r
+my_data <- read_excel("data_raw/my_file.xlsx") |>
+  clean_names()
+```
+
+**What it does:**
+
+| Original column name | After `clean_names()` |
+|---|---|
+| `Leaf Mass (g)` | `leaf_mass_g` |
+| `% Cover` | `percent_cover` |
+| `Site ID` | `site_id` |
+| `DATE Collected` | `date_collected` |
+| `length.mm` | `length_mm` |
+
+> 💡 **Key idea:** Run `clean_names()` immediately after every `read_excel()` or `read_csv()` call. Your fingers will thank you — no more backticks around column names with spaces.
+
+### remove_empty()
+
+Excel files often have blank formatting rows or columns that import as rows full of `NA`. Drop them:
+
+```r
+my_data <- read_excel("data_raw/my_file.xlsx") |>
+  clean_names() |>
+  remove_empty(which = c("rows", "cols"))
+```
+
+### Rename specific columns
+
+After `clean_names()`, use `rename()` if you still want different names:
+
+```r
+my_data <- my_data |>
+  rename(weight_g = wt_g,
+         site_id  = site)
+```
+
+### tabyl() — quick frequency check
+
+`tabyl()` is a tidy version of `table()`. Use it to check that your grouping variables imported correctly:
+
+```r
+my_data |> tabyl(side)               # one-way count and percent
+my_data |> tabyl(side, treatment)    # two-way cross-tabulation
+```
+
+> ⚠️ **Watch out!** After import, always `tabyl()` your grouping columns. Stray spaces (`"sunny "` vs `"sunny"`) or mixed capitalisation (`"Sunny"` vs `"sunny"`) will show up as extra levels here — better to catch them now than after running a t-test.
+
+---
+
+# 4 · Checking What You Loaded
+
+Always inspect a new data frame before you do any analysis:
+
+```r
+glimpse(my_data)      # column names, types, and first few values — tidyverse style
+dim(my_data)          # rows, columns
+names(my_data)        # column names only
+head(my_data)         # first 6 rows
+tail(my_data)         # last 6 rows
+summary(my_data)      # min / mean / max for numeric; counts for character
+skimr::skim(my_data)  # full distributional summary with missing-value counts
+```
+
+> 💡 **Key idea:** `glimpse()` and `str()` are the two fastest ways to catch type problems. If a column that should be numeric shows as `<chr>`, a stray letter or comma is hiding in your raw data. Find it before it causes silent errors downstream.
+
+---
+
+# 5 · Fixing Common Import Problems
+
+### A numeric column read as character
+
+This happens when even one cell in the column contains a letter, a comma used as a thousand-separator, or a unit like `"4.2 g"`:
+
+```r
+my_data <- my_data |>
+  mutate(length_mm = as.numeric(length_mm))
+```
+
+> ⚠️ **Watch out!** `as.numeric()` silently converts any value it cannot parse to `NA` and prints a warning. Always check how many `NA`s appeared after the conversion — they tell you exactly which rows had non-numeric values.
+
+### A grouping column read as numeric
+
+Common when sites or treatments are coded as numbers (1, 2, 3) but should be treated as categories:
+
+```r
+my_data <- my_data |>
+  mutate(site = as.factor(site))
+```
+
+### Dates read as character
+
+```r
+my_data <- my_data |>
+  mutate(date = ymd(date))    # "2026-06-25"
+  # mutate(date = mdy(date))  # "06/25/2026"
+  # mutate(date = dmy(date))  # "25-06-2026"
+```
+
+### Whitespace in character columns
+
+`"sunny "` and `"sunny"` are different strings to R. Trim trailing and leading spaces from all character columns at once:
+
+```r
+my_data <- my_data |>
+  mutate(across(where(is.character), str_trim))
+```
+
+### Inconsistent capitalisation
+
+```r
+my_data <- my_data |>
+  mutate(across(where(is.character), str_to_lower))
+```
+
+---
+
+# 6 · Writing CSV Files
+
+Save a clean copy to `data_clean/` — never overwrite your `data_raw/` file.
+
+```r
+write_csv(my_data, "data_clean/my_data_clean.csv")
+```
+
+> 💡 **Key idea:** `write_csv()` never adds row numbers to the file (unlike base R's `write.csv()`). Prefer it in every script.
+
+To append new rows to an existing file without overwriting:
+
+```r
+write_csv(new_rows, "data_clean/my_data_clean.csv", append = TRUE)
+```
+
+---
+
+# 7 · Writing Excel Files
+
+`writexl` writes `.xlsx` files without needing Excel or Java. It is lightweight and reliable.
+
+### Single sheet
+
+```r
+write_xlsx(my_data, "data_clean/my_data_clean.xlsx")
+```
+
+### Multiple sheets in one workbook
+
+Pass a named list — each element becomes a sheet:
+
+```r
+write_xlsx(
+  list(
+    "Clean data" = my_data,
+    "Summary"    = my_summary,
+    "Metadata"   = my_metadata
+  ),
+  "data_clean/my_data_package.xlsx"
+)
+```
+
+> 💡 **Coming from Excel?** This is the equivalent of saving a multi-tab workbook. Each named element in the list becomes one tab.
+
+---
+
+# 8 · Complete Recommended Pipeline
+
+This is the pattern to use at the top of every analysis script — read, clean, check, save:
+
+```r
+# ── Packages ──────────────────────────────────────────────────────────────────
+library(tidyverse)
+library(readxl)
+library(writexl)
+library(janitor)
+library(lubridate)
+
+# ── Read and clean ─────────────────────────────────────────────────────────────
+my_data <- read_excel("data_raw/my_file.xlsx") |>
+  clean_names() |>
+  remove_empty(which = c("rows", "cols")) |>
+  mutate(
+    date      = ymd(date),
+    site      = as.factor(site),
+    length_mm = as.numeric(length_mm),
+    across(where(is.character), str_trim)
+  )
+
+# ── Always check before saving ─────────────────────────────────────────────────
+glimpse(my_data)
+my_data |> tabyl(site)
+
+# ── Save clean copy ────────────────────────────────────────────────────────────
+write_csv(my_data, "data_clean/my_data_clean.csv")
+```
+
+> ✅ **Key idea:** Your project folder enforces discipline. `data_raw/` is read-only — you read from it and never write back to it. `data_clean/` holds the version your analysis scripts actually use. If something goes wrong you can always re-run the cleaning script from scratch.
+
+Your project folder after running this pipeline:
+
+```
+my_project/
+├── data_raw/
+│   └── my_file.xlsx        <- untouched original — never edit this
+├── scripts/
+│   └── 01_clean_data.R     <- the script that produced the clean file
+├── figures/                <- empty until your plotting script runs
+└── data_clean/
+    └── my_data_clean.csv   <- what every other script reads from
+```
+
+---
+
+# Quick reference
+
+| Task | Function | Package |
+|---|---|---|
+| Read CSV | `read_csv("path/file.csv")` | tidyverse |
+| Read Excel | `read_excel("path/file.xlsx")` | readxl |
+| List sheet names | `excel_sheets("path/file.xlsx")` | readxl |
+| Clean column names | `clean_names()` | janitor |
+| Drop empty rows/cols | `remove_empty(which = c("rows","cols"))` | janitor |
+| Drop constant cols | `remove_constant()` | janitor |
+| Frequency table | `tabyl(column)` | janitor |
+| Inspect types | `glimpse(df)` | tidyverse |
+| Full summary | `skim(df)` | skimr |
+| Write CSV | `write_csv(df, "path/file.csv")` | tidyverse |
+| Write Excel | `write_xlsx(df, "path/file.xlsx")` | writexl |
+| Multi-sheet Excel | `write_xlsx(list(...), "path/file.xlsx")` | writexl |
+| Parse dates | `ymd()`, `mdy()`, `dmy()` | lubridate |
+| Fix character cols | `mutate(across(where(is.character), str_trim))` | tidyverse |
+
+*End of Common Code 02 — Reading and Writing Files.* *Next: Common Code 03 — Basic ggplot2.*

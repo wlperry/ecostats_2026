@@ -1,0 +1,279 @@
+---
+order: 11
+week: 7
+title: "Homework 6 — Multiple Regression"
+subtitle: "When predictors tell the same story"
+description: "Seventy-three North American grassland sites, six climate and geography predictors, and one pair of predictors so tangled that dropping one reverses the sign of the other."
+author: "Bill Perry"
+---
+
+# Worksheet: When Predictors Tell the Same Story
+
+[📥 Grassland data](data/grassland_c3.csv){.btn .btn-primary download="grassland_c3.csv"} [📥 Same data (.xlsx)](data/grassland_c3.xlsx){.btn .btn-primary download="grassland_c3.xlsx"} [📥 Tools script (.R)](themes_functions/r_themes_and_functions.R){.btn .btn-primary download="r_themes_and_functions.R"} [📥 Script skeleton (.R)](11_multiple_regression_homework.R){.btn .btn-primary download="11_multiple_regression_homework.R"}
+
+::: callout-note
+## 📚 Where these data come from
+
+**Book source:** Quinn & Keough, *Experimental Design and Data Analysis for Biologists* — **Chapter 6** (Multiple and complex regression), **Box 6.1** and Figures 6.1–6.2. The book's own file is `paruelo.csv`.
+
+**Original study:** Paruelo, J.M. & Lauenroth, W.K. (1996), *Ecological Applications* — relative abundance of plant functional types across the grasslands and shrublands of central North America.
+
+**What we changed:** columns renamed to readable names (`c3_proportion`, `mean_annual_precip_mm`, …). The numbers are the book's.
+:::
+
+**The study.** Paruelo & Lauenroth surveyed **73 grassland sites** across central North America and recorded what fraction of the plant community was **C3 grasses** — the cool-season photosynthetic type. For each site they recorded six climate and geography variables that might explain it.
+
+**The question.** What controls the abundance of C3 grasses?
+
+**How this relates to class.** In class the Loyn bird data had mild collinearity: grazing lost significance once patch area was in the model, but nothing reversed. These data are worse. Two of these predictors carry almost the same information, and which of them you include decides not just the size of a slope but its **sign**.
+
+Columns: `c3_proportion`, `mean_annual_precip_mm`, `mean_annual_temp_c`, `summer_precip_prop`, `winter_precip_prop`, `longitude`, `latitude`.
+
+::: callout-note
+**Before you start**
+
+There is no hidden "right" model to find. You are graded on whether your conclusion follows from your diagnostics — and on whether you can say plainly what these data cannot resolve.
+:::
+
+------------------------------------------------------------------------
+
+# Part 1 · Setup and the data
+
+**▶ Run this:**
+
+``` r
+# ── Part 1.1 · Setup and the data ───────────────────────────────────────
+library(tidyverse)
+library(car)
+
+source("themes_functions/r_themes_and_functions.R")
+
+grass_df <- read_csv("data/grassland_c3.csv") %>%
+  mutate(log_c3 = log10(c3_proportion + 0.1))
+
+grass_df
+```
+
+> 💡 The response is logged because `c3_proportion` is a bounded proportion with zeros in it. The `+ 0.1` keeps `log10()` from returning `-Inf`.
+
+------------------------------------------------------------------------
+
+# Part 2 · One predictor at a time
+
+**▶ Run this** — fit each predictor on its own, exactly as in class:
+
+``` r
+# ── Part 2.1 · One predictor at a time ──────────────────────────────────
+lm(log_c3 ~ mean_annual_temp_c, data = grass_df) %>% summary()
+
+lm(log_c3 ~ latitude, data = grass_df) %>% summary()
+```
+
+✏️ **Your turn:** Record both, then say what each one claims on its own.
+
+```
+mean_annual_temp_c: slope = __________  p = __________
+
+latitude:           slope = __________  p = __________
+
+In words: ___________________________________________________
+```
+
+------------------------------------------------------------------------
+
+# Part 3 · Put them in the same model
+
+**▶ Run this:**
+
+``` r
+# ── Part 3.1 · Put them in the same model ───────────────────────────────
+temp_lat <- lm(log_c3 ~ mean_annual_temp_c + latitude, data = grass_df)
+
+summary(temp_lat)
+```
+
+✏️ **Your turn:** Compare the temperature slope with what you got in Part 2.
+
+```
+Temperature slope alone     = __________  p = __________
+
+Temperature slope with lat  = __________  p = __________
+
+What happened to the sign? __________________________________
+```
+
+✏️ **Your turn:** Before you look at any diagnostic, write down what you think caused it.
+
+```
+____________________________________________________________
+```
+
+------------------------------------------------------------------------
+
+# Part 4 · Diagnose it
+
+**▶ Run this:**
+
+``` r
+# ── Part 4.1 · Diagnose it ──────────────────────────────────────────────
+grass_df %>%
+  select(mean_annual_precip_mm, mean_annual_temp_c, summer_precip_prop,
+         winter_precip_prop, longitude, latitude) %>%
+  cor() %>%
+  round(2)
+
+vif(temp_lat)
+```
+
+✏️ **Your turn:** Find the two most strongly correlated predictors in the matrix.
+
+```
+Strongest pair: __________ and __________   r = __________
+
+VIF for temperature and latitude: __________ and __________
+```
+
+✏️ **Your turn:** The VIFs are nowhere near the "VIF > 10 is bad" rule of thumb, yet the slope still flipped sign. What does that tell you about rules of thumb?
+
+```
+____________________________________________________________
+```
+
+------------------------------------------------------------------------
+
+# Part 5 · The full model
+
+**▶ Run this:**
+
+``` r
+# ── Part 5.1 · The full model ───────────────────────────────────────────
+full_model <- lm(log_c3 ~ mean_annual_precip_mm + mean_annual_temp_c +
+                   summer_precip_prop + winter_precip_prop +
+                   longitude + latitude,
+                 data = grass_df)
+
+summary(full_model)
+
+vif(full_model)
+```
+
+✏️ **Your turn:** Six predictors go in. How many come out significant, and which?
+
+```
+Significant: ________________________________________________
+
+Overall model p = __________   R squared = __________
+```
+
+✏️ **Your turn:** The overall F-test is highly significant while five of six predictors are not. Explain how both can be true at once.
+
+```
+____________________________________________________________
+
+____________________________________________________________
+```
+
+**▶ Your turn to write it:** run the four diagnostic plots and a Shapiro test on the residuals of `full_model`.
+
+``` r
+# ── Part 5.2 · The full model ───────────────────────────────────────────
+```
+
+------------------------------------------------------------------------
+
+# Part 6 · Choose a model
+
+**▶ Your turn to write it:** build a comparison table like the one in class. Fit at least these four models, then compare them on adjusted R² and AIC:
+
+- all six predictors
+- `latitude` + `summer_precip_prop`
+- `latitude` only
+- `mean_annual_temp_c` only
+
+``` r
+# ── Part 6.1 · Choose a model ───────────────────────────────────────────
+# Build a tibble with one row per model, columns adj_r2 and AIC,
+# then add delta_AIC and arrange by AIC.
+```
+
+✏️ **Your turn:** Fill in your table and name the winner.
+
+```
+                              adj R2        AIC      delta AIC
+all six                     ________    ________    ________
+latitude + summer_precip    ________    ________    ________
+latitude only               ________    ________    ________
+temperature only            ________    ________    ________
+
+Model I would report: _______________________________________
+```
+
+✏️ **Your turn:** The single-predictor latitude model and the full six-predictor model differ by only a few AIC units. Which would you publish, and what is your justification — statistical, biological, or both?
+
+```
+____________________________________________________________
+
+____________________________________________________________
+```
+
+------------------------------------------------------------------------
+
+# Part 7 · Say what the data cannot do
+
+✏️ **Your turn:** A reviewer writes: *"The authors show that mean annual temperature has no effect on C3 grass abundance."* Using your Part 2 and Part 3 results, write two or three sentences explaining why that sentence is wrong — and what the honest version would say.
+
+```
+____________________________________________________________
+
+____________________________________________________________
+
+____________________________________________________________
+```
+
+✏️ **Your turn:** What kind of sites would you need to add to this dataset to separate temperature from latitude?
+
+```
+____________________________________________________________
+```
+
+------------------------------------------------------------------------
+
+# Part 8 · The figure you hand in
+
+**▶ Your turn to write it:** one publication-quality figure of the relationship your chosen model supports, saved as a PDF.
+
+``` r
+# ── Part 8.1 · The figure you hand in ───────────────────────────────────
+# Plot log_c3 against your strongest predictor with a fitted line and
+# confidence band. Title, subtitle, axis labels with units,
+# theme_regular(). Save to figures/grassland_c3.pdf at 6 x 4 inches.
+```
+
+✏️ **Your turn:** Write the one-sentence result you would put in a paper, with the slope, the sample size, and one clause about what is confounded with what.
+
+```
+____________________________________________________________
+
+____________________________________________________________
+```
+
+------------------------------------------------------------------------
+
+# Review and checkpoint
+
+At this point you can:
+
+- [ ] Fit and interpret a multiple regression with several continuous predictors
+- [ ] Recognise a sign reversal as a symptom of collinearity rather than a new finding
+- [ ] Use a correlation matrix and VIFs, and explain why the VIF rule of thumb is not a safety net
+- [ ] Explain a significant overall F alongside non-significant individual predictors
+- [ ] Compare models on adjusted R² and AIC and defend a choice
+- [ ] State plainly what a dataset cannot resolve
+
+::: callout-note
+**📤 What to turn in**
+
+1. `11_multiple_regression_homework.R`
+2. `figures/grassland_c3.pdf`
+3. This worksheet, with your written answers
+:::

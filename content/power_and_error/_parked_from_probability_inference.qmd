@@ -1,0 +1,114 @@
+---
+title: "PARKED — power & Type I/II material moved out of Probability & Inference"
+---
+
+<!--
+This file is NOT rendered (leading underscore = Quarto ignores it).
+
+Moved here 2026-09-16 from content/probability_inference/probability_inference_lecture.qmd
+so the Probability & Inference lecture could end at confidence intervals and
+hypothesis testing. The Type I/II error slides duplicated material already in
+power_and_error_lecture.qmd; the grayling power example below is the only piece
+that is genuinely new and worth folding in later.
+
+TO DO: merge the grayling power example into the "Statistical Power" section of
+power_and_error_lecture.qmd, or keep it as a second worked example alongside the
+pine-needle one.
+-->
+
+## Type I and Type II Errors  {#parked-errors}
+
+**Type I Error (False Positive)**
+
+- Rejecting H₀ when it is actually true
+- Probability = α (significance level)
+- "Finding an effect that isn't real"
+
+**Type II Error (False Negative)**
+
+- Failing to reject H₀ when it is actually false
+- Probability = β
+- "Missing an effect that is real"
+
+**Statistical Power = 1 − β**
+
+- Probability of correctly rejecting a false H₀
+- Increases with: larger sample size, larger effect size, lower variability, higher α
+
+**Reading the two-curve figure:**
+
+- Black curve (null): distribution of the test statistic when H₀ is true
+- Green curve (alternative): distribution when there really is an effect
+- Red shaded area (Type I): area under the **null** curve right of the critical value
+- Blue shaded area (Type II): area under the **alternative** curve left of the critical value
+- Power = area under the **green** curve right of the critical value
+- Moving the critical value trades one error against the other — you cannot shrink both
+
+```{r parked-error-plot}
+#| eval: false
+x <- seq(-4, 8, length.out = 1000)
+null_y <- dnorm(x, mean = 0, sd = 1)
+alt_y  <- dnorm(x, mean = 3, sd = 1)
+crit   <- qnorm(0.95)
+
+type1 <- data.frame(x = seq(crit, 8, length.out = 200)) %>%
+  mutate(y = dnorm(x, 0, 1))
+type2 <- data.frame(x = seq(-4, crit, length.out = 200)) %>%
+  mutate(y = dnorm(x, 3, 1))
+
+ggplot() +
+  geom_line(data = data.frame(x = x, y = null_y), aes(x, y)) +
+  geom_line(data = data.frame(x = x, y = alt_y), aes(x, y), colour = "green4") +
+  geom_area(data = type1, aes(x, y), fill = "red",  alpha = 0.4) +
+  geom_area(data = type2, aes(x, y), fill = "blue", alpha = 0.4) +
+  geom_vline(xintercept = crit, linetype = "dashed") +
+  labs(x = "Test Statistic", y = "Probability Density") +
+  theme_classic(base_size = 9)
+```
+
+## Power example on the grayling data  {#parked-power}
+
+Power to detect a 30 mm difference in mean length between lakes I3 and I8.
+
+```{r parked-power-grayling}
+#| eval: false
+grayling_df <- read_csv("data/gray_I3_I8.csv")
+lake_I3 <- grayling_df %>% filter(lake == "I3")
+lake_I8 <- grayling_df %>% filter(lake == "I8")
+
+# count only the fish we actually measured (the length() trap from week 2)
+n1 <- sum(!is.na(lake_I3$length_mm))
+n2 <- sum(!is.na(lake_I8$length_mm))
+
+sd_pooled <- sqrt((var(lake_I3$length_mm, na.rm = TRUE) * (n1 - 1) +
+                   var(lake_I8$length_mm, na.rm = TRUE) * (n2 - 1)) /
+                  (n1 + n2 - 2))
+
+# power.t.test assumes EQUAL group sizes. Ours are 66 and 102, so use the
+# harmonic mean - the effective n per group when the design is unbalanced.
+n_effective <- 2 / (1/n1 + 1/n2)
+
+power_result <- power.t.test(n = n_effective,
+                             delta = 30,       # difference we care about, in mm
+                             sd = sd_pooled,   # same scale as delta
+                             sig.level = 0.05,
+                             type = "two.sample",
+                             alternative = "two.sided")
+power_result
+```
+
+::: callout-warning
+**⚠️ An assumption quietly made here**
+
+`sd_pooled` averages the two lakes' SDs, which assumes they are equal. They are
+not: sd(I3) = 28.3 mm but sd(I8) = 52.3 mm — nearly double. That is also why the
+two-sample t-test is a **Welch** test (R's default), which does *not* assume
+equal variances. Treat this power number as a rough guide, not a precise answer.
+:::
+
+## Scenario questions (from the old Practice Exercise 7)
+
+Identify whether a Type I or Type II error might have occurred:
+
+1. A researcher concludes that a new fishing regulation increased grayling size, when in fact it had no effect.
+2. A study fails to detect a real decline in grayling population due to warming water, concluding there was no effect.

@@ -1,0 +1,495 @@
+---
+order: 5
+week: 3
+title: "Activity: Probability & Inference"
+subtitle: "From the normal curve to the confidence interval"
+description: "Hands-on activity: the normal distribution, z-scores and areas under the curve, checking normality, standard error, confidence intervals, and one- and two-sample t-tests on the Arctic grayling length dataset."
+author: "Bill Perry"
+metadata-files:
+  - ../../_templates/activities.yml
+format:
+  html: default
+  docx: default
+---
+
+# Worksheet: Probability & Inference
+
+[📥 Download the data](https://wlperry.github.io/ecostats_2026/content/probability_inference/data/gray_I3_I8.csv){.btn .btn-primary download="gray_I3_I8.csv"} [📄 Download the script skeleton](https://wlperry.github.io/ecostats_2026/content/probability_inference/data/05_probability_inference_skeleton.R){.btn .btn-secondary download="05_probability_inference_skeleton.R"}
+
+# Part 1 · Setup and Data
+
+**▶ Run this:**
+
+``` r
+# ── Part 1.1 · Setup and Data ───────────────────────────────────────────
+library(janitor)
+library(tidyverse)
+
+g_df <- read_csv("data/gray_I3_I8.csv")
+
+i3_df <- g_df %>% filter(lake == "I3")
+
+head(g_df)
+```
+
+**▶ Run this** — the three numbers everything today depends on:
+
+``` r
+# ── Part 1.2 · Setup and Data ───────────────────────────────────────────
+stats_df <- g_df %>%
+  group_by(lake) %>%
+  summarize(
+    mean_length = mean(length_mm, na.rm = TRUE),
+    sd_length   = sd(length_mm, na.rm = TRUE),
+    n           = sum(!is.na(length_mm)),
+    se_length   = sd_length / sqrt(n),
+    .groups = "drop"
+  )
+stats_df
+```
+
+✏️ **Your turn:** Which lake has more fish measured? Which has the larger mean length? Which has the larger SD?
+
+`________________________`
+
+------------------------------------------------------------------------
+
+## A tool you will reuse all semester
+
+You just typed out `mean`, `sd`, `n` and `se` by hand. You will want those same four numbers in *every* analysis from here on — so let's package them into a **function** and never type that block again.
+
+::: callout-note
+**This one is a tool, not a lesson — it is already filled in for you in the script skeleton.** You do not have to type it. Read it, run it, and then use it.
+
+`{{ variable }}` (the "curly-curly" braces) is what lets you hand the function a *bare column name* like `length_mm` instead of a quoted string. It is the one piece of syntax here worth remembering.
+:::
+
+**▶ Run this** — define it once:
+
+``` r
+# ── Part 1.3 · A reusable summary function ──────────────────────────────
+summary_stats <- function(data, variable) {
+  data %>%
+    summarize(
+      n        = sum(!is.na({{ variable }})),
+      mean     = mean({{ variable }}, na.rm = TRUE),
+      sd       = sd({{ variable }}, na.rm = TRUE),
+      se       = sd / sqrt(n),
+      ci_lower = mean - qt(0.975, df = n - 1) * se,
+      ci_upper = mean + qt(0.975, df = n - 1) * se,
+      .groups  = "drop"
+    ) %>%
+    mutate(across(c(mean, sd, se, ci_lower, ci_upper),
+                  ~ round_half_up(.x, 2)))
+}
+```
+
+**▶ Run this** — now use it. Three ways, no retyping:
+
+``` r
+# ── Part 1.4 · A reusable summary function ──────────────────────────────
+g_df %>% group_by(lake) %>% summary_stats(length_mm)   # per lake
+
+g_df %>% summary_stats(length_mm)                      # both lakes pooled
+
+g_df %>% group_by(lake) %>% summary_stats(mass_g)      # a different column
+```
+
+✏️ **Your turn:** Compare the first result to `stats_df` from Part 1.2. Do the `mean`, `sd` and `se` columns match?
+
+`________________________`
+
+✏️ **Your turn:** The function also returns `ci_lower` and `ci_upper` — a 95% confidence interval. We have not explained those yet. **That is Part 6.** For now, just notice they are there.
+
+------------------------------------------------------------------------
+
+# Part 2 · The Normal Distribution
+
+> 📖 **Read more:** Whitlock & Schluter Ch. 10 (The Normal Distribution); Gotelli & Ellison Ch. 2.
+
+A normal distribution is fully described by just two numbers: its mean (μ) and its standard deviation (σ). Let's draw the normal curve that matches our fish and see how well it fits.
+
+**▶ Run this:**
+
+``` r
+# ── Part 2.1 · The Normal Distribution ──────────────────────────────────
+i3_mean <- mean(i3_df$length_mm, na.rm = TRUE)
+i3_sd   <- sd(i3_df$length_mm, na.rm = TRUE)
+
+i3_df %>%
+  ggplot(aes(x = length_mm)) +
+  geom_histogram(aes(y = after_stat(density)), binwidth = 10,
+                 fill = "lightblue", colour = "white") +
+  stat_function(fun = dnorm, args = list(mean = i3_mean, sd = i3_sd),
+                colour = "red", linewidth = 1) +
+  labs(x = "Length (mm)", y = "Density")
+```
+
+✏️ **Your turn:** Where does the red curve sit **above** the blue bars, and where does it sit **below** them? Look especially at the right-hand side.
+
+`________________________`
+
+------------------------------------------------------------------------
+
+# Part 3 · Z-Scores — Putting Everything on One Ruler
+
+> 📖 **Read more:** Whitlock & Schluter Ch. 10 — standardizing a value.
+
+There is a different normal curve for every μ and σ. Standardizing rescales any of them into the *same* units: standard deviations from the mean.
+
+**▶ Run this:**
+
+``` r
+# ── Part 3.1 · Z-Scores ─────────────────────────────────────────────────
+i3_df <- i3_df %>%
+  mutate(z_score = (length_mm - i3_mean) / i3_sd)
+
+i3_df %>%
+  select(lake, length_mm, z_score) %>%
+  head()
+
+i3_df %>%
+  ggplot(aes(x = z_score)) +
+  geom_histogram(binwidth = 0.25, fill = "blue", alpha = 0.7) +
+  labs(x = "z (SDs from the mean)", y = "Count")
+```
+
+✏️ **Your turn:** Compare this histogram to the one in Part 2. What changed — the **shape**, or just the **axis numbers**?
+
+`________________________`
+
+**▶ Run this** — what fraction of our fish really are within 1 SD?
+
+``` r
+# ── Part 3.2 · Z-Scores ─────────────────────────────────────────────────
+within_1sd <- mean(abs(i3_df$z_score) <= 1, na.rm = TRUE)
+round_half_up(100 * within_1sd, 1)
+```
+
+✏️ **Your turn:** A perfect normal distribution gives 68%. What did you get, and is the gap big or small?
+
+`________________________`
+
+------------------------------------------------------------------------
+
+# Part 4 · Area Under the Curve = Probability
+
+> 📖 **Read more:** Whitlock & Schluter Ch. 5 (Probability) and Ch. 10.
+
+The whole point of a density curve is that **area under it is probability**. `pnorm()` gives us that area without any integration.
+
+| Function | You give it | You get back |
+|----|----|----|
+| `pnorm(z)` | a **z** | the **area to the left** |
+| `qnorm(p)` | an **area** | the **z** that cuts it off |
+| `dnorm(z)` | a **z** | the **height** of the curve |
+
+**▶ Run this:**
+
+``` r
+# ── Part 4.1 · Area Under the Curve ─────────────────────────────────────
+pnorm(1.96)          # area to the LEFT of 1.96
+1 - pnorm(1.96)      # area to the RIGHT
+qnorm(0.975)         # the z with 97.5% to its left - the inverse of pnorm
+```
+
+**▶ Run this** — the worked example from lecture: how rare is a 300 mm grayling?
+
+``` r
+# ── Part 4.2 · Area Under the Curve ─────────────────────────────────────
+z_300 <- (300 - i3_mean) / i3_sd
+round_half_up(z_300, 2)                          # should be about 1.22
+
+round_half_up(100 * (1 - pnorm(z_300)), 1)       # % of fish LONGER than 300 mm
+```
+
+**▶ Run this** — and now run it backwards, from a probability to a length:
+
+``` r
+# ── Part 4.3 · Area Under the Curve ─────────────────────────────────────
+z_top5 <- qnorm(0.95)
+length_top5 <- i3_mean + z_top5 * i3_sd
+round_half_up(length_top5, 1)
+```
+
+✏️ **Your turn:** In one sentence, what does that last number mean to someone fishing lake I3?
+
+`________________________`
+
+✏️ **Your turn:** Use `pnorm()` to find the percentage of I3 fish shorter than **240 mm**. Convert 240 to a z-score first.
+
+``` r
+# ── Part 4.4 · Area Under the Curve ─────────────────────────────────────
+# Write your code in the R script:
+```
+
+::: callout-tip
+**🚀 If you finish early:** Shade the tail you just calculated.
+
+``` r
+# ── Part 4.5 · Area Under the Curve ─────────────────────────────────────
+i3_df %>%
+  ggplot(aes(x = length_mm)) +
+  geom_density(fill = "lightblue", alpha = 0.5) +
+  geom_vline(xintercept = 300, colour = "red", linetype = "dashed")
+```
+:::
+
+------------------------------------------------------------------------
+
+# Part 5 · Checking the Assumption
+
+> 📖 **Read more:** Whitlock & Schluter Ch. 13 (Handling Violations of Assumptions).
+
+Every number in Part 4 assumed the fish are normally distributed. Now we test that.
+
+**Watch the hypotheses — they run backwards from what you expect:**
+
+- **H₀: the data ARE normal**
+- **Hₐ: the data are NOT normal**
+- so **p < 0.05 means NOT normal** — a small p-value here is bad news
+
+**▶ Run this:**
+
+``` r
+# ── Part 5.1 · Checking the Assumption ──────────────────────────────────
+shapiro.test(i3_df$length_mm)
+
+i3_df %>%
+  ggplot(aes(sample = length_mm)) +
+  stat_qq() +
+  stat_qq_line(colour = "red") +
+  labs(x = "Theoretical quantiles", y = "Sample quantiles")
+```
+
+✏️ **Your turn:** What is the p-value, and what does it say about normality? On the Q-Q plot, where do the points leave the red line?
+
+`________________________`
+
+**▶ Run this** — so how wrong was our 300 mm answer? Compare theory to the actual fish:
+
+``` r
+# ── Part 5.2 · Checking the Assumption ──────────────────────────────────
+round_half_up(100 * (1 - pnorm(300, i3_mean, i3_sd)), 1)   # normal theory
+round_half_up(100 * mean(i3_df$length_mm > 300, na.rm = TRUE), 1)  # actual fish
+```
+
+✏️ **Your turn:** How far apart are those two numbers? Why does it matter that the disagreement is out in the **tail** rather than in the middle?
+
+`________________________`
+
+::: callout-tip
+**🚀 If you finish early:** Run `shapiro.test()` on lake I8 as well. Is it normal? Does the Q-Q plot agree with the p-value?
+
+``` r
+# ── Part 5.3 · Checking the Assumption ──────────────────────────────────
+# Write your code in the R script:
+```
+:::
+
+------------------------------------------------------------------------
+
+# Part 6 · SD, SE, and Confidence Intervals
+
+> 📖 **Read more:** Whitlock & Schluter Ch. 4 (Estimating with Uncertainty) — this is the chapter that separates SD from SE.
+
+**SD** describes how much *individual fish* vary. **SE** describes how much a *sample mean* would vary from study to study. They answer different questions and must not be swapped.
+
+**▶ Run this:**
+
+``` r
+# ── Part 6.1 · SD, SE, and Confidence Intervals ─────────────────────────
+i3_n  <- sum(!is.na(i3_df$length_mm))
+i3_se <- i3_sd / sqrt(i3_n)
+
+tibble(
+  n  = i3_n,
+  SD = round_half_up(i3_sd, 1),
+  SE = round_half_up(i3_se, 1)
+)
+```
+
+✏️ **Your turn:** If we measured 4× as many fish, which of those two numbers would shrink, and by how much?
+
+`________________________`
+
+**▶ Run this** — build a 95% CI by hand, the way the formula reads: $\bar{y} \pm t \cdot SE$
+
+``` r
+# ── Part 6.2 · SD, SE, and Confidence Intervals ─────────────────────────
+t_crit <- qt(0.975, df = i3_n - 1)   # two-tailed, 95%
+t_crit
+
+ci_lower <- i3_mean - t_crit * i3_se
+ci_upper <- i3_mean + t_crit * i3_se
+
+round_half_up(c(ci_lower, ci_upper), 1)
+```
+
+**▶ Run this** — now check yourself two ways: against R's `t.test()`, and against the function you wrote back in Part 1.3.
+
+``` r
+# ── Part 6.3 · SD, SE, and Confidence Intervals ─────────────────────────
+t.test(i3_df$length_mm)$conf.int          # R's answer
+
+i3_df %>% summary_stats(length_mm)        # your function's answer
+```
+
+✏️ **Your turn:** Do all three intervals — yours by hand, `t.test()`, and `summary_stats()` — agree?
+
+`________________________`
+
+> 💡 **That is the payoff.** The `ci_lower` / `ci_upper` columns were in your function's output back in Part 1.4, before you knew what they meant. Now you do — and you get them on any grouped dataset for free:
+>
+> ``` r
+> g_df %>% group_by(lake) %>% summary_stats(length_mm)
+> ```
+>
+> One line, and every lake gets a mean, an SE, and a confidence interval.
+
+✏️ **Your turn:** Write the I3 interval as a sentence you could put in a paper.
+
+`________________________`
+
+**▶ Run this** — why t and not 1.96? Take a small sample and watch the multiplier change:
+
+``` r
+# ── Part 6.4 · SD, SE, and Confidence Intervals ─────────────────────────
+set.seed(42)
+small_sample <- i3_df %>% slice_sample(n = 10)
+
+s_mean <- mean(small_sample$length_mm)
+s_se   <- sd(small_sample$length_mm) / sqrt(10)
+
+tibble(
+  method = c("z (wrong here)", "t (correct)"),
+  crit   = round_half_up(c(1.96, qt(0.975, df = 9)), 3),
+  lower  = round_half_up(s_mean - crit * s_se, 1),
+  upper  = round_half_up(s_mean + crit * s_se, 1),
+  width  = round_half_up(upper - lower, 1)
+)
+```
+
+✏️ **Your turn:** Which interval is wider, and why is the wider one the *honest* one?
+
+`________________________`
+
+::: callout-note
+**The interpretation to get right**
+
+❌ "There is a 95% chance μ is in my interval."
+✅ "95% of intervals built this way capture μ."
+
+μ is a fixed number. The **interval** is what is random.
+:::
+
+------------------------------------------------------------------------
+
+# Part 7 · One-Sample t-Test
+
+> 📖 **Read more:** Whitlock & Schluter Ch. 11 (Inference for a Normal Population) and Ch. 6 (Hypothesis Testing).
+
+A CI asks *where is μ?* A t-test asks *is μ equal to some specific value?*
+
+**▶ Run this** — do I3 fish differ from a historical mean of 260 mm?
+
+``` r
+# ── Part 7.1 · One-Sample t-Test ────────────────────────────────────────
+t.test(i3_df$length_mm, mu = 260)
+```
+
+✏️ **Your turn:** Fill these in from the output.
+
+```
+H0            = ______________________________________________
+Ha            = ______________________________________________
+t             = __________    df = __________
+p-value       = __________
+95% CI        = __________ to __________
+Decision at α = 0.05: ________________________________________
+```
+
+✏️ **Your turn:** Does the confidence interval contain 260? Explain how that answer and the p-value are telling you the *same thing*.
+
+`________________________`
+
+------------------------------------------------------------------------
+
+# Part 8 · Two-Sample t-Test
+
+> 📖 **Read more:** Whitlock & Schluter Ch. 12 (Comparing Two Means) and Ch. 6 on one- vs. two-tailed tests.
+
+**Formulate the hypotheses first**, for the question "Are fish in Lake I8 longer than fish in Lake I3?"
+
+```
+H0 = ________________________________________________________
+Ha = ________________________________________________________
+```
+
+This question has a **direction**, so it is one-tailed. R orders `lake` alphabetically and tests I3 − I8, so "I8 is longer" means that difference is **less** than zero.
+
+**▶ Run this:**
+
+``` r
+# ── Part 8.1 · Two-Sample t-Test ────────────────────────────────────────
+t.test(length_mm ~ lake, data = g_df, alternative = "less")
+```
+
+✏️ **Your turn:** What do you conclude? Report the **difference in mm**, not just the p-value.
+
+`________________________`
+
+✏️ **Your turn:** The output says "Welch Two Sample t-test". Look back at the SDs in Part 1.2. Why is Welch the right default here?
+
+`________________________`
+
+::: callout-tip
+**🚀 If you finish early:** Rerun with `alternative = "two.sided"`. Does the p-value change? Does the conclusion? Which should you have chosen *before* seeing the data?
+
+``` r
+# ── Part 8.2 · Two-Sample t-Test ────────────────────────────────────────
+# Write your code in the R script:
+```
+:::
+
+------------------------------------------------------------------------
+
+# Review and checkpoint
+
+At this point you can:
+
+- [ ] Draw a normal curve over real data and see where it fits and where it doesn't
+- [ ] Convert values to z-scores and explain what standardizing does and does not change
+- [ ] Use `pnorm()` for areas and `qnorm()` for cutoffs, in both directions
+- [ ] Run and read a Shapiro-Wilk test, remembering that p < 0.05 means **not** normal
+- [ ] Say when to use SD and when to use SE
+- [ ] Build a 95% CI by hand and state correctly what the 95% refers to
+- [ ] Explain why the multiplier is t rather than 1.96
+- [ ] Run and interpret one- and two-sample t-tests
+
+::: callout-note
+**📤 What to turn in before next class**
+
+1. Your script — `scripts/05_probability_inference.R`
+2. This worksheet, with your written answers
+:::
+
+------------------------------------------------------------------------
+
+# Readings
+
+**Before next class** — chapter PDFs are on **Canvas**:
+
+- **Whitlock & Schluter** — **Ch. 10**, The Normal Distribution; **Ch. 4**, Estimating with Uncertainty; **Ch. 6**, Hypothesis Testing. If you read only one, read **Ch. 4**
+- **Gotelli & Ellison** — **Ch. 2**, Random Variables and Probability Distributions; **Ch. 4**, Framing and Testing Hypotheses
+
+| Worksheet part | Read |
+|----|----|
+| Parts 1-2 — summary stats, the normal curve | W&S Ch. 3, Ch. 10 |
+| Parts 3-4 — z-scores, area as probability | W&S Ch. 10; Gotelli Ch. 2 |
+| Part 5 — checking normality | W&S Ch. 13 |
+| Part 6 — SD, SE, confidence intervals | W&S Ch. 4; Ch. 11 |
+| Part 7 — one-sample t-test | W&S Ch. 11, Ch. 6 |
+| Part 8 — two-sample t-test | W&S Ch. 12; Gotelli Ch. 4 |
+
+**If you want more:** [R4DS §13 — Numbers](https://r4ds.hadley.nz/numbers.html) for `mean()`, `sd()` and rounding, and [§9 — Layers](https://r4ds.hadley.nz/layers.html) for the plots.

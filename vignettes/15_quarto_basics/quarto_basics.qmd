@@ -1,0 +1,291 @@
+---
+title: "Common Code 15 — Quarto Document Basics"
+subtitle: "Chunk options, inline R, cross-references, YAML, and parameterised reports"
+author: "Bill Perry"
+date: today
+
+topic_number: "15"
+type: common_code
+description: >
+  Markdown programming the easy way
+categories: [packages, setup]
+
+format:
+  html: default
+  docx: default
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+# Quarto document basics
+
+Quarto (`.qmd`) is what powers every worksheet, vignette, and lecture in this course. Understanding its structure lets you write documents where prose and analysis live together — and where every number in your text updates automatically when your data changes.
+
+> ⬇️ **Download the companion R script:** [`18_quarto_basics.R`](17_quarto_basics.R)
+
+------------------------------------------------------------------------
+
+# 1 · The structure of a Quarto file
+
+Every `.qmd` file has three parts:
+
+```         
+---
+YAML header    ← document settings
+---
+
+Prose text     ← markdown: **bold**, *italic*, # headings, lists
+
+` ` `{r}        ← code chunk
+# R code here
+` ` `
+```
+
+------------------------------------------------------------------------
+
+# 2 · YAML header — document settings
+
+The YAML header controls the title, author, output format, and execution behaviour. It must be at the very top of the file, enclosed in `---`.
+
+``` yaml
+---
+title: "My Analysis"
+subtitle: "Palmer penguins"
+author: "Bill Perry"
+date: today           # inserts today's date automatically
+format:
+  html:
+    toc: true         # table of contents
+    toc-depth: 3
+    number-sections: true
+    theme: cosmo
+  docx:
+    toc: true
+execute:
+  echo: true          # show code by default
+  warning: false      # suppress warnings everywhere
+  message: false      # suppress messages (e.g. library() output)
+  eval: false         # set to true when you want code to run
+---
+```
+
+::: callout-tip
+## `eval: false` vs `echo: true`
+
+`echo` controls whether code is *shown*. `eval` controls whether it is *run*. For a student worksheet where you want to show code but not run it, set `eval: false` globally in the YAML and override individual chunks where needed.
+:::
+
+------------------------------------------------------------------------
+
+# 3 · Chunk options
+
+Place chunk options at the top of a code chunk using `#|`:
+
+```{{{r}}}
+#| echo: true          # show this chunk's code
+#| eval: true          # run this chunk
+#| warning: false      # suppress warnings for this chunk
+#| message: false      # suppress messages for this chunk
+#| fig-width: 6        # figure width in inches
+#| fig-height: 4       # figure height in inches
+#| fig-cap: "Body mass by species"
+#| label: fig-penguins # for cross-referencing
+
+ggplot(penguins, aes(x = species, y = body_mass_g)) +
+  geom_boxplot()
+```
+
+**Full chunk option reference:**
+
+| Option       | Values         | Effect                         |
+|--------------|----------------|--------------------------------|
+| `echo`       | `true`/`false` | Show / hide the code           |
+| `eval`       | `true`/`false` | Run / skip the code            |
+| `include`    | `true`/`false` | Show output + code / hide both |
+| `warning`    | `true`/`false` | Show / suppress warnings       |
+| `message`    | `true`/`false` | Show / suppress messages       |
+| `error`      | `true`/`false` | Show errors / stop on error    |
+| `fig-width`  | number (in)    | Figure width                   |
+| `fig-height` | number (in)    | Figure height                  |
+| `fig-dpi`    | number         | Resolution (300 for print)     |
+| `fig-cap`    | string         | Caption below the figure       |
+| `fig-alt`    | string         | Accessibility alt text         |
+| `label`      | string         | Cross-reference ID             |
+| `cache`      | `true`/`false` | Cache slow chunk output        |
+
+------------------------------------------------------------------------
+
+# 4 · Inline R — embedding values in prose
+
+Inline R lets you write results directly in your text. Values update automatically when your data changes — no more copy-pasting numbers.
+
+Syntax: `` `r expression` ``
+
+**Setup chunk** (usually at the top, with `echo: false`):
+
+```{{{r}}}
+#| echo: false
+#| eval: true
+library(tidyverse)
+library(palmerpenguins)
+library(broom)
+
+mean_mass  <- mean(penguins$body_mass_g, na.rm = TRUE) |> round(1)
+n_penguins <- sum(!is.na(penguins$body_mass_g))
+n_species  <- n_distinct(penguins$species)
+
+model <- lm(body_mass_g ~ flipper_length_mm,
+            data = penguins |> drop_na())
+res   <- tidy(model, conf.int = TRUE)
+fit   <- glance(model)
+
+slope    <- round(res$estimate[2], 1)
+r_sq     <- round(fit$r.squared, 3)
+f_val    <- round(fit$statistic, 1)
+p_model  <- fit$p.value
+```
+
+**In your prose:**
+
+```         
+We measured `r n_penguins` penguins from `r n_species` species.
+Mean body mass was `r mean_mass` g.
+
+Flipper length predicted body mass
+(F~1,340~ = `r f_val`, p < 0.001, R² = `r r_sq`).
+```
+
+::: callout-warning
+## Never copy-paste model output into text
+
+Copy-pasted numbers go stale the moment your data or model changes. Always extract values with `tidy()` and `glance()` and embed them inline. This is the single biggest quality-of-life improvement in reproducible writing.
+:::
+
+------------------------------------------------------------------------
+
+# 5 · Cross-references
+
+Label a figure chunk with `label: fig-something` (must start with `fig-`), then reference it in text with `@fig-something`. Quarto numbers and hyperlinks automatically.
+
+```{{{r}}}
+#| label: fig-penguins
+#| fig-cap: "Penguin body mass by species."
+#| eval: true
+
+ggplot(penguins, aes(x = species, y = body_mass_g)) +
+  geom_boxplot()
+```
+
+In prose: `As shown in @fig-penguins, Gentoo penguins are heavier...`
+
+Same pattern for tables (`#| label: tbl-summary` → `@tbl-summary`) and equations (`::: {#eq-regression}` → `@eq-regression`).
+
+------------------------------------------------------------------------
+
+# 6 · Caching slow chunks
+
+``` yaml
+execute:
+  cache: true
+```
+
+Or per-chunk: `#| cache: true`
+
+Quarto saves the output of slow chunks (model fits, large file reads) and skips re-running them until the chunk code changes. Clear the cache by deleting the `_cache/` folder.
+
+::: callout-tip
+## `freeze: auto` for website projects
+
+In a Quarto website (`_quarto.yml` with `project: type: website`), add:
+
+``` yaml
+execute:
+  freeze: auto
+```
+
+This skips rendering unchanged `.qmd` files during `quarto render`. The rendered output is stored in `_freeze/` — commit this folder to git so collaborators and GitHub Pages do not re-run everything from scratch.
+:::
+
+------------------------------------------------------------------------
+
+# 7 · Parameterised reports
+
+Run the same document template with different inputs — one report per species, per lake, per year — without copying the file.
+
+**In the YAML:**
+
+``` yaml
+params:
+  species: "Adelie"
+  year:    2008
+```
+
+**In the code:**
+
+``` r
+penguins |>
+  filter(species == params$species,
+         year    == params$year)
+```
+
+**Render from the terminal with different params:**
+
+``` bash
+quarto render report.qmd -P species:Gentoo -P year:2009
+```
+
+::: callout-note
+## Practical use in ecology
+
+Parameterised reports are ideal for: annual monitoring reports (one per site), species summaries (one per taxon), and assignment feedback (one per student dataset). Write the template once; render dozens of customised documents.
+:::
+
+------------------------------------------------------------------------
+
+# 8 · Rendering formats
+
+From the terminal or Positron terminal:
+
+``` bash
+# Render to all formats declared in YAML
+quarto render my_document.qmd
+
+# Render to a specific format
+quarto render my_document.qmd --to html
+quarto render my_document.qmd --to docx
+
+# Render an entire website project
+quarto render
+```
+
+From inside R:
+
+``` r
+quarto::quarto_render("my_document.qmd")
+quarto::quarto_render("my_document.qmd", output_format = "docx")
+```
+
+------------------------------------------------------------------------
+
+# Quick reference
+
+| Task                   | Code / syntax                               |
+|------------------------|---------------------------------------------|
+| Global chunk options   | `execute:` block in YAML                    |
+| Show code, hide output | `#| echo: true` `#| eval: false`            |
+| Hide code, show output | `#| echo: false` `#| eval: true`            |
+| Suppress messages      | `#| message: false`                         |
+| Set figure size        | `#| fig-width: 6` `#| fig-height: 4`        |
+| Add figure caption     | `#| fig-cap: "My caption"`                  |
+| Label for cross-ref    | `#| label: fig-myplot`                      |
+| Reference figure       | `@fig-myplot` in prose                      |
+| Inline R value         | `` `r round(mean_mass, 1)` ``               |
+| Cache a chunk          | `#| cache: true`                            |
+| Freeze website         | `freeze: auto` in `_quarto.yml`             |
+| Parameterise           | `params:` in YAML; `params$species` in code |
+| Render from terminal   | `quarto render file.qmd`                    |
+| Render from R          | `quarto::quarto_render("file.qmd")`         |
+
+*End of Common Code 15 — Quarto Document Basics.* This is the last Common Code topic — the statistics vignettes begin below.

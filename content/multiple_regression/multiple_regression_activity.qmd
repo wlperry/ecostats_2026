@@ -1,0 +1,329 @@
+---
+order: 11
+week: 7
+title: "Activity: Multiple Regression"
+subtitle: "Several predictors"
+description: "In-class activity on Loyn's Victorian forest-bird data: fit predictors alone and together, diagnose collinearity, simplify the model, and set a factor's reference level with fct_relevel()."
+author: "Bill Perry"
+metadata-files:
+  - ../../_templates/activities.yml
+format:
+  html: default
+  docx: default
+---
+
+# Worksheet: Multiple Regression
+
+[📥 Bird data](data/loyn_birds.csv){.btn .btn-primary download="loyn_birds.csv"} [📥 Tools script (.R)](themes_functions/r_themes_and_functions.R){.btn .btn-primary download="r_themes_and_functions.R"} [📥 Script skeleton (.R)](data/11_multiple_regression.R){.btn .btn-primary download="11_multiple_regression.R"}
+
+The lecture's dataset: **56 remnant forest patches** in Victoria, Australia, from Loyn (1987). Bird `abundance` is the response, and six patch characteristics are the candidate predictors.
+
+You will do four things, in this order: fit the predictors **one at a time**, fit them **all at once** and see what happens, work out **why** it happened, and then decide what to keep.
+
+------------------------------------------------------------------------
+
+# Part 1 · Setup and the data
+
+**▶ Run this:**
+
+``` r
+# ── Part 1.1 · Setup and the data ───────────────────────────────────────
+library(tidyverse)
+library(car)
+
+source("themes_functions/r_themes_and_functions.R")
+
+bird_df <- read_csv("data/loyn_birds.csv") %>%
+  mutate(log_area        = log10(area_ha),
+         log_dist        = log10(dist_m),
+         log_dist_larger = log10(dist_larger_m))
+
+bird_df
+```
+
+✏️ **Your turn:** Why are area and the two distances logged? Look at the range of `area_ha`.
+
+```
+____________________________________________________________
+```
+
+------------------------------------------------------------------------
+
+# Part 2 · One predictor at a time
+
+**▶ Run this** — three separate simple regressions:
+
+``` r
+# ── Part 2.1 · One predictor at a time ──────────────────────────────────
+summary(lm(abundance ~ log_area, data = bird_df))
+
+summary(lm(abundance ~ grazing, data = bird_df))
+
+summary(lm(abundance ~ year_isolated, data = bird_df))
+```
+
+✏️ **Your turn:** Record each one.
+
+```
+log_area:      slope = __________  p = __________
+
+grazing:       slope = __________  p = __________
+
+year_isolated: slope = __________  p = __________
+
+How many are significant? __________
+```
+
+------------------------------------------------------------------------
+
+# Part 3 · All of them at once
+
+**▶ Run this:**
+
+``` r
+# ── Part 3.1 · All of them at once ──────────────────────────────────────
+full_model <- lm(abundance ~ log_area + log_dist +
+                   log_dist_larger + year_isolated +
+                   grazing + altitude_m,
+                 data = bird_df)
+
+summary(full_model)
+```
+
+✏️ **Your turn:** Which predictors are still significant?
+
+```
+Still significant: _________________________________________
+
+grazing slope alone = __________   in this model = __________
+```
+
+✏️ **Your turn:** Both grazing slopes came from the same 56 patches. Is one of them wrong? Explain what each one is actually measuring.
+
+```
+____________________________________________________________
+
+____________________________________________________________
+```
+
+------------------------------------------------------------------------
+
+# Part 4 · Why it happened
+
+**▶ Run this:**
+
+``` r
+# ── Part 4.1 · Why it happened ──────────────────────────────────────────
+bird_df %>%
+  select(log_area, log_dist, log_dist_larger,
+         year_isolated, grazing, altitude_m) %>%
+  cor() %>%
+  round(2)
+
+vif(full_model)
+```
+
+✏️ **Your turn:** Find the two most strongly correlated predictors, and say in one sentence what that correlation means on the ground.
+
+```
+Pair: __________ and __________   r = __________
+
+On the ground: ______________________________________________
+```
+
+✏️ **Your turn:** All the VIFs are small. Does that mean collinearity is not a problem here?
+
+```
+____________________________________________________________
+```
+
+------------------------------------------------------------------------
+
+# Part 5 · Simplify the model
+
+**▶ Run this** — drop the four predictors that earned nothing, then test whether dropping them cost anything:
+
+``` r
+# ── Part 5.1 · Simplify the model ───────────────────────────────────────
+reduced_model <- lm(abundance ~ log_area + grazing, data = bird_df)
+
+anova(reduced_model, full_model)
+```
+
+**▶ Run this** — compare the two models the other way:
+
+``` r
+# ── Part 5.2 · Simplify the model ───────────────────────────────────────
+tibble(
+  model  = c("six predictors", "log_area + grazing"),
+  adj_r2 = c(summary(full_model)$adj.r.squared,
+             summary(reduced_model)$adj.r.squared),
+  AIC    = c(AIC(full_model), AIC(reduced_model))
+)
+```
+
+✏️ **Your turn:** Do the two methods agree? Which model do you keep?
+
+```
+anova p = __________   lower AIC = __________
+
+Model I keep: _______________________________________________
+```
+
+------------------------------------------------------------------------
+
+# Part 6 · Check the assumptions
+
+**▶ Run this:**
+
+``` r
+# ── Part 6.1 · Check the assumptions ────────────────────────────────────
+par(mfrow = c(2, 2))
+plot(reduced_model)
+par(mfrow = c(1, 1))
+
+shapiro.test(residuals(reduced_model))
+```
+
+✏️ **Your turn:** One line per assumption.
+
+```
+Linearity: __________________________________________________
+
+Equal variance: _____________________________________________
+
+Normality (Shapiro p = ______): _____________________________
+
+Influential points: _________________________________________
+```
+
+------------------------------------------------------------------------
+
+# Part 7 · Grazing as a factor
+
+Grazing has been a number, 1 to 5, which forces every step to cost the same. Now let it be a **category** so each level is estimated separately.
+
+**▶ Run this** — make it a factor and look at the order R chose:
+
+``` r
+# ── Part 7.1 · Grazing as a factor ──────────────────────────────────────
+bird_df <- bird_df %>%
+  mutate(grazing_class = factor(grazing_class))
+
+levels(bird_df$grazing_class)
+
+summary(lm(abundance ~ log_area + grazing_class, data = bird_df))
+```
+
+✏️ **Your turn:** Which level is R using as the reference, and why did it pick that one?
+
+```
+Reference level: __________   Why: _________________________
+```
+
+**▶ Run this** — put the least-grazed level first instead:
+
+``` r
+# ── Part 7.2 · Grazing as a factor ──────────────────────────────────────
+bird_df <- bird_df %>%
+  mutate(grazing_class = fct_relevel(grazing_class,
+                                     "minimal", "light", "moderate",
+                                     "heavy", "intense"))
+
+levels(bird_df$grazing_class)
+
+grazing_model <- lm(abundance ~ log_area + grazing_class, data = bird_df)
+
+summary(grazing_model)
+```
+
+✏️ **Your turn:** Write down the four grazing coefficients and their p-values.
+
+```
+light:    __________  p = __________
+
+moderate: __________  p = __________
+
+heavy:    __________  p = __________
+
+intense:  __________  p = __________
+```
+
+✏️ **Your turn:** Compare the R² and F-statistic of the two models in 7.1 and 7.2. What changed, and what did not?
+
+```
+Changed: ____________________________________________________
+
+Did not change: _____________________________________________
+```
+
+✏️ **Your turn:** Fitting grazing as the number 1–5 gave one slope of about −2.9 birds per step. What does the factor version show that the number version hid?
+
+```
+____________________________________________________________
+```
+
+------------------------------------------------------------------------
+
+# Part 8 · The figure you hand in
+
+**▶ Run this:**
+
+``` r
+# ── Part 8.1 · The figure you hand in ───────────────────────────────────
+final_plot <- ggplot(bird_df, aes(log_area, abundance,
+                                  colour = grazing_class)) +
+  geom_point(size = 2.5) +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(
+    title = "Bird abundance rises with patch area and falls under intense grazing",
+    subtitle = "56 remnant forest patches, Victoria, Australia (Loyn 1987)",
+    x = "log10 patch area (ha)",
+    y = "Bird abundance",
+    colour = "Grazing"
+  ) +
+  theme_regular(base_size = 12)
+
+final_plot
+
+ggsave(
+  "figures/bird_regression.pdf",
+  plot   = final_plot,
+  width  = 7,
+  height = 4.5,
+  units  = "in"
+)
+```
+
+✏️ **Your turn:** Open the PDF and check the legend order runs minimal → intense, not alphabetically.
+
+------------------------------------------------------------------------
+
+# Review and checkpoint
+
+At this point you can:
+
+- [ ] Fit several predictors one at a time and then together, and explain why the slopes differ
+- [ ] Read a correlation matrix and `vif()` output
+- [ ] Say what a dataset cannot separate, rather than that a predictor "has no effect"
+- [ ] Drop predictors and test whether it cost anything, with `anova()` and with AIC
+- [ ] Turn a categorical predictor into a factor and set its reference level with `fct_relevel()`
+- [ ] Export a labelled figure to PDF
+
+::: callout-note
+**📤 What to turn in**
+
+1. `11_multiple_regression.R`
+2. `figures/bird_regression.pdf`
+3. This worksheet, with your written answers
+:::
+
+------------------------------------------------------------------------
+
+# Homework
+
+**[Homework 6 — Multiple Regression: When Predictors Tell the Same Story](../../homeworks/multiple_regression_homework/multiple_regression_homework.qmd)**
+
+**Seventy-three North American grassland sites**, six climate and geography predictors, and one response: the proportion of the plant community that is C3 grass. Two of the predictors are so tangled that dropping one reverses the sign of the other — so the honest conclusion is about what the data *cannot* separate, which is exactly the move you practised in class.
+
+**Data:** [`grassland_c3.csv`](../../homeworks/multiple_regression_homework/data/grassland_c3.csv) — Quinn & Keough, *Experimental Design and Data Analysis for Biologists*, Box 6.1 (`paruelo.csv`); originally Paruelo & Lauenroth (1996), *Ecological Applications*.

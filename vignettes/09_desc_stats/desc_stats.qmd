@@ -1,0 +1,410 @@
+---
+title: "Common Code 09 — Descriptive Statistics"
+subtitle: "Summary stats by hand with summarise(), grouped summaries, and skimr"
+author: "Bill Perry"
+date: today
+
+topic_number: "09"
+type: common_code
+description: >
+  Descriptive statistics 3 ways
+categories: [packages, setup]
+
+format:
+  html: default
+  docx: default
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+# Descriptive statistics
+
+Before any formal test, always summarise your data. This vignette covers how
+to compute counts, means, medians, standard deviations, and standard errors
+using `summarise()` — including the correct way to count non-missing
+observations — then how to do it all in one line with `skimr`.
+
+> ⬇️ **Download the companion R script** — all examples ready to run:
+> [`08_desc_stats.R`](09_desc_stats.R)
+
+---
+
+### Packages needed
+
+```r
+library(tidyverse)
+library(palmerpenguins)
+library(skimr)
+
+source("themes/r_themes_for_3_sizes.R")
+```
+
+---
+
+# 1 · Counting non-NA values — why `n()` is not enough
+
+This is the most important thing in this vignette.
+
+`n()` counts every row in a group, including rows where the variable you care
+about is `NA`. In real ecological data, missing values are the rule rather
+than the exception — birds not sexed in the field, fish that escaped before
+weighing, plots where a measurement failed. Using `n()` as your sample size
+when some values are missing gives you a denominator that is too large, which
+makes every standard error and standard deviation wrong.
+
+```r
+penguins |>
+  summarise(
+    n_rows      = n(),                        # ALL rows — includes NA
+    n_body_mass = sum(!is.na(body_mass_g))    # rows with a real value only
+  )
+```
+
+```
+  n_rows  n_body_mass
+     344          342
+```
+
+Two penguins are missing `body_mass_g`. For this column, `n = 342`, not `344`.
+
+> ⚠️ **Watch out!** `n()` and `length()` both count rows, not values. Neither
+> knows or cares whether the variable in that row is `NA`. Always use
+> `sum(!is.na(variable))` when you need the sample size for a specific
+> measurement column.
+
+**How `sum(!is.na(x))` works:**
+
+- `is.na(x)` returns `TRUE` for each missing value, `FALSE` for each real value
+- `!is.na(x)` flips that — `TRUE` for real values, `FALSE` for missing
+- `sum(...)` adds up the `TRUE`s — in R, `TRUE = 1` and `FALSE = 0`
+
+So `sum(!is.na(x))` is literally "count the real values."
+
+---
+
+# 2 · Basic summary statistics by hand
+
+`summarise()` collapses the whole data frame to one row of summary values.
+Always add `na.rm = TRUE` to every statistical function — without it, a single
+`NA` anywhere in the column makes the whole result `NA`.
+
+```r
+penguins |>
+  summarise(
+    n      = sum(!is.na(body_mass_g)),
+    mean   = mean(body_mass_g,            na.rm = TRUE),
+    median = median(body_mass_g,          na.rm = TRUE),
+    sd     = sd(body_mass_g,              na.rm = TRUE),
+    se     = sd(body_mass_g, na.rm = TRUE) /
+               sqrt(sum(!is.na(body_mass_g))),
+    min    = min(body_mass_g,             na.rm = TRUE),
+    max    = max(body_mass_g,             na.rm = TRUE),
+    q25    = quantile(body_mass_g, 0.25,  na.rm = TRUE),
+    q75    = quantile(body_mass_g, 0.75,  na.rm = TRUE)
+  )
+```
+
+**The standard error formula: SE = SD / √n**
+
+Standard error measures how precisely the sample mean estimates the population
+mean. It gets smaller as sample size grows. In R:
+
+```r
+se = sd(x, na.rm = TRUE) / sqrt(sum(!is.na(x)))
+```
+
+> 💡 **SD vs SE** — Standard deviation describes the spread of individual
+> observations around the mean. Standard error describes the uncertainty in the
+> mean itself. Report SD when you want to show how variable your measurements
+> are. Report SE (or a CI) when you want to show how precisely you have
+> estimated the mean. Both appear constantly in ecology — know which one you
+> are reporting.
+
+**Functions at a glance:**
+
+| Statistic | R function | Notes |
+|---|---|---|
+| Count (non-NA) | `sum(!is.na(x))` | Always use this, not `n()` |
+| Mean | `mean(x, na.rm = TRUE)` | Sensitive to outliers |
+| Median | `median(x, na.rm = TRUE)` | Robust to outliers |
+| Standard deviation | `sd(x, na.rm = TRUE)` | Spread of observations |
+| Standard error | `sd(x, na.rm=TRUE) / sqrt(sum(!is.na(x)))` | Precision of the mean |
+| Minimum | `min(x, na.rm = TRUE)` | |
+| Maximum | `max(x, na.rm = TRUE)` | |
+| 25th percentile | `quantile(x, 0.25, na.rm = TRUE)` | Lower quartile |
+| 75th percentile | `quantile(x, 0.75, na.rm = TRUE)` | Upper quartile |
+
+---
+
+# 3 · Grouped summary — one grouping variable
+
+Add `group_by()` before `summarise()` to compute statistics separately for
+each level of a grouping variable. Add `.groups = "drop"` at the end of
+`summarise()` to remove the grouping from the result — otherwise the output
+is still grouped and can cause unexpected behaviour in later steps.
+
+```r
+penguins |>
+  group_by(species) |>
+  summarise(
+    n      = sum(!is.na(body_mass_g)),
+    mean   = mean(body_mass_g,   na.rm = TRUE),
+    median = median(body_mass_g, na.rm = TRUE),
+    sd     = sd(body_mass_g,     na.rm = TRUE),
+    se     = sd(body_mass_g,     na.rm = TRUE) /
+               sqrt(sum(!is.na(body_mass_g))),
+    .groups = "drop"
+  )
+```
+
+```
+  species      n  mean  median    sd    se
+  Adelie     151  3701    3700   459  37.3
+  Chinstrap   68  3733    3700   384  46.6
+  Gentoo     123  5076    5000   504  45.5
+```
+
+> 💡 **Key idea:** `group_by()` does not change the data — it only adds
+> grouping metadata. The transformation happens in `summarise()` (or
+> `mutate()`, `filter()`, etc.) that follows. Always pair `group_by()` with
+> `.groups = "drop"` in `summarise()` or add `ungroup()` afterwards.
+
+---
+
+# 4 · Grouped summary — two grouping variables
+
+Chain multiple variables in `group_by()` to cross-tabulate:
+
+```r
+penguins |>
+  drop_na(sex) |>
+  group_by(species, sex) |>
+  summarise(
+    n      = sum(!is.na(body_mass_g)),
+    mean   = mean(body_mass_g,   na.rm = TRUE),
+    median = median(body_mass_g, na.rm = TRUE),
+    sd     = sd(body_mass_g,     na.rm = TRUE),
+    se     = sd(body_mass_g,     na.rm = TRUE) /
+               sqrt(sum(!is.na(body_mass_g))),
+    .groups = "drop"
+  )
+```
+
+> 💡 **`drop_na(sex)` before grouping** removes rows where sex is unknown
+> so they do not appear as a third `NA` level in the output. Only drop NA
+> in the grouping variable, not the measurement column — missing measurements
+> are handled by `na.rm = TRUE` and `sum(!is.na(...))` inside `summarise()`.
+
+---
+
+# 5 · Summarise multiple columns at once with `across()`
+
+`across()` inside `summarise()` applies the same function to multiple columns
+at once — essential when you have many measurement columns and do not want to
+type them all out individually.
+
+### Mean of every numeric column
+
+```r
+penguins |>
+  group_by(species) |>
+  summarise(
+    across(where(is.numeric), ~ mean(.x, na.rm = TRUE)),
+    .groups = "drop"
+  )
+```
+
+### Multiple statistics for specific columns
+
+```r
+penguins |>
+  group_by(species) |>
+  summarise(
+    across(
+      c(bill_length_mm, bill_depth_mm, flipper_length_mm, body_mass_g),
+      list(
+        n    = ~ sum(!is.na(.x)),
+        mean = ~ mean(.x, na.rm = TRUE),
+        sd   = ~ sd(.x,   na.rm = TRUE)
+      )
+    ),
+    .groups = "drop"
+  )
+```
+
+The output column names are built automatically as `variable_statistic`
+(e.g. `body_mass_g_mean`, `body_mass_g_sd`).
+
+> 💡 **The `.x` pronoun** inside `across()` refers to "the current column."
+> Think of `~ mean(.x, na.rm = TRUE)` as shorthand for "apply `mean()` to
+> whatever column we are currently working on."
+
+---
+
+# 6 · Store the summary and plot it
+
+Pre-computing the summary table and storing it is the cleanest approach when
+you need to make a mean ± SE bar chart — it separates data preparation from
+visualisation and makes the code easier to read and debug.
+
+```r
+mass_summary <- penguins |>
+  group_by(species) |>
+  summarise(
+    n    = sum(!is.na(body_mass_g)),
+    mean = mean(body_mass_g, na.rm = TRUE),
+    se   = sd(body_mass_g,   na.rm = TRUE) /
+             sqrt(sum(!is.na(body_mass_g))),
+    .groups = "drop"
+  )
+
+mass_summary
+```
+
+### Mean ± SE bar chart
+
+```r
+ggplot(mass_summary, aes(x = species, y = mean, fill = species)) +
+  geom_col(alpha = 0.7, width = 0.6) +
+  geom_errorbar(aes(ymin = mean - se, ymax = mean + se),
+                width = 0.2, linewidth = 0.8) +
+  labs(x     = "Species",
+       y     = "Body mass (g)",
+       title = "Mean ± 1 SE body mass by species") +
+  theme_regular() +
+  theme(legend.position = "none")
+```
+
+### Add sample size labels
+
+```r
+ggplot(mass_summary, aes(x = species, y = mean, fill = species)) +
+  geom_col(alpha = 0.7, width = 0.6) +
+  geom_errorbar(aes(ymin = mean - se, ymax = mean + se),
+                width = 0.2, linewidth = 0.8) +
+  geom_text(aes(label = paste0("n = ", n),
+                y     = mean + se + 80),
+            size = 3.5) +
+  labs(x     = "Species",
+       y     = "Body mass (g)",
+       title = "Mean ± 1 SE body mass by species") +
+  theme_regular() +
+  theme(legend.position = "none")
+```
+
+> ⚠️ **Watch out!** `geom_errorbar()` needs `ymin` and `ymax` in `aes()` —
+> these are the bottom and top of the bar, not the half-width. So
+> `ymin = mean - se` and `ymax = mean + se`, not just `se`.
+
+---
+
+# 7 · Quick summaries with `skimr`
+
+`skim()` produces a full distributional summary of every column in a data
+frame in one call — counts, missing values, mean, SD, percentiles, and a
+small inline histogram. It is the fastest way to get a complete picture of a
+new dataset.
+
+### Whole data frame
+
+```r
+skim(penguins)
+```
+
+Output includes:
+- **n_missing** and **complete_rate** — immediately shows which columns have
+  gaps and how serious they are
+- **mean**, **sd**, **p0**, **p25**, **p50**, **p75**, **p100** — the full
+  five-number summary plus mean and SD
+- **hist** — a tiny ASCII histogram showing the distribution shape
+
+### One variable
+
+```r
+penguins |> select(body_mass_g) |> skim()
+```
+
+### Grouped by a factor
+
+```r
+penguins |> group_by(species) |> skim()
+```
+
+This produces separate summary blocks for each species — the fastest way to
+check whether distributions look similar across groups before running a test.
+
+### Only numeric columns
+
+```r
+penguins |> select(where(is.numeric)) |> skim()
+```
+
+### Pull specific columns from the skim result
+
+`skim()` returns a data frame, so you can filter and select it like any other:
+
+```r
+skim_result <- skim(penguins)
+
+skim_result |>
+  filter(skim_type == "numeric") |>
+  select(skim_variable, n_missing, numeric.mean, numeric.sd, numeric.p50)
+```
+
+> 💡 **`skim()` vs `summary()`** — Base R's `summary()` is fast and always
+> available. `skim()` gives you more: it separates numeric and character
+> columns, shows missing-value rates explicitly, adds percentiles, and
+> produces a tiny histogram. Use `summary()` for a quick one-liner check;
+> use `skim()` when you want a thorough first look at a new dataset.
+
+---
+
+# 8 · Rounding the output table
+
+Summary tables often have too many decimal places for display. Round all
+numeric columns at once with `across()` inside `mutate()`:
+
+```r
+penguins |>
+  group_by(species) |>
+  summarise(
+    n    = sum(!is.na(body_mass_g)),
+    mean = mean(body_mass_g, na.rm = TRUE),
+    sd   = sd(body_mass_g,   na.rm = TRUE),
+    se   = sd(body_mass_g,   na.rm = TRUE) /
+             sqrt(sum(!is.na(body_mass_g))),
+    .groups = "drop"
+  ) |>
+  mutate(across(where(is.double), ~ round(.x, 2)))
+```
+
+> 💡 **`where(is.double)`** targets only floating-point numeric columns and
+> leaves integer columns (like `n`) alone. Without this, rounding `n` to 2
+> decimal places is harmless but unnecessary. `is.double` is the precise type
+> check for decimal numbers in R.
+
+---
+
+# Quick reference
+
+| Task | Code |
+|---|---|
+| Count non-NA values | `sum(!is.na(x))` |
+| Mean | `mean(x, na.rm = TRUE)` |
+| Median | `median(x, na.rm = TRUE)` |
+| Standard deviation | `sd(x, na.rm = TRUE)` |
+| Standard error | `sd(x, na.rm=TRUE) / sqrt(sum(!is.na(x)))` |
+| Min / max | `min(x, na.rm = TRUE)` / `max(x, na.rm = TRUE)` |
+| Percentile | `quantile(x, 0.25, na.rm = TRUE)` |
+| Grouped summary | `group_by(species) \|> summarise(...)` |
+| Drop grouping | `.groups = "drop"` inside `summarise()` |
+| Multiple columns | `across(where(is.numeric), ~ mean(.x, na.rm = TRUE))` |
+| Round output | `mutate(across(where(is.double), ~ round(.x, 2)))` |
+| Full skim | `skim(df)` |
+| Grouped skim | `df \|> group_by(species) \|> skim()` |
+| Mean ± SE error bar | `geom_errorbar(aes(ymin = mean - se, ymax = mean + se))` |
+| n label on plot | `geom_text(aes(label = paste0("n = ", n), y = mean + se + offset))` |
+
+*End of Common Code 09 — Descriptive Statistics.* *Next: Common Code 10 — Joining Data Frames.*

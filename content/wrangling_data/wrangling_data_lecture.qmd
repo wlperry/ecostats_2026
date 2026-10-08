@@ -1,0 +1,1032 @@
+---
+metadata-files:
+  - ../../_templates/_lectures.yml
+title: "Lecture: Wrangling Your Data"
+subtitle: "Importing more than one way, reshaping columns, and saving what you make"
+description: "Reading CSV and Excel files, the filter/select/mutate/arrange verbs, the full boolean-operator toolkit (==, !=, >, <, is.na(), %in%, & vs. |), recoding and binning with case_when(), log and unit-conversion transforms, catching duplicate rows, and writing your cleaned data back out — all on the pine needle dataset."
+categories: [Wrangling, R, tidyverse]
+order: 2
+week: 1
+author: "Bill Perry"
+
+format:
+  html:
+    downloads: [docx, pptx]
+  revealjs:
+    output-ext: "slides.html"
+  docx:
+    reference-doc: ../../ms_templates/custom-reference-compact.docx
+    fig-width: 2.5
+    fig-height: 2.5
+    fig-dpi: 300
+    dpi: 300            # tell Pandoc the real render dpi so it sizes figures correctly
+  pptx: default
+execute:
+  echo: true
+---
+
+## Where We Left Off
+
+::::::: columns
+:::: {.column width="60%"}
+Last time you:
+
+- Turned a field observation into a testable **H₀ / Hₐ**
+- Built a project folder (`data/`, `scripts/`, `figures/`, `output/`)
+- Loaded `pine_data.csv` and made your first `ggplot`
+- Saw why 64 rows is not 64 independent observations
+
+::: callout-note
+**✅ Key idea from Getting Started**
+
+You can get data *into* R and make a plot. Today we learn to **reshape** what you have and **save** what you make — the two skills every later module depends on.
+:::
+::::
+
+:::: {.column width="40%"}
+::: callout-note
+**Today's roadmap**
+
+1.  Importing data more than one way
+2.  The five wrangling verbs
+3.  `filter()` in depth — every boolean operator, `%in%`, AND vs. OR
+4.  `mutate()` — unit conversions and log transforms
+5.  `case_when()` — recoding and binning
+6.  Catching duplicate rows
+7.  Saving your work with `write_csv()`
+:::
+::::
+:::::::
+
+## Part 1 · Importing Data More Than One Way {.divider}
+
+## The same data, two file formats
+
+::::::: columns
+:::: {.column width="60%"}
+Field data doesn't always arrive as a `.csv`. Excel workbooks are everywhere in ecology — you need both tools.
+
+[📥 Download the data](data/pine_data.csv){.btn .btn-primary download="pine_data.csv"} [📥 The messy version](data/pine_needles_error.csv){.btn .btn-secondary download="pine_needles_error.csv"}
+
+```{r wrangling-data-01}
+# install.packages("readxl")
+# install.packages("janitor")
+library(tidyverse)
+library(readxl)   # reading Excel files
+library(janitor)  # cleans messy column names, Excel artifacts, rounding
+
+pine_csv_df   <- read_csv("data/pine_data.csv")
+pine_excel_df <- read_excel("data/pine_data.xlsx")
+```
+
+::: callout-note
+**✅ Key idea**
+
+`read_csv()` comes from `readr` (loaded with `tidyverse`). \
+Excel files need the separate `readxl` package \
+— install once, `library()` every session.
+:::
+::::
+
+:::: {.column width="40%"}
+::: callout-note
+**📖 New word**
+
+**Package vs. bundle** — `tidyverse` is a bundle of packages (`readr`, `dplyr`, `ggplot2`, …). `readxl` isn't included; it always needs its own `library()` line.
+
+[📖 R4DS §7 — Data import](https://r4ds.hadley.nz/data-import.html)
+:::
+::::
+:::::::
+
+## Look before you trust it — every time
+
+::::::: columns
+:::: {.column width="60%"}
+```{r wrangling-data-02}
+glimpse(pine_csv_df)
+```
+
+```{r wrangling-data-03}
+dim(pine_csv_df)
+```
+
+::: callout-tip
+**🖐 Notice**
+
+Six columns: `source_file`, `team`, `replicate`, `side`, `needle_length_mm`, `needle_width_mm`.\
+Same structure whether it came from the `.csv` or the `.xlsx`.
+:::
+::::
+
+:::: {.column width="40%"}
+::: callout-warning
+**⚠️ Watch out!**
+
+Excel loves to turn a plain number column into a date, or a `replicate` like `1` into `1.0`. \
+Always `glimpse()` an Excel import before doing anything else.
+
+[📖 R4DS §20 — Spreadsheets](https://r4ds.hadley.nz/spreadsheets.html) is entirely about importing from Excel and Sheets.
+:::
+::::
+:::::::
+
+## Part 2 · The Five Wrangling Verbs {.divider}
+
+## The Five Wrangling Verbs
+
+::::::: columns
+:::: {.column width="60%"}
+Almost everything you do to a data frame is one of these five functions, chained with the pipe `|>`:
+
+| Function      | What it does                       |
+|---------------|------------------------------------|
+| `filter()`    | keep **rows** matching a condition |
+| `select()`    | keep **columns** by name           |
+| `mutate()`    | **add or change** a column         |
+| `arrange()`   | **sort** rows                      |
+| `summarize()` | **collapse** rows to a summary     |
+
+All take a data frame as input and return a data frame — that's what makes them chainable.
+
+::: callout-note
+**✅ Key idea**
+
+`summarize()` is Describing Your Data's whole topic. \
+Today: the other four, plus saving what you build.
+:::
+::::
+
+:::: {.column width="40%"}
+::: callout-tip
+**Read a pipeline out loud**
+
+```         
+pine_csv_df |>
+  filter(...) |>   # then
+  select(...) |>   # then
+  mutate(...) |>   # then
+  arrange(...)     # then
+```
+
+Each `|>` reads as **"then."**
+:::
+
+::: callout-note
+**📖 Reference**
+
+[📖 R4DS §3 — Data transformation](https://r4ds.hadley.nz/data-transform.html) is the chapter for all five verbs and the pipe.
+:::
+::::
+:::::::
+
+## `filter()` — Picking Rows
+
+:::::: columns
+:::: {.column width="60%"}
+```{r wrangling-data-04}
+# Keep only the shady side
+pine_csv_df |> filter(side == "shady") |> head()
+
+# Keep only needles longer than 17 mm
+pine_csv_df |> filter(needle_length_mm > 17) |> head()
+```
+
+::: callout-warning
+**⚠️ Watch out!**
+
+- `=` assigns a value
+- `==` tests equality — `filter(side = "shady")` is an error
+  - you want `filter(side == "shady")`.
+:::
+::::
+
+::: {.column width="40%"}
+**Common comparison operators:**
+
+| Symbol     | Meaning                       |
+|------------|-------------------------------|
+| `==`       | exactly equal                 |
+| `!=`       | not equal                     |
+| `>` `<`    | greater / less than           |
+| `>=` `<=`  | greater / less / or equal     |
+| `is.na()`  | is the value missing?         |
+| `!is.na()` | is the value **not** missing? |
+:::
+::::::
+
+## `filter()` — Combining Conditions
+
+:::::: columns
+::: {.column width="60%"}
+```{r wrangling-data-05}
+# Combine two conditions with a comma (AND)
+pine_csv_df |> filter(side == "sunny", needle_length_mm > 15) |> head()
+```
+:::
+
+:::: {.column width="40%"}
+::: callout-tip
+**AND vs. OR**
+
+- A comma between conditions means **AND**
+  - —every condition must be true for a row to be kept.
+- Use `|` between conditions for **OR** instead
+:::
+::::
+::::::
+
+## `filter()` — OR, With a Real Example
+
+::: callout-note
+**🔮 Predict first:** `side == "shady" | needle_length_mm > 18` keeps a row if the side is shady **or** the needle is longer than 18 mm. \
+Will this ever keep a *sunny* needle? \
+Under what condition?
+:::
+
+:::::: columns
+::: {.column width="60%"}
+```{r wrangling-data-06}
+# Shady-side needles, OR any exceptionally long needle
+pine_csv_df |>
+  filter(side == "shady" | needle_length_mm > 18) |>
+  head()
+```
+:::
+
+:::: {.column width="40%"}
+::: callout-warning
+**⚠️ Watch out!**
+
+- `|` is the pipe **character** (logical OR), not the pipe **operator** `|>` (or `%>%`)
+- They look alike but do completely different jobs — one is logical OR, the other chains steps together.
+:::
+::::
+::::::
+
+## `filter()` — Matching One of Several Values with `%in%`
+
+:::::: columns
+::: {.column width="60%"}
+```{r wrangling-data-07}
+# Keep rows where team is one of two named teams
+pine_csv_df |>
+  filter(team %in% c("botany", "waterbugs")) |>
+  head()
+```
+
+```{r wrangling-data-08}
+# The long way, for comparison — %in% replaces a chain of |
+pine_csv_df |>
+  filter(team == "botany" | team == "waterbugs") |>
+  head()
+```
+:::
+
+:::: {.column width="40%"}
+::: callout-note
+**✅ Key idea**
+
+- `x %in% c(a, b, c)` asks "is `x` equal to *any* of these?"
+  - it's the clean way to write an OR across many possible values without a long chain of `|`.
+:::
+::::
+::::::
+
+## `filter()` — Missing Values with `is.na()`
+
+::::::: columns
+:::: {.column width="60%"}
+```{r wrangling-data-09}
+# A tiny illustrative dataset with missing values
+survey_df <- tibble(
+  site  = c("A", "B", "C", "D"),
+  count = c(12, NA, 8, NA)
+)
+
+survey_df |> filter(is.na(count))    # rows that ARE missing
+survey_df |> filter(!is.na(count))   # rows that are NOT missing
+```
+
+::: callout-note
+**✅ Key idea**
+
+- `is.na(x)` is itself a boolean test
+  -  `TRUE`/`FALSE` — so it plugs into `filter()`
+  - exactly like `==` or `>` does.
+:::
+::::
+
+:::: {.column width="40%"}
+::: callout-tip
+**📖 Coming up**
+
+`pine_csv_df` has no missing values, so `is.na()` has nothing to catch here. \
+Describing Your Data digs into *why* missing values matter so much once you're computing a sample size or a mean.
+:::
+
+::: callout-note
+**📖 Reference**
+
+[📖 R4DS §12 — Logical vectors](https://r4ds.hadley.nz/logicals.html) covers `==`, `&`, `|`, `%in%` and `is.na()`.\
+[📖 R4DS §18 — Missing values](https://r4ds.hadley.nz/missing-values.html)
+:::
+::::
+:::::::
+
+## `select()` — Picking Columns
+
+:::::: columns
+:::: {.column width="60%"}
+```{r wrangling-data-10}
+# Keep only side and length
+pine_csv_df |> select(side, needle_length_mm) |> head()
+
+# Drop the provenance column we do not need (minus sign)
+pine_csv_df |> select(-source_file) |> head()
+```
+
+::: callout-note
+**✅ Key idea**
+
+`select()` doesn't touch rows — it only trims the columns you're carrying forward. Useful the moment a dataset has 30+ columns and you need 4 of them.
+:::
+::::
+
+::: {.column width="40%"}
+- Name the columns you want, in any order
+- A leading `-` drops a column instead of keeping it
+:::
+::::::
+
+## `select()` — Picking Columns by Pattern
+
+::::: columns
+::: {.column width="60%"}
+```{r wrangling-data-11}
+# Keep columns that contain a word
+pine_csv_df |> select(contains("n")) |> head()
+```
+:::
+
+::: {.column width="40%"}
+**Useful helpers:**
+
+- `starts_with("needle")` — super useful when related variables share a prefix
+- `ends_with("_mm")`
+- `contains("needle")`
+
+[📖 R4DS §3.3 — `select()`](https://r4ds.hadley.nz/data-transform.html#sec-select)
+:::
+:::::
+
+## `mutate()` — Creating and Changing Columns
+
+::: callout-note
+**🔮 Predict first:** `needle_length_mm / 10` converts millimeters to centimeters. \
+Will `mutate()` **replace** `needle_length_mm`, or **add** a new column? \
+How many columns will the result have?
+:::
+
+:::::: columns
+::: {.column width="60%"}
+```{r wrangling-data-12}
+# Add a converted-units column
+pine_csv_df |>
+  mutate(needle_length_cm = needle_length_mm / 10) |>
+  head()
+```
+:::
+
+:::: {.column width="40%"}
+::: callout-note
+**✅ Key idea**
+
+`mutate()` keeps every existing column and adds new ones to the right. \
+To *overwrite* a column, reuse its name: \
+`mutate(needle_length_mm = round(needle_length_mm, 1))`.
+:::
+::::
+::::::
+
+## `mutate()` — More Examples
+
+:::::: columns
+::: {.column width="60%"}
+```{r wrangling-data-13}
+# Add a log-transformed column
+pine_csv_df |>
+  mutate(log_length = log(needle_length_mm)) |>
+  head()
+
+# mutate() can build on a column it just created
+pine_csv_df |>
+  mutate(
+    needle_length_cm  = needle_length_mm / 10,
+    size_class = if_else(needle_length_mm > 15, "long", "short")
+  ) |>
+  head()
+```
+:::
+
+:::: {.column width="40%"}
+::: callout-tip
+**📖 Why log-transform?**
+
+- Many biological measurements are **right-skewed**
+  - a log transform pulls extreme values in and can make a distribution more symmetric before you summarize or test it.
+- We'll check whether it matters for our data in a later module
+- **Know which log you are using.** In R, `log()` is the *natural* log (ln, base e); `log2()` and `log10()` are the other two. Always say which one in your methods.
+
+[📖 R4DS §13 — Numbers](https://r4ds.hadley.nz/numbers.html)
+:::
+::::
+::::::
+
+## Part 2b · `case_when()` — Recoding and Binning {.divider}
+
+## `case_when()` — Turning a Number into a Category
+
+::: callout-note
+**🔮 Predict first:** We're about to bin `needle_length_mm` into `"short"` (< 13), `"medium"` (< 16), and `"long"`. The first needle in the data is 18.44 mm. Which bin does it land in — and would that change if the cutoffs used `<=` instead of `<`?
+:::
+
+:::::: columns
+::: {.column width="60%"}
+```{r wrangling-data-14}
+pine_csv_df |>
+  mutate(
+    size_class = case_when(
+      needle_length_mm < 13 ~ "short",
+      needle_length_mm < 16 ~ "medium",
+      TRUE           ~ "long"
+    )
+  ) |>
+  count(size_class)
+```
+:::
+
+:::: {.column width="40%"}
+::: callout-note
+**✅ Key idea**
+
+`case_when()` checks conditions **top to bottom** and uses the *first* one that's `TRUE`. \
+Once a row matches `needle_length_mm < 13`, R never even looks at the later conditions for that row.
+
+[📖 R4DS §12.5 — `if_else()` and `case_when()`](https://r4ds.hadley.nz/logicals.html#conditional-transformations)
+:::
+::::
+::::::
+
+## `case_when()` — Always End With `TRUE ~`
+
+:::::: columns
+::: {.column width="60%"}
+```{r wrangling-data-15}
+# What happens if we forget the catch-all?
+pine_csv_df |>
+  mutate(
+    size_class = case_when(
+      needle_length_mm < 13 ~ "short",
+      needle_length_mm < 16 ~ "medium"
+      # no TRUE ~ ... here
+    )
+  ) |>
+  count(size_class)
+```
+:::
+
+:::: {.column width="40%"}
+::: callout-warning
+**⚠️ Watch out!**
+
+Drop the `TRUE ~ "long"` line and all 21 "long" needles silently become `NA` instead of erroring. `case_when()` never warns you — always finish with a `TRUE ~ ...` catch-all, even when you're sure you've covered every case.
+:::
+::::
+::::::
+
+## `case_when()` — Recoding Categories, Not Just Numbers
+
+:::::: columns
+::: {.column width="60%"}
+```{r wrangling-data-16}
+# Give each field team a short code
+pine_csv_df |>
+  mutate(
+    team_code = case_when(
+      team == "botany"     ~ "BOT",
+      team == "grace_jace" ~ "GRJ",
+      team == "one"        ~ "ONE",
+      team == "waterbugs"  ~ "WBG",
+      TRUE                 ~ "UNK"
+    )
+  ) |>
+  distinct(team, team_code)
+```
+:::
+
+:::: {.column width="40%"}
+::: callout-tip
+**🖐 Notice**
+
+`case_when()` isn't just for numeric cutoffs — every condition on the left of a `~` can be any boolean test: `==`, `%in%`, `>`, even combinations with `&` and `|`.
+
+The `"UNK"` catch-all should never actually appear here — if it does, that's your signal a team name was misspelled somewhere upstream.
+:::
+::::
+::::::
+
+## `arrange()` — Sorting Rows
+
+::::: columns
+::: {.column width="60%"}
+```{r wrangling-data-17}
+# Shortest needles first
+pine_csv_df |> arrange(needle_length_mm)
+
+# Longest first
+pine_csv_df |> arrange(desc(needle_length_mm))
+```
+:::
+
+::: {.column width="40%"}
+- Default is **ascending** (smallest first)
+- `desc()` reverses it
+:::
+:::::
+
+## `arrange()` — Sorting by Multiple Columns
+
+:::::: columns
+::: {.column width="60%"}
+```{r wrangling-data-18}
+# Sort by side, then by length within each side
+pine_csv_df |> arrange(side, desc(needle_length_mm))
+```
+:::
+
+:::: {.column width="40%"}
+- Most useful at the **end** of a pipeline, to inspect results in a sensible order
+
+::: callout-tip
+`arrange()` never changes *which* rows you have — only the order they print in.
+:::
+::::
+::::::
+
+## The Full Pipeline
+
+:::::: columns
+:::: {.column width="60%"}
+```{r wrangling-data-19}
+pine_wrangled_df <- pine_csv_df |>
+  filter(needle_length_mm > 0) |>                 # drop impossible values
+  select(team, side, needle_length_mm, needle_width_mm) |>  # keep what we need
+  mutate(
+    needle_length_cm  = needle_length_mm / 10,
+    log_length = log(needle_length_mm),
+    size_class = case_when(
+      needle_length_mm < 13 ~ "short",
+      needle_length_mm < 16 ~ "medium",
+      TRUE                  ~ "long"
+    )
+  ) |>
+  arrange(side, desc(needle_length_mm))            # sort for inspection
+
+head(pine_wrangled_df)
+```
+
+::: callout-note
+**✅ Key idea**
+
+The pipe `|>` is what makes this readable top to bottom — a recipe, not a nest of parentheses.
+:::
+::::
+
+::: {.column width="40%"}
+**Read it out loud:**
+
+> - Take `pine_csv_df`,
+>   - **then** filter to real values,
+>     - **then** select four columns,
+>       - **then** add three new columns,
+>         - **then** sort by side and length.
+:::
+::::::
+
+## Part 3 · A Duplicate-Row Problem {.divider}
+
+## A Duplicate-Row Problem
+
+::::::: columns
+:::: {.column width="60%"}
+Remember **pseudoreplication** from Getting Started — one tree standing in for many? Duplicate rows are the data-entry version of the same mistake: the same measurement counted twice inflates your sample size without adding real information.
+
+```{r wrangling-data-20}
+needle_check_df <- read_csv("data/pine_needles_error.csv")
+
+nrow(needle_check_df)
+n_distinct(needle_check_df)
+```
+
+::: callout-important
+**Something's wrong:** `nrow()` and `n_distinct()` don't match. Some rows are exact repeats.
+:::
+::::
+
+:::: {.column width="40%"}
+::: callout-note
+**📖 New words**
+
+- **`n_distinct()`** — counts how many *unique* rows exist
+- **`distinct()`** — returns the data with duplicate rows removed — use it deliberately, not reflexively
+- **`unique()`** — lists the distinct values in a single column; the fastest way to spot misspellings
+:::
+::::
+:::::::
+
+## Finding the duplicates
+
+:::::: columns
+::: {.column width="60%"}
+```{r wrangling-data-21}
+# Which rows are exact duplicates of an earlier row?
+needle_check_df |> filter(duplicated(needle_check_df))
+```
+:::
+
+:::: {.column width="40%"}
+::: callout-tip
+**🖐 Field habit**
+
+Before you trust any dataset — yours or a collaborator's — check `nrow()` against `n_distinct()`. It takes five seconds and catches a real, common mistake.
+:::
+::::
+::::::
+
+## Removing duplicates with `distinct()`
+
+:::::: columns
+::: {.column width="60%"}
+```{r wrangling-data-22}
+# Keep only one copy of each unique row
+needle_clean_df <- needle_check_df |> distinct()
+
+nrow(needle_check_df)
+nrow(needle_clean_df)
+```
+:::
+
+:::: {.column width="40%"}
+::: callout-warning
+**⚠️ Watch out!**
+
+`distinct()` only catches *exact* duplicate rows. A typo'd duplicate (`waterbugs` vs `Waterbugs`) slips right through — always eyeball your data too.
+:::
+::::
+::::::
+
+## Part 3b · The Rest of the Mess {.divider}
+
+## `unique()` — what else is wrong in here?
+
+::::::: columns
+:::: {.column width="60%"}
+Duplicates were only the *first* problem in this file. Look at the columns themselves:
+
+```{r wrangling-data-23}
+names(needle_check_df)
+```
+
+```{r wrangling-data-24}
+unique(needle_clean_df$`Side of Tree`)
+```
+
+::: callout-important
+**Two values became six.** `shady`, `Shady`, `SHADY` — R treats every one as a separate category. Any `group_by()` or `count()` you run right now is wrong.
+:::
+::::
+
+:::: {.column width="40%"}
+::: callout-note
+**📖 New words**
+
+- **`clean_names()`** (janitor) — turns `Needle Length (mm)` into `needle_length_mm`
+- **`str_to_lower()`** — force text to lowercase
+- **`str_squish()`** — strip leading/trailing spaces
+
+[📖 R4DS §14 — Strings](https://r4ds.hadley.nz/strings.html)
+:::
+
+::: callout-tip
+**🖐 It was almost worse**
+
+This file also has stray spaces (`"sunny "`, `" shady"`). You don't see them because **`read_csv()` trims whitespace for you by default.** Prove it to yourself:
+
+``` r
+read_csv("data/pine_needles_error.csv", trim_ws = FALSE)
+```
+
+Now there are **ten** values, not six. Not every import tool is that kind — which is why we still run `str_squish()` below.
+:::
+::::
+:::::::
+
+## Fixing names and text in one pipeline
+
+::::::: columns
+:::: {.column width="60%"}
+```{r wrangling-data-25}
+needle_fixed_df <- needle_check_df |>
+  clean_names() |>                 # Needle Length (mm) -> needle_length_mm
+  distinct() |>                    # drop the repeated rows
+  mutate(
+    side = str_squish(str_to_lower(side_of_tree)),
+    team = str_squish(str_to_lower(team_name))
+  )
+
+unique(needle_fixed_df$side)
+unique(needle_fixed_df$team)
+```
+
+::: callout-warning
+**⚠️ Watch out!**
+
+`str_to_lower()` collapsed `Waterbugs` into `waterbugs` — but **`water bugs` is still its own value**. Lowercasing fixes case, not spelling. That last one needs `case_when()`.
+:::
+::::
+
+:::: {.column width="40%"}
+::: callout-tip
+**🖐 Field habit**
+
+Run `unique()` on *every* text column the first time you open a dataset. It takes seconds and it is how you find the problems that silently split your groups.
+:::
+::::
+:::::::
+
+## Numbers that aren't numbers
+
+::::::: columns
+:::: {.column width="60%"}
+```{r wrangling-data-26}
+class(needle_fixed_df$needle_length_mm)
+class(needle_fixed_df$needle_width_mm)
+```
+
+**Both** imported as text, not numbers — somebody typed `17.73 mm` in a cell, somebody used a comma decimal (`13,98`), and the missing values were written four different ways.
+
+```{r wrangling-data-27}
+needle_final_df <- needle_fixed_df |>
+  mutate(
+    team = case_when(team == "water bugs" ~ "waterbugs",
+                     TRUE                 ~ team),
+    needle_length_mm = needle_length_mm |>
+      str_remove(" mm") |>                    # drop the typed unit
+      str_replace(",", ".") |>                # comma decimal -> point
+      na_if("") |> na_if("NA") |>             # blank and literal "NA"
+      as.numeric(),
+    needle_width_mm = needle_width_mm |>
+      na_if("") |> na_if("na") |> na_if(".") |>   # three more ways to write "missing"
+      as.numeric(),
+    needle_length_mm = if_else(needle_length_mm == -999,
+                               NA_real_, needle_length_mm)   # sentinel value
+  )
+
+class(needle_final_df$needle_length_mm)
+sum(is.na(needle_final_df$needle_length_mm))
+sum(is.na(needle_final_df$needle_width_mm))
+```
+::::
+
+:::: {.column width="40%"}
+::: callout-important
+**⚠️ The trap:** `parse_number("13,98")` returns **1398** — it reads the comma as a thousands separator and never warns you.
+
+A 1398 mm pine needle is obvious *if you look*. **Always summarize or plot a column right after you clean it.**
+:::
+
+::: callout-note
+**📖 New words**
+
+- **`na_if(x, "")`** — turn a specific value into `NA`
+- **`-999`** — a "sentinel" code some field sheets use for missing. R has no idea it means missing until you tell it.
+
+[📖 R4DS §13 — Numbers](https://r4ds.hadley.nz/numbers.html)\
+[📖 R4DS §18 — Missing values](https://r4ds.hadley.nz/missing-values.html)
+:::
+::::
+:::::::
+
+## Part 4 · Saving Your Work {.divider}
+
+## The one-way street
+
+::::::: columns
+:::: {.column width="60%"}
+Everything we did today runs in **one direction**:
+
+```
+data/     ← raw, read-only, never written to
+   │  read_csv()
+   ▼
+scripts/  ← the cleaning code you just wrote
+   │  write_csv()
+   ▼
+output/   ← everything R produces
+```
+
+The raw file is **evidence**. The script is the **method**. The output is a **result you can always rebuild** by re-running the method on the evidence.
+
+::: callout-important
+**Never write into `data/`.** If a script can overwrite the raw file, then one bad run destroys the only copy of what you actually measured — and no one can check your work.
+:::
+::::
+
+:::: {.column width="40%"}
+::: callout-note
+**✅ Key idea**
+
+If you can't reproduce a result from **raw data + script**, the problem is in the script — never in the raw file. Keeping `data/` read-only is what makes that guarantee possible.
+:::
+::::
+:::::::
+
+## Tidy up before you save
+
+::::::: columns
+:::: {.column width="60%"}
+`needle_final_df` still carries the wreckage of cleaning — the original messy columns *and* our fixed ones:
+
+```{r wrangling-data-28}
+names(needle_final_df)
+```
+
+Nobody downstream needs `team_name` **and** `team`. Keep the columns you mean to keep, in the order you want them:
+
+```{r wrangling-data-29}
+needle_out_df <- needle_final_df |>
+  select(team, side, replicate = replicate_number,
+         needle_length_mm, needle_width_mm) |>
+  arrange(team, side, replicate)
+
+glimpse(needle_out_df)
+```
+::::
+
+:::: {.column width="40%"}
+::: callout-tip
+**🖐 Field habit**
+
+`select()` right before `write_csv()` is the last checkpoint. A saved file with `side` *and* `side_of_tree` in it will confuse someone in three months — and that someone is usually you.
+:::
+
+::: callout-note
+`select(new_name = old_name)` renames while it selects — handy for dropping janitor's `replicate_number` back to `replicate`.
+:::
+::::
+:::::::
+
+## `write_csv()` — the mirror image of `read_csv()`
+
+::::::: columns
+:::: {.column width="60%"}
+```{r wrangling-data-30}
+#| eval: false
+write_csv(needle_out_df, "output/pine_needles_cleaned.csv")
+```
+
+Read from `data/`, write to `output/`. Same shape of call, opposite direction:
+
+| Reading | Writing |
+|---------|---------|
+| `read_csv("data/…")` | `write_csv(df, "output/…")` |
+| file → data frame | data frame → file |
+
+::: callout-warning
+**⚠️ Watch out!**
+
+`write_csv()` **overwrites without asking** — no warning, no undo. That is exactly why the target is `output/` and never `data/`: re-running your script should be free, and it is only free if the thing it clobbers is something the script can rebuild.
+:::
+::::
+
+:::: {.column width="40%"}
+::: callout-note
+**📖 Note the argument order**
+
+`write_csv(df, path)` — **data frame first**, then where to put it. `read_csv(path)` takes only the path. Getting these backwards is one of the most common errors of the term.
+
+[📖 R4DS §7.5 — Writing to a file](https://r4ds.hadley.nz/data-import.html#sec-writing-to-a-file)
+:::
+::::
+:::::::
+
+## Naming your saved files
+
+::::::: columns
+:::: {.column width="60%"}
+- Name the file for **what happened to it**: `pine_needles_cleaned.csv`, not `pine2.csv` or `final.csv`
+- If a script produces several stages, number them: `01_cleaned.csv`, `02_summarised.csv`
+- Anyone re-running your script from scratch should get a **byte-identical** output file
+
+::: callout-warning
+**⚠️ Watch out!**
+
+`final.csv`, `final_v2.csv`, `final_FINAL.csv` — version control by filename. This is exactly the mess a project folder with clear names and a re-runnable script is meant to prevent.
+:::
+::::
+
+:::: {.column width="40%"}
+::: callout-tip
+**🖐 Try it yourself**
+
+Delete your `output/` folder entirely, then re-run your script top to bottom.
+
+Everything should come back. **If it doesn't, something important only exists in your console history — and that is a bug in your script.**
+:::
+::::
+:::::::
+
+## Wrap-up
+
+::::::: columns
+:::: {.column width="60%"}
+Today you:
+
+- Imported the same data from a `.csv` **and** an `.xlsx`
+- Used `filter()`, `select()`, `mutate()`, and `arrange()` — and chained them into a pipeline
+- Filtered with the full boolean toolkit: `==`, `!=`, `>`/`<`, `%in%`, `is.na()`, AND (`,`) vs. OR (`|`)
+- Recoded and binned columns with `case_when()` — always ending in a `TRUE ~` catch-all
+- Converted units and log-transformed a column with `mutate()`
+- Caught and removed duplicate rows with `distinct()`
+- Cleaned messy headers with `clean_names()`, messy text with `str_to_lower()`, and numbers-stored-as-text with `as.numeric()`
+- Trimmed to the columns worth keeping and wrote the result to `output/` — leaving `data/` untouched
+
+::: callout-tip
+**🖐 Before next class**
+
+Finish the worksheet: take `pine_needles_error.csv` from `data/`, clean it end to end, `select()` the columns worth keeping, and write the result to `output/`. Then delete `output/`, re-run your script, and check that it all comes back.
+:::
+::::
+
+:::: {.column width="40%"}
+::: callout-note
+**Up next — Describing Your Data**
+
+- Mean, median, variance, SD, SE
+- The `length()` trap and the `sum(!is.na())` fix
+- `group_by()` + `summarize()` for tidy group comparisons
+:::
+::::
+:::::::
+
+## Readings
+
+::::::: columns
+:::: {.column width="60%"}
+**Before next class** — chapter PDFs are posted on **Canvas**:
+
+- **Gotelli & Ellison**, *A Primer of Ecological Statistics* — **Ch. 8**, Managing and Curating Data (raw vs. processed data, the audit trail from field sheet to analysis)
+- **Whitlock & Schluter**, *The Analysis of Biological Data* — **Ch. 1**, Statistics and Samples, §1.4 on types of variables — the categorical/numerical distinction behind `case_when()` and every `group_by()` to come
+
+::: callout-note
+**✅ Key idea**
+
+Neither statistics text teaches `dplyr` — that is what R4DS is for. Read the texts for *why* a clean, documented dataset matters, and R4DS for *how*.
+:::
+::::
+
+:::: {.column width="40%"}
+::: callout-note
+**📖 R for Data Science (2e)**
+
+Free online at [r4ds.hadley.nz](https://r4ds.hadley.nz/):
+
+- [§3 — Data transformation](https://r4ds.hadley.nz/data-transform.html) — the five verbs
+- [§5 — Data tidying](https://r4ds.hadley.nz/data-tidy.html)
+- [§7 — Data import](https://r4ds.hadley.nz/data-import.html)
+- [§12 — Logical vectors](https://r4ds.hadley.nz/logicals.html) — `case_when()`
+- [§13 — Numbers](https://r4ds.hadley.nz/numbers.html)
+- [§14 — Strings](https://r4ds.hadley.nz/strings.html)
+- [§18 — Missing values](https://r4ds.hadley.nz/missing-values.html)
+- [§20 — Spreadsheets](https://r4ds.hadley.nz/spreadsheets.html)
+:::
+::::
+:::::::
+
+## Getting unstuck
+
+When code breaks — and it will, that is normal:
+
+1.  Read the **error message** out loud; it usually names the line
+2.  Check the usual suspects: `library(tidyverse)` and `library(readxl)` loaded? Spelling? A missing `)` or `|>` at the *start* of a line?
+3.  `?function_name` opens the help page
+4.  Bring the **exact error** (copy-paste it) to class or office hours
+
+[📖 R4DS §8 — Workflow: getting help](https://r4ds.hadley.nz/workflow-help.html)
+
+::: callout-note
+**✅ Key idea**
+
+Every working scientist googles error messages daily. Getting stuck is not failing — it is the job.
+:::

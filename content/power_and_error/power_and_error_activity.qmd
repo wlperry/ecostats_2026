@@ -1,0 +1,348 @@
+---
+order: 8
+week: 5
+title: "Activity: Power and Type I & II Error"
+subtitle: "Power and error rates"
+description: "Hands-on activity: Type I/II error, Cohen's d, and statistical power calculated a priori and retrospectively with the pwr package, on the class pine needle data and the horned lizard predation dataset from Whitlock & Schluter, Ch. 12."
+author: "Bill Perry"
+metadata-files:
+  - ../../_templates/activities.yml
+format:
+  html: default
+  docx: default
+---
+
+# Worksheet: Power and Type I & II Error
+
+[📥 Pine needle data](data/pine_data.csv){.btn .btn-primary download="pine_data.csv"} [📥 Horned lizard data](data/horned_lizards.csv){.btn .btn-primary download="horned_lizards.csv"}
+
+[📥 Tools script (.R)](themes_functions/r_themes_and_functions.R){.btn .btn-primary download="r_themes_and_functions.R"} [📥 Script skeleton (.R)](data/08_power_and_error.R){.btn .btn-primary download="08_power_and_error.R"}
+
+::: callout-important
+## Column names
+
+`pine_data.csv` has the same six columns you have used all term (`source_file`, `team`, `replicate`, `side`, `needle_length_mm`, `needle_width_mm`). `horned_lizards.csv` has two:
+
+| Column | What it is |
+|--------------------|------------------------------------------|
+| `squamosal_horn_length_mm` | horn length, millimetres (1 `NA`) |
+| `survival` | `"living"` or `"killed"` by shrike predation |
+:::
+
+------------------------------------------------------------------------
+
+# Part 1 · Setup
+
+**▶ Run this:**
+
+``` r
+# ── Part 1.1 · Setup ─────────────────────────────────────────────────
+library(tidyverse)
+library(effectsize)  # cohens_d()
+library(pwr)         # power analysis
+
+source("themes_functions/r_themes_and_functions.R")
+
+pine_df <- read_csv("data/pine_data.csv")
+
+p_df <- pine_df %>%
+  group_by(team, side) %>%
+  summarise(needle_length_mm = mean(needle_length_mm, na.rm = TRUE),
+            .groups = "drop")
+
+p_wide_df <- p_df %>%
+  pivot_wider(names_from = side, values_from = needle_length_mm)
+
+lizard_df <- read_csv("data/horned_lizards.csv") %>%
+  filter(!is.na(squamosal_horn_length_mm))
+
+p_df
+lizard_df
+```
+
+------------------------------------------------------------------------
+
+# Part 2 · Two Ways to Be Wrong
+
+Crossing the *statistical decision* against the *unknown truth* gives four outcomes: correct rejection, correct non-rejection, a **Type I error (α)** — a false positive — and a **Type II error (β)** — a false negative. **Power = 1 − β.**
+
+✏️ **Your turn:** For each scenario, is it a Type I error, a Type II error, or a correct decision?
+
+```
+1. A study concludes sunny-side pine needles are longer, when really
+   there is no difference.
+   ________________________________________________________
+
+2. A study fails to detect a real horn-length difference between
+   surviving and predated lizards, and concludes there is none.
+   ________________________________________________________
+
+3. A study correctly detects that predated lizards have shorter horns.
+   ________________________________________________________
+```
+
+------------------------------------------------------------------------
+
+# Part 3 · What Is Power
+
+**Statistical power** is the probability of detecting a true effect — of rejecting H₀ when it really is false. **80% power** is the usual convention for an adequately powered study.
+
+✏️ **Your turn:** List the four things that increase power.
+
+```
+1. ________________________________________________________
+2. ________________________________________________________
+3. ________________________________________________________
+4. ________________________________________________________
+```
+
+------------------------------------------------------------------------
+
+# Part 4 · Effect Size — Cohen's d
+
+Cohen proposed rough benchmarks for small, medium, and large effects:
+
+**▶ Run this:**
+
+``` r
+# ── Part 4.1 · Cohen's benchmarks ────────────────────────────────────
+cohen.ES(test = "t", size = "small")$effect.size
+cohen.ES(test = "t", size = "medium")$effect.size
+cohen.ES(test = "t", size = "large")$effect.size
+```
+
+**▶ Run this** — the real Cohen's d for both datasets:
+
+``` r
+# ── Part 4.2 · Cohen's d, pine and lizards ───────────────────────────
+d_unpaired <- cohens_d(needle_length_mm ~ side, data = p_df)
+d_unpaired
+
+d_paired <- cohens_d(p_wide_df$shady, p_wide_df$sunny, paired = TRUE)
+d_paired
+
+d_lizard <- cohens_d(squamosal_horn_length_mm ~ survival, data = lizard_df)
+d_lizard
+```
+
+✏️ **Your turn:** Record all three, and which Cohen bucket (small/medium/large) each lands in.
+
+```
+unpaired pine d = ______  bucket: ______
+paired pine d   = ______  bucket: ______
+lizard d        = ______  bucket: ______
+```
+
+------------------------------------------------------------------------
+
+# Part 5 · A Priori Power — Planning Before You Collect Data
+
+The most useful power analysis happens **before** you collect data: guess or borrow an effect size, then ask what sample size gives 80% power.
+
+**▶ Run this:**
+
+``` r
+# ── Part 5.1 · A priori power, pine (unpaired) ───────────────────────
+pwr.t.test(
+  d = d_unpaired$Cohens_d,
+  power = 0.80,
+  sig.level = 0.05,
+  type = "two.sample"
+)
+```
+
+✏️ **Your turn:** How many trees per side does that call for (always round `n` up)? How many did we actually collect?
+
+`________________________`
+
+::: callout-tip
+**🖐 Practice 5 · A smaller effect**
+
+The lizards gave a *large* effect (d ≈ 0.87). Suppose instead you are planning a **new** study where you only expect a *medium* effect (d = 0.5). Assuming **equal** group sizes, how many lizards per group would you need for 80% power?
+
+**▶ Run this:**
+
+``` r
+# ── Part 5.2 · Practice 5 — a priori power, medium effect ────────────
+pwr.t.test(d = 0.5, power = 0.80, sig.level = 0.05, type = "two.sample")
+```
+
+✏️ **Your turn:** How does that n compare to the pine study's per-side n from Part 5.1?
+
+`________________________`
+:::
+
+------------------------------------------------------------------------
+
+# Part 6 · Unequal Group Sizes — `pwr.t2n.test()`
+
+The lizard groups are far from equal (154 living vs. 30 killed). `pwr.t2n.test()` takes the two **actual** group sizes directly — no averaging, no workaround.
+
+**▶ Run this:**
+
+``` r
+# ── Part 6.1 · Power with unequal group sizes ────────────────────────
+pwr.t2n.test(
+  n1 = sum(lizard_df$survival == "living"),
+  n2 = sum(lizard_df$survival == "killed"),
+  d = d_lizard$Cohens_d,
+  sig.level = 0.05
+)
+```
+
+✏️ **Your turn:** What is the power? Compare it to the pine study's power at n = 4 (you'll compute that next, in Part 7).
+
+`________________________`
+
+------------------------------------------------------------------------
+
+# Part 7 · Retrospective (Post-Hoc) Power
+
+The other direction: **after** a study, ask what power your actual n and observed effect size gave you.
+
+**▶ Run this:**
+
+``` r
+# ── Part 7.1 · Retrospective power, pine (unpaired) ──────────────────
+pwr.t.test(
+  n = 4,
+  d = d_unpaired$Cohens_d,
+  sig.level = 0.05,
+  type = "two.sample"
+)
+```
+
+✏️ **Your turn:** What is the power? If the pine difference is completely real, how often out of 10 would a study like ours **miss** it?
+
+```
+power = ______        we would miss it ______ times out of 10
+```
+
+::: callout-warning
+**⚠️ A warning about "post-hoc power"**
+
+Computing power *from the effect size you observed* is a known trap — it is fine for planning the next study, but it is **not** a valid way to explain away a non-significant result. "Our result was non-significant, but we had low power" says the same thing twice.
+:::
+
+::: callout-tip
+**🖐 Practice 6 · Retrospective power, paired**
+
+You already calculated `d_paired` in Part 4.2 (the same four trees, paired instead of unpaired). Compute the retrospective power of the **paired** design at n = 4.
+
+**▶ Run this:**
+
+``` r
+# ── Part 7.2 · Practice 6 — retrospective power, paired ──────────────
+pwr.t.test(n = 4, d = d_paired$Cohens_d, sig.level = 0.05, type = "paired")
+```
+
+✏️ **Your turn:** How much higher is the paired power than the unpaired power from Part 7.1?
+
+`________________________`
+:::
+
+------------------------------------------------------------------------
+
+# Part 8 · Pairing Buys You Power
+
+**▶ Run this** — trees needed for 80% power, paired:
+
+``` r
+# ── Part 8.1 · Trees needed, paired ──────────────────────────────────
+pwr.t.test(
+  d = d_paired$Cohens_d,
+  power = 0.80,
+  sig.level = 0.05,
+  type = "paired"
+)
+```
+
+✏️ **Your turn:** Fill in the table using Parts 5.1, 7.1, 7.2, and 8.1.
+
+```
+Design       Power at n = 4      Trees for 80% power
+unpaired     ______              ______ per side
+paired       ______              ______ total
+```
+
+✏️ **Your turn:** Same trees. Same needles. Same measurements. Where did the extra power come from?
+
+`________________________`
+
+------------------------------------------------------------------------
+
+# Part 9 · Error Bars — SD, SE, and CI
+
+`summary_stats()` gives you all three from one call: **SD** (spread of the raw data), **SE** (precision of the mean, `SD / sqrt(n)`), and the **95% CI** (plausible range for the true mean).
+
+**▶ Run this:**
+
+``` r
+# ── Part 9.1 · SD, SE, and CI for the lizard data ────────────────────
+lizard_df %>%
+  group_by(survival) %>%
+  reframe(summary_stats(squamosal_horn_length_mm))
+```
+
+✏️ **Your turn:** Which of the three (SD, SE, CI) is widest, and which is narrowest, for each group? A large sample doesn't shrink SD — what does it shrink, and why?
+
+`________________________`
+
+------------------------------------------------------------------------
+
+# Part 10 · Pseudoreplication
+
+**Pseudoreplication** occurs when measurements that are not independent are analyzed as if they were — for example, treating every pine needle as an independent replicate instead of every tree.
+
+✏️ **Your turn:** Our pine needle data has 64 rows (needles), but only 4 trees per side. If we (wrongly) ran the power analysis in Part 7.1 on n = 32 needles per side instead of n = 4 trees, would the power come out higher or lower than the honest answer? Would that make the study *actually* better, or just make us *believe* it was?
+
+`________________________`
+
+------------------------------------------------------------------------
+
+# Summary and Conclusions
+
+In this activity, we've:
+
+1. Classified Type I and Type II error scenarios
+2. Calculated Cohen's d for pine (paired and unpaired) and horned lizards
+3. Run **a priori** power analysis to find the n a study needs, including for unequal group sizes with `pwr.t2n.test()`
+4. Run **retrospective** power analysis on our own pine needle study
+5. Compared unpaired vs. paired designs and seen what pairing buys in power
+6. Compared SD, SE, and CI as answers to three different questions
+7. Connected pseudoreplication to inflated apparent power
+
+**Key takeaways:**
+
+- A priori power planning is the single most useful use of this toolkit
+- Retrospective power is for planning the next study, not excusing a null result
+- Report effect size and power alongside p-values, not instead of them
+
+# Reflection Questions
+
+1. Why is an a priori power analysis only as good as the effect size fed into it?
+2. Why does `pwr.t2n.test()` beat the old harmonic-mean workaround for unequal groups?
+3. Why can pairing buy more power than adding raw sample size?
+4. How would you explain "our study wasn't wrong, it just didn't have enough power" to someone who has never taken a statistics course?
+
+# Review and checkpoint
+
+At this point you can:
+
+- [ ] Classify a scenario as a Type I error, a Type II error, or a correct decision
+- [ ] Calculate Cohen's d for a paired and an unpaired design
+- [ ] Run an a priori power analysis with `pwr.t.test()` to find a required sample size
+- [ ] Run a power analysis for unequal group sizes with `pwr.t2n.test()`
+- [ ] Run a retrospective power analysis and explain why it should not excuse a null result
+- [ ] Explain what SD, SE, and CI each answer, and how pseudoreplication distorts them
+
+::: callout-note
+**📤 What to turn in before next class**
+
+Upload both of these to the course management system:
+
+1. Your code — the `scripts/` folder (or just `08_power_and_error.R`)
+2. This worksheet, with your written answers
+:::
+
+------------------------------------------------------------------------

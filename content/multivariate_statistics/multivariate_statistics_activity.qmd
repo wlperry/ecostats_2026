@@ -1,0 +1,369 @@
+---
+order: 18
+week: 13
+title: "Activity: Multivariate Statistics (MANOVA)"
+subtitle: "MANOVA"
+description: "Hands-on activity: principal component analysis on the Darlingtonia (cobra lily) morphology dataset — standardization, correlations, PCA, loadings, scores, and distances between site centroids."
+author: "Bill Perry"
+metadata-files:
+  - ../../_templates/activities.yml
+format:
+  html: default
+  docx: default
+---
+
+# Worksheet: Multivariate Statistics
+
+[📥 Download the data](data/darlingtonia.csv){.btn .btn-primary download="darlingtonia.csv"}
+
+**▶ Run this in your Script:**
+
+``` r
+# ── Setup (1) ───────────────────────────────────────────────────────────
+library(car)
+library(emmeans)
+library(psych)
+library(vegan)
+library(ggfortify)
+library(corrplot)
+library(FactoMineR)
+library(factoextra)
+library(ggrepel)
+library(plotly)
+library(broom)
+library(patchwork)
+library(janitor)
+library(tidyverse)
+
+theme_set(theme_minimal(base_size = 9))
+```
+
+------------------------------------------------------------------------
+
+# Part 1 · Load and Explore the Data
+
+**▶ Run this:**
+
+``` r
+# ── Part 1.1 · Load and Explore the Data ────────────────────────────────
+darlingtonia <- read_csv("data/darlingtonia.csv")
+
+head(darlingtonia)
+
+darlingtonia %>%
+  count(site, name = "n_plants")
+```
+
+**▶ Run this** — visualize the raw data by site (notice the different scales!):
+
+``` r
+# ── Part 1.2 · Load and Explore the Data ────────────────────────────────
+darl_long <- darlingtonia %>%
+  pivot_longer(cols = -site,
+               names_to = "variable",
+               values_to = "value")
+
+ggplot(darl_long, aes(x = site, y = value, fill = site)) +
+  geom_boxplot() +
+  facet_wrap(~variable, scales = "free_y", ncol = 2) +
+  theme_minimal(base_size = 7) +
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Raw Data by Site",
+       subtitle = "Notice the different scales!")
+```
+
+✏️ **Your turn:** Which variable(s) have the largest values (dominating the raw scale), and which have the smallest?
+
+`________________________`
+
+------------------------------------------------------------------------
+
+# Part 2 · Standardization
+
+**▶ Run this** — check means and SDs by site before standardizing:
+
+``` r
+# ── Part 2.1 · Standardization ──────────────────────────────────────────
+darlingtonia %>%
+  group_by(site) %>%
+  summarize(
+    mean_height = mean(height),
+    sd_height = sd(height),
+    mean_wingmass = mean(wingmass_g),
+    sd_wingmass = sd(wingmass_g)
+  )
+
+# After standardization, both will have:
+# mean = 0, sd = 1
+```
+
+**▶ Run this** — standardize all numeric variables and visualize:
+
+``` r
+# ── Part 2.2 · Standardization ──────────────────────────────────────────
+darl_numeric <- darlingtonia %>%
+  dplyr::select(-site)
+
+# Standardize using scale() - centers (mean=0) and scales (sd=1) each variable
+darl_scaled <- scale(darl_numeric)
+
+darl_scaled_df <- as.data.frame(darl_scaled)
+
+darl_scaled_df %>%
+  select(height, mouth_diam, wingmass_g) %>%
+  pivot_longer(cols = c(height, mouth_diam, wingmass_g), names_to = "variable", values_to = "value") %>%
+  ggplot(aes(x = variable, y = value, fill = variable)) +
+  geom_boxplot() +
+  labs(title = "Standardized Data (same scale)") +
+  theme(legend.position = "none")
+```
+
+------------------------------------------------------------------------
+
+# Part 3 · Correlations
+
+**▶ Run this:**
+
+``` r
+# ── Part 3.1 · Correlations ─────────────────────────────────────────────
+cor_matrix <- cor(darl_numeric)
+
+corrplot(cor_matrix,
+         method = "color",
+         type = "upper",
+         order = "hclust",
+         tl.col = "black",
+         tl.cex = 0.7,
+         addCoef.col = "black",
+         number.cex = 0.6,
+         title = "Correlation Matrix\n(Darlingtonia variables)",
+         mar = c(0,0,2,0))
+
+round(cor_matrix, 2)
+```
+
+✏️ **Your turn:** Which pair of variables has the strongest correlation? Does that make biological sense?
+
+`________________________`
+
+------------------------------------------------------------------------
+
+# Part 4 · Running PCA
+
+**▶ Run this:**
+
+``` r
+# ── Part 4.1 · Running PCA ──────────────────────────────────────────────
+pca_result <- prcomp(darl_numeric,
+                     center = TRUE,
+                     scale. = TRUE)
+
+summary(pca_result)
+```
+
+**▶ Run this** — a scree plot to decide how many components to keep:
+
+``` r
+# ── Part 4.2 · Running PCA ──────────────────────────────────────────────
+fviz_eig(pca_result,
+         addlabels = TRUE,
+         ylim = c(0, 50))
+```
+
+✏️ **Your turn:** Based on the scree plot, how many components would you retain, and why?
+
+`________________________`
+
+------------------------------------------------------------------------
+
+# Part 5 · Interpreting Loadings
+
+**▶ Run this** — view the loadings for the first 3 PCs:
+
+``` r
+# ── Part 5.1 · Interpreting Loadings ────────────────────────────────────
+loadings <- pca_result$rotation[, 1:3]
+round(loadings, 3)
+```
+
+**▶ Run this** — PC1 loadings, sorted and visualized:
+
+``` r
+# ── Part 5.2 · Interpreting Loadings ────────────────────────────────────
+pc1_loads <- tibble(
+  Variable = rownames(pca_result$rotation),
+  Loading = pca_result$rotation[, 1]) %>%
+  arrange(desc(abs(Loading)))
+pc1_loads
+
+pc1_loads %>%
+  ggplot(aes(x = reorder(Variable, Loading), y = Loading)) +
+  geom_col(aes(fill = Loading > 0), show.legend = FALSE) +
+  coord_flip() +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  labs(title = "PC1 Loadings",
+       subtitle = "Overall Plant Size",
+       x = "Variable",
+       y = "Loading") +
+  scale_fill_manual(values = c("FALSE" = "coral", "TRUE" = "darkblue")) +
+  theme_minimal()
+```
+
+**▶ Run this** — same for PC2:
+
+``` r
+# ── Part 5.3 · Interpreting Loadings ────────────────────────────────────
+pc2_loads <- tibble(
+  Variable = rownames(pca_result$rotation),
+  Loading = pca_result$rotation[, 2]
+) %>%
+  arrange(desc(abs(Loading)))
+
+pc2_loads
+
+pc2_loads %>%
+  ggplot(aes(x = reorder(Variable, Loading), y = Loading)) +
+  geom_col(aes(fill = Loading > 0), show.legend = FALSE) +
+  coord_flip() +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  labs(title = "PC2 Loadings",
+       subtitle = "Shape: Height vs. Wing Size",
+       x = "Variable",
+       y = "Loading") +
+  scale_fill_manual(values = c("FALSE" = "coral", "TRUE" = "darkblue")) +
+  theme_minimal()
+```
+
+✏️ **Your turn:** Based on the loadings, write a one-sentence biological interpretation of PC1 and PC2 (what does a high score on each mean?).
+
+```
+PC1 = ________________________________________________
+PC2 = ________________________________________________
+```
+
+::: callout-tip
+**🚀 If you finish early:** Repeat this loadings analysis for PC3 (`pca_result$rotation[, 3]`). What does PC3 seem to represent?
+
+``` r
+# ── Part 5.4 · Interpreting Loadings ────────────────────────────────────
+# Write your code in the R script:
+```
+:::
+
+------------------------------------------------------------------------
+
+# Part 6 · Scores and Ordination
+
+**▶ Run this** — view PC scores for individual plants:
+
+``` r
+# ── Part 6.1 · Scores and Ordination ────────────────────────────────────
+pc_scores <- as_tibble(pca_result$x) %>%
+  mutate(site = darlingtonia$site,
+         plant_id = 1:n())
+
+pc_scores %>%
+  select(plant_id, site, PC1, PC2, PC3) %>%
+  head(10)
+```
+
+**▶ Run this** — a basic scores plot:
+
+``` r
+# ── Part 6.2 · Scores and Ordination ────────────────────────────────────
+ggplot(pc_scores, aes(x = PC1, y = PC2, color = site)) +
+  geom_point(size = 3, alpha = 0.7) +
+  stat_ellipse(level = 0.68, linetype = 2) +
+  labs(title = "PCA Scores Plot",
+       x = paste0("PC1: Overall Size"),
+       y = paste0("PC2: Shapeb%)"),
+       color = "Site") +
+  theme_minimal(base_size = 9) +
+  theme(legend.position = "right")
+```
+
+**▶ Run this** — an interactive 3D version using `plotly`:
+
+``` r
+# ── Part 6.3 · Scores and Ordination ────────────────────────────────────
+pc_data <- as.data.frame(pca_result$x) %>%
+  mutate(site = darlingtonia$site)
+
+plot_ly(pc_data,
+        x = ~PC1, y = ~PC2, z = ~PC3,
+        color = ~site,
+        type = "scatter3d",
+        mode = "markers") %>%
+  layout(scene = list(
+    xaxis = list(title = "PC1"),
+    yaxis = list(title = "PC2"),
+    zaxis = list(title = "PC3")
+  ))
+```
+
+✏️ **Your turn:** Looking at the scores plot, do the sites appear to separate from each other, or do they overlap heavily?
+
+`________________________`
+
+------------------------------------------------------------------------
+
+# Part 7 · Distances Between Sites
+
+**▶ Run this** — calculate site centroids (mean PC scores) and the Euclidean distance between them:
+
+``` r
+# ── Part 7.1 · Distances Between Sites ──────────────────────────────────
+pc_scores_for_dist <- as.data.frame(pca_result$x) %>%
+  mutate(site = darlingtonia$site)
+
+site_centroids <- pc_scores_for_dist %>%
+  group_by(site) %>%
+  summarise(across(starts_with("PC"), mean)) %>%
+  ungroup()
+
+site_centroids_matrix <- site_centroids %>%
+  column_to_rownames("site")
+
+dist_matrix <- dist(site_centroids_matrix, method = "euclidean")
+
+dist_matrix
+
+fviz_dist(dist_matrix,
+          gradient = list(low = "#00AFBB", high = "#FC4E07"))
+```
+
+✏️ **Your turn:** Which two sites are the most different from each other (largest centroid distance)? Which two are the most similar?
+
+`________________________`
+
+::: callout-tip
+**🚀 If you finish early:** Run a quick one-way ANOVA testing whether `PC1` differs by `site` (`aov(PC1 ~ site, data = pc_scores)`), just like we did in lecture. Is the site effect significant?
+
+``` r
+# ── Part 7.2 · Distances Between Sites ──────────────────────────────────
+# Write your code in the R script:
+```
+:::
+
+------------------------------------------------------------------------
+
+# Review and checkpoint
+
+At this point you can:
+
+- [ ] Explain why standardization matters before PCA
+- [ ] Interpret a correlation matrix in the context of PCA
+- [ ] Run a PCA with `prcomp()` and read a scree plot
+- [ ] Interpret loadings to give principal components biological meaning
+- [ ] Plot and interpret PC scores, including an interactive 3D version
+- [ ] Calculate Euclidean distances between group centroids in PC space
+
+::: callout-note
+**📤 What to turn in before next class**
+
+Upload both of these to the course management system:
+
+1. Your code — the `scripts/` folder (or just `09_multivariate_statistics.R`)
+2. This worksheet, with your written answers
+:::

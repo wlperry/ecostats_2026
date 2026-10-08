@@ -1,0 +1,471 @@
+---
+title: "Common Code 04 — Filter and Select"
+subtitle: "Subsetting rows with filter() and columns with select() using dplyr"
+author: "Bill Perry"
+date: today
+
+topic_number: "04"
+type: common_code
+description: >
+  how to clean up rows and columns of data
+categories: [packages, setup]
+
+format:
+  html: default
+  docx: default
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+# Subsetting data with dplyr
+
+Two of the most useful functions in the tidyverse are `filter()` and `select()`.
+`filter()` keeps the **rows** you want. `select()` keeps the **columns** you
+want. Together they let you carve out exactly the slice of a data frame you
+need for any analysis.
+
+> ⬇️ **Download the companion R script** — all examples ready to run:
+> [`04_filter_select.R`](04_filter_select.R)
+
+> 💡 **Following along?** Examples use the `penguins` dataset from the
+> `palmerpenguins` package. Swap in your own data frame wherever you see
+> `penguins`.
+
+---
+
+### Packages needed
+
+```r
+library(tidyverse)
+library(palmerpenguins)
+```
+
+---
+
+# 1 · The pipe `|>` — reading code as a recipe
+
+The pipe sends the result of the left side into the function on the right.
+Read it as the word **"then"**. It lets you chain steps in the order you think
+about them, top to bottom:
+
+```r
+penguins |>
+  filter(species == "Adelie") |>
+  select(species, bill_length_mm, body_mass_g)
+```
+
+> Take `penguins`, **then** keep only Adelie rows, **then** keep only those
+> three columns.
+
+Without the pipe the same code nests inside-out, which is harder to read:
+
+```r
+select(filter(penguins, species == "Adelie"), species, bill_length_mm, body_mass_g)
+```
+
+> 💡 **Key idea:** The pipe is not just style — it is the tidyverse's way of
+> building readable, step-by-step pipelines. Every vignette from here on uses
+> it. You may also see `%>%` from the magrittr package; it does the same thing.
+
+---
+
+# 2 · Comparison operators
+
+`filter()` keeps rows where a logical test is `TRUE`. These are the operators
+you use to write the test:
+
+| Operator | Meaning | Example |
+|---|---|---|
+| `==` | equal to | `species == "Adelie"` |
+| `!=` | not equal to | `species != "Adelie"` |
+| `>` | greater than | `body_mass_g > 4000` |
+| `>=` | greater than or equal to | `body_mass_g >= 4000` |
+| `<` | less than | `flipper_length_mm < 190` |
+| `<=` | less than or equal to | `flipper_length_mm <= 190` |
+
+> ⚠️ **Watch out!** The most common mistake is using a single `=` to test
+> equality. A single `=` is assignment; R will throw an error or silently do
+> the wrong thing. Always use `==` inside `filter()`.
+
+---
+
+# 3 · `filter()` — keep rows by condition
+
+### Single condition
+
+```r
+# Keep rows where species is exactly "Gentoo"
+penguins |> filter(species == "Gentoo")
+
+# Keep rows where body mass exceeds 4500 g
+penguins |> filter(body_mass_g > 4500)
+
+# Keep rows from 2008 only
+penguins |> filter(year == 2008)
+
+# Keep female penguins
+penguins |> filter(sex == "female")
+```
+
+### What `filter()` does to your data frame
+
+`filter()` never changes the columns or reorders rows — it only removes rows
+that do not meet the condition. The original data frame is untouched; the
+result is a new, smaller data frame.
+
+> 💡 **Key idea:** `filter()` returns a **new** data frame. The original
+> `penguins` is unchanged unless you overwrite it with `<-`. Always store the
+> result in a new, descriptively named object:
+> `adelie <- penguins |> filter(species == "Adelie")`.
+
+---
+
+# 4 · `filter()` — multiple conditions
+
+### AND — both conditions must be true
+
+Use `&` or a comma (they are identical inside `filter()`):
+
+```r
+# Adelie penguins heavier than 4000 g
+penguins |> filter(species == "Adelie" & body_mass_g > 4000)
+penguins |> filter(species == "Adelie", body_mass_g > 4000)   # same result
+```
+
+### OR — at least one condition must be true
+
+Use `|`:
+
+```r
+penguins |> filter(species == "Adelie" | species == "Chinstrap")
+```
+
+### `%in%` — match any value in a list
+
+`%in%` is cleaner than chaining `|` when you have several values to match:
+
+```r
+# Two species
+penguins |> filter(species %in% c("Adelie", "Chinstrap"))
+
+# Same result as the | version above, but scales to any number of values
+penguins |> filter(island %in% c("Dream", "Biscoe"))
+```
+
+### NOT IN — exclude values
+
+Put `!` in front of the whole `%in%` expression:
+
+```r
+penguins |> filter(!species %in% c("Adelie", "Chinstrap"))
+```
+
+> ⚠️ **Watch out!** `!` negates the entire expression. `!species %in% c(...)` 
+> means "species is NOT in this list." Do not confuse it with `!=`, which only 
+> tests one value at a time.
+
+### Range — between two values
+
+```r
+# Both of these keep rows where body mass is between 3500 and 4500 g
+penguins |> filter(body_mass_g >= 3500 & body_mass_g <= 4500)
+penguins |> filter(between(body_mass_g, 3500, 4500))   # cleaner
+```
+
+### Combining AND and OR — use parentheses
+
+When mixing `&` and `|`, parentheses make the logic explicit and avoid
+operator-precedence surprises:
+
+```r
+penguins |> filter(
+  (species == "Gentoo" | species == "Chinstrap") & body_mass_g > 4000
+)
+```
+
+> ⚠️ **Watch out!** `&` binds more tightly than `|` in R, just like
+> multiplication binds more tightly than addition in arithmetic. When in doubt,
+> add parentheses — they cost nothing and make intent clear.
+
+---
+
+# 5 · `filter()` — handling missing values
+
+Missing values (`NA`) need their own function. You **cannot** test for them
+with `==`.
+
+```r
+# ❌  This does NOT work — always returns FALSE, not TRUE for NA rows
+penguins |> filter(sex == NA)
+
+# ✅  Use is.na() instead
+penguins |> filter(is.na(sex))       # rows where sex IS missing
+penguins |> filter(!is.na(sex))      # rows where sex is NOT missing
+```
+
+> ⚠️ **Watch out!** In R, `NA == NA` returns `NA`, not `TRUE`. This is
+> intentional — a missing value is unknown, so comparing two unknowns gives
+> an unknown result. `is.na()` is the only reliable way to find missing values.
+
+### Drop rows with missing values
+
+```r
+# Drop ALL rows that have NA in ANY column
+penguins |> drop_na()
+
+# Drop rows with NA in specific columns only
+penguins |> drop_na(sex, bill_length_mm)
+```
+
+> 💡 **Key idea:** Be deliberate about when you drop NAs. Dropping too early
+> can remove valid data in other columns. Drop only the columns you actually
+> need for the analysis at hand.
+
+---
+
+# 6 · `select()` — keep columns by name
+
+### Keep named columns
+
+```r
+penguins |> select(species, island, body_mass_g)
+```
+
+### Drop named columns with `-`
+
+```r
+penguins |> select(-year, -island)
+```
+
+### Keep a range of adjacent columns
+
+```r
+penguins |> select(bill_length_mm:body_mass_g)
+```
+
+### Drop a range of adjacent columns
+
+```r
+penguins |> select(-(bill_length_mm:body_mass_g))
+```
+
+### Reorder — move columns to the front
+
+`everything()` is a helper that means "all the columns not yet named":
+
+```r
+penguins |> select(species, island, everything())
+```
+
+> 💡 **Key idea:** `select()` keeps columns in the order you name them. Use
+> `everything()` at the end to pull specific columns to the front without
+> having to name all the others.
+
+---
+
+# 7 · `select()` helper functions
+
+These helpers let you select columns by pattern in their name rather than
+typing each one — essential when a data frame has dozens of columns:
+
+### `starts_with()` and `ends_with()`
+
+```r
+penguins |> select(starts_with("bill"))     # bill_length_mm, bill_depth_mm
+penguins |> select(ends_with("mm"))         # all columns ending in "mm"
+```
+
+### `contains()`
+
+```r
+penguins |> select(contains("length"))      # any column with "length" in the name
+```
+
+### `where()` — select by data type
+
+```r
+penguins |> select(where(is.numeric))       # all numeric columns
+penguins |> select(where(is.character))     # all character columns
+```
+
+**Select helpers at a glance:**
+
+| Helper | Keeps columns where name… |
+|---|---|
+| `starts_with("x")` | begins with `"x"` |
+| `ends_with("x")` | ends with `"x"` |
+| `contains("x")` | contains `"x"` anywhere |
+| `everything()` | all remaining columns |
+| `where(is.numeric)` | column is numeric |
+| `where(is.character)` | column is character |
+
+---
+
+# 8 · Renaming columns
+
+### `rename()` — rename without dropping anything
+
+The syntax is `new_name = old_name`:
+
+```r
+penguins |> rename(
+  mass_g     = body_mass_g,
+  flipper_mm = flipper_length_mm
+)
+```
+
+### Rename inside `select()` — rename and subset at once
+
+```r
+penguins |> select(
+  species,
+  mass_g     = body_mass_g,
+  flipper_mm = flipper_length_mm
+)
+```
+
+> 💡 **Key idea:** Renaming inside `select()` is efficient when you want to
+> both slim down and rename in one step. Use `rename()` alone when you want to
+> rename but keep all columns.
+
+---
+
+# 9 · Combining `filter()` and `select()`
+
+In practice you almost always use both together. The pattern is: filter the
+rows you need, then select the columns you need, then store the result:
+
+```r
+gentoo <- penguins |>
+  filter(species == "Gentoo", !is.na(body_mass_g)) |>
+  select(species, island, body_mass_g, flipper_length_mm, sex)
+
+glimpse(gentoo)
+```
+
+A clean starting data frame for modelling — no NAs in any column used:
+
+```r
+penguins_clean <- penguins |>
+  drop_na() |>
+  select(species, bill_length_mm, bill_depth_mm,
+         flipper_length_mm, body_mass_g, sex)
+
+glimpse(penguins_clean)
+```
+
+Then pipe straight into ggplot:
+
+```r
+penguins |>
+  filter(species == "Gentoo", !is.na(sex)) |>
+  select(species, body_mass_g, flipper_length_mm, sex) |>
+  ggplot(aes(x = flipper_length_mm, y = body_mass_g, color = sex)) +
+  geom_point(size = 2.5, alpha = 0.7) +
+  labs(
+    title = "Gentoo penguins: flipper length vs body mass",
+    x     = "Flipper length (mm)",
+    y     = "Body mass (g)",
+    color = "Sex"
+  ) +
+  theme_classic()
+```
+
+> 💡 **Key idea:** You can pipe a filtered and selected data frame straight
+> into `ggplot()` without storing an intermediate object. This keeps scripts
+> concise, but do store intermediate results when you need to inspect them or
+> reuse them in multiple plots.
+
+---
+
+# 10 · Always check your result
+
+After filtering and selecting, a quick sanity check before moving on saves
+time later:
+
+```r
+result <- penguins |>
+  filter(species == "Gentoo", body_mass_g > 5000) |>
+  select(species, island, body_mass_g, sex)
+
+nrow(result)       # how many rows passed the filter?
+dim(result)        # rows and columns
+glimpse(result)    # column names and types
+```
+
+`count()` is the fastest way to check that your grouping variables have the
+right levels and no unexpected extras:
+
+```r
+penguins |> count(species)            # rows per species
+penguins |> count(species, island)    # cross-tabulate two variables
+penguins |> count(species, is.na(sex))  # how many NAs per species?
+```
+
+> ⚠️ **Watch out!** Always check `nrow()` after filtering. If you get 0 rows,
+> the condition matched nothing — often a spelling error (`"Adelie"` vs
+> `"adelie"`) or using `=` instead of `==`.
+
+---
+
+# 11 · Complete pipeline — from raw file to filtered plot
+
+This is the full pattern you will use at the top of every analysis script:
+
+```r
+library(tidyverse)
+library(readxl)
+library(janitor)
+
+# 1. Read and clean
+tree_df <- read_excel("data_raw/2026_06_25_tree_experiment_raw_data.xlsx") |>
+  clean_names()
+
+# 2. Filter and select
+sunny <- tree_df |>
+  filter(side == "sunny", !is.na(weight_g)) |>
+  select(index, side, weight_g, width_cm, height_cm)
+
+# 3. Check
+glimpse(sunny)
+nrow(sunny)
+
+# 4. Plot
+ggplot(sunny, aes(x = width_cm, y = weight_g)) +
+  geom_point(color = "tomato", size = 2.5, alpha = 0.7) +
+  labs(
+    title = "Sunny leaves: width vs. weight",
+    x     = "Leaf width (cm)",
+    y     = "Leaf weight (g)"
+  ) +
+  theme_classic()
+```
+
+---
+
+# Quick reference
+
+| Task | Code |
+|---|---|
+| Keep rows equal to a value | `filter(species == "Adelie")` |
+| Keep rows not equal to a value | `filter(species != "Adelie")` |
+| Keep rows above a threshold | `filter(body_mass_g > 4000)` |
+| Keep rows in a range | `filter(between(body_mass_g, 3500, 4500))` |
+| Match any of several values | `filter(species %in% c("Adelie", "Chinstrap"))` |
+| Exclude several values | `filter(!species %in% c("Adelie", "Chinstrap"))` |
+| AND — both conditions true | `filter(species == "Adelie", body_mass_g > 4000)` |
+| OR — either condition true | `filter(species == "Adelie" \| species == "Chinstrap")` |
+| Keep rows where NA | `filter(is.na(sex))` |
+| Drop rows where NA | `filter(!is.na(sex))` or `drop_na(sex)` |
+| Keep named columns | `select(species, island, body_mass_g)` |
+| Drop named columns | `select(-year, -island)` |
+| Keep columns by prefix | `select(starts_with("bill"))` |
+| Keep columns by suffix | `select(ends_with("mm"))` |
+| Keep all numeric columns | `select(where(is.numeric))` |
+| Rename a column | `rename(new_name = old_name)` |
+| Reorder columns | `select(species, island, everything())` |
+| Count rows per group | `count(species)` |
+
+*End of Common Code 04 — Filter and Select.* *Next: Common Code 05 — mutate().*

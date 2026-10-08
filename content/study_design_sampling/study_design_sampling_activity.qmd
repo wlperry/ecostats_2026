@@ -1,0 +1,222 @@
+---
+order: 9
+week: 5
+title: "Activity: Study Design & Sampling"
+subtitle: "Design and sampling"
+description: "In-class activity: reading a design off a real randomized, blinded, unbalanced experiment — Wright & Czeisler's circadian light study — and testing whether the placebo arm was needed."
+author: "Bill Perry"
+metadata-files:
+  - ../../_templates/activities.yml
+format:
+  html: default
+  docx: default
+---
+
+# Worksheet: Reading a Design
+
+[📥 Knees data](data/knees.csv){.btn .btn-primary download="knees.csv"} [📥 Tools script (.R)](themes_functions/r_themes_and_functions.R){.btn .btn-primary download="r_themes_and_functions.R"} [📥 Script skeleton (.R)](data/09_study_design_sampling.R){.btn .btn-primary download="09_study_design_sampling.R"}
+
+**The study.** Wright & Czeisler (2002) asked whether bright light shone on the **back of the knee** could reset a person's circadian clock, the way light in the **eyes** does. Each volunteer was randomly assigned to one of three treatments and their circadian rhythm shift was measured in hours (negative = the clock shifted later).
+
+- `control` — no light at all
+- `knee` — light on the back of the knee
+- `eyes` — light in the eyes
+
+**Why this study is here.** `knee` is not really a third treatment. It is a **placebo** — it puts a person through the entire procedure (the apparatus, the room, the night, the measurement) while delivering light somewhere it should not work. Today you decide whether that arm earned its place.
+
+This is Whitlock & Schluter, Example 15.1.
+
+------------------------------------------------------------------------
+
+# Part 1 · Setup and the data
+
+**▶ Run this:**
+
+``` r
+# ── Part 1.1 · Setup and the data ───────────────────────────────────────
+library(tidyverse)
+library(effectsize)
+
+source("themes_functions/r_themes_and_functions.R")
+
+knees_df <- read_csv("data/knees.csv")
+
+knees_df
+```
+
+------------------------------------------------------------------------
+
+# Part 2 · Read the design off the data
+
+Before any test: how many replicates, at what level, and is it balanced?
+
+**▶ Run this:**
+
+``` r
+# ── Part 2.1 · Read the design off the data ─────────────────────────────
+count(knees_df, treatment)
+```
+
+✏️ **Your turn:** What is the experimental unit here, and is the design balanced?
+
+```
+unit = ____________________    balanced? ____________________
+```
+
+**▶ Run this** — the numbers for each group:
+
+``` r
+# ── Part 2.2 · Read the design off the data ─────────────────────────────
+knees_df %>%
+  group_by(treatment) %>%
+  reframe(summary_stats(shift_h))
+```
+
+**▶ Run this** — look at the data before you test it:
+
+``` r
+# ── Part 2.3 · Read the design off the data ─────────────────────────────
+ggplot(knees_df, aes(treatment, shift_h)) +
+  geom_boxplot() +
+  geom_jitter(width = 0.15)
+```
+
+✏️ **Your turn:** From the plot alone, which treatment looks different from the other two?
+
+`________________________`
+
+------------------------------------------------------------------------
+
+# Part 3 · Did the placebo do anything?
+
+This is the bias question: does going through the procedure, without useful light, shift the clock on its own?
+
+**▶ Run this:**
+
+``` r
+# ── Part 3.1 · Did the placebo do anything? ─────────────────────────────
+knees_df %>%
+  filter(treatment %in% c("control", "knee")) %>%
+  t.test(shift_h ~ treatment, data = .)
+```
+
+✏️ **Your turn:** p = __________ . Is there a procedural artifact in this experiment?
+
+`________________________`
+
+------------------------------------------------------------------------
+
+# Part 4 · Did the real treatment do anything?
+
+**▶ Run this:**
+
+``` r
+# ── Part 4.1 · Did the real treatment do anything? ──────────────────────
+knees_df %>%
+  filter(treatment %in% c("control", "eyes")) %>%
+  t.test(shift_h ~ treatment, data = .)
+```
+
+**▶ Run this** — how big is it?
+
+``` r
+# ── Part 4.2 · Did the real treatment do anything? ──────────────────────
+knees_df %>%
+  filter(treatment %in% c("control", "eyes")) %>%
+  cohens_d(shift_h ~ treatment, data = .)
+```
+
+✏️ **Your turn:** p = __________ , d = __________ .
+
+::: callout-note
+**Two comparisons, both decided in advance**
+
+We ran two tests against the same control rather than one test across all three groups. That is legitimate here *because we chose both comparisons before looking* — each one answers a specific design question. Three groups at once is a one-way ANOVA, which is Week 8.
+:::
+
+------------------------------------------------------------------------
+
+# Part 5 · What the design bought
+
+✏️ **Your turn:** In the sponge experiment from lecture, the sham control (foam) **did** differ from the bare control, and the real treatment added nothing. Here the result came out the other way around. One sentence: what would you have concluded in this study if the `knee` arm had never been run?
+
+```
+________________________________________________________
+```
+
+::: callout-tip
+**🚀 If you finish early:** This design is unbalanced (8, 7, 7). Work out how much precision that costs: compare the standard error of the `control` mean with what it would be if all 22 subjects had been split evenly into three groups of about 7.3.
+
+``` r
+# ── Part 5.1 · What the design bought (bonus) ───────────────────────────
+# Write your code in the R script:
+```
+:::
+
+------------------------------------------------------------------------
+
+# Part 6 · The figure you hand in
+
+This is the only plot that gets labels, a theme and a title — because this is the one being graded on presentation.
+
+**▶ Run this:**
+
+``` r
+# ── Part 6.1 · The figure you hand in ───────────────────────────────────
+knees_summary <- knees_df %>%
+  group_by(treatment) %>%
+  reframe(summary_stats(shift_h))
+
+final_plot <- ggplot(knees_summary, aes(treatment, mean)) +
+  geom_col(fill = "grey70", width = 0.6) +
+  geom_errorbar(aes(ymin = mean - se, ymax = mean + se), width = 0.15) +
+  labs(
+    title = "Circadian shift by light treatment",
+    subtitle = "Mean ± 1 SE; light on the knee behaves like no light at all",
+    x = "Light treatment",
+    y = "Circadian shift (hours)"
+  ) +
+  theme_regular(base_size = 12)
+
+final_plot
+
+ggsave(
+  "figures/knees_figure.pdf",
+  plot   = final_plot,
+  width  = 6,
+  height = 4,
+  units  = "in"
+)
+```
+
+✏️ **Your turn:** Open the PDF and check the axis labels are readable before you submit it.
+
+------------------------------------------------------------------------
+
+# Review and checkpoint
+
+At this point you can:
+
+- [ ] State the experimental unit and say whether a design is balanced
+- [ ] Explain what a placebo or sham control is for
+- [ ] Test whether a procedural artifact exists, and interpret the answer either way
+- [ ] Say why the same test can support opposite conclusions in two different designs
+- [ ] Export a labelled, themed figure to PDF
+
+::: callout-note
+**📤 What to turn in**
+
+1. `09_study_design_sampling.R`
+2. `figures/knees_figure.pdf`
+3. This worksheet, with your written answers
+:::
+
+------------------------------------------------------------------------
+
+# Homework
+
+**[Homework 5 — Study Design & Sampling: Finding the Real Replicate](../../homeworks/study_design_homework/study_design_homework.qmd)**
+
+**1022 mangrove periwinkles from 18 sites**, nine on each side of the tropical Atlantic, analysed twice: once with the snail as the replicate and once with the site as the replicate. The comparison is the same both times; the answer is not. The homework is about deciding which of those two analyses you are entitled to report.
+
+**Data:** [`littoraria.csv`](../../homeworks/study_design_homework/data/littoraria.csv) — Gotelli & Ellison, *A Primer of Ecological Statistics*, Chapter 12 archive; originally Merkt & Ellison (1998), *Malacologia* 40(1–2): 279–295.

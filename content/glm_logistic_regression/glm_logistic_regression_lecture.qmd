@@ -1,0 +1,1739 @@
+---
+metadata-files:
+  - ../../_templates/_lectures.yml
+title: "Lecture: GLM & Logistic Regression"
+subtitle: "Generalized linear models"
+description: "Generalized Linear Models (GLMs) for non-normal response data — Gaussian, Poisson, and negative binomial GLMs for count data, logistic regression for binary responses, odds ratios, model diagnostics, and the connection back to ANOVA."
+categories: [GLM, Regression]
+order: 16
+week: 11
+author: "Bill Perry"
+
+knitr:
+  opts_chunk:
+    paged.print: false
+    collapse: true
+format:
+  html:
+    downloads: [docx, pptx]  # This creates download links for all three
+  revealjs:
+    output-ext: "slides.html"
+  docx:
+    reference-doc: ../../ms_templates/custom-reference-compact.docx
+    fig-width: 2.5
+    fig-height: 2.5
+    fig-dpi: 300
+    dpi: 300            # tell Pandoc the real render dpi so it sizes figures correctly
+  pptx: default
+execute:
+  echo: true
+---
+
+```{r setup}
+#| echo: false
+#| message: false
+#| warning: false
+#| paged-print: false
+
+# Load required packages
+# install.packages("ResourceSelection")
+# install.packages("pscl")
+library(pscl)
+library(tinytable)
+library(performance)
+library(ResourceSelection)
+library(car)
+library(emmeans)
+library(DHARMa)
+library(MASS)
+library(broom)
+library(flextable)
+library(patchwork)  # For combining plots
+library(faraway)  # For gala dataset
+library(tidyverse)
+
+
+```
+
+## Part 1 · From ANOVA to the GLM Framework {.divider}
+
+## Review of ANOVAs
+
+### Review
+
+-   ANOVA
+-   Factorial ANOVA
+-   Nested ANOVA
+-   ASSUMPTIONS OF ALL
+    -   Homogeneity of variance - Levenes or Bartletts Test
+
+    -   Normality of Residuals
+
+    -   Independence
+
+## GLM Overview
+
+### Overview
+
+-   General Linear Models GLM
+-   Essentially the same as before while using defined distributions
+    -   Normal
+    -   Lognormal
+    -   Binomial
+    -   Poisson
+    -   Gamma
+    -   Negative binomial
+-   Logistic Regression
+    -   when the outcome is yes or no or categorical
+
+## Overview of Generalized Linear Models (GLMs)
+
+:::::: columns
+:::: {.column width="60%"}
+General linear models assume normal distribution of response variables
+and residuals. However, many types of biological data don't meet this
+assumption.
+
+Generalized Linear Models (GLMs) allow for a wider range of probability
+distributions for the response variable.
+
+GLMs allow all types of "exponential family" distributions:
+
+-   Normal
+-   Lognormal
+-   Binomial
+-   Poisson
+-   Gamma
+-   Negative binomial
+
+GLMs can be used for binary (yes/no), discrete (count), and
+categorical/multinomial response variables, using maximum likelihood
+(ML) rather than ordinary least squares (OLS) for estimation.
+
+**Note:** GLMs extend linear models to non-normal data distributions.
+
+::: callout-note
+Gotelli & Ellison, *A Primer of Ecological Statistics*, Ch. 9 — Regression, on extending the linear model beyond ordinary least squares.
+:::
+::::
+
+::: {.column width="40%"}
+```{r glm-distributions}
+#| echo: false
+#| message: false
+#| warning: false
+#| fig-cap: Examples of distributions in the exponential family
+#| fig-height: 3.6
+#| fig-width: 3.6
+#| paged-print: false
+#| fig-alt: "Three example distributions from the exponential family: a normal density curve on top, and a Poisson (lambda = 3) and a binomial (n = 10, p = 0.3) bar distribution side by side below."
+
+# Create example data for different distributions
+set.seed(123)
+x <- seq(-4, 4, length.out = 100)
+normal <- dnorm(x)
+poisson_data <- dpois(0:10, lambda = 3)
+binomial_data <- dbinom(0:10, size = 10, prob = 0.3)
+
+# Plot the distributions
+p1 <- ggplot(data.frame(x, normal), aes(x, normal)) +
+  geom_line() +
+  labs(title = "Normal Distribution",
+       x = "Value", y = "Density") +
+  theme_minimal(base_size = 7)
+
+p2 <- ggplot(data.frame(x = 0:10, y = poisson_data), 
+             aes(x, y)) +
+  geom_col(fill = "darkblue") +
+  labs(title = "Poisson Distribution (λ = 3)",
+       x = "Count", y = "Probability") +
+  theme_minimal(base_size = 7)
+
+p3 <- ggplot(data.frame(x = 0:10, y = binomial_data), 
+             aes(x, y)) +
+  geom_col(fill = "darkred") +
+  labs(title = "Binomial Distribution (n = 10, p = 0.3)",
+       x = "Successes", y = "Probability") +
+  theme_minimal(base_size = 7)
+
+(p1 / (p2 + p3))
+```
+:::
+::::::
+
+## Example comparison of logged response variable and GLM
+
+::::: columns
+::: {.column width="50%"}
+```{r l14-01}
+# Simulate data that students might log-transform
+set.seed(123)
+treatment_data <- data.frame(
+  treatment = rep(c("Control", "Low", "High"), each = 20),
+  biomass = c(rlnorm(20, meanlog = 2, sdlog = 0.5),
+              rlnorm(20, meanlog = 2.5, sdlog = 0.5),
+              rlnorm(20, meanlog = 3, sdlog = 0.5)))
+# Approach 1: Log transformation + ANOVA
+model_log <- lm(log(biomass) ~ treatment, data = treatment_data)
+
+# Approach 2: Gamma GLM with log link
+model_glm <- glm(biomass ~ treatment, 
+                 family = Gamma(link = "log"), 
+                 data = treatment_data)
+```
+:::
+
+::: {.column width="50%"}
+Here is the difference
+
+```{r l14-02}
+# Compare predictions on original scale
+cat("logged response variable\n\n")
+emmeans(model_log, ~treatment, type = "response")  # Geometric means
+cat("\n\n")
+cat("using glm opn original scale\n\n")
+emmeans(model_glm, ~treatment, type = "response")  # Arithmetic means
+
+```
+:::
+:::::
+
+## The Three Elements of a GLM
+
+### GLMs consist of three components:
+
+1.  **Response component**: The response variable and its probability
+    distribution (from exponential family: normal, binomial, Poisson)
+2.  **Systematic component**: The predictor variable(s) in the model,
+    which can be continuous or categorical
+3.  **Link function**: Connects expected value of Y to predictor
+    variables
+
+$$g(\mu) = \beta_0 + \beta_1X_1 + \beta_2X_2...$$
+
+::: {.callout-important appearance="simple"}
+## Link Functions and Distributions
+
+| Distribution | Common Link Function | Formula                      |
+|--------------|----------------------|------------------------------|
+| Normal       | Identity             | $g(\mu) = \mu$               |
+| Poisson      | Log                  | $g(\mu) = \log(\mu)$         |
+| Binomial     | Logit                | $g(\mu) = \log[\mu/(1-\mu)]$ |
+:::
+
+## Part 2 · Gaussian GLMs {.divider}
+
+## Gaussian GLM — The Galápagos Island Data
+
+::::: columns
+::: {.column width="60%"}
+The simplest form of GLM uses a normal (Gaussian) distribution with an
+identity link function. This is equivalent to standard ANOVA
+
+-   Let's compare a standard linear model and a Gaussian GLM
+
+-   Island Biogeography Data
+
+-   The `gala` dataset from the `faraway` package contains data on 30
+    Galapagos islands, testing MacArthur-Wilson's theory of island
+    biogeography.
+
+-   **Variables in the dataset:**
+
+    -   `Species`- Number of plant species (count data)
+
+    -   `Endemics`- Number of endemic species (count data)
+
+    -   `Area`- Island area (km²)
+
+    -   `Elevation`- Maximum elevation (m)
+
+    ```{r gaussian-model}
+    #| echo: false
+    #| message: false
+    #| warning: false
+    #| paged-print: false
+
+    # Create a categorical variable for demonstration
+    gala <- gala %>%
+      mutate(size_category = case_when(
+        Area < 1 ~ "Small",
+        Area >= 1 & Area < 100 ~ "Medium",
+        Area >= 100 ~ "Large"
+      ),
+      size_category = factor(size_category, levels = c("Small", "Medium", "Large")))
+
+    head(gala %>% dplyr::select(-Scruz, -Adjacent),3)
+    ```
+:::
+
+::: {.column width="40%"}
+Let's look at the summary of our Gaussian GLM:
+
+```{r summary-gaussian_2}
+#| echo: false
+#| message: false
+#| warning: false
+#| paged-print: false
+#| fig-alt: "Histogram of the number of endemic plant species across the 30 Galapagos islands, showing a right-skewed count distribution."
+
+ggplot(gala, aes(x = Endemics)) +
+  geom_histogram(binwidth = 5, fill = "darkblue", color = "black") +
+  labs(title = "Distribution of Endemics Richness",
+       subtitle = "Galapagos Islands",
+       x = "Number of Plant Endemics",
+       y = "Number of Islands") +
+  theme_minimal(base_size = 9)
+```
+:::
+:::::
+
+## Gaussian GLM — Building the Size Categories
+
+::::: columns
+::: {.column width="60%"}
+The simplest form of GLM uses a normal (Gaussian) distribution with an
+identity link function. This is equivalent to standard linear
+regression.
+
+Let's compare a standard linear model and a Gaussian GLM using the
+Galapagos dataset, modeling endemic Endemics richness by island size
+category.
+
+```{r gaussianmodel2a}
+#| echo: false
+#| message: false
+#| warning: false
+#| paged-print: false
+
+gala %>% arrange(-Area) %>% dplyr::select(Endemics, Area, size_category, Elevation) %>% head(8) %>%
+  tt()
+```
+:::
+
+::: {.column width="40%"}
+Let's visualize endemic Endemics by island size:
+
+```{r summarygaussian_2a}
+#| echo: false
+#| message: false
+#| warning: false
+#| paged-print: false
+#| fig-alt: "Boxplot of number of endemic species by island size category (Small, Medium, Large), filled by category, showing endemic richness increasing with island size."
+
+gala %>% ggplot(aes(size_category, Endemics, fill = size_category)) +
+  geom_boxplot() + 
+  theme(
+    axis.text = element_text(size = 9),
+    axis.title = element_text(size = 9)
+  ) +
+  labs(x = "Island Size Category", 
+       y = "Number of Endemic Endemics",
+       color = "Size Category")
+```
+:::
+:::::
+
+## Gaussian GLM — Fitting `lm()` and `glm()` Side by Side
+
+::::: columns
+::: {.column .scrollable width="50%"}
+The simplest form of GLM uses a normal (Gaussian) distribution with an
+identity link function. This is equivalent to standard linear
+regression.
+
+-   Let's compare a standard linear model and a Gaussian GLM using the
+    Galapagos dataset, modeling endemic species richness by island size
+    category.
+    -   Fit a standard linear model - model_lm \<- lm(Endemics \~
+        size_category,\
+        data = gala)
+    -   Fit a Gaussian GLM
+    -   model_gaussian \<- glm(Endemics \~ size_category, data = gala,\
+        family = gaussian(link = "identity")) **Residual Standard
+        Error**. This is the standard deviation of the residuals
+        ($\sigma$)
+:::
+
+::: {.column .scrollable width="50%"}
+-   Let's look at the summary of our Gaussian GLM:
+
+```{r l14-03}
+#| include: false
+# Fit a standard linear model
+model_lm <- lm(Endemics ~ size_category, data = gala)
+# Fit a Gaussian GLM
+model_gaussian <- glm(Endemics ~ size_category,  data = gala, 
+                       family = gaussian(link = "identity"))
+# # Compare the coefficients
+coef_lm <- coefficients(model_lm)
+coef_glm <- coefficients(model_gaussian)
+# # Check if they're the same
+# all.equal(coef_lm, coef_glm)
+```
+
+```{r gaussian-model_2a}
+#| echo: false
+#| message: false
+#| warning: false
+#| paged-print: false
+summary(model_lm)
+```
+:::
+:::::
+
+## Gaussian GLM — Reading the Output: Deviance and Dispersion
+
+::::: columns
+::: {.column width="60%"}
+-   Let's look at the summary of our Gaussian GLM:
+    -   Dispersion parameter
+        -   **variance of the residuals** ($\sigma^2$)
+    -   Null deviance
+        -   This is the error (deviance) of the "Null" or
+            "Intercept-Only" model
+
+        -   how much error you have when you try to predict the number
+            of endemics using *only* the overall average, without any
+            predictors. It's your baseline, or the total amount of
+            variation in the data to be explained
+    -   Residual deviance
+        -   conceptually the same as the "Model Sum of Squares" in an
+            ANOVA
+
+        -   Null Deviance tells you your `size_category` predictor is
+            *very* useful for explaining the number of endemics.
+:::
+
+::: {.column width="40%"}
+```{r summary-gaussian3b}
+#| echo: false
+#| message: false
+#| warning: false
+#| paged-print: false
+summary(model_gaussian)
+```
+:::
+:::::
+
+## GLM with Gaussian Distribution: Analysis
+
+::::: columns
+::: {.column width="60%"}
+-   Now let's perform an ANOVA on LM and GLM model using `car`:
+    -   **Residual Standard Error**. This is the standard deviation of
+        the residuals ($\sigma$)
+
+    -   **Residual Deviance/df**: 5756.1 / 27 = 213.1878
+
+    -   In this context, "Sum Sq" (Sum of Squares) and "Deviance" are
+        the same thing.
+
+    -   **"Pearson residuals" are essentially the same as the regular
+        residuals**
+
+```{r gaussian-anovaa}
+#| echo: false
+#| message: false
+#| warning: false
+#| paged-print: false
+Anova(model_lm, type = "III", test = "F")
+Anova(model_gaussian, type = "III", test = "F")
+```
+:::
+
+::: {.column width="40%"}
+Visualizing the results:
+
+```{r gaussian-plot}
+#| echo: false
+#| message: false
+#| warning: false
+#| paged-print: false
+#| fig-alt: "Jittered scatterplot of raw endemic species counts by island size category, with the Gaussian GLM's estimated mean and 95% confidence interval error bar overlaid in red for each category."
+
+
+# Get estimated means
+emm_gaussian <- emmeans(model_gaussian, ~ size_category)
+emm_df <- as.data.frame(emm_gaussian)
+
+# Create plot of data with estimated means
+ggplot() +
+  # Plot raw data
+  geom_jitter(data = gala, 
+              aes(x = size_category, y = Endemics), 
+              width = 0.2, 
+              alpha = 0.5) +
+  # Add estimated means with confidence intervals
+  geom_point(data = emm_df, 
+             aes(x = size_category, y = emmean), 
+             size = 4, color = "red") +
+  geom_errorbar(data = emm_df, 
+                aes(x = size_category, 
+                    ymin = lower.CL, 
+                    ymax = upper.CL), 
+                width = 0.2, 
+                color = "red") +
+  labs(
+       x = "Size",
+       y = "# Endemics") +
+  theme_minimal(base_size = 9) + theme(
+  axis.text = element_text(size = 9) ,
+  axis.title = element_text(size = 9) ) 
+```
+:::
+:::::
+
+## Equivalence of Linear Models and Gaussian GLMs
+
+### Equivalence of Linear Models and Gaussian GLMs
+
+When we use a **Gaussian distribution** with an **identity link**, GLM
+gives identical results to standard linear regression. This can be seen
+in the coefficient values and overall model statistics.
+
+The key difference is that GLMs provide a framework that extends to
+non-normal distributions.
+
+[**Note when we look at Heteroscedascidity (SP) cone of despair - this
+is why a Poisson model works**]{.underline}
+
+## Part 3 · Poisson GLMs for Count Data {.divider}
+
+## Poisson GLM — Why Counts Need a Different Distribution
+
+-   **Poisson GLMs** Poisson model used when response variable is
+    **count data**:
+    -   Number of species on an island
+    -   Number of parasites in a host
+    -   Number of bird nests in a plot
+    -   Number of seeds produced by a plant
+-   The Poisson distribution assumes:
+    -   Counts are non-negative integers (0, 1, 2, 3, ...)
+    -   The mean equals the variance
+    -   Events occur independently
+-   **Key consideration:** If variance \> mean (overdispersion),
+    consider negative binomial regression instead.
+-   Now let's fit a Poisson GLM to model the relationship between the
+    rounded quarter-mile time and the number of cylinders:
+
+## Fit Poisson GLM with size_category as predictor
+
+::::: columns
+::: {.column width="50%"}
+-   model is predicting the natural logarithm (log) of the expected
+    species count
+-   exponentiate them (i.e., calculate $e^{\text{coefficient}}$ or
+    exp(coefficient).
+-   converts the additive log-counts back into a multiplicative effect
+    on the actual species count
+-   exp(2.67101) = 14.45 species on a "Small" island
+-   exp(1.33784) = 3.81
+    -   "Medium" predicted to have 3.81x more spp than "Small" island
+-   exp(2.84300) = 17.17
+    -   "Large" island is predicted to have 17.17 times more species
+        than a "Small" island, on average
+-   Dispersion - Divide the deviance by its df: $939.74 / 27 \approx$
+    34.8
+:::
+
+::: {.column width="50%"}
+```{r l14-04}
+#| echo: true
+#| message: false
+#| warning: false
+#| paged-print: false
+model_poisson_gala <- glm(Endemics ~ size_category, 
+                          data = gala,
+                          family = poisson(link = "log"))
+summary(model_poisson_gala)
+```
+:::
+:::::
+
+## Poisson GLM — Fitting the Model
+
+::::: columns
+::: {.column width="50%"}
+Does island size category, as a whole, have a statistically significant
+effect on the number of plant species?
+
+-   `test = "LR"`: important part!
+    -   normal ANOVA (with a Gaussian/normal distribution) test is an
+        F-test.
+    -   GLM (like Poisson) can't use F-test in the same way
+        -   use a Likelihood Ratio (LR) test
+        -   LR test statistically compares fit of full model (the one
+            with size_category) to simpler null model (one without
+            size_category)
+        -   LR test tells us if it is significant
+:::
+
+::: {.column width="50%"}
+Test overall effect of size_category
+
+```{r l14-05}
+#| echo: true
+#| message: false
+#| warning: false
+#| paged-print: false
+
+Anova(model_poisson_gala, type = "III", test = "LR")
+```
+:::
+:::::
+
+## Poisson GLM — Checking Dispersion
+
+::::: columns
+::: {.column width="50%"}
+**Poisson GLMs** appropriate for **count data** and assumes variance
+equals mean - use the Gala Data and endemics - With natural log link,
+coefficients = **multiplicative effects**: - A coefficient of β means:
+for each 1-unit increase in X, the response is multiplied by exp(β) -
+For small β, exp(β) ≈ 1 + β, so β × 100% =app. %change
+
+```{r poisson-model}
+#| echo: false
+#| message: false
+#| warning: false
+#| paged-print: false
+summary(model_poisson_gala)
+```
+:::
+
+::: {.column width="50%"}
+-   check overdispersion- common in count data:
+-   Should be close to 1 for well-fitting Poisson model
+-   If \> 1.5, may indicate overdispersion
+-   Dispersion parameter measures obs var / expected var:
+-   **Dispersion ≈ 1**: Good fit (var = mean)
+-   **Dispersion \> 1**: Overdispersion (var \> mean)
+-   **Dispersion \< 1**: **Underdispersion** (var \< mean)
+-   use Negative Binomial model
+
+```{r gala-poisson-dispersion}
+#| message: false
+#| warning: false
+# Calculate the dispersion parameter
+# (Pearson's Chi-Squared statistic / residual degrees of freedom)
+dispersion_gala <- sum(residuals(model_poisson_gala, type = "pearson")^2) / 
+                   model_poisson_gala$df.residual
+
+# Print dispersion parameter
+cat("Dispersion parameter:", round(dispersion_gala, 2), "\n")
+```
+:::
+:::::
+
+## Poisson GLM — Estimated Marginal Means on the Count Scale
+
+::::: columns
+::: {.column width="60%"}
+-   **Poisson GLMs** are appropriate for **count data**
+-   assumes that the variance equals the mean.
+
+```{r gala-poisson-emmeans}
+#| message: false
+#| warning: false
+
+# 1. Calculate Estimated Marginal Means (EMMs)
+# type = "response" converts the log-means back to the "Endemics count" scale
+emm_gala <- emmeans(model_poisson_gala, 
+                    specs = ~ size_category,
+                    type = "response")
+print(emm_gala)
+```
+:::
+
+::: {.column width="40%"}
+Let's check the emmeans and pairwise comparisons
+
+```{r poisson-overdispersion}
+#| echo: false
+#| message: false
+#| warning: false
+#| paged-print: false
+# 2. Pairwise Comparisons
+# Compares all pairs: Small-Medium, Small-Large, Medium-Large
+pairs_gala <- pairs(emm_gala, adjust = "tukey")
+print(pairs_gala)
+
+# 3. Compact Letter Display (CLD)
+# The easiest way to see the groupings
+cld_gala <- multcomp::cld(emm_gala, 
+                          Letters = letters,  
+                          alpha = 0.05)
+print(cld_gala)
+
+```
+:::
+:::::
+
+## Poisson GLM: Visualization and Interpretation
+
+::::: columns
+::: {.column width="60%"}
+-   Plot raw data and our emmeans results
+
+    -   shows the model's predictions on top of the real data
+
+    ```{r poisson-plot}
+    #| echo: false
+    #| message: false
+    #| warning: false
+    #| paged-print: false
+    #| fig-alt: "Jittered scatterplot of raw endemic species counts by island size category, with the Poisson GLM's estimated mean rate and confidence interval error bar overlaid in blue for each category."
+
+
+    # 1. Get the estimated means and CIs into a dataframe
+    emm_gala_df <- as.data.frame(emm_gala)
+
+    # 2. Create visualization
+    ggplot() +
+      # Plot raw data (jittered so we can see the points)
+      geom_jitter(data = gala,
+                  aes(x = size_category, y = Endemics),
+                  width = 0.2, # Spreads points horizontally
+                  alpha = 0.5) +
+      # Add estimated means (points)
+      geom_point(data = emm_gala_df, 
+                 aes(x = size_category, y = rate), # 'rate' is the mean
+                 size = 4, color = "blue") +
+      # Add confidence intervals (error bars)
+      geom_errorbar(data = emm_gala_df, 
+                    aes(x = size_category, 
+                        ymin = asymp.LCL, # Lower Confidence Limit
+                        ymax = asymp.UCL), # Upper Confidence Limit
+                    width = 0.2, color = "blue", linewidth = 1) +
+      labs(title = "Endemics Richness by Island Size Category",
+           subtitle = "Poisson GLM predictions (on the response scale)",
+           x = "Island Size Category",
+           y = "Number of Plant Endemics") +
+      theme_minimal(base_size = 9)
+    ```
+:::
+
+::: {.column width="40%"}
+### Interpreting Poisson GLM Coefficients
+
+-   In a Poisson GLM with a log link function:
+    -   Coefficientschanges in the **log** of the expected count
+    -   When exponentiated (`exp(coef)`)= multiplicative effects
+    -   `exp(coef)` = 0.90 = the expected count is 90% of reference
+:::
+:::::
+
+## Comparison of interpretation
+
+-   Interpretation of β₁ GLM (Log-Link) glm(Y\~X, family = poisson)
+    -   1-unit change in X multiplies the mean of Y by exp(β₁)
+-   lm (Log-Response) lm(log(Y) \~ X)
+    -   1-unit change in X multiplies median Y by exp(β₁).
+-   lm (Log-Log) lm(log(Y) \~ log(X))
+    -   A 1% change in x is a beta percent change in y...
+
+| Model Type | R Code (Example) | Interpretation of β₁ |
+|----|----|----|
+| GLM (Log-Link) | `glm(Y ~ X, family = poisson)` | A 1-unit change in X multiplies the mean of Y by exp(β₁). |
+| lm (Log-Response) | `lm(log(Y) ~ X)` | A 1-unit change in X multiplies the median of Y by exp(β₁). |
+| lm (Log-Log) | `lm(log(Y) ~ log(X))` | A 1% change in X is associated with a β₁% change in Y. |
+
+## Checking Model Assumptions with DHARMa
+
+::: {.panel column="screen"}
+```{r gala-poisson-diagnostics}
+#| echo: false
+#| message: false
+#| warning: false
+#| fig-height: 3.6
+#| fig-width: 3.6
+#| fig-alt: "DHARMa diagnostic plots for the Poisson GLM: a QQ-plot of scaled residuals with a KS-test result, and a scaled-residuals-versus-predicted plot, used to check the model's distributional assumptions."
+
+# Load DHARMa library (if not already loaded)
+# library(DHARMa)
+
+# Simulate residuals
+set.seed(123) # For reproducible results
+simulation_gala <- simulateResiduals(fittedModel = model_poisson_gala, n = 1000)
+
+# Plot diagnostic plots
+plot(simulation_gala)
+```
+:::
+
+## Dealing with Overdispersion in Count Data
+
+::::: columns
+::: {.column width="60%"}
+When overdispersion (variance \> mean) - use negative binomial model
+`model_nb <- glm.nb(Endemics ~ area_cat, data = gala)`
+
+-   negative binomial model includes a dispersion parameter (theta)
+
+    -   allows variance to be larger than mean
+    -   **standard errors bigger because NB model accounts for high
+        variability (overdispersion)**
+    -   estimates dispersion parameter 'Theta' (or 1/theta)
+
+    ```{r negbin-model}
+    #| echo: false
+    #| message: false
+    #| warning: false
+    #| paged-print: false
+    model_nb_gala <- glm.nb(Endemics ~ size_category, data = gala)
+    summary(model_nb_gala)
+    ```
+:::
+
+::: {.column width="40%"}
+Let's compare the predictions from both models:
+
+```{r gala-compare-models}
+#| echo: false
+#| message: false
+#| warning: false
+#| fig-alt: "Scatterplot comparing predicted endemic-species counts from the Poisson GLM (x-axis) to the negative binomial GLM (y-axis), colored by island size category, with a dashed 1-to-1 reference line showing the two models give nearly identical point predictions."
+
+# Add predictions from both models to the gala dataframe
+gala$pred_poisson <- predict(model_poisson_gala, type = "response")
+gala$pred_nb <- predict(model_nb_gala, type = "response")
+
+# Plot Poisson predictions vs. Negative Binomial predictions
+ggplot(gala, aes(x = pred_poisson, y = pred_nb, color = size_category)) +
+  geom_point(size = 3, alpha = 0.7) +
+  # Add a 1-to-1 reference line
+  geom_abline(intercept = 0, slope = 1, linetype = "dashed") +
+  labs(title = "Comparison of Poisson and Negative Binomial Predictions",
+       x = "Poisson Predicted Endemics Count",
+       y = "Negative Binomial Predicted Endemics Count",
+       color = "Size Category") +
+  theme_minimal(base_size = 9)
+```
+:::
+:::::
+
+## Part 4 · Logistic Regression {.divider}
+
+## Logistic Regression - Introduction
+
+:::::: columns
+:::: {.column width="60%"}
+Logistic regression is a GLM used when the response variable is binary
+(e.g., dead/alive, present/absent). It models the probability of the
+response being "1" (success) given predictor values.
+
+-   Logistic regression model:
+    -   $\pi(x) = \frac{e^{\beta_0 + \beta_1 x}}{1 + e^{\beta_0 + \beta_1 x}}$
+    -   Where:
+    -   $\pi(x)$ is the probability that Y = 1 given X = x
+    -   $\beta_0$ is the intercept
+    -   $\beta_1$ is the slope (rate of change in $\pi(x)$ for a unit
+        change in X)
+-   To linearize this relationship, we use the logit link function:
+    -   $g(x) = \log\left(\frac{\pi(x)}{1-\pi(x)}\right) = \beta_0 + \beta_1 x$
+-   transforms probability (bounded between 0 and 1) to linear fx ranges
+    from -∞ to +∞.
+
+::: callout-note
+Gotelli & Ellison, *A Primer of Ecological Statistics*, Ch. 11 — The Analysis of Categorical Data, for logistic regression and binomial GLMs.
+:::
+::::
+
+::: {.column width="40%"}
+```{r logistic-curve}
+#| echo: false
+#| message: false
+#| warning: false
+#| paged-print: false
+#| fig-alt: "S-shaped logistic (sigmoid) curve mapping the linear predictor to probability, with dashed reference lines at probability 0, 0.5, and 1 and at a linear predictor of 0, illustrating the logit link function."
+# Create data for sigmoid curve
+sigmoid_data <- data.frame(
+  x = seq(-6, 6, length.out = 100)
+)
+sigmoid_data$p <- 1 / (1 + exp(-sigmoid_data$x))
+
+# Plot the sigmoid curve
+ggplot(sigmoid_data, aes(x, p)) +
+  geom_line(linewidth = 1.2, color = "darkblue") +
+  geom_hline(yintercept = c(0, 0.5, 1), 
+             linetype = "dashed", 
+             color = "gray50") +
+  geom_vline(xintercept = 0, 
+             linetype = "dashed", 
+             color = "gray50") +
+  labs(title = "Logistic Function",
+       subtitle = "Mapping from linear predictor to probability",
+       x = "Linear predictor (β0 + β1x)",
+       y = "Probability π(x)") +
+  scale_y_continuous(breaks = seq(0, 1, 0.25)) +
+  theme_minimal(base_size = 9)
+```
+:::
+::::::
+
+## Logistic Regression — The Lizard Island Data
+
+Based on the example from Polis et al. (1998) - presence/absence of
+lizards (*Uta*) on islands in Gulf of California based on perimeter/area
+ratio.
+
+::: {.panel column="screen"}
+```{r lizard-data}
+#| echo: false
+#| message: false
+#| warning: false
+#| paged-print: false
+#| fig-alt: "Scatterplot of lizard presence (0/1) versus perimeter-to-area ratio for 30 islands, showing presence at low ratios and absence at high ratios with mixed outcomes in between."
+set.seed(123)
+island_data <- data.frame(
+  island_id = 1:30,
+  pa_ratio = seq(5, 70, length.out = 30),
+  uta_present = c(rep(1, 10), 
+                  rbinom(10, 1, prob = 0.5),  # Mixed outcomes in middle
+                  rep(0, 10)))%>%
+  mutate(uta_present_factor = factor(uta_present, levels = c(0, 1), 
+         labels = c("Absent", "Present")))
+ggplot() +
+  # Add jittered points for observed data
+  geom_point(data = island_data, 
+              aes(x = pa_ratio, y = uta_present),
+              position = position_dodge2(width=.1), alpha = 0.7) +
+  labs(title = "Probability of Uta Presence vs. Perimeter/Area Ratio",
+       x = "Perimeter/Area Ratio",
+       y = "Probability of Presence") +
+  scale_y_continuous(limits = c(0, 1)) +
+  theme_minimal(base_size = 9)
+
+```
+:::
+
+## Logistic Regression — Fitting the Model
+
+Based on the example from Polis et al. (1998) - presence/absence of
+lizards (*Uta*) on islands in Gulf of California based on perimeter/area
+ratio.
+
+::: {.panel column="screen"}
+```{r l14-06}
+# Fit the logistic regression model
+lizard_model <- glm(uta_present ~ pa_ratio, 
+                    data = island_data, 
+                    family = binomial(link = "logit"))
+
+# Model summary
+summary(lizard_model)
+```
+:::
+
+## Lizard Example: Visualization and Testing
+
+::::: columns
+::: {.column width="60%"}
+Let's visualize the data and the fitted model:
+
+```{r lizard-plot}
+#| echo: false
+#| message: false
+#| warning: false
+#| paged-print: false
+#| fig-alt: "Scatterplot of observed lizard presence/absence versus perimeter-to-area ratio, with the fitted logistic regression probability curve overlaid in blue, declining from near 1 at low ratios to near 0 at high ratios."
+# Create a dataframe for predictions
+pred_data <- data.frame(
+  pa_ratio = seq(min(island_data$pa_ratio), 
+                max(island_data$pa_ratio), 
+                length.out = 100)
+)
+
+# Get predicted probabilities
+pred_data$prob <- predict(lizard_model, 
+                         newdata = pred_data, 
+                         type = "response")
+
+# Plot
+ggplot() +
+  # Add jittered points for observed data
+  geom_point(data = island_data, 
+              aes(x = pa_ratio, y = uta_present),
+              position = position_dodge2(width=.1), alpha = 0.7) +
+  # Add predicted probability curve
+  geom_line(data = pred_data, 
+            aes(x = pa_ratio, y = prob), 
+            color = "blue", size = 1) +
+  # Add confidence intervals (optional)
+  labs(title = "Probability of Uta Presence vs. Perimeter/Area Ratio",
+       x = "Perimeter/Area Ratio",
+       y = "Probability of Presence") +
+  scale_y_continuous(limits = c(0, 1)) +
+  theme_minimal(base_size = 9)
+```
+:::
+
+::: {.column width="40%"}
+-   Test null hypothesis that β₁ = 0
+    -   no relationship between P/A ratio and lizard presence
+-   There are two common ways to test this hypothesis:
+
+1.  **Wald test**: Tests if the parameter estimate divided by its
+    standard error differs significantly from zero
+2.  **Likelihood ratio test**: Compares the fit of the full model to a
+    reduced model without the predictor variable
+
+```{r likelihood-ratio-test}
+reduced_model <- glm(uta_present ~ 1, 
+                     data = island_data, 
+                     family = binomial(link = "logit"))
+anova(reduced_model, lizard_model, test = "Chisq")
+```
+:::
+:::::
+
+## Interpreting the Odds Ratio
+
+### Working with Odds Ratios
+
+Odds ratio represents how odds of event (e.g., lizard presence) change
+with unit increase in predictor
+
+-   **Odds ratio = exp(β₁)**
+-   \> 1: Increasing predictor increases odds of event
+-   \< 1: Increasing predictor decreases odds of event
+-   = 1: No effect of predictor on odds of event
+-   one-unit increase in island's Perimeter/Area Ratio - odds of finding
+    lizard present multiplied by 0.898
+-   odds decrease by 10.2% (1-0.898) for every one-unit increase P/A
+-   entire interval is below 1.0, relationship is negative: more P/A
+    ratio means lower odds of lizards
+
+::: {.panel column="screen"}
+```{r odds-ratio}
+coef_lizard <- coef(lizard_model)[2]  # Extract slope coefficient
+odds_ratio <- exp(coef_lizard)
+ci <- exp(confint(lizard_model, "pa_ratio"))
+cat("Odds Ratio:", round(odds_ratio, 3), "\n\n",
+"95% CI:", round(ci[1], 3), "to", round(ci[2], 3), "\n")
+```
+:::
+
+## Assessing Model Fit
+
+There are several ways to assess the goodness-of-fit for logistic
+regression models:
+
+::: {.panel column="screen"}
+```{r model-fit}
+#| echo: false
+#| message: false
+#| warning: false
+#| paged-print: false
+# Calculate Hosmer-Lemeshow statistic
+# This would normally require an additional package like 'ResourceSelection'
+# Instead, we'll use a simpler approximation and other diagnostics
+
+# Calculate Pearson residuals
+pearson_resid <- residuals(lizard_model, type = "pearson")
+pearson_chi2 <- sum(pearson_resid^2)
+df_resid <- lizard_model$df.residual
+# Calculate deviance
+deviance_g2 <- lizard_model$deviance
+null_deviance <- lizard_model$null.deviance
+# Calculate McFadden's pseudo-R²
+r2_mcfadden <- 1 - (deviance_g2 / null_deviance)
+# Display results
+
+cat("\n\nPearson χ²:", round(pearson_chi2, 3), "on", df_resid, "df, p =", 
+    round(1 - pchisq(pearson_chi2, df_resid), 3), "\n\n")
+cat("\n\n")
+cat("\n\nDeviance G²:", round(deviance_g2, 3), "on", df_resid, "df, p =", 
+    round(1 - pchisq(deviance_g2, df_resid), 3), "\n\n")
+cat("\n\n")
+cat("\n\nMcFadden's R²:", round(r2_mcfadden, 3), "\n\n")
+# This one function gives McFadden's and other popular R² values
+performance::r2(lizard_model)
+cat("\n\n")
+pscl::pR2(lizard_model)
+# or 
+cat("\n\n")
+cat("\n\n")
+# glance() gives a one-row data frame of all model-level stats
+glance(lizard_model)
+cat("\n\n")
+# 'g' is the number of groups to test (e.g., 10 for deciles)
+# Note: You need to provide the observed 'y' values
+hoslem.test(lizard_model$y, fitted(lizard_model), g = 10)
+cat("\n\n")
+```
+:::
+
+## Part 5 · Multiple Logistic Regression {.divider}
+
+## Multiple Logistic Regression: Setup
+
+::::: columns
+::: {.column width="50%"}
+Logistic regression can be extended to include multiple predictors. The
+model becomes:
+
+$$g(x) = \beta_0 + \beta_1 x_1 + \beta_2 x_2 + \ldots + \beta_p x_p$$
+
+Where g(x) is the logit link function, and x₁, x₂, ..., xₚ are the
+predictor variables.
+
+Let's create a simulated dataset based on the Bolger et al. (1997) study
+of the presence/absence of native rodents in canyon fragments.
+
+```{r fragment-data}
+#| echo: false
+#| message: false
+#| warning: false
+#| paged-print: false
+#| 
+# Simulate data for the rodent example
+set.seed(123)
+n <- 25  # 25 canyon fragments
+
+# Create predictor variables
+fragment_data <- data.frame(
+  fragment_id = paste0("F", 1:n),
+  distance = runif(n, 0, 3000),            # Distance to source canyon (m)
+  age = runif(n, 5, 80),                   # Years since isolation
+  shrub_cover = runif(n, 10, 100)          # Percentage shrub cover
+)
+
+# Generate response variable (rodent presence)
+# Higher probability with higher shrub cover, slight effect of age
+linear_pred <- -5 + 0.0001*fragment_data$distance + 
+               0.02*fragment_data$age + 
+               0.09*fragment_data$shrub_cover
+prob <- 1 / (1 + exp(-linear_pred))
+fragment_data$rodent_present <- rbinom(n, 1, prob)
+fragment_data$rodent_present <- factor(fragment_data$rodent_present, 
+                                      levels = c(0, 1), 
+                                      labels = c("Absent", "Present"))
+
+# Fit multiple logistic regression model
+rodent_model <- glm(rodent_present ~ distance + age + shrub_cover, 
+                    data = fragment_data, 
+                    family = binomial(link = "logit"))
+
+# Model summary
+summary(rodent_model)
+```
+:::
+
+::: {.column width="50%"}
+To test the significance of individual predictors, we can use likelihood
+ratio tests comparing nested models:
+
+```{r test-predictors}
+#| echo: false
+#| message: false
+#| warning: false
+#| paged-print: false
+# Test distance
+model_no_distance <- glm(rodent_present ~ age + shrub_cover, 
+                         data = fragment_data, 
+                         family = binomial(link = "logit"))
+anova(model_no_distance, rodent_model, test = "Chisq")
+
+# Test age
+model_no_age <- glm(rodent_present ~ distance + shrub_cover, 
+                    data = fragment_data, 
+                    family = binomial(link = "logit"))
+anova(model_no_age, rodent_model, test = "Chisq")
+
+# Test shrub cover
+model_no_shrub <- glm(rodent_present ~ distance + age, 
+                      data = fragment_data, 
+                      family = binomial(link = "logit"))
+anova(model_no_shrub, rodent_model, test = "Chisq")
+```
+:::
+:::::
+
+## Multiple Logistic Regression: Odds Ratios
+
+Let's calculate odds ratios and confidence intervals for all predictors.
+
+::: {.panel column="screen"}
+```{r multiple-odds-ratios}
+#| echo: false
+#| message: false
+#| warning: false
+#| paged-print: false
+# Calculate odds ratios and CIs
+coefs <- coef(rodent_model)[-1]  # Exclude intercept
+odds_ratios <- exp(coefs)
+ci <- exp(confint(rodent_model)[-1, ])  # Exclude intercept
+
+# Create a data frame for display
+or_df <- data.frame(
+  Predictor = names(coefs),
+  OddsRatio = odds_ratios,
+  LowerCI = ci[, 1],
+  UpperCI = ci[, 2]
+)
+
+# Display formatted table
+or_df %>%
+  mutate(across(where(is.numeric), round, 4)) %>%
+  mutate(CI = paste0("(", LowerCI, ", ", UpperCI, ")")) %>%
+  dplyr::select(Predictor, OddsRatio, CI) 
+```
+:::
+
+## Visualizing Multiple Logistic Regression
+
+::: {.panel column="screen"}
+For multiple predictors, we can visualize the effect of each predictor
+while holding others constant at their mean or median values.
+
+This visualization shows the effect of each predictor on the probability
+of rodent presence, while holding the other predictors constant at their
+mean values.
+
+```{r visualize-effects}
+#| echo: false
+#| message: false
+#| warning: false
+#| fig-height: 4
+#| fig-width: 3.6
+#| paged-print: false
+#| fig-alt: "Three stacked line plots of predicted probability of rodent presence versus distance to source, years since isolation, and shrub cover, each with a rug plot of observed 0/1 outcomes along the bottom, showing shrub cover has the clearest positive relationship."
+
+# Create a function to generate prediction data for one variable
+predict_for_var <- function(var_name, model, data) {
+  # Create grid of values for the variable of interest
+  pred_df <- data.frame(
+    x = seq(min(data[[var_name]]), max(data[[var_name]]), length.out = 100)
+  )
+  names(pred_df) <- var_name
+  
+  # Add mean values for other predictors
+  for (other_var in c("distance", "age", "shrub_cover")) {
+    if (other_var != var_name) {
+      pred_df[[other_var]] <- mean(data[[other_var]])
+    }
+  }
+  
+  # Add predictions
+  pred_df$prob <- predict(model, newdata = pred_df, type = "response")
+  
+  return(pred_df)
+}
+
+# Generate prediction data for each variable
+pred_distance <- predict_for_var("distance", rodent_model, fragment_data)
+pred_age <- predict_for_var("age", rodent_model, fragment_data)
+pred_shrub <- predict_for_var("shrub_cover", rodent_model, fragment_data)
+
+# Create plots
+p1 <- ggplot() +
+  geom_rug(data = fragment_data, 
+           aes(x = distance, y = as.numeric(rodent_present) - 1),
+           sides = "b", alpha = 0.7) +
+  geom_line(data = pred_distance, aes(x = distance, y = prob), 
+            color = "darkred", size = 1) +
+  labs(title = "Effect of Distance",
+       x = "Distance to Source (m)",
+       y = "Probability of Presence") +
+  theme_minimal(base_size = 7)
+
+p2 <- ggplot() +
+  geom_rug(data = fragment_data, 
+           aes(x = age, y = as.numeric(rodent_present) - 1),
+           sides = "b", alpha = 0.7) +
+  geom_line(data = pred_age, aes(x = age, y = prob), 
+            color = "darkgreen", size = 1) +
+  labs(title = "Effect of Age",
+       x = "Years Since Isolation",
+       y = "Probability of Presence") +
+  theme_minimal(base_size = 7)
+
+p3 <- ggplot() +
+  geom_rug(data = fragment_data, 
+           aes(x = shrub_cover, y = as.numeric(rodent_present) - 1),
+           sides = "b", alpha = 0.7) +
+  geom_line(data = pred_shrub, aes(x = shrub_cover, y = prob), 
+            color = "darkblue", size = 1) +
+  labs(title = "Effect of Shrub Cover",
+       x = "Shrub Cover (%)",
+       y = "Probability of Presence") +
+  theme_minimal(base_size = 7)
+
+# Combine plots
+p1 + p2 + p3
+```
+:::
+
+## Assumptions and Diagnostics of Logistic Regression
+
+::::: columns
+::: {.column width="50%"}
+Logistic regression has several key assumptions:
+
+1.  Independence of observations
+2.  Linear relationship between predictors and log odds
+3.  No extreme outliers
+4.  No multicollinearity (when multiple predictors are used)
+
+diagnostics for our multiple logistic regression model:
+:::
+
+::: {.column width="50%"}
+```{r diagnostics}
+#| echo: false
+#| message: false
+#| warning: false
+#| fig-height: 3.6
+#| fig-width: 3.6
+#| paged-print: false
+#| fig-alt: "Three stacked scatterplots of binned log-odds of rodent presence against distance, age, and shrub cover, each with a linear fit line, used to check the linearity assumption for each predictor."
+
+# 1. Check for linearity between predictors and log odds
+# Use bins of X variables and plot log odds
+check_linearity <- function(model, data, var) {
+  # Create bins of predictor
+  n_bins <- 5
+  data$bin <- cut(data[[var]], breaks = n_bins)
+  
+  # Calculate log odds for each bin
+  bin_summary <- data %>%
+    group_by(bin) %>%
+    summarize(
+      n = n(),
+      mean_var = mean(!!sym(var)),
+      successes = sum(rodent_present == "Present"),
+      failures = sum(rodent_present == "Absent")
+    ) %>%
+    mutate(
+      p = successes / n,
+      logodds = log(p / (1 - p))
+    )
+  
+  # Create plot
+  ggplot(bin_summary, aes(x = mean_var, y = logodds)) +
+    geom_point(size = 3) +
+    geom_smooth(method = "lm", se = FALSE, color = "red") +
+    labs(title = paste("Linearity Check:", var),
+         x = var,
+         y = "Log Odds") +
+    theme_minimal(base_size = 9)
+}
+
+# Create diagnostic plots for each variable
+p1 <- check_linearity(rodent_model, fragment_data, "distance")
+p2 <- check_linearity(rodent_model, fragment_data, "age")
+p3 <- check_linearity(rodent_model, fragment_data, "shrub_cover")
+
+# Arrange the plots
+p1 / p2 / p3
+```
+:::
+:::::
+
+## Model Comparison and Selection
+
+::::: columns
+::: {.column width="60%"}
+When working with multiple predictors, want to find most parsimonious
+model. use: - Likelihood ratio tests for nested models - Information
+criteria (AIC, BIC) for non-nested models - Classification metrics like
+accuracy, sensitivity, and specificity
+
+Compare models and AIC values:
+
+```{r model-selection}
+#| echo: false
+#| message: false
+#| warning: false
+#| paged-print: false
+# Calculate AIC for our models
+models <- list(
+  "Full" = rodent_model,
+  "No Distance" = model_no_distance,
+  "No Age" = model_no_age,
+  "No Shrub" = model_no_shrub,
+  "Intercept Only" = glm(rodent_present ~ 1, 
+                        data = fragment_data, 
+                        family = binomial)
+)
+
+# Calculate AIC and BIC
+model_comparison <- data.frame(
+  Model = names(models),
+  Parameters = sapply(models, function(m) length(coef(m))),
+  AIC = sapply(models, AIC),
+  BIC = sapply(models, BIC),
+  Deviance = sapply(models, function(m) m$deviance)
+)
+
+# Show model comparison table
+model_comparison %>%
+  arrange(AIC) %>%
+  mutate(across(where(is.numeric), round, 2)) 
+```
+:::
+
+::: {.column width="40%"}
+Evaluate predictive performance of our model:
+
+```{r prediction-performance}
+#| echo: false
+#| message: false
+#| warning: false
+#| paged-print: false
+# Get predictions
+predicted_probs <- predict(rodent_model, type = "response")
+predicted_class <- ifelse(predicted_probs > 0.5, "Present", "Absent")
+
+# Create confusion matrix
+true_class <- fragment_data$rodent_present
+conf_matrix <- table(Predicted = predicted_class, Actual = true_class)
+
+# Calculate metrics
+accuracy <- sum(diag(conf_matrix)) / sum(conf_matrix)
+sensitivity <- conf_matrix["Present", "Present"] / sum(conf_matrix[, "Present"])
+specificity <- conf_matrix["Absent", "Absent"] / sum(conf_matrix[, "Absent"])
+
+# Display results
+conf_matrix
+cat("\nAccuracy:", round(accuracy, 3), "\n")
+cat("Sensitivity:", round(sensitivity, 3), "\n")
+cat("Specificity:", round(specificity, 3), "\n")
+```
+:::
+:::::
+
+## Publication-Quality Figure
+
+Let's create a publication-quality figure for our multiple logistic
+regression model and show how we would write up the results for a
+scientific publication.
+
+::: {.panel column="screen"}
+```{r publication-figure}
+#| echo: false
+#| message: false
+#| warning: false
+#| paged-print: false
+#| fig-alt: "Publication-quality plot of the probability of native rodent presence versus percentage shrub cover, with jittered raw 0/1 data points, a fitted probability curve, and a shaded 95% confidence band, showing probability of presence rising with shrub cover."
+
+# Create a more polished visualization for shrub cover effect
+polished_pred <- predict_for_var("shrub_cover", rodent_model, fragment_data)
+
+# Calculate confidence intervals
+pred_se <- predict(rodent_model, 
+                  newdata = polished_pred, 
+                  type = "link", 
+                  se.fit = TRUE)
+
+# Convert to data frame with CIs
+ci_data <- data.frame(
+  shrub_cover = polished_pred$shrub_cover,
+  fit = pred_se$fit,
+  se = pred_se$se.fit
+)
+
+# Calculate upper and lower bounds of CI on link scale
+ci_data$lower_link <- ci_data$fit - 1.96 * ci_data$se
+ci_data$upper_link <- ci_data$fit + 1.96 * ci_data$se
+
+# Transform back to probability scale
+ci_data$prob <- plogis(ci_data$fit)
+ci_data$lower_prob <- plogis(ci_data$lower_link)
+ci_data$upper_prob <- plogis(ci_data$upper_link)
+
+# Create plot
+ggplot() +
+  # Add jittered points for raw data
+  geom_jitter(data = fragment_data, 
+             aes(x = shrub_cover, 
+                 y = as.numeric(rodent_present == "Present")),
+             width = 0, height = 0.05, alpha = 0.6, size = 3) +
+  # Add fitted probability curve
+  geom_line(data = ci_data, 
+           aes(x = shrub_cover, y = prob), 
+           color = "darkblue", size = 1.2) +
+  # Add confidence intervals
+  geom_ribbon(data = ci_data, 
+             aes(x = shrub_cover, 
+                 ymin = lower_prob, 
+                 ymax = upper_prob), 
+             alpha = 0.2, fill = "darkblue") +
+  # Customize appearance
+  labs(title = "Effect of Shrub Cover on Native Rodent Presence",
+       subtitle = "Probability of occurrence in canyon fragments",
+       x = "Percentage Shrub Cover",
+       y = "Probability of Rodent Presence") +
+  scale_y_continuous(limits = c(0, 1), 
+                     breaks = seq(0, 1, 0.2)) +
+  theme_minimal(base_size = 9) +
+  theme(
+    plot.title = element_text(face = "bold"),
+    axis.title = element_text(face = "bold"),
+    legend.position = "none",
+    panel.grid.minor = element_blank(),
+    panel.border = element_rect(fill = NA, color = "gray80")
+  )
+```
+:::
+
+## Scientific Write-Up — Results
+
+::: {.callout-important appearance="simple"}
+## Results
+
+**Results**
+
+The presence of native rodents in 25 canyon fragments was modeled using
+multiple logistic regression with three predictors: distance to nearest
+source canyon, years since isolation, and percentage of shrub cover.
+Taken together the three predictors improved on the null model
+(likelihood-ratio χ² = 18.28, df = 3, p < 0.001; McFadden's R² = 0.66).
+
+**No individual predictor reached significance at α = 0.05.** Shrub cover
+showed the strongest effect (β = 0.193, SE = 0.116, p = 0.096; odds ratio
+1.21, 95% CI 1.06–1.79), suggesting that each additional percentage point
+of shrub cover multiplies the odds of rodent presence by roughly 1.2 —
+but the confidence interval is wide and the coefficient is not
+distinguishable from zero at conventional levels. Neither distance to
+source canyon (β = 0.0021, p = 0.229) nor years since isolation
+(β = 0.069, p = 0.249) approached significance.
+
+The model correctly classified 88% of the fragments (sensitivity 0.90,
+specificity 0.83), and showed no evidence of poor fit
+(Hosmer-Lemeshow χ² = 0.95, df = 6, p = 0.99).
+:::
+
+## Scientific Write-Up — Discussion
+
+::: {.callout-important appearance="simple"}
+## Discussion
+
+**Discussion**
+
+Our findings are *suggestive* that vegetation structure, as measured by
+shrub cover, is associated with native rodent presence in canyon
+fragments — the effect is in the expected direction and is the largest of
+the three — but with only 25 fragments the estimate is too imprecise to
+call significant (p = 0.096). The positive direction is consistent with
+vegetation providing food, shelter from predators, and suitable
+microhabitat. Isolation metrics (distance to source canyon and years
+since isolation) showed no detectable relationship, though the same
+sample-size caveat applies: **failing to detect an effect is not the same
+as showing there is none.** A larger set of fragments would be needed to
+separate these possibilities.
+:::
+
+## Part 6 · GLMs, ANOVA, and Wrap-Up {.divider}
+
+## Relationship Between GLMs and ANOVAs
+
+### GLMs and ANOVAs: The Connection
+
+General linear models (including ANOVAs and standard regression) are
+special cases of Generalized Linear Models where:
+
+1.  The response variable follows a normal distribution
+2.  The link function is the identity function
+
+-   Therefore, a one-way ANOVA is equivalent to:
+    -   A linear regression with a categorical predictor
+
+    -   A Gaussian GLM with an identity link and a categorical predictor
+
+## Demonstrating ANOVA-GLM Equivalence
+
+Let's demonstrate this equivalence:
+
+::: {.panel column="screen"}
+```{r anova-glm-comparison}
+#| echo: false
+#| message: false
+#| warning: false
+#| fig-height: 4
+#| fig-width: 3.6
+#| paged-print: false
+#| fig-alt: "Boxplot with jittered points of mpg by number of cylinders from mtcars, overlaid with red triangles (linear regression estimated means) and blue squares (Gaussian GLM estimated means) that land on identical values, illustrating the equivalence of ANOVA, linear regression, and a Gaussian GLM."
+
+# 1. Standard ANOVA
+anova_model <- aov(mpg ~ cyl, data = mtcars)
+
+# 2. Linear regression
+lm_model <- lm(mpg ~ cyl, data = mtcars)
+
+# 3. Gaussian GLM
+glm_model <- glm(mpg ~ cyl, family = gaussian(link = "identity"), data = mtcars)
+
+# Compare coefficients
+coef_comparison <- data.frame(
+  Term = names(coef(lm_model)),
+  `Linear Regression` = coef(lm_model),
+  `Gaussian GLM` = coef(glm_model)
+)
+
+# Display the comparison
+coef_comparison %>%
+  mutate(across(where(is.numeric), round, 3)) %>%
+  flextable()
+
+# Compare ANOVA tables
+anova_aov <- anova(anova_model)
+anova_lm <- anova(lm_model)
+anova_glm <- anova(glm_model)
+
+# Create visualization showing the three approaches
+# Use the same data and estimated means
+ggplot() +
+  # Plot raw data
+  geom_boxplot(data = mtcars, 
+              aes(x = cyl, y = mpg, group = cyl),
+              alpha = 0.3, width = 0.5) +
+  geom_jitter(data = mtcars, 
+             aes(x = cyl, y = mpg),
+             width = 0.1, alpha = 0.6) +
+  # Add fitted values from each model
+  geom_point(data = emmeans(lm_model, ~cyl) %>% data.frame(),
+            aes(x = cyl, y = emmean), 
+            color = "red", size = 3, shape = 17) +
+  geom_point(data = emmeans(glm_model, ~cyl) %>% data.frame(),
+            aes(x = cyl, y = emmean), 
+            color = "blue", size = 3, shape = 15) +
+  # Add legend for model types
+  annotate("text", x = 8, y = 30, 
+          label = "Red triangles: Linear Regression\nBlue squares: Gaussian GLM", 
+          hjust = 1, size = 3.5) +
+  labs(title = "Comparison of Models: ANOVA, Linear Regression, and Gaussian GLM",
+       subtitle = "All three approaches yield identical results",
+       x = "Number of Cylinders",
+       y = "Miles Per Gallon") +
+  theme_minimal(base_size = 9)
+```
+:::
+
+## Assumptions and Diagnostics Summary
+
+::::: columns
+::: {.column width="60%"}
+-   Generalized Linear Models- assumptions depend on distribution+link
+    function used:
+-   **All GLMs:**
+    -   Independence of observations, No outliers, No Multicolinearity
+    -   Correct specification of the link function /variance structure
+-   **Gaussian GLMs (including linear regression):**
+    -   Normality of residuals
+    -   Homogeneity of variance
+-   **Poisson GLMs:**
+    -   Count data (non-negative integers)
+    -   Mean equals variance - overdispersed = negative binomial)
+-   **Logistic GLMs:**
+    -   Binary response variable
+    -   Linear relationship between predictors and log odds
+    -   Adequate sample size relative to number of parameters
+:::
+
+::: {.column width="40%"}
+R code checks common diagnostics for logistic model:
+
+```{r diagnostic-summary}
+#| echo: false
+#| message: false
+#| warning: false
+#| fig-height: 3.6
+#| fig-width: 3.6
+#| paged-print: false
+#| fig-alt: "Four diagnostic plots for the multiple logistic regression rodent model: Pearson residuals versus fitted values, residuals versus leverage, Cook's distance for each observation, and observed outcomes versus predicted probabilities with a 1-to-1 reference line."
+# Create diagnostic plots for the rodent model
+par(mfrow = c(2, 2))
+
+# 1. Residuals vs fitted
+plot(fitted(rodent_model), residuals(rodent_model, type = "pearson"),
+     main = "Residuals vs Fitted",
+     xlab = "Fitted Values (predicted probabilities)",
+     ylab = "Pearson Residuals",
+     pch = 16)
+abline(h = 0, lty = 2)
+
+# 2. Leverage
+leverage <- hatvalues(rodent_model)
+plot(leverage, residuals(rodent_model, type = "pearson"),
+     main = "Residuals vs Leverage",
+     xlab = "Leverage",
+     ylab = "Pearson Residuals",
+     pch = 16)
+abline(h = 0, lty = 2)
+
+# 3. Cook's distance
+cook <- cooks.distance(rodent_model)
+plot(cook, main = "Cook's Distance",
+     ylab = "Cook's Distance",
+     pch = 16)
+abline(h = 4/length(cook), lty = 2, col = "red")  # Rule of thumb threshold
+
+# 4. Observed vs Predicted probabilities
+plot(predicted_probs, 
+     as.numeric(fragment_data$rodent_present) - 1,
+     main = "Observed vs Predicted",
+     xlab = "Predicted Probability",
+     ylab = "Observed (0/1)",
+     pch = 16)
+curve(I, from = 0, to = 1, add = TRUE, col = "red")
+```
+:::
+:::::
+
+## Summary — What a GLM Gives You
+
+Generalized Linear Models (GLMs) provide a powerful and flexible
+framework for analyzing a wide range of data types in biology:
+
+1.  **Gaussian GLMs** identity link function = linear model ANOVAs
+
+2.  **Poisson GLMs** log link function appropriate for count data,
+    cautious of overdispersion.
+
+3.  **Negative Binomial** works with overdispersed data
+
+4.  **Logistic GLMs** with logit link function useful for binary
+    responses
+
+    -   probability of success or presence.
+
+-   Key advantages of GLMs include:
+    -   Handle various response variables beyond normal distributions
+    -   Unified framework for linear modeling
+    -   Flexibility in specifying the link function to match the data
+        structure
+    -   Interpretable parameters, though interpretation differs by model
+        type
+
+## Summary — Choosing a Distribution and Link
+
+When working with GLMs:
+
+1.  Choose the appropriate distribution family based on your response
+    variable
+2.  Verify model assumptions through diagnostic plots
+3.  Watch for overdispersion in count data
+4.  Use odds ratios to interpret logistic regression results
+5.  Compare competing models using likelihood ratio tests and
+    information criteria
+
+This framework allows biologists to appropriately model many types of
+data encountered in ecological, behavioral, and physiological research.
+
+## References
+
+-Agresti, A. (1996). An Introduction to Categorical Data Analysis.
+Wiley, New York. Bolger, D. T., Alberts, A. C., Sauvajot, R. M.,
+Potenza, P., McCalvin, C., Tran, D., Mazzoni, S., & Soulé, M. E. (1997).
+Response of rodents to habitat fragmentation in coastal southern
+California. Ecological Applications, 7(2), 552-563. -Christensen, R.
+(1997). Log-linear Models and Logistic Regression. Springer, New York.
+-Hosmer, D. W., & Lemeshow, S. (1989). Applied Logistic Regression.
+Wiley, New York. -McCullagh, P., & Nelder, J. A. (1989). Generalized
+Linear Models. Chapman and Hall, London. -Polis, G. A., Hurd, S. D.,
+Jackson, C. T., & Piñero, F. S. (1998). Multifactor analysis of
+ecosystem patterns on islands in the Gulf of California. Ecological
+Monographs, 68, 490-502.

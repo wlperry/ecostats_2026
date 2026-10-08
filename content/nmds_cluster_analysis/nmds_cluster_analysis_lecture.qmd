@@ -1,0 +1,1894 @@
+---
+metadata-files:
+  - ../../_templates/_lectures.yml
+title: "Lecture: NMDS & Cluster Analysis"
+subtitle: "Community ordination"
+description: "Non-metric Multidimensional Scaling (NMDS), PERMANOVA, and ANOSIM for community ecology data — Bray-Curtis dissimilarity, stress and Shepard diagrams, testing group differences, dispersion diagnostics, and environmental drivers, using the classic Doubs River fish community dataset."
+categories: [Multivariate, Ordination]
+order: 20
+week: 15
+author: "Bill Perry"
+
+knitr:
+  opts_chunk:
+    paged.print: false
+    collapse: true
+format:
+  html:
+    downloads: [docx, pptx]  # This creates download links for all three
+  revealjs:
+    output-ext: "slides.html"
+  docx:
+    reference-doc: ../../ms_templates/custom-reference-compact.docx
+    fig-width: 2.5
+    fig-height: 2.5
+    fig-dpi: 300
+    dpi: 300            # tell Pandoc the real render dpi so it sizes figures correctly
+  pptx: default
+execute:
+  echo: true
+editor:
+  markdown:
+    wrap: 72
+---
+
+```{r setup}
+#| include: false
+#| message: false
+#| warning: false
+
+# install.packages("devtools")
+# devtools::install_github("pmartinezarbizu/pairwiseAdonis/pairwiseAdonis")
+library(pairwiseAdonis)
+library(factoextra)
+library(corrplot)
+library(vegan)
+library(car)
+library(ggrepel)
+library(emmeans)
+library(patchwork)
+library(knitr)
+library(broom)
+library(gridExtra)
+library(tidyverse)
+
+# Set a consistent plotting theme
+theme_set(theme_minimal(base_size = 9) +
+            theme(panel.grid.minor = element_blank(),
+                  plot.title = element_text(face = "bold", size = 11)))
+
+# Load data
+doubs_env <- read_csv("data/DoubsEnv.csv") %>%
+  rename(site = 1) %>%
+  mutate(site = as.factor(site))
+
+doubs_spe <- read_csv("data/DoubsSpe.csv") %>%
+  rename(site = 1) %>%
+  mutate(site = as.factor(site))
+
+# Define River Reaches (Matches original 9-10-10 split)
+doubs_env <- doubs_env %>% 
+  mutate(reach = case_when(
+    das < 100 ~ "Upstream",    # Sites 1-9
+    das < 250 ~ "Midstream",   # Sites 10-19
+    TRUE ~ "Downstream"        # Sites 20-29
+  )) %>% 
+  mutate(reach = factor(reach, levels = c("Upstream", "Midstream", "Downstream")))
+
+
+doubs_spe <- doubs_spe %>%
+  left_join(doubs_env %>% select(site, reach), by = "site")
+
+# Vegan's metaMDS will fail if a row sums to 0.
+# Find sites with no species
+empty_sites <- doubs_spe |> 
+  pivot_longer(-c(site, reach), names_to = "species", values_to = "count") |> 
+  group_by(site) |> 
+  summarize(total_abundance = sum(count), .groups = "drop") |> 
+  filter(total_abundance == 0) |> 
+  pull(site)
+
+cat("Sites with no species:", as.character(empty_sites), "\n")
+
+# Remove empty sites from both datasets
+doubs_spe <- doubs_spe |> filter(!site %in% empty_sites)
+doubs_env <- doubs_env |> filter(!site %in% empty_sites)
+
+# Separate the community matrix (numeric only)
+com_matrix <- doubs_spe %>% select(-site)
+
+
+
+# https://search.r-project.org/CRAN/refmans/codep/html/Doubs.html
+```
+
+## Part 1 · Why NMDS? {.divider}
+
+## Introduction: Why NMDS?
+
+### The Problem with Ecological Community Data
+
+-   Ecological community data presents unique challenges for traditional
+    statistical methods
+-   When sampling species abundances across sites
+-   encounter data that is sparse (most species are absent from most
+    sites) - many zeros
+-   exhibits non-linear relationships between species and environmental
+    gradients
+-   has no clear distributional form
+-   Principal Components Analysis (PCA) works beautifully for continuous
+    environmental variables
+    -   assumes linear relationships
+    -   can leverage correlations between variables
+    -   for species abundance data - assumptions often fail
+        ***spectacularly***
+-   **NMDS offers a fundamentally different approach**:
+    -   instead of trying to preserve exact distances or maximize
+        variance explained
+
+    -   focuses on **preserving the *rank order* of similarities between
+        samples**
+
+    -   makes it remarkably robust for ecological data.
+
+## NMDS - Multivariate Community Analysis
+
+::::: columns
+::: {.column width="60%"}
+**Data - built in R and other plac**es
+
+| **Code** | **Description of the variable**              |
+|:---------|:---------------------------------------------|
+| das      | Distance from the source \[km\]              |
+| alt      | Altitude \[m a.s.l.\]                        |
+| pen      | Slope \[per thousand\]                       |
+| deb      | Mean minimum discharge \[m^3^s^-1^\]         |
+| pH       | pH of water                                  |
+| dur      | Calcium concentration (hardness) \[mgL^-1^\] |
+| pho      | Phosphate concentration \[mgL^-1^\]          |
+| nit      | Nitrate concentration \[mgL^-1^\]            |
+| amn      | Ammonium concentration \[mgL^-1^\]           |
+| oxy      | Dissolved oxygen \[mgL^-1^\]                 |
+| dbo      | Biological oxygen demand \[mgL^-1^\]         |
+:::
+
+::: {.column width="40%"}
+| Code | Common Name (English) | Family         |
+|:-----|:----------------------|:---------------|
+| Chb  | Bullhead              | Cottidae       |
+| Tru  | Brown trout           | Salmonidae     |
+| Vai  | Minnow                | Cyprinidae     |
+| Loc  | Stone loach           | Balitoridae    |
+| Omb  | Grayling              | Salmonidae     |
+| Bla  | Souffia               | Cyprinidae     |
+| Hot  | Common nase           | Cyprinidae     |
+| Tox  | Sofie                 | Cyprinidae     |
+| Van  | Dace                  | Cyprinidae     |
+| Che  | Chub                  | Cyprinidae     |
+| Bar  | Barbel                | Cyprinidae     |
+| Lot  | Burbot                | Lotidae        |
+| Spi  | Spirlin               | Cyprinidae     |
+| Gou  | Gudgeon               | Cyprinidae     |
+| Bro  | Pike                  | Esocidae       |
+| Per  | Perch                 | Percidae       |
+| Tan  | Tench                 | Cyprinidae     |
+| Gar  | Roach                 | Cyprinidae     |
+| Lam  | Brook lamprey         | petromizonidae |
+:::
+:::::
+
+## Today's Data: The Doubs River
+
+::::: columns
+::: {.column width="50%"}
+### About the Doubs River Dataset
+
+-   **Study System:**
+    -   Doubs River, France
+    -   29 sites from upstream to downstream
+    -   Collected by Verneaux (1973)
+    -   Classic community ecology dataset
+-   **Two Datasets:**
+    1.  **Environmental**: 11 water quality variables
+    2.  **Species**: 27 fish species abundances (0-5 scale)
+-   **Research Questions:**
+    -   How do fish communities change along the river?
+    -   Which environmental factors drive community composition?
+    -   Are there distinct community types?
+:::
+
+::: {.column width="50%"}
+```{r river-overview}
+#| echo: false
+#| message: false
+#| warning: false
+#| fig-height: 3.6
+#| fig-width: 3.6
+#| paged-print: false
+#| fig-alt: "Two stacked plots of the Doubs River sampling design: altitude versus distance from source with points colored by river reach, and species richness versus distance from source with a loess smooth, both showing values changing as the river flows downstream."
+
+# Show the sampling design
+p1 <- doubs_env %>%
+  ggplot(aes(das, alt, color = reach)) +
+  geom_point(size = 3) +
+  geom_line(color = "darkblue", alpha = 0.6) +
+  labs(title = "Doubs River Sampling Sites",
+       x = "Distance from source (km)",
+       y = "Altitude (m)",
+       color = "River Reach") +
+  scale_color_viridis_d()
+
+# Show species richness along river
+species_richness <- doubs_spe %>%
+  select(-site, -reach) %>%
+  mutate(richness = rowSums(. > 0)) %>%
+  bind_cols(doubs_env %>% select(das, reach))
+
+p2 <- species_richness %>%
+  ggplot(aes(das, richness, color = reach)) +
+  geom_point(size = 3) +
+  geom_smooth(method = "loess", se = FALSE, color = "darkred") +
+  labs(title = "Species Richness Along River",
+       x = "Distance from source (km)",
+       y = "Number of species",
+       color = "River Reach") +
+  scale_color_viridis_d()
+
+p1 / p2
+```
+:::
+:::::
+
+## Part 2 · The NMDS Algorithm {.divider}
+
+## Non-metric Multidimensional Scaling (NMDS)
+
+:::::: columns
+:::: {.column width="60%"}
+-   **What is NMDS?**
+    -   **Overview of NMDS:**
+        -   **Purpose**: Visualize dissimilarity between objects in
+            2D/3D space
+        -   **Goal**: Preserve rank order of distances, not exact
+            distances
+        -   **Method**: Iterative re-positioning to minimize stress
+        -   **Output**: Ordination plot showing relationships between
+            samples
+    -   **Key Differences from PCA:**
+        -   Uses dissimilarity matrices (not covariance)
+
+        -   Non-parametric (rank-based)
+
+        -   Better for non-linear ecological relationships
+
+        -   No assumption about data distribution
+-   Before running NMDS - analyzing **dissimilarity matrices** not raw
+    abundance data
+    -   dissimilarity matrix contains values for every pair of samples =
+        "how different"
+
+    -   typically range from 0 (identical) to 1 (completely different).
+
+::: callout-note
+Gotelli & Ellison, *A Primer of Ecological Statistics*, Ch. 12 — The Analysis of Multivariate Data, covers ordination methods including NMDS.
+:::
+::::
+
+::: {.column width="40%"}
+```{r nmds-process-diagram}
+#| fig-width: 3.6
+#| fig-height: 3.6
+#| echo: false
+#| message: false
+#| warning: false
+#| paged-print: false
+#| fig-alt: "Heatmap of the Bray-Curtis dissimilarity matrix for the first 15 river sites, with cells colored from white (identical) to dark red (completely different) and dissimilarity values printed in each cell."
+#|
+# Create species matrix (numeric only)
+spe_matrix <- doubs_spe |> select(-site, -reach)
+
+# Calculate Bray-Curtis dissimilarity
+spe_dist <- vegdist(spe_matrix, method = "bray")
+
+# Visualize as a heatmap (first 15 sites for clarity)
+dist_df <- as.matrix(spe_dist)[1:15, 1:15] |>
+  as.data.frame() |>
+  rownames_to_column("site1") |>
+  pivot_longer(-site1, names_to = "site2", values_to = "dissimilarity") |>
+  mutate(site1 = factor(site1, levels = 1:15),
+         site2 = factor(site2, levels = 1:15))
+
+ggplot(dist_df, aes(site1, site2, fill = dissimilarity)) +
+  geom_tile() +
+  geom_text(aes(label = round(dissimilarity, 2)), size = 2.5) +
+  scale_fill_gradient(low = "white", high = "darkred") +
+  labs(title = "Bray-Curtis Dissimilarity Matrix (First 15 Sites)",
+       subtitle = "0 = identical communities, 1 = completely different",
+       x = "Site", y = "Site") +
+  coord_fixed() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+:::
+::::::
+
+## Why Bray-Curtis for Community Data?
+
+-   **Bray-Curtis dissimilarity** is standard choice for community data
+    because it handles zeros appropriately (**joint absences don't
+    contribute to similarity**)
+    -   bounded between 0 and 1
+
+    -   weights by abundance (not just presence/absence) - ignores joint
+        absences entirely
+
+    -   Similarity is based only on what's actually present and shared
+        between sites
+
+    -   performs well with sparse data
+
+The formula is:
+
+$$BC_{jk} = \frac{\sum_i |y_{ij} - y_{ik}|}{\sum_i (y_{ij} + y_{ik})}$$
+
+Where $y_{ij}$ is the abundance of species $i$ at site $j$
+
+-   **numerator sums up the [absolute differences in
+    abundance]{.underline} for each species between two sites**
+-   **denominator sums up the [total abundance]{.underline} at both
+    sites**
+-   Bray-Curtis asks: **"Of all the individuals at these two sites, what
+    proportion would need to be moved to make the sites identical?"**
+
+## The NMDS Algorithm
+
+-   **What NMDS Actually Does**
+    -   NMDS tries to place samples in a low-dimensional space (usually
+        2D)
+    -   so **rank order** of distances in ordination matches **rank
+        order** of dissimilarities in original matrix
+-   Not your PCA which preserves *exact* distances (or variance)
+-   NMDS only cares about relative ordering:
+    -   if site A is more similar to site B than to site C in the
+        original data
+    -   then A should be closer to B than to C in the ordination
+
+## How NMDS Works step by step
+
+::::: columns
+::: {.column width="50%"}
+-   **The NMDS Algorithm:**
+    1.  **Calculate dissimilarity matrix** between all pairs of sites
+    2.  **Start with random configuration** of points in 2D space
+    3.  **Calculate stress** = **difference between original distances
+        and ordination distances**
+    4.  **Move points** to reduce stress
+    5.  **Repeat** until stress cannot be reduced further
+    6.  **Try multiple random starts** to avoid local minima
+-   **Stress Values:**
+    -   \< 0.1: Good representation
+    -   0.1-0.2: Acceptable
+    -   \> 0.2: Poor representation
+:::
+
+::: {.column width="50%"}
+```{r stress-visualization}
+#| fig-width: 3.6
+#| fig-height: 3.6
+#| echo: false
+#| message: false
+#| warning: false
+#| paged-print: false
+#| fig-alt: "Line plot of simulated NMDS stress declining over 50 iterations, with dashed reference lines at 0.1 (good threshold) and 0.2 (poor threshold)."
+#|
+# Simulate stress reduction over iterations
+set.seed(123)
+iterations <- 1:50
+stress <- 0.3 * exp(-iterations/15) + 0.05 + rnorm(50, 0, 0.01)
+stress[stress < 0.05] <- 0.05
+
+ stess_plot_ex <- tibble(iterations, stress) %>%
+  ggplot(aes(iterations, stress)) +
+  geom_line(color = "darkred", linewidth = 1) +
+  geom_hline(yintercept = 0.1, linetype = "dashed", color = "orange") +
+  geom_hline(yintercept = 0.2, linetype = "dashed", color = "red") +
+  annotate("text", x = 35, y = 0.12, label = "Good < 0.1", color = "orange") +
+  annotate("text", x = 35, y = 0.22, label = "Poor > 0.2", color = "red") +
+  labs(title = "NMDS Stress Reduction",
+       x = "Iteration",
+       y = "Stress") +
+  theme_minimal()
+
+ print(stess_plot_ex)
+```
+:::
+:::::
+
+## Part 3 · Stress and Model Diagnostics {.divider}
+
+## Understanding Stress
+
+::::: columns
+::: {.column width="60%"}
+-   **What is Stress?**
+    -   **Stress** is key diagnostic for NMDS quality
+    -   measures disagreement between original dissimilarities and
+        distances in ordination
+    -   stress is calculated by first ranking all pairwise
+        dissimilarities
+    -   then calculating corresponding distances in the ordination
+    -   fitting a monotonic regression line to the relationship between
+        these
+    -   finally computing sum of squared deviations from this line.
+-   Lower stress means ordination better represents original
+    relationships
+-   **The Shepard Diagram: Visualizing Stress**
+    -   **Shepard diagram** (or stress plot) is primary diagnostic tool
+        for NMDS
+    -   shows relationship between original dissimilarities (x-axis) and
+        ordination distances (y-axis) with a fitted monotonic line
+    -   If NMDS is working well - points should closely follow the line
+    -   Scatter indicates loss of information.
+:::
+
+::: {.column width="40%"}
+```{r l18-01}
+#| message: false
+#| warning: false
+#| include: false
+#| paged-print: false
+# Prepare species data (remove site column)
+spe_matrix <- doubs_spe %>% select(-site, -reach) %>% as.matrix()
+# Add small constant to avoid issues with zeros
+spe_matrix <- spe_matrix + 0.1
+# Run NMDS with multiple random starts
+set.seed(123)
+fish_nmds <- metaMDS(spe_matrix, distance = "bray",  # Bray-Curtis dissimilarity
+                     k = 2,   trymax = 100)            # 2 dimensions + Maximum tries
+```
+
+```{r shepard-diagram_1}
+#| echo: false
+#| message: false
+#| warning: false
+#| paged-print: false
+#| fig-alt: "Shepard diagram for the fish NMDS: a scatterplot of ordination distance versus original Bray-Curtis dissimilarity for every pair of sites, with a stepped monotonic regression line, showing points closely tracking the line."
+# Create Shepard diagram
+stressplot(fish_nmds, main = "Shepard Diagram for Fish NMDS")
+
+```
+:::
+:::::
+
+## Interpreting the Shepard Diagram
+
+::::: columns
+::: {.column width="60%"}
+-   Shepard diagram
+    -   each point represents one pair of sites
+    -   x-axis shows their original Bray-Curtis dissimilarity
+    -   y-axis shows their distance in the 2D ordination
+    -   stepped line is a monotonic regression, = can only go up/stay
+        flat not down
+    -   because NMDS preserves rank order - "stress" = scatter around
+        line
+-   **Insights from our Shepard diagram:**
+    -   minimal scatter
+-   **Stress Guidelines**
+    -   Clarke (1993) widely-used guidelines for interpreting stress
+        -   \<0.05 excellent representation w/no misinterpretation
+        -   0.05 - 0.10 good ordination - no real risk of false
+            inferences
+        -   0.10 - 0.20 usable ordination but details at lower end
+            interpreted cautiously
+        -   0.20 and 0.30 used with caution/potentially higher
+            dimensions considered
+        -   \>0.30 = random placement.
+:::
+
+::: {.column width="40%"}
+```{r shepard-diagram}
+#| echo: false
+#| message: false
+#| warning: false
+#| paged-print: false
+#| fig-alt: "The same Shepard diagram for the fish NMDS repeated, shown alongside the discussion of stress guidelines for interpreting scatter around the monotonic line."
+# Create Shepard diagram
+stressplot(fish_nmds, main = "Shepard Diagram for Fish NMDS")
+
+```
+:::
+:::::
+
+## Choosing the Number of Dimensions
+
+-   How do we know 2 dimensions is enough?
+-   create a **scree plot** showing stress for different numbers of
+    dimensions:
+
+::: panel
+```{r dimension-selection}
+#| echo: false
+#| message: false
+#| warning: false
+#| fig-height: 3.6
+#| fig-width: 3.6
+#| paged-print: false
+#| fig-alt: "Scree plot of NMDS stress versus number of dimensions (1 to 6), with dashed reference lines at the 0.10 good and 0.20 acceptable stress thresholds, used to find the elbow where added dimensions stop meaningfully reducing stress."
+
+# Calculate stress for k = 1 to 6 dimensions
+set.seed(123)
+stress_values <- map_dbl(1:6, function(k) {
+  nmds_k <- metaMDS(spe_matrix, distance = "bray", k = k, trymax = 50, trace = 0)
+  nmds_k$stress
+})
+
+# Create stress plot
+tibble(dimensions = 1:6, stress = stress_values) |>
+  ggplot(aes(dimensions, stress)) +
+  geom_point(size = 4, color = "navy") +
+  geom_line(color = "navy") +
+  geom_hline(yintercept = 0.10, linetype = "dashed", color = "orange") +
+  geom_hline(yintercept = 0.20, linetype = "dashed", color = "red") +
+  annotate("text", x = 5, y = 0.12, label = "Good threshold (0.10)", color = "orange") +
+  annotate("text", x = 5, y = 0.22, label = "Acceptable threshold (0.20)", color = "red") +
+  scale_x_continuous(breaks = 1:6) +
+  labs(title = "Stress vs. Number of Dimensions",
+       subtitle = "Look for the 'elbow' where additional dimensions provide diminishing returns",
+       x = "Number of Dimensions (k)",
+       y = "Stress")
+```
+:::
+
+## NMDS Assumptions
+
+::::: columns
+::: {.column width="50%"}
+-   **NMDS Assumptions:**
+-   ✅ **Few assumptions:**
+    -   Samples are independent
+    -   Dissimilarity measure is appropriate
+    -   Sufficient data for stable solution
+-   ❌ **No assumptions about:**
+    -   Data distribution
+    -   Linear relationships
+    -   Homoscedasticity
+    -   Normality
+-   **This makes NMDS very robust for ecological data!**
+:::
+
+::: {.column width="50%"}
+```{r nmds-robustness}
+#| echo: false
+#| message: false
+#| warning: false
+#| fig-height: 3.6
+#| fig-width: 3.6
+#| paged-print: false
+#| fig-alt: "Scatterplot of a simulated sinusoidal (non-linear) relationship colored by group, with a red dashed linear fit line and a blue loess curve, showing the linear fit missing the true non-linear pattern that NMDS is robust to."
+# Show why NMDS is robust - non-linear example
+set.seed(42)
+n <- 30
+x <- runif(n, 0, 10)
+y <- 2 * sin(x) + rnorm(n, 0, 0.5)
+group <- rep(c("A", "B", "C"), each = 10)
+
+tibble(x, y, group) %>%
+  ggplot(aes(x, y, color = group)) +
+  geom_point(size = 3) +
+  geom_smooth(method = "lm", se = FALSE, color = "red", linetype = "dashed") +
+  geom_smooth(method = "loess", se = FALSE, color = "blue") +
+  labs(title = "NMDS Handles Non-linear Relationships",
+       subtitle = "Red = linear assumption (PCA), Blue = actual pattern",
+       x = "Environmental Gradient",
+       y = "Community Response") +
+  scale_color_viridis_d()
+```
+:::
+:::::
+
+## Part 4 · Running and Visualizing NMDS {.divider}
+
+## NMDS in Practice
+
+### Running NMDS on Fish Communities
+
+::: panel
+```{r nmds-analysis}
+# Prepare species data (remove site column)
+spe_matrix <- doubs_spe %>% select(-site, -reach) %>% as.matrix()
+# Add small constant to avoid issues with zeros
+spe_matrix <- spe_matrix + 0.1
+# Run NMDS with multiple random starts
+set.seed(123)
+fish_nmds <- metaMDS(spe_matrix, distance = "bray",  # Bray-Curtis dissimilarity
+                     k = 2,   trymax = 100)            # 2 dimensions + Maximum tries
+
+```
+
+```{r l18-02}
+cat("Final stress:", round(fish_nmds$stress, 3))
+```
+:::
+
+## NMDS in Practice
+
+::::: columns
+::: {.column width="50%"}
+-   **Code Explanation:**
+-   `fish_nmds <- metaMDS(spe_matrix, distance = "bray", # Bray-Curtis dissimilarity`
+    -   `k = 2, trymax = 100) # 2 dimensions + Maximum tries`
+-   `metaMDS()`: Main NMDS function from vegan package
+    -   `distance = "bray"`: Bray-Curtis dissimilarity (best for
+        abundances)
+    -   `k = 2`: Two dimensions for plotting
+    -   `trymax = 100`: Try 100 random starting configurations
+    -   Small constant added to avoid zero-distance issues
+:::
+
+::: {.column width="50%"}
+```{r stress-diagnostic}
+#| echo: false
+#| message: false
+#| warning: false
+#| fig-height: 3.6
+#| fig-width: 3.6
+#| paged-print: false
+#| fig-alt: "Shepard diagram (NMDS stress plot) for the fish community NMDS, showing ordination distance versus original dissimilarity closely tracking the monotonic fit line, consistent with the reported stress of 0.074."
+
+# Create stress plot (Shepard diagram)
+stressplot(fish_nmds, main = "NMDS Stress Plot")
+```
+:::
+:::::
+
+## Interpreting NMDS Output
+
+::::: columns
+::: {.column width="50%"}
+-   **Understanding the Output:**
+
+    1.  **Stress = 0.074** : This is "excellent"
+    2.  Our 2D representation preserves the original distances well
+    3.  **Convergent solutions**: Found stable solutions from multiple
+        tries
+    4.  **Two dimensions**: Axis 1 and Axis 2 have no inherent meaning
+        (unlike PCA components)
+    5.  **No eigenvalues**: NMDS doesn't calculate variance explained
+        per axis
+:::
+
+::: {.column width="50%"}
+```{r basic-nmds-plot}
+#| echo: false
+#| message: false
+#| warning: false
+#| fig-height: 3.6
+#| fig-width: 3.6
+#| paged-print: false
+#| fig-alt: "Basic NMDS ordination plot with sites plotted as text labels in 2D NMDS space, the raw base-R output before adding color-by-reach styling."
+
+# Basic NMDS plot
+plot(fish_nmds, type = "t", main = "Basic NMDS Plot")
+```
+:::
+:::::
+
+## Creating Enhanced NMDS Plots
+
+-   **What the NMDS Shows:**
+    -   **Clear separation** between river reaches
+
+    -   **Gradient pattern** from upper to lower reaches
+
+    -   Sites within each reach are **more similar** to each other than
+        to other reaches
+
+::: panel
+```{r enhanced-nmds-plots}
+#| echo: false
+#| message: false
+#| warning: false
+#| fig-height: 3.6
+#| fig-width: 3.6
+#| paged-print: false
+#| fig-alt: "Two side-by-side NMDS ordination plots of fish community sites: one colored by river reach with confidence ellipses showing clear separation between upstream, midstream, and downstream groups; the other colored by continuous distance from source showing a smooth gradient."
+
+# Extract site scores
+site_scores <- scores(fish_nmds, display = "sites") |>
+  as_tibble(rownames = "site_num") |>
+  mutate(site_num = as.integer(site_num)) |>
+  left_join(doubs_env |> mutate(site_num = row_number()), by = "site_num")
+
+# Plot 1: Sites colored by reach
+p1 <- ggplot(site_scores, aes(NMDS1, NMDS2)) +
+  geom_point(aes(color = reach), size = 4, alpha = 0.8) +
+  geom_text_repel(aes(label = site), size = 3, max.overlaps = 15) +
+  stat_ellipse(aes(color = reach), level = 0.75, linewidth = 1) +
+  labs(title = "Fish Communities by River Reach",
+       subtitle = paste("Stress =", round(fish_nmds$stress, 3)),
+       color = "River Reach") +
+  scale_color_viridis_d() +
+  coord_fixed()
+
+# Plot 2: Sites colored by distance from source
+p2 <- ggplot(site_scores, aes(NMDS1, NMDS2)) +
+  geom_point(aes(color = das), size = 4) +
+  geom_text_repel(aes(label = site), size = 3, max.overlaps = 15) +
+  scale_color_gradient(low = "blue", high = "red", name = "Distance\nfrom source (km)") +
+  labs(title = "Fish Communities by Position") +
+  coord_fixed()
+
+p1 + p2
+```
+:::
+
+## Different plot using the actual hull definitions from vegan
+
+::: panel
+```{r l18-03}
+#| echo: false
+#| message: false
+#| warning: false
+#| paged-print: false
+#| fig-height: 3.6
+#| fig-width: 3.6
+#| fig-alt: "NMDS ordination plot with convex hull polygons drawn around sites in each river reach, species names plotted as grey text labels, and site points colored by reach, showing fish community composition structured along the river."
+# 1. Extract Site Scores
+site_scores <- scores(fish_nmds, display = "sites") %>% 
+  as_tibble(rownames = "site") %>% 
+  # Join with environmental data to get groups (Reaches)
+  bind_cols(doubs_env %>% select(reach))
+
+# 2. Extract Species Scores (for plotting species text)
+species_scores <- scores(fish_nmds, display = "species") %>% 
+  as_tibble(rownames = "species")
+
+nmds_scores <- site_scores %>%
+  rename(MDS1 = NMDS1, MDS2 = NMDS2)
+
+# 3. Calculate Convex Hulls (Polygons around groups)
+# This replaces the need for loops
+grp_hulls <- site_scores %>% 
+  group_by(reach) %>% 
+  slice(chull(NMDS1, NMDS2))
+
+ggplot() +
+  # Layer 1: The Convex Hulls (Groups)
+  geom_polygon(data = grp_hulls, 
+               aes(x = NMDS1, y = NMDS2, fill = reach, group = reach), 
+               alpha = 0.3) +
+  
+  # Layer 2: The Species (Text labels)
+  geom_text_repel(data = species_scores, 
+                  aes(x = NMDS1, y = NMDS2, label = species), 
+                  color = "darkgrey", size = 3, max.overlaps = 20) +
+  
+  # Layer 3: The Sites (Points)
+  geom_point(data = site_scores, 
+             aes(x = NMDS1, y = NMDS2, color = reach), 
+             size = 3) +
+  
+  # Aesthetics
+  scale_fill_viridis_d() +
+  scale_color_viridis_d() +
+  labs(title = "Fish Community Composition by River Reach",
+       subtitle = paste("NMDS Stress:", " 0.074"),
+       caption = "Bray-Curtis Dissimilarity") +
+  coord_fixed() # Important! Keeps aspect ratio 1:1
+```
+:::
+
+## Part 5 · PERMANOVA {.divider}
+
+## PERMANOVA: Testing Multivariate Differences
+
+::::: columns
+::: {.column width="60%"}
+-   **What is PERMANOVA?**
+    -   **PERMANOVA (Permutational Multivariate ANOVA):**
+        -   **Purpose**: Test whether groups have different multivariate
+            centroids
+        -   **Method**: ANOVA using distance matrices instead of raw
+            data
+        -   **Advantage**: No distributional assumptions
+        -   **Permutation**: Creates null distribution by randomly
+            reassigning group labels
+    -   **Think of it as:**
+        -   Multivariate version of ANOVA
+
+        -   Uses distances between samples instead of means
+
+        -   Tests: "Are the centers of these groups different in
+            multivariate space?" .
+:::
+
+::: {.column width="40%"}
+```{r permanova-concept-plot}
+#| fig-width: 3.6
+#| fig-height: 3.6
+#| echo: false
+#| message: false
+#| warning: false
+#| paged-print: false
+#| fig-alt: "Scatterplot of three simulated groups with confidence ellipses and X marks showing each group's centroid, illustrating the concept PERMANOVA tests: whether group centroids differ."
+
+# Conceptual visualization of PERMANOVA
+set.seed(42)
+group_a <- data.frame(x = rnorm(15, 2, 1), y = rnorm(15, 2, 1), group = "A")
+group_b <- data.frame(x = rnorm(15, 5, 1), y = rnorm(15, 4, 1), group = "B")
+group_c <- data.frame(x = rnorm(15, 3, 1), y = rnorm(15, 6, 1), group = "C")
+
+combined <- rbind(group_a, group_b, group_c)
+
+# Calculate centroids
+centroids <- combined %>%
+  group_by(group) %>%
+  summarise(x = mean(x), y = mean(y), .groups = "drop")
+
+combined %>%
+  ggplot(aes(x, y, color = group)) +
+  geom_point(size = 2, alpha = 0.7) +
+  geom_point(data = centroids, size = 6, shape = 4, stroke = 2) +
+  stat_ellipse(level = 0.68) +
+  labs(title = "PERMANOVA Concept",
+       subtitle = "Tests if group centroids (×) differ",
+       x = "Dimension 1", y = "Dimension 2") +
+  scale_color_viridis_d() +
+  theme_minimal()
+```
+:::
+:::::
+
+## How PERMANOVA Works
+
+::::: columns
+::: {.column width="50%"}
+-   **PERMANOVA Algorithm:**
+    1.  **Calculate distance matrix** between all pairs of samples
+    2.  **Calculate F-statistic** based on distances:
+        -   Between-group sum of squares
+        -   Within-group sum of squares
+    3.  **Permute group labels** randomly (e.g., 999 times)
+    4.  **Recalculate F-statistic** for each permutation
+    5.  **Compare observed F** to permutation distribution
+    6.  **P-value** = proportion of permuted F ≥ observed F
+-   **Why permutation?**
+    -   No assumptions about data distribution
+
+    -   Creates empirical null distribution
+
+    -   Accounts for complex dependency structures
+:::
+
+::: {.column width="50%"}
+```{r permutation-distribution}
+#| fig-width: 3.6
+#| fig-height: 3.6
+#| echo: false
+#| message: false
+#| warning: false
+#| paged-print: false
+#| fig-alt: "Histogram of the null distribution of F-statistics from 999 PERMANOVA permutations, with a red vertical line marking the observed F-statistic (8.5) far to the right of the null distribution."
+
+# Simulate PERMANOVA permutation distribution
+set.seed(123)
+observed_F <- 8.5
+null_F <- c(rgamma(999, 2, 0.5), observed_F)
+
+tibble(F_statistic = null_F,
+       type = c(rep("Permuted", 999), "Observed")) %>%
+  ggplot(aes(F_statistic)) +
+  geom_histogram(aes(fill = type), bins = 50, alpha = 0.7) +
+  geom_vline(xintercept = observed_F, color = "red", size = 2) +
+  scale_fill_manual(values = c("Observed" = "red", "Permuted" = "lightblue")) +
+  labs(title = "PERMANOVA Permutation Test",
+       subtitle = "Red line = observed F-statistic",
+       x = "F-statistic", y = "Frequency",
+       fill = "Type") +
+  theme_minimal()
+```
+:::
+:::::
+
+## PERMANOVA Hypotheses
+
+::::: columns
+::: {.column width="50%"}
+-   **Research Question:** *"Do fish communities differ significantly
+    between river reaches?"*
+-   **Statistical Hypotheses:**
+    -   **H₀**: The centroids of fish communities are the same across
+        all river reaches (Upper = Middle = Lower)
+    -   **H₁**: At least one river reach has a different community
+        centroid
+-   **In practical terms:** -
+    -   H₀: River position doesn't affect community composition
+
+    -   H₁: River position significantly affects community composition
+:::
+
+::: {.column width="50%"}
+```{r hypothesis-visualization}
+#| fig-height: 3.6
+#| fig-width: 3.6
+#| echo: false
+#| message: false
+#| warning: false
+#| paged-print: false
+#| fig-alt: "NMDS ordination plot of fish community sites colored by river reach with confidence ellipses, black X marks and text labels showing each reach's group centroid, illustrating the centroid differences PERMANOVA tests."
+nmds_scores <- as.data.frame(nmds_scores)
+
+# Visualize the hypothesis being tested
+nmds_scores %>%
+  group_by(reach) %>%
+  summarise(cent_x = mean(MDS1), cent_y = mean(MDS2), .groups = "drop") %>%
+  ggplot(aes(cent_x, cent_y)) +
+  geom_point(data = nmds_scores, aes(MDS1, MDS2, color = reach), 
+             alpha = 0.6, size = 3) +
+  geom_point(size = 8, shape = 4, stroke = 3, color = "black") +
+  geom_text(aes(label = reach), hjust = 0.5, vjust = -0.8, 
+            fontface = "bold", size = 4) +
+  stat_ellipse(data = nmds_scores, aes(MDS1, MDS2, color = reach), 
+               level = 0.75) +
+  labs(title = "PERMANOVA Tests Centroid Differences",
+       subtitle = "× = group centroids",
+       x = "NMDS1", y = "NMDS2",
+       color = "River Reach") +
+  scale_color_viridis_d() +
+  theme_minimal()
+```
+:::
+:::::
+
+## PERMANOVA Assumptions
+
+::::: columns
+::: {.column width="50%"}
+-   **PERMANOVA Assumptions:**
+-   ✅ **Required:**
+    1.  **Independence**: Samples are independent
+    2.  **Exchangeability**: Under H₀, observations are exchangeable
+        between groups
+    3.  **Homogeneity of dispersion**: Groups have similar multivariate
+        spread
+-   ❌ **Not required:**
+    -   Normality or other distribution
+    -   Linearity
+-   **Checking Assumptions:**
+    -   **Use `betadisper()` to test homogeneity of dispersion**
+    -   If violated, PERMANOVA is testing dispersion differences and not
+        location differences
+
+```{r homo_dispersion}
+#| echo: false
+#| message: false
+#| warning: false
+#| paged-print: false
+# Check homogeneity of dispersion assumption
+spe_dist <- vegdist(spe_matrix, method = "bray")
+dispersion_test <- betadisper(spe_dist, doubs_env$reach)
+
+# Test for homogeneity
+dispersion_anova <- anova(dispersion_test)
+cat("Homogeneity of dispersion test p-value:", round(dispersion_anova$`Pr(>F)`[1], 4))
+```
+:::
+
+::: {.column width="50%"}
+-   vegan::betadisper() converts bray-curtis to euclidean distances to
+    calculate distance from sample to center
+-   Principal Coordinates Analysis (PCoA) - ordination for distances
+    between samples in a low-dimensional, Euclidean space
+
+```{r dispersion_plot}
+#| fig-height: 3.6
+#| fig-width: 3.6
+#| echo: false
+#| message: false
+#| warning: false
+#| paged-print: false
+#| fig-alt: "PCoA-based dispersion plot showing sites in each river reach with lines connecting each site to its group centroid, and confidence ellipses, used to check the homogeneity-of-dispersion assumption for PERMANOVA."
+
+# Plot dispersions
+plot(dispersion_test, main = "Multivariate Dispersion by Group")
+```
+:::
+:::::
+
+## Running PERMANOVA
+
+::::: columns
+::: {.column width="60%"}
+-   **PERMANOVA on Fish Communities**
+    -   **Line-by-line interpretation:**
+        1.  **reach**: The factor being tested (river reach)
+        2.  **Df = 2**: Degrees of freedom (3 groups - 1)
+        3.  **SumOfSqs**: Between-group sum of squares
+        4.  **R2**: Proportion of variance explained by reach
+        5.  **F**: F-statistic (ratio of between/within group variation)
+        6.  **Pr(\>F)**: P-value from permutation test
+
+```{r run-permanova}
+#| echo: false
+#| message: false
+#| warning: false
+#| paged-print: false
+# Run PERMANOVA using adonis2 (newer version)
+perm_result <- adonis2(spe_matrix ~ reach, 
+                       data = doubs_env, 
+                       distance = "bray",
+                       permutations = 999)
+# Display results
+perm_result
+```
+:::
+
+::: {.column width="40%"}
+-   **What this means:**
+    -   **Significant result** (p \< 0.001): We reject H₀
+
+    -   River reach **explains substantial variation** in fish
+        communities
+
+    -   Fish communities **differ significantly** between river reaches
+
+    -   Very few permutations gave F ≥ observed F
+:::
+:::::
+
+## Pairwise PERMANOVA Tests
+
+-   **Interpretation of Pairwise Results:**
+    -   All pairwise comparisons are **statistically significant** even
+        after Bonferroni correction
+
+    -   **Upper vs Lower** shows the strongest difference (highest
+        F-statistic)
+
+    -   Downstream comparisons to up and middle explains a substantial
+        portion of variance (R² \> 0.3)
+
+    -   **Biological interpretation**: Fish communities change
+        progressively down the river
+
+```{r pairwise-tests}
+#| echo: false
+#| message: false
+#| warning: false
+#| paged-print: false
+# Calculate the Bray-Curtis distance matrix first (recommended)
+doubs_dist <- vegdist(spe_matrix, method = "bray")
+
+# Run all pairwise comparisons in one step
+pairwise_results_simple <- pairwise.adonis(
+  x = doubs_dist,                               # The distance matrix
+  factors = doubs_env$reach,                    # The grouping factor
+  p.adjust.m = "bonferroni",                    # The correction method
+  perm = 999                                    # Number of permutations
+)
+
+# Display results
+pairwise_results_simple
+```
+
+## Visualizing PERMANOVA Results
+
+**Results:**
+
+::: panel
+```{r visualize-permanova}
+#| echo: false
+#| message: false
+#| warning: false
+#| fig-height: 3.6
+#| fig-width: 3.6
+#| paged-print: false
+#| fig-alt: "Combined figure: an NMDS plot with centroids and confidence ellipses by river reach on top, and a table of pairwise PERMANOVA comparison results (F-statistic, R-squared, adjusted p-value) below."
+# Create visualization of PERMANOVA results
+p1 <-  nmds_scores %>% group_by(reach) %>%
+  summarise(cent_x = mean(MDS1), cent_y = mean(MDS2), .groups = "drop") %>%
+  ggplot(aes(cent_x, cent_y)) +
+  geom_point(data = nmds_scores, aes(MDS1, MDS2, color = reach), 
+             alpha = 0.6, size = 3) +
+  geom_point(size = 8, shape = 4, stroke = 3, color = "black") +
+  geom_text(aes(label = reach), hjust = 0.5, vjust = -0.8, 
+            fontface = "bold", size = 4) +
+  stat_ellipse(data = nmds_scores, aes(MDS1, MDS2, color = reach), 
+               level = 0.75) +
+  labs(title = "PERMANOVA Tests Centroid Differences",
+       subtitle = "× = group centroids",
+       x = "NMDS1", y = "NMDS2",
+       color = "River Reach") +
+  scale_color_viridis_d() +
+  theme_minimal()
+
+
+
+
+# --- Prepare the Table (grob) ---
+
+# Select and format the columns for the table
+table_data <- pairwise_results_simple %>%
+  select(pairs, F.Model, R2, p.adjusted) %>%
+  mutate(
+    `F-stat` = round(F.Model, 3),
+    `R-squared` = round(R2, 3),
+    `Adj. P` = round(p.adjusted, 4)
+  ) %>%
+  select(Comparison = pairs, `F-stat`, `R-squared`, `Adj. P`)
+
+# Convert the data frame to a graphical table object
+t1 <- tableGrob(
+  table_data,
+  rows = NULL,
+  theme = ttheme_minimal(
+    core = list(
+      fg_params = list(fontsize = 10, fontface = 3),
+      bg_params = list(fill = "grey95", col = "white")
+    ),
+    head = list(
+      fg_params = list(fontsize = 10, fontface = "bold", col = "white"),
+      bg_params = list(fill = "grey40", col = "white")
+    )
+  )
+)
+
+# --- 5. Combine Plot and Table using patchwork ---
+
+# The |> operator is part of the tidyverse and is fine to use here
+p_final <- p1 / t1 +
+  plot_layout(heights = c(3, 1)) # Allocate more space to the plot
+
+# Print the final combined figure
+p_final
+```
+:::
+
+## Part 6 · ANOSIM {.divider}
+
+## ANOSIM: Analysis of Similarities
+
+::::: columns
+::: {.column width="60%"}
+-   **ANOSIM (Analysis of Similarities):**
+    -   **Purpose**: are samples w/in groups are more similar than
+        samples between groups
+    -   **Method**: Based on rank dissimilarities
+    -   **Statistic**: R-statistic ranging from -1 to +1
+    -   **Interpretation**:
+        -   R ≈ 1: Groups are completely separated
+
+        -   R ≈ 0: Groups are indistinguishable
+
+        -   R \< 0: More dissimilarity within groups than between
+-   **Differences from PERMANOVA:**
+    -   ANOSIM uses ranks of distances
+
+    -   PERMANOVA uses actual distances
+
+    -   ANOSIM is more robust but less powerful
+:::
+
+::: {.column width="40%"}
+```{r anosim-concept-diagram}
+#| echo: false
+#| message: false
+#| warning: false
+#| paged-print: false
+#| fig-height: 3.6
+#| fig-width: 3.6
+#| fig-alt: "NMDS ordination plot with colored segments connecting each site to its river-reach centroid (within-group distances) and red lines connecting the reach centroids to each other (between-group distances), illustrating the logic ANOSIM tests."
+# Extract site coordinates
+plot_data <- scores(fish_nmds, display = "sites") %>%
+  as.data.frame() %>%
+  mutate(site = doubs_spe$site, reach = doubs_spe$reach)
+
+# Calculate Centroids (the center of each group)
+centroids <- plot_data %>%
+  group_by(reach) %>%
+  summarize(NMDS1_cent = mean(NMDS1), 
+            NMDS2_cent = mean(NMDS2), .groups = "drop")
+
+# Join centroids back to the plot_data
+plot_data <- plot_data %>%
+  left_join(centroids, by = "reach")
+
+# 4. Create "Between" Lines (Connecting Centroids)
+between_lines <- tibble(
+  x = c(centroids$NMDS1_cent[centroids$reach == "Upstream"], 
+        centroids$NMDS1_cent[centroids$reach == "Midstream"]),
+  y = c(centroids$NMDS2_cent[centroids$reach == "Upstream"], 
+        centroids$NMDS2_cent[centroids$reach == "Midstream"]),
+  xend = c(centroids$NMDS1_cent[centroids$reach == "Midstream"], 
+           centroids$NMDS1_cent[centroids$reach == "Downstream"]),
+  yend = c(centroids$NMDS2_cent[centroids$reach == "Midstream"], 
+           centroids$NMDS2_cent[centroids$reach == "Downstream"])
+)
+
+# --- 4. CREATE THE PLOT ---
+anosim_doubs_plot <- ggplot() +
+  # GREEN/COLORED LINES: Within-group distances (Spider legs)
+  # FIX: color = reach is now INSIDE aes()
+  geom_segment(data = plot_data,
+               aes(x = NMDS1, y = NMDS2, 
+                   xend = NMDS1_cent, yend = NMDS2_cent, 
+                   color = reach),  # <--- Moved inside aes()
+               alpha = 0.5, linewidth = 0.8) +
+  
+  # RED LINES: Between-group distances (Centroid connectors)
+  geom_segment(data = between_lines,
+               aes(x = x, y = y, xend = xend, yend = yend),
+               color = "red", linewidth = 2, alpha = 0.7) +
+  
+  # Points for Sites
+  geom_point(data = plot_data, 
+             aes(x = NMDS1, y = NMDS2, color = reach), 
+             size = 4) +
+  
+  # Points for Centroids (marked with X)
+  geom_point(data = centroids,
+             aes(x = NMDS1_cent, y = NMDS2_cent),
+             shape = 4, size = 6, stroke = 2, color = "darkblue") +
+  
+  # Labels
+  geom_text(data = plot_data, aes(x = NMDS1, y = NMDS2, label = site),
+            vjust = -0.8, size = 3, fontface = "bold") +
+  
+  scale_color_viridis_d() +
+  labs(title = "ANOSIM Visual Logic: Doubs River",
+       subtitle = "Colored lines = Within-reach variation\nRed lines = Between-reach separation",
+       x = "NMDS Dimension 1", y = "NMDS Dimension 2",
+       color = "River Reach") +
+  theme_minimal()
+
+print(anosim_doubs_plot)
+
+```
+:::
+:::::
+
+## How ANOSIM Works
+
+::::: columns
+::: {.column width="50%"}
+-   **ANOSIM Algorithm:**
+    1.  **Calculate dissimilarity matrix** between all samples
+    2.  **Rank all dissimilarities** from smallest to largest
+    3.  **Calculate mean rank** of within-group dissimilarities (r̄w)
+    4.  **Calculate mean rank** of between-group dissimilarities (r̄b)
+    5.  **Compute R-statistic**: R = (r̄b - r̄w) / (N(N-1)/4) where N =
+        total number of samples
+    6.  **Permute group labels** and recalculate R many times
+    7.  **P-value** = proportion of permuted R ≥ observed R
+-   **R-statistic interpretation:**
+    -   R = 1: Perfect separation
+
+    -   R = 0: No separation
+
+    -   R = -1: More similar between groups than within
+:::
+
+::: {.column width="50%"}
+```{r run-anosim_1}
+# Run ANOSIM
+anosim_result <- anosim(spe_matrix, doubs_env$reach, 
+                       distance = "bray", permutations = 999)
+
+# Display results
+anosim_result
+```
+:::
+:::::
+
+## Running ANOSIM
+
+::::: columns
+::: {.column width="50%"}
+-   **ANOSIM Results Interpretation:**
+    -   **R = 0.5082** : This indicates "good" separation between groups
+    -   \*\*p-value = 0.001 - significant result
+    -   **Biological meaning**: Fish communities well-separated between
+        river reaches, with communities within each reach being much
+        more similar to each other than to communities in other reaches
+-   "Within" box is clearly lower than the "Between" box
+    -   sites within same river reach tend to be more similar to each
+        other (lower dissimilarity ranks) than sites in different
+        reaches (higher dissimilarity ranks)
+
+    -   R statistic of 0.51 quantifies this separation
+
+        -   there's clear differentiation, but with some overlap.
+:::
+
+::: {.column width="50%"}
+-   Interpreting R:
+
+    -   R = 1 - Complete separation
+        -   all within-group dissimilarities smaller than between-group
+            dissimilarities
+    -   R \> 0.75 Well separated
+    -   R \> 0.5 Separated, but overlapping
+    -   R \> 0.25 Barely separated
+    -   R ≈ 0 No difference between groups
+
+    ```{r anosim-boxplot}
+    #| fig-width: 3.6
+    #| fig-height: 3.6
+    #| echo: false
+    #| message: false
+    #| warning: false
+    #| paged-print: false
+    #| fig-alt: "Boxplots of dissimilarity ranks for within-group versus between-group comparisons from the ANOSIM test, showing the within-group box clearly lower than the between-group box, consistent with an R-statistic of 0.51."
+
+    # Plot ANOSIM results
+    plot(anosim_result, main = "ANOSIM Results")
+    ```
+:::
+:::::
+
+## Part 7 · Comparing PERMANOVA and ANOSIM {.divider}
+
+## ANOSIM vs PERMANOVA Comparison
+
+::: panel
+```{r method-comparison}
+#| echo: false
+#| message: false
+#| warning: false
+#| paged-print: false
+# Compare results
+comparison_table <- tibble(
+  Method = c("PERMANOVA", "ANOSIM"),
+  `Test Statistic` = c(paste("F =", round(perm_result$F[1], 2)),
+                       paste("R =", round(anosim_result$statistic, 3))),
+  `P-value` = c(round(perm_result$Pr[1], 3),
+                round(anosim_result$signif, 3)),
+  `Interpretation` = c("Groups have different centroids",
+                       "Excellent group separation"),
+  `What it tests` = c("Differences in group means",
+                      "Overlap between groups"),
+  `Approach` = c("Uses actual distances", "Uses rank distances")
+)
+
+comparison_table
+```
+:::
+
+## ANOSIM vs PERMANOVA Comparison
+
+-   **When to use which:**
+    -   **PERMANOVA:**
+        -   More powerful for detecting differences
+
+        -   Better for complex experimental designs
+
+        -   Can handle interactions and covariates
+
+        -   Preferred for most applications
+    -   **ANOSIM:**
+        -   More robust to outliers
+        -   Simpler interpretation
+        -   Good for initial exploratory analysis
+        -   Useful when distributions are very non-normal
+
+## PERMANOVA vs ANOSIM
+
+-   **What's the Difference? Three Scenarios**
+-   Both methods test whether groups differ, but they ask **different
+    questions**:
+    -   **PERMANOVA asks:** *Do the group centroids differ in location?*
+        -   Uses actual squared distances and partitions variance like
+            ANOVA
+    -   **ANOSIM asks:** *Are within-group dissimilarities smaller than
+        between-group?*
+        -   Uses ranked distances to compares rank distributions
+
+::: panel
+```{r three-scenarios}
+#| echo: false
+#| message: false
+#| warning: false
+#| fig-height: 3.6
+#| fig-width: 3.6
+#| paged-print: false
+#| fig-alt: "Three side-by-side scatterplots of simulated two-group data with confidence ellipses and centroid markers, illustrating three scenarios: a clear centroid difference detected by both PERMANOVA and ANOSIM, a dispersion-only difference misleadingly flagged by PERMANOVA but not ANOSIM, and a combined location-and-dispersion difference detected by both."
+
+set.seed(42)
+
+# Scenario 1: Clear location difference - both methods detect
+s1 <- tibble(
+  x = c(rnorm(40, 2, 0.8), rnorm(40, 6, 0.8)),
+  y = c(rnorm(40, 4, 0.8), rnorm(40, 4, 0.8)),
+  group = rep(c("Group A", "Group B"), each = 40)
+)
+centroids1 <- s1 |> group_by(group) |> summarize(x = mean(x), y = mean(y), .groups = "drop")
+
+p1 <- ggplot(s1, aes(x, y, color = group, fill = group)) +
+  geom_point(size = 2.5, alpha = 0.6) +
+  stat_ellipse(level = 0.75, linewidth = 1, geom = "polygon", alpha = 0.1) +
+  geom_point(data = centroids1, size = 6, shape = 4, stroke = 2, color = "black") +
+  geom_segment(data = centroids1,
+               aes(x = x[1], xend = x[2], y = y[1], yend = y[2]),
+               inherit.aes = FALSE, linetype = "dashed", linewidth = 1) +
+  scale_color_manual(values = c("Group A" = "#2166ac", "Group B" = "#b2182b")) +
+  scale_fill_manual(values = c("Group A" = "#2166ac", "Group B" = "#b2182b")) +
+  annotate("label", x = 6, y = 7, label = "Centroids differ", size = 3.5) +
+  labs(title = "Scenario 1: Location Difference",
+       subtitle = "PERMANOVA ✓ | ANOSIM ✓") +
+  coord_fixed(xlim = c(-1, 9), ylim = c(1, 7)) +
+  theme_minimal(base_size = 7) +
+  theme(legend.position = "none",
+        plot.title = element_text(face = "bold"))
+
+# Scenario 2: Same location, different spread
+s2 <- tibble(
+  x = c(rnorm(40, 4, 0.5), rnorm(40, 4, 2.0)),
+  y = c(rnorm(40, 4, 0.5), rnorm(40, 4, 2.0)),
+  group = rep(c("Group A", "Group B"), each = 40)
+)
+centroids2 <- s2 |> group_by(group) |> summarize(x = mean(x), y = mean(y), .groups = "drop")
+
+p2 <- ggplot(s2, aes(x, y, color = group, fill = group)) +
+  geom_point(size = 2.5, alpha = 0.6) +
+  stat_ellipse(level = 0.75, linewidth = 1, geom = "polygon", alpha = 0.1) +
+  geom_point(data = centroids2, size = 6, shape = 4, stroke = 2, color = "black") +
+  scale_color_manual(values = c("Group A" = "#2166ac", "Group B" = "#b2182b")) +
+  scale_fill_manual(values = c("Group A" = "#2166ac", "Group B" = "#b2182b")) +
+  annotate("label", x = 6.5, y = 7.5, label = "Same centroid\ndifferent spread", 
+           size = 3.5, lineheight = 0.9) +
+  labs(title = "Scenario 2: Dispersion Only",
+       subtitle = "PERMANOVA ✓ (misleading!) | ANOSIM ✗") +
+  coord_fixed(xlim = c(-1, 9), ylim = c(0, 8)) +
+  theme_minimal(base_size = 7) +
+  theme(legend.position = "none",
+        plot.title = element_text(face = "bold"))
+
+# Scenario 3: Both location AND spread differ
+s3 <- tibble(
+  x = c(rnorm(40, 2, 0.5), rnorm(40, 6, 1.5)),
+  y = c(rnorm(40, 4, 0.5), rnorm(40, 5, 1.5)),
+  group = rep(c("Group A", "Group B"), each = 40)
+)
+centroids3 <- s3 |> group_by(group) |> summarize(x = mean(x), y = mean(y), .groups = "drop")
+
+p3 <- ggplot(s3, aes(x, y, color = group, fill = group)) +
+  geom_point(size = 2.5, alpha = 0.6) +
+  stat_ellipse(level = 0.75, linewidth = 1, geom = "polygon", alpha = 0.1) +
+  geom_point(data = centroids3, size = 6, shape = 4, stroke = 2, color = "black") +
+  geom_segment(data = centroids3,
+               aes(x = x[1], xend = x[2], y = y[1], yend = y[2]),
+               inherit.aes = FALSE, linetype = "dashed", linewidth = 1) +
+  scale_color_manual(values = c("Group A" = "#2166ac", "Group B" = "#b2182b")) +
+  scale_fill_manual(values = c("Group A" = "#2166ac", "Group B" = "#b2182b")) +
+  annotate("label", x = 2, y = 6.5, label = "Use betadisper()\nto disentangle", 
+           size = 3.5, lineheight = 0.9) +
+  labs(title = "Scenario 3: Location + Dispersion",
+       subtitle = "PERMANOVA ✓ (ambiguous) | ANOSIM ✓") +
+  coord_fixed(xlim = c(-1, 9), ylim = c(1, 7)) +
+  theme_minimal(base_size = 7) +
+  theme(legend.position = "none",
+        plot.title = element_text(face = "bold"))
+
+p1 + p2 + p3 +
+  plot_annotation(
+    subtitle = "× = group centroid | Scenario 2 is why we always run betadisper()",
+    theme = theme(
+      plot.subtitle = element_text(size = 12, color = "gray30", face = "italic")
+    )
+  )
+```
+:::
+
+## Scenario 2 is Key!
+
+::::: columns
+::: {.column width="50%"}
+-   **The Problem:**
+    -   Groups A and B have the **same centroid** (same average
+        community)
+    -   But Group B is much more **variable** (spread out)
+    -   PERMANOVA will detect this as "significant"!
+-   **Why?**
+    -   PERMANOVA tests distances from points to centroids
+    -   More spread = larger distances = detected as "different"
+:::
+
+::: {.column width="50%"}
+```{r scenario2-alone}
+#| echo: false
+#| message: false
+#| warning: false
+#| fig-height: 3.6
+#| fig-width: 3.6
+#| paged-print: false
+#| fig-alt: "Scatterplot of two simulated groups with the same centroid but very different spread, with confidence ellipses and centroid markers, showing why PERMANOVA can misleadingly flag a 'significant' result driven only by dispersion differences."
+
+ggplot(s2, aes(x, y, color = group, fill = group)) +
+  geom_point(size = 3, alpha = 0.6) +
+  stat_ellipse(level = 0.75, linewidth = 1.2, geom = "polygon", alpha = 0.15) +
+  geom_point(data = centroids2, size = 8, shape = 4, stroke = 3, color = "black") +
+  scale_color_manual(values = c("Group A" = "#2166ac", "Group B" = "#b2182b")) +
+  scale_fill_manual(values = c("Group A" = "#2166ac", "Group B" = "#b2182b")) +
+  labs(x = "NMDS1", y = "NMDS2", color = "Group", fill = "Group") +
+  coord_fixed(xlim = c(-1, 9), ylim = c(-1, 9)) +
+  theme_minimal(base_size = 9) +
+  theme(legend.position = "bottom")
+```
+:::
+:::::
+
+## Dispersion test for PERMANOVA
+
+-   **Solution:** Always run `betadisper()` before interpreting
+    PERMANOVA!
+    -   What PERMANOVA "Sees"
+
+::: panel
+```{r permanova-view}
+#| echo: false
+#| message: false
+#| warning: false
+#| fig-height: 3.6
+#| fig-width: 3.6
+#| paged-print: false
+#| fig-alt: "Scatterplot of two simulated groups with lines connecting each point to its group centroid and a double-headed arrow between the two centroids, illustrating that PERMANOVA tests whether the distance between group centroids is significant."
+
+set.seed(123)
+
+demo_data <- tibble(
+  x = c(rnorm(25, 2.5, 0.9), rnorm(25, 5.5, 0.9)),
+  y = c(rnorm(25, 3.5, 0.9), rnorm(25, 5, 0.9)),
+  group = rep(c("Upstream", "Downstream"), each = 25)
+)
+
+centroids_demo <- demo_data |> 
+  group_by(group) |> 
+  summarize(cx = mean(x), cy = mean(y), .groups = "drop")
+
+demo_with_centroids <- demo_data |>
+  left_join(centroids_demo, by = "group")
+
+ggplot(demo_data, aes(x, y)) +
+  # Lines from points to their centroid
+  geom_segment(data = demo_with_centroids,
+               aes(xend = cx, yend = cy, color = group), 
+               alpha = 0.4, linewidth = 0.5) +
+  geom_point(aes(color = group), size = 4, alpha = 0.8) +
+  # Centroids
+  geom_point(data = centroids_demo, aes(x = cx, y = cy), 
+             size = 10, shape = 18, color = "black") +
+  # Line between centroids
+  geom_segment(data = centroids_demo,
+               aes(x = cx[1], y = cy[1], xend = cx[2], yend = cy[2]),
+               linewidth = 3, color = "black",
+               arrow = arrow(length = unit(0.5, "cm"), ends = "both")) +
+  scale_color_manual(values = c("Upstream" = "#2166ac", "Downstream" = "#b2182b")) +
+  annotate("label", x = 2, y = 6.8, 
+           label = "PERMANOVA tests if\nthis distance is significant", 
+           size = 5, fill = "lightyellow", fontface = "bold") +
+  labs(title = "PERMANOVA: Testing Centroid Distances",
+       subtitle = "Compares between-group variance to within-group variance",
+       x = "NMDS1", y = "NMDS2", color = "Group") +
+  coord_fixed(xlim = c(0, 8), ylim = c(1, 7)) +
+  theme_minimal(base_size = 9) +
+  theme(legend.position = "bottom",
+        plot.title = element_text(face = "bold", size = 18))
+```
+:::
+
+## What ANOSIM "Sees"
+
+-   This is different
+
+::: panel
+```{r anosim-view}
+#| echo: false
+#| message: false
+#| warning: false
+#| fig-height: 3.6
+#| fig-width: 3.6
+#| paged-print: false
+#| fig-alt: "Scatterplot of two simulated groups with green solid lines connecting example within-group point pairs and orange dashed lines connecting example between-group point pairs, illustrating that ANOSIM compares whether within-group distances rank shorter than between-group distances."
+
+# Select example pairs for visualization
+within_up <- demo_data |> filter(group == "Upstream") |> slice(c(1, 5, 10, 15))
+within_down <- demo_data |> filter(group == "Downstream") |> slice(c(1, 8, 12, 20))
+
+within_lines <- tibble(
+  x = c(within_up$x[1], within_up$x[2], within_down$x[1], within_down$x[2]),
+  y = c(within_up$y[1], within_up$y[2], within_down$y[1], within_down$y[2]),
+  xend = c(within_up$x[3], within_up$x[4], within_down$x[3], within_down$x[4]),
+  yend = c(within_up$y[3], within_up$y[4], within_down$y[3], within_down$y[4]),
+  type = "Within-group (should be SHORT)"
+)
+
+between_lines <- tibble(
+  x = c(within_up$x[1], within_up$x[2], within_up$x[3]),
+  y = c(within_up$y[1], within_up$y[2], within_up$y[3]),
+  xend = c(within_down$x[1], within_down$x[2], within_down$x[3]),
+  yend = c(within_down$y[1], within_down$y[2], within_down$y[3]),
+  type = "Between-group (should be LONG)"
+)
+
+all_lines <- bind_rows(within_lines, between_lines)
+
+ggplot(demo_data, aes(x, y)) +
+  geom_segment(data = all_lines,
+               aes(xend = xend, yend = yend, linetype = type, color = type),
+               linewidth = 1.5, alpha = 0.8) +
+  geom_point(aes(fill = group), size = 4, alpha = 0.8, shape = 21, color = "white", stroke = 1) +
+  scale_fill_manual(values = c("Upstream" = "#2166ac", "Downstream" = "#b2182b")) +
+  scale_color_manual(values = c("Within-group (should be SHORT)" = "#1b9e77", 
+                                "Between-group (should be LONG)" = "#d95f02")) +
+  scale_linetype_manual(values = c("Within-group (should be SHORT)" = "solid", 
+                                   "Between-group (should be LONG)" = "dashed")) +
+  annotate("label", x = 5.5, y = 1.5, 
+           label = "ANOSIM: Are green lines\nranked shorter than orange?", 
+           size = 5, fill = "lightyellow", fontface = "bold", lineheight = 0.9) +
+  labs(title = "ANOSIM: Comparing Ranked Pairwise Distances",
+       subtitle = "R statistic = (mean rank between - mean rank within) / (N/2)",
+       x = "NMDS1", y = "NMDS2", 
+       fill = "Group", color = "Comparison", linetype = "Comparison") +
+  coord_fixed(xlim = c(0, 8), ylim = c(1, 7)) +
+  theme_minimal(base_size = 9) +
+  theme(legend.position = "bottom",
+        legend.box = "vertical",
+        plot.title = element_text(face = "bold", size = 18)) +
+  guides(fill = guide_legend(order = 1),
+         color = guide_legend(order = 2),
+         linetype = guide_legend(order = 2))
+```
+:::
+
+## Side-by-Side Comparison of PCA and ANOSIM
+
+Comparison
+
+::: panel
+```{r side-by-side}
+#| echo: false
+#| message: false
+#| warning: false
+#| fig-height: 3.6
+#| fig-width: 3.6
+#| paged-print: false
+#| fig-alt: "Two side-by-side scatterplots of the same simulated two-group data: the left panel shows the PERMANOVA view with centroid distances, the right panel shows the ANOSIM view with within- versus between-group distance lines."
+
+p_perm <- ggplot(demo_data, aes(x, y)) +
+  geom_segment(data = demo_with_centroids,
+               aes(xend = cx, yend = cy, color = group), 
+               alpha = 0.4, linewidth = 0.5) +
+  geom_point(aes(color = group), size = 3, alpha = 0.8) +
+  geom_point(data = centroids_demo, aes(x = cx, y = cy), 
+             size = 8, shape = 18, color = "black") +
+  geom_segment(data = centroids_demo,
+               aes(x = cx[1], y = cy[1], xend = cx[2], yend = cy[2]),
+               linewidth = 2, color = "black",
+               arrow = arrow(length = unit(0.4, "cm"), ends = "both")) +
+  scale_color_manual(values = c("Upstream" = "#2166ac", "Downstream" = "#b2182b")) +
+  labs(title = "PERMANOVA",
+       subtitle = "Tests centroid locations",
+       x = "NMDS1", y = "NMDS2") +
+  coord_fixed(xlim = c(0, 8), ylim = c(1, 7)) +
+  theme_minimal(base_size = 7) +
+  theme(legend.position = "none",
+        plot.title = element_text(face = "bold", size = 16))
+
+p_anos <- ggplot(demo_data, aes(x, y)) +
+  geom_segment(data = all_lines,
+               aes(xend = xend, yend = yend, linetype = type, color = type),
+               linewidth = 1.2, alpha = 0.7) +
+  geom_point(aes(fill = group), size = 3, alpha = 0.8, shape = 21, color = "white") +
+  scale_fill_manual(values = c("Upstream" = "#2166ac", "Downstream" = "#b2182b")) +
+  scale_color_manual(values = c("Within-group (should be SHORT)" = "#1b9e77", 
+                                "Between-group (should be LONG)" = "#d95f02")) +
+  scale_linetype_manual(values = c("Within-group (should be SHORT)" = "solid", 
+                                   "Between-group (should be LONG)" = "dashed")) +
+  labs(title = "ANOSIM",
+       subtitle = "Compares ranked distances",
+       x = "NMDS1", y = "NMDS2") +
+  coord_fixed(xlim = c(0, 8), ylim = c(1, 7)) +
+  theme_minimal(base_size = 7) +
+  theme(legend.position = "none",
+        plot.title = element_text(face = "bold", size = 16))
+
+p_perm + p_anos +
+  plot_annotation(
+    title = "Two Methods, Two Questions",
+    theme = theme(plot.title = element_text(face = "bold", size = 18))
+  )
+```
+:::
+
+## Part 8 · Environmental Drivers and Wrap-Up {.divider}
+
+## Environmental Drivers
+
+::::: columns
+::: {.column width="50%"}
+-   **Environmental Vector Results:**
+    -   Which Environmental Variables Matter?
+    -   **Significant variables (p \< 0.05):**
+-   **What this means:**
+    -   variables significantly correlate w/ comm. comp
+    -   explain spatial arrangement of sites in NMDS
+-   arrows show direction of max change for env. variables
+    -   Longer arrows = stronger correlations with ordination
+    -   Arrow direction = sites have high vs. low values of variable
+-   distance from source (das) and altitude (alt) point opp. directions
+    -   (expected - altitude decreases as distance increases)
+-   Oxygen (oxy) decreases downstream
+-   BOD (dbo) increases downstream = more org. pollution
+:::
+
+::: {.column width="50%"}
+```{r environmental-analysis}
+#| echo: false
+#| message: false
+#| warning: false
+#| paged-print: false
+
+# Fit environmental vectors to NMDS ordination
+env_matrix <- doubs_env %>%
+  select(das:dbo) %>%  # All environmental variables
+  as.matrix()
+
+# Fit environmental vectors
+env_fit <- envfit(fish_nmds, env_matrix, permutations = 999)
+env_fit
+```
+
+```{r environmental-vectors-plot}
+#| fig-width: 3.6
+#| fig-height: 3.6
+#| echo: false
+#| message: false
+#| warning: false
+#| paged-print: false
+#| fig-alt: "NMDS ordination plot of fish community sites colored by river reach, with red arrows overlaid showing the direction and strength of significant environmental variables (such as distance from source, oxygen, and biological oxygen demand)."
+# Plot with environmental vectors
+ordiplot(fish_nmds, type = "n", main = "Fish Communities with Environmental Vectors")
+
+# Add site points colored by reach
+points(fish_nmds, display = "sites", 
+       col = as.numeric(doubs_env$reach) + 1, 
+       pch = 16, cex = 1.5)
+
+# Add significant environmental vectors (p < 0.05)
+plot(env_fit, p.max = 0.05, col = "red", cex = 0.9)
+
+# Add legend
+legend("topright", 
+       legend = levels(doubs_env$reach), 
+       col = 2:4, 
+       pch = 10)
+```
+:::
+:::::
+
+## Environmental Gradient Analysis
+
+-   **Key Environmental Patterns:**
+    -   **Distance from source (das)**: Strong correlate with community
+        change
+    -   **Oxygen (oxy)**: Decreases downstream, affects fish communities
+    -   **Biological oxygen demand (dbo)**: Increases downstream
+        (pollution indicator)
+    -   **Altitude (alt)**: Decreases downstream, associated with
+        temperature changes
+
+::: panel
+```{r environmental-gradients}
+#| fig-width: 3.6
+#| fig-height: 3.6
+#| echo: false
+#| message: false
+#| warning: false
+#| paged-print: false
+#| fig-alt: "Two-panel figure: faceted scatterplots of pH, oxygen, biological oxygen demand, and altitude against distance from source with loess trend lines colored by river reach; and a correlation heatmap of the two NMDS axes against each environmental variable, with correlation values printed in each cell."
+# Create comprehensive environmental gradient plots
+env_long <- doubs_env %>%
+  select(site, reach, das, pH, oxy, dbo, alt) %>%
+  pivot_longer(cols = c(pH, oxy, dbo, alt), 
+               names_to = "variable", values_to = "value")
+
+p1 <- env_long %>%
+  ggplot(aes(das, value, color = reach)) +
+  geom_point(size = 2) +
+  geom_smooth(method = "loess", se = FALSE, color = "black") +
+  facet_wrap(~variable, scales = "free_y") +
+  labs(title = "Environmental Gradients Along River",
+       x = "Distance from source (km)",
+       y = "Environmental value",
+       color = "River Reach") +
+  scale_color_viridis_d() +
+  theme_minimal()
+
+# Show correlation with NMDS axes
+nmds_env_cor <- cor(nmds_scores %>% select(MDS1, MDS2), 
+                    env_matrix, use = "complete.obs")
+
+p2 <- nmds_env_cor %>%
+  as.data.frame() %>%
+  rownames_to_column("NMDS_axis") %>%
+  pivot_longer(cols = -NMDS_axis, names_to = "env_var", values_to = "correlation") %>%
+  ggplot(aes(env_var, NMDS_axis, fill = correlation)) +
+  geom_tile() +
+  geom_text(aes(label = round(correlation, 2)), color = "white", fontface = "bold") +
+  scale_fill_gradient2(low = "blue", mid = "white", high = "red", 
+                       midpoint = 0, name = "Correlation") +
+  labs(title = "Environmental Correlations with NMDS Axes",
+       x = "Environmental Variable", y = "NMDS Axis") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+p1 / p2
+```
+:::
+
+## Summary and Conclusions
+
+::::: columns
+::: {.column width="50%"}
+-   **Key Findings**
+-   **NMDS Results:**
+    -   **Stress =**: Excellent representation
+    -   **Clear gradient** from upper to lower river reaches
+    -   **Within-reach similarity** greater between-reach similarity
+-   **PERMANOVA Results:**
+    -   **Highly significant** differences between reaches (p \< 0.001)
+    -   **River reach explains substantial variance** in community
+        composition
+    -   **All pairwise comparisons significant** after correction
+-   **ANOSIM Results:**
+    -   R = 0.508 p = 0.001 **: Excellent separation**\
+    -   **Confirms PERMANOVA findings** with different approach
+    -   **Strong within-group coherence**
+:::
+
+::: {.column width="50%"}
+-   **Environmental Drivers:**
+    -   **Distance from source**: Primary gradient
+    -   **Dissolved oxygen**: Decreases downstream
+    -   **Biological oxygen demand**: Increases downstream
+    -   **Multiple correlated factors** drive community change
+-   **Biological Interpretation:**
+    -   **River continuum concept supported**
+    -   **Progressive community change** from source to mouth
+    -   **Environmental filtering** shapes community assembly
+    -   **Pollution gradient** evident in lower reaches
+:::
+:::::
+
+## Take-Home
+
+::::: columns
+::: {.column width="50%"}
+-   **NMDS (Non-metric Multidimensional Scaling):**
+    -   Visualizes community dissimilarity in 2D/3D
+    -   Preserves rank order of distances (non-metric)
+    -   No distributional assumptions
+    -   Stress \< 0.2 for acceptable solutions
+    -   Great for exploring ecological gradients
+-   **PERMANOVA (Permutational MANOVA):**
+    -   Tests for differences in group centroids
+    -   Uses distance matrices, not raw data
+    -   No distributional assumptions
+    -   Can handle complex designs
+    -   Check dispersion homogeneity assumption
+:::
+
+::: {.column width="50%"}
+-   **ANOSIM (Analysis of Similarities):**
+    -   Tests group separation using rank distances
+    -   R-statistic: -1 (no separation) to +1 (complete)
+    -   More robust to outliers than PERMANOVA
+    -   Simpler but less powerful
+    -   Good for exploratory analysis
+-   **Environmental Drivers:**
+    -   Use `envfit()` to correlate environment with ordination
+    -   Identifies which variables explain community patterns
+    -   Helps understand ecological mechanisms
+    -   Essential for management implications
+:::
+:::::

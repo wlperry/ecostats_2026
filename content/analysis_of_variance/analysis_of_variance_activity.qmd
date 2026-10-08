@@ -1,0 +1,322 @@
+---
+order: 12
+week: 8
+title: "Activity: Analysis of Variance"
+subtitle: "Single-factor ANOVA"
+description: "In-class activity on the fiddler crab claw-radiator experiment: build the sums of squares by hand, run the ANOVA, check its assumptions, set the reference level with fct_relevel(), and find which groups actually differ with Tukey HSD."
+author: "Bill Perry"
+metadata-files:
+  - ../../_templates/activities.yml
+format:
+  html: default
+  docx: default
+---
+
+# Worksheet: One-Way ANOVA
+
+[📥 Crab data](data/fiddler_crabs.csv){.btn .btn-primary download="fiddler_crabs.csv"} [📥 Tools script (.R)](themes_functions/r_themes_and_functions.R){.btn .btn-primary download="r_themes_and_functions.R"} [📥 Script skeleton (.R)](data/12_analysis_of_variance.R){.btn .btn-primary download="12_analysis_of_variance.R"}
+
+The lecture's dataset: **84 fiddler crabs**, 21 in each of four groups, with body temperature above ambient measured in the field. Does the male's oversized major claw act as a **heat radiator**?
+
+- `intact male` — the control
+- `male major removed` — the big claw taken off
+- `male minor removed` — a small claw taken off, the procedural control
+- `female` — never had a major claw
+
+If the claw sheds heat, removing it should make males **hotter**.
+
+------------------------------------------------------------------------
+
+# Part 1 · Setup and the data
+
+**▶ Run this:**
+
+``` r
+# ── Part 1.1 · Setup and the data ───────────────────────────────────────
+library(tidyverse)
+library(car)
+
+source("themes_functions/r_themes_and_functions.R")
+
+crab_df <- read_csv("data/fiddler_crabs.csv") %>%
+  mutate(crab_type = factor(crab_type))
+
+count(crab_df, crab_type)
+```
+
+**▶ Run this** — look at the data before you test it:
+
+``` r
+# ── Part 1.2 · Setup and the data ───────────────────────────────────────
+ggplot(crab_df, aes(crab_type, body_temp_c)) +
+  geom_boxplot() +
+  geom_jitter(width = 0.15, alpha = 0.5)
+```
+
+✏️ **Your turn:** Which group looks warmest, and does the picture match the radiator prediction?
+
+```
+____________________________________________________________
+```
+
+------------------------------------------------------------------------
+
+# Part 2 · Build the sums of squares
+
+**▶ Run this:**
+
+``` r
+# ── Part 2.1 · Build the sums of squares ────────────────────────────────
+grand_mean <- mean(crab_df$body_temp_c)
+
+crab_parts <- crab_df %>%
+  group_by(crab_type) %>%
+  mutate(group_mean = mean(body_temp_c)) %>%
+  ungroup()
+
+ss_total  <- sum((crab_parts$body_temp_c - grand_mean)^2)
+ss_among  <- sum((crab_parts$group_mean  - grand_mean)^2)
+ss_within <- sum((crab_parts$body_temp_c - crab_parts$group_mean)^2)
+
+c(total = ss_total, among = ss_among, within = ss_within)
+
+ss_among + ss_within
+```
+
+✏️ **Your turn:** Does the partition add up, and what fraction does the grouping explain?
+
+```
+ss_among + ss_within = __________   ss_total = __________
+
+ss_among / ss_total = __________
+```
+
+------------------------------------------------------------------------
+
+# Part 3 · The ANOVA
+
+**▶ Run this:**
+
+``` r
+# ── Part 3.1 · The ANOVA ────────────────────────────────────────────────
+crab_model <- lm(body_temp_c ~ crab_type, data = crab_df)
+
+anova(crab_model)
+
+summary(crab_model)$r.squared
+```
+
+✏️ **Your turn:** Match the table to what you computed in Part 2.
+
+```
+Sum Sq, crab_type = __________   Sum Sq, Residuals = __________
+
+Df = ______ and ______      F = __________   p = __________
+
+R squared = __________  (compare it with ss_among / ss_total)
+```
+
+✏️ **Your turn:** Write down exactly what this p-value licenses you to say — and one thing it does **not**.
+
+```
+It says: ____________________________________________________
+
+It does not say: ____________________________________________
+```
+
+------------------------------------------------------------------------
+
+# Part 4 · Check the assumptions
+
+**▶ Run this:**
+
+``` r
+# ── Part 4.1 · Check the assumptions ────────────────────────────────────
+par(mfrow = c(2, 2))
+plot(crab_model)
+par(mfrow = c(1, 1))
+```
+
+**▶ Run this** — the two formal tests:
+
+``` r
+# ── Part 4.2 · Check the assumptions ────────────────────────────────────
+shapiro.test(residuals(crab_model))
+
+leveneTest(body_temp_c ~ crab_type, data = crab_df)
+```
+
+✏️ **Your turn:** Both tests have a null hypothesis you *want* to keep. Fill in.
+
+```
+Shapiro H0 = ________________  p = __________  pass? ______
+
+Levene  H0 = ________________  p = __________  pass? ______
+```
+
+✏️ **Your turn:** The third assumption is independence. Why can no plot or test on this slide check it?
+
+```
+____________________________________________________________
+```
+
+------------------------------------------------------------------------
+
+# Part 5 · Set the reference level
+
+**▶ Run this** — see the order R chose for you:
+
+``` r
+# ── Part 5.1 · Set the reference level ──────────────────────────────────
+levels(crab_df$crab_type)
+
+summary(crab_model)$coefficients
+```
+
+✏️ **Your turn:** Which level is the reference, why did R pick it, and what is each coefficient comparing?
+
+```
+Reference: __________   Why: _______________________________
+
+Each coefficient is "degrees hotter than a ______________"
+```
+
+**▶ Run this** — put the control first and refit:
+
+``` r
+# ── Part 5.2 · Set the reference level ──────────────────────────────────
+crab_df <- crab_df %>%
+  mutate(crab_type = fct_relevel(crab_type, "intact male"))
+
+crab_model <- lm(body_temp_c ~ crab_type, data = crab_df)
+
+summary(crab_model)$coefficients
+
+anova(crab_model)
+```
+
+✏️ **Your turn:** Compare the two coefficient tables, and the two ANOVA tables.
+
+```
+What changed: _______________________________________________
+
+What did not change: ________________________________________
+
+Why does the F-test not care which level is first?
+
+____________________________________________________________
+```
+
+------------------------------------------------------------------------
+
+# Part 6 · Which groups actually differ?
+
+**▶ Run this:**
+
+``` r
+# ── Part 6.1 · Which groups actually differ? ────────────────────────────
+TukeyHSD(aov(crab_model))
+```
+
+✏️ **Your turn:** Fill in the adjusted p-values for the three comparisons with the control.
+
+```
+female - intact male             = __________
+
+male major removed - intact male = __________
+
+male minor removed - intact male = __________
+```
+
+✏️ **Your turn:** The radiator hypothesis predicts that removing the **major** claw makes males hotter. Does the Tukey output support it? Answer in one sentence, using the number.
+
+```
+____________________________________________________________
+```
+
+✏️ **Your turn:** Females *are* significantly hotter than every male group. Why does that not rescue the hypothesis?
+
+```
+____________________________________________________________
+```
+
+------------------------------------------------------------------------
+
+# Part 7 · Report it
+
+✏️ **Your turn:** Write the results sentence you would put in a paper. It needs the test, F with **both** degrees of freedom, the p-value, R², and the post-hoc method — including the comparison that was *not* significant.
+
+```
+____________________________________________________________
+
+____________________________________________________________
+
+____________________________________________________________
+```
+
+------------------------------------------------------------------------
+
+# Part 8 · The figure you hand in
+
+**▶ Run this:**
+
+``` r
+# ── Part 8.1 · The figure you hand in ───────────────────────────────────
+crab_summary <- crab_df %>%
+  group_by(crab_type) %>%
+  reframe(summary_stats(body_temp_c))
+
+final_plot <- ggplot(crab_summary, aes(crab_type, mean)) +
+  geom_col(fill = "grey70", width = 0.6) +
+  geom_errorbar(aes(ymin = mean - se, ymax = mean + se), width = 0.15) +
+  labs(
+    title = "Female fiddler crabs run warmer than males",
+    subtitle = "Mean ± 1 SE; removing the major claw did not raise male temperature",
+    x = "Crab type",
+    y = "Body temperature above ambient (C)"
+  ) +
+  theme_regular(base_size = 12)
+
+final_plot
+
+ggsave(
+  "figures/crab_anova.pdf",
+  plot   = final_plot,
+  width  = 7,
+  height = 4.5,
+  units  = "in"
+)
+```
+
+✏️ **Your turn:** Open the PDF and check the bars run in the order you releveled to, not alphabetically.
+
+------------------------------------------------------------------------
+
+# Review and checkpoint
+
+At this point you can:
+
+- [ ] Build $SS_{among}$, $SS_{within}$ and $SS_{total}$ by hand and match them to `anova()`
+- [ ] Say what a significant F does and does not tell you
+- [ ] Check normality and equal variance on the residuals, and name the assumption no test can check
+- [ ] Set a factor's reference level with `fct_relevel()` and explain what it does and does not change
+- [ ] Read a Tukey HSD table and answer a specific biological prediction with it
+- [ ] Write a results sentence with both degrees of freedom and an effect size
+
+::: callout-note
+**📤 What to turn in**
+
+1. `12_analysis_of_variance.R`
+2. `figures/crab_anova.pdf`
+3. This worksheet, with your written answers
+:::
+
+------------------------------------------------------------------------
+
+# Homework
+
+**[Homework 7 — One-Way ANOVA: A Dose Series R Puts in the Wrong Order](../../homeworks/one_way_anova_homework/one_way_anova_homework.qmd)**
+
+**Thirty-two *Daphnia* across three densities of toxic cyanobacteria.** The crab worksheet again, in the same order, with two traps: the design is unbalanced, and the group labels (`low`, `med`, `high`) sort alphabetically into nonsense unless you set the factor levels yourself. There is also a real question about whether a dose series should be a factor at all.
+
+**Data:** [`daphnia_resistance.csv`](../../homeworks/one_way_anova_homework/data/daphnia_resistance.csv) — Whitlock & Schluter, **Chapter 15, problem 17**.

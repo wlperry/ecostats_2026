@@ -1,0 +1,414 @@
+---
+order: 20
+week: 15
+title: "Activity: NMDS & PERMANOVA"
+subtitle: "NMDS & PERMANOVA"
+description: "Hands-on activity: NMDS ordination, PERMANOVA, ANOSIM, and environmental fitting, using the iris dataset treated as a community-style abundance matrix."
+author: "Bill Perry"
+metadata-files:
+  - ../../_templates/activities.yml
+format:
+  html: default
+  docx: default
+---
+
+# Worksheet: NMDS & PERMANOVA
+
+**▶ Run this in your Script:**
+
+``` r
+# ── Setup (1) ───────────────────────────────────────────────────────────
+library(vegan)
+library(janitor)
+library(patchwork)
+library(tidyverse)
+
+theme_set(theme_minimal(base_size = 9))
+```
+
+**What is NMDS?** NMDS (Non-metric Multidimensional Scaling) is an ordination technique that:
+
+- Visualizes dissimilarity between objects in reduced dimensions
+- Preserves rank order of distances, not exact distances
+- Works well with non-linear ecological relationships
+- Makes few assumptions about data structure
+
+**When to use NMDS:** community data (species abundance or presence/absence matrices), non-linear relationships (when PCA assumptions are violated), or complex ecological gradients (multiple environmental factors affecting communities).
+
+**Key concepts of NMDS:**
+
+1.  **Dissimilarity matrices** instead of covariance
+2.  **Stress values** measure goodness of fit (< 0.2 is acceptable)
+3.  **Iterative algorithm** to find optimal configuration
+4.  **No eigenvalues** - axes have no inherent meaning
+5.  **Rank-based** - preserves order, not exact distances
+
+::: callout-important
+**Critical first step:** Always check your stress value! Stress < 0.1 is excellent, 0.1-0.2 is good, > 0.2 is poor representation.
+:::
+
+------------------------------------------------------------------------
+
+# Part 1 · Data Preparation and Exploration
+
+We'll use the iris dataset for this analysis, treating it as if the measurements represent abundances of different "species" at different "sites".
+
+**▶ Run this:**
+
+``` r
+# ── Part 1.1 · Data Preparation and Exploration ─────────────────────────
+iris_df <- read_csv("data/iris.csv") %>%
+  clean_names()
+
+head(iris_df)
+```
+
+**▶ Run this** — separate the grouping variable from the numeric "community" matrix:
+
+``` r
+# ── Part 1.2 · Data Preparation and Exploration ─────────────────────────
+iris_species_df <- iris_df %>%
+  dplyr::select(species)
+
+iris_numeric_df <- iris_df %>%
+  dplyr::select(-species)
+
+str(iris_numeric_df)
+```
+
+**▶ Run this** — a quick pairs plot to see relationships:
+
+``` r
+# ── Part 1.3 · Data Preparation and Exploration ─────────────────────────
+iris_pairs_plot <- iris_df %>%
+  dplyr::select(-species) %>%
+  pairs(main = "Iris Measurements Relationships")
+```
+
+------------------------------------------------------------------------
+
+# Part 2 · Running NMDS
+
+## Step 1: Calculate a distance matrix
+
+``` r
+# ── Part 2.1 · Running NMDS ─────────────────────────────────────────────
+# For iris data, we'll use Euclidean distance since these are measurements
+# (Bray-Curtis is more common for real abundance/count data)
+iris_dist <- dist(iris_numeric_df, method = "euclidean")
+
+iris_dist[1:5]
+```
+
+## Step 2: Run NMDS
+
+``` r
+# ── Part 2.2 · Running NMDS ─────────────────────────────────────────────
+set.seed(123)
+iris_nmds_model <- metaMDS(iris_numeric_df,
+                           distance = "euclidean",
+                           k = 2,
+                           trymax = 100)
+
+iris_nmds_model
+```
+
+✏️ **Your turn:** Fill in from your own output — Stress value: `______`. Is that excellent (<0.1), good (0.1–0.2), or poor (>0.2)?
+
+`________________________`
+
+## Step 3: Extract NMDS scores
+
+``` r
+# ── Part 2.3 · Running NMDS ─────────────────────────────────────────────
+nmds_scores_df <- as.data.frame(iris_nmds_model$points) %>%
+  rename(nmds1 = MDS1, nmds2 = MDS2) %>%
+  bind_cols(iris_species_df)
+
+head(nmds_scores_df)
+```
+
+## Step 4: Create an NMDS plot
+
+``` r
+# ── Part 2.4 · Running NMDS ─────────────────────────────────────────────
+nmds_basic_plot <- ggplot(nmds_scores_df, aes(x = nmds1, y = nmds2, color = species)) +
+  geom_point(size = 3, alpha = 0.8) +
+  labs(title = "NMDS Ordination of Iris Data",
+       subtitle = paste("Stress =", round(iris_nmds_model$stress, 3)),
+       x = "NMDS1",
+       y = "NMDS2",
+       color = "Species") +
+  theme_minimal()
+
+nmds_basic_plot
+```
+
+## Step 5: Add confidence ellipses
+
+``` r
+# ── Part 2.5 · Running NMDS ─────────────────────────────────────────────
+nmds_ellipse_plot <- ggplot(nmds_scores_df, aes(x = nmds1, y = nmds2, color = species)) +
+  geom_point(size = 3, alpha = 0.8) +
+  stat_ellipse(level = 0.95, linewidth = 1) +
+  labs(title = "NMDS Ordination with 95% Confidence Ellipses",
+       subtitle = paste("Stress =", round(iris_nmds_model$stress, 3)),
+       x = "NMDS1",
+       y = "NMDS2",
+       color = "Species") +
+  theme_minimal()
+
+nmds_ellipse_plot
+```
+
+## Step 6: Stress plot (Shepard diagram)
+
+``` r
+# ── Part 2.6 · Running NMDS ─────────────────────────────────────────────
+stressplot(iris_nmds_model, main = "Shepard Diagram: Ordination vs Original Distances")
+```
+
+✏️ **Your turn:** Do the three species separate cleanly on the NMDS plot, or do any overlap?
+
+`________________________`
+
+------------------------------------------------------------------------
+
+# Part 3 · PERMANOVA Analysis
+
+PERMANOVA (Permutational Multivariate Analysis of Variance) tests whether groups have different multivariate centroids using permutation tests.
+
+## Step 1: Run PERMANOVA
+
+``` r
+# ── Part 3.1 · PERMANOVA Analysis ───────────────────────────────────────
+set.seed(456)
+iris_permanova_model <- adonis2(iris_numeric_df ~ species,
+                                data = iris_df,
+                                method = "euclidean",
+                                permutations = 999)
+
+iris_permanova_model
+```
+
+✏️ **Your turn:** Fill in from your own output — F-statistic: `______`, R² (variance explained): `______`, p-value: `______`. Do species differ significantly in multivariate space?
+
+## Step 2: Check homogeneity of dispersions
+
+Before interpreting PERMANOVA, we need to check if groups have similar multivariate spread.
+
+``` r
+# ── Part 3.2 · PERMANOVA Analysis ───────────────────────────────────────
+iris_dist_full <- dist(iris_numeric_df)
+dispersion_model <- betadisper(iris_dist_full, iris_df$species)
+
+dispersion_test <- anova(dispersion_model)
+dispersion_test
+```
+
+## Step 3: Visualize dispersions
+
+``` r
+# ── Part 3.3 · PERMANOVA Analysis ───────────────────────────────────────
+plot(dispersion_model, main = "Multivariate Dispersion by Species")
+```
+
+## Step 4: Pairwise PERMANOVA
+
+``` r
+# ── Part 3.4 · PERMANOVA Analysis ───────────────────────────────────────
+pairwise_permanova <- function(data_matrix, groups, distance_method = "euclidean") {
+  group_levels <- unique(groups)
+  comparisons <- combn(group_levels, 2)
+
+  results_df <- data.frame(
+    group1 = character(),
+    group2 = character(),
+    f_statistic = numeric(),
+    r_squared = numeric(),
+    p_value = numeric()
+  )
+
+  for(i in 1:ncol(comparisons)) {
+    group1 <- comparisons[1, i]
+    group2 <- comparisons[2, i]
+    subset_indices <- which(groups %in% c(group1, group2))
+
+    subset_data <- data_matrix[subset_indices, ]
+    subset_groups <- groups[subset_indices]
+
+    temp_result <- adonis2(subset_data ~ subset_groups,
+                          method = distance_method,
+                          permutations = 999)
+
+    results_df <- rbind(results_df, data.frame(
+      group1 = group1,
+      group2 = group2,
+      f_statistic = temp_result$F[1],
+      r_squared = temp_result$R2[1],
+      p_value = temp_result$"Pr(>F)"[1]
+    ))
+  }
+
+  results_df$p_adjusted <- p.adjust(results_df$p_value, method = "bonferroni")
+
+  return(results_df)
+}
+
+pairwise_results_df <- pairwise_permanova(iris_numeric_df, iris_df$species)
+pairwise_results_df
+```
+
+✏️ **Your turn:** Which pair of species is the most different (largest F-statistic)? Which pair is the least different?
+
+`________________________`
+
+::: callout-tip
+**🚀 If you finish early:** Does the dispersion test in Step 2 suggest the three species have similar multivariate spread? If not, how would that affect how you interpret the PERMANOVA result from Step 1?
+
+``` r
+# ── Part 3.5 · PERMANOVA Analysis ───────────────────────────────────────
+# Write your notes/code in the R script:
+```
+:::
+
+------------------------------------------------------------------------
+
+# Part 4 · ANOSIM Analysis
+
+ANOSIM (Analysis of Similarities) tests whether there is a significant difference between groups using rank dissimilarities.
+
+## Step 1: Run ANOSIM
+
+``` r
+# ── Part 4.1 · ANOSIM Analysis ──────────────────────────────────────────
+set.seed(789)
+iris_anosim_model <- anosim(iris_dist_full, iris_df$species, permutations = 999)
+
+iris_anosim_model
+```
+
+✏️ **Your turn:** Fill in from your own output — R statistic: `______`, p-value: `______`. R close to 1 indicates strong separation between groups; how strong is the separation here?
+
+## Step 2: Plot ANOSIM results
+
+``` r
+# ── Part 4.2 · ANOSIM Analysis ──────────────────────────────────────────
+plot(iris_anosim_model, main = "ANOSIM Results: Distribution of Permuted R Statistics")
+```
+
+------------------------------------------------------------------------
+
+# Part 5 · Environmental Fitting (Optional)
+
+If we had environmental variables, we could fit them to the ordination. For demonstration, let's use `petal_length` as a stand-in "environmental" variable.
+
+**▶ Run this:**
+
+``` r
+# ── Part 5.1 · Environmental Fitting (Optional) ─────────────────────────
+env_data_df <- data.frame(petal_length = iris_df$petal_length)
+
+env_fit_model <- envfit(iris_nmds_model, env_data_df, permutations = 999)
+env_fit_model
+```
+
+**▶ Run this** — visualize the environmental vector on the ordination:
+
+``` r
+# ── Part 5.2 · Environmental Fitting (Optional) ─────────────────────────
+env_coords_df <- as.data.frame(env_fit_model$vectors$arrows * 2)  # Scale for visibility
+env_coords_df$variable <- rownames(env_coords_df)
+
+nmds_env_plot <- ggplot(nmds_scores_df, aes(x = nmds1, y = nmds2, color = species)) +
+  geom_point(size = 3, alpha = 0.8) +
+  stat_ellipse(level = 0.95, linewidth = 1, alpha = 0.3) +
+  geom_segment(data = env_coords_df,
+               aes(x = 0, y = 0, xend = NMDS1, yend = NMDS2),
+               arrow = arrow(length = unit(0.3, "cm")),
+               color = "black", linewidth = 1) +
+  geom_text(data = env_coords_df,
+            aes(x = NMDS1 * 1.1, y = NMDS2 * 1.1, label = variable),
+            color = "black", size = 4) +
+  labs(title = "NMDS with Environmental Vector",
+       subtitle = paste("Stress =", round(iris_nmds_model$stress, 3)),
+       x = "NMDS1",
+       y = "NMDS2",
+       color = "Species") +
+  theme_minimal()
+
+nmds_env_plot
+```
+
+::: callout-tip
+**🚀 If you finish early:** Repeat the environmental fitting with `sepal_width` instead of `petal_length`. Does it point in a similar direction, or a very different one?
+
+``` r
+# ── Part 5.3 · Environmental Fitting (Optional) ─────────────────────────
+# Write your code in the R script:
+```
+:::
+
+------------------------------------------------------------------------
+
+# Summary checklist for NMDS and PERMANOVA
+
+::: callout-tip
+**Analysis checklist**
+
+1.  **Prepare your data** - ensure numeric matrix format.
+2.  **Choose appropriate distance measure** - Bray-Curtis for abundance data, Euclidean for measurement data.
+3.  **Run NMDS** with sufficient iterations.
+4.  **Check stress value** - must be < 0.2.
+5.  **Create ordination plots** with groups identified.
+6.  **Test homogeneity of dispersions** before PERMANOVA.
+7.  **Run PERMANOVA** to test group differences.
+8.  **Consider ANOSIM** as complementary test.
+9.  **Fit environmental variables** if available.
+:::
+
+**Key points to remember:**
+
+- **NMDS preserves rank order** of distances, not exact values.
+- **Stress < 0.2** is acceptable, < 0.1 is excellent.
+- **PERMANOVA tests centroids**, ANOSIM tests overlap.
+- **Check dispersion homogeneity** - violated assumption affects interpretation.
+- **Multiple comparisons** require p-value adjustment.
+- **Axes have no inherent meaning** in NMDS (unlike PCA).
+- **Use appropriate distance measures** for your data type.
+
+::: callout-important
+**Key takeaways from NMDS/PERMANOVA analysis**
+
+1.  **NMDS is flexible** - works with any distance measure and makes few assumptions.
+2.  **Stress indicates fit quality** - always report and check this value.
+3.  **PERMANOVA is powerful** but assumes homogeneous dispersions.
+4.  **ANOSIM is complementary** - provides different perspective on group separation.
+5.  **Visualization is crucial** - always plot your ordination results.
+6.  **Environmental fitting** helps interpret ecological patterns.
+7.  **Permutation tests** avoid distributional assumptions.
+
+Remember: NMDS is iterative and may find different solutions - always set a seed for reproducibility!
+:::
+
+------------------------------------------------------------------------
+
+# Review and checkpoint
+
+At this point you can:
+
+- [ ] Explain when NMDS is preferred over PCA
+- [ ] Run `metaMDS()` and interpret the stress value
+- [ ] Build an NMDS ordination plot with confidence ellipses
+- [ ] Run and interpret PERMANOVA, including checking dispersion homogeneity with `betadisper()`
+- [ ] Run and interpret ANOSIM as a complementary test
+- [ ] Fit an environmental (or other continuous) vector onto an ordination with `envfit()`
+
+::: callout-note
+**📤 What to turn in before next class**
+
+Upload both of these to the course management system:
+
+1. Your code — the `scripts/` folder (or just `10_nmds_permanova.R`)
+2. This worksheet, with your written answers
+:::
