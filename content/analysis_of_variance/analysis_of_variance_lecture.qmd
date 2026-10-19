@@ -581,12 +581,36 @@ Different names, same partition, same arithmetic.
 ::::
 ::::::
 
+## Look at `summary()` First {.tight-code}
+
+:::::: columns
+::: {.column width="58%"}
+```{r analysis-of-variance-05b}
+crab_model <- lm(body_temp_c ~ crab_type, data = crab_df)
+summary(crab_model)
+```
+:::
+
+:::: {.column width="42%"}
+Same model, two different tables. `summary()` gives you the **coefficients**; `anova()` gives you the **partition**.
+
+- **(Intercept)** = `r round(coef(crab_model)[1], 3)` — the mean of the **reference level**, which R picked alphabetically: *female*
+- **Each slope** — that level's mean **minus** the reference, not its own mean
+- **Bottom line** — the same overall **F = `r round(crab_F, 2)`** on the same two df that `anova()` is about to print
+
+::: callout-note
+**🖐 Where to look for what**
+
+The intercept only ever appears in `summary()` and in a Type III table. `anova()` and `Anova(type = "II")` do not print an (Intercept) row at all.
+:::
+::::
+::::::
+
 ## The ANOVA Table from R
 
 ::::: columns
 ::: {.column width="55%"}
 ```{r analysis-of-variance-06}
-crab_model <- lm(body_temp_c ~ crab_type, data = crab_df)
 anova(crab_model)
 ```
 :::
@@ -675,7 +699,7 @@ With three types in circulation:
 Anova(crab_model, type = "II")
 ```
 
-Sum Sq `r round(ss_among, 4)`, F = `r round(crab_F, 2)` — **identical** to the `anova()` table two slides back.
+Sum Sq `r round(ss_among, 4)`, F = `r round(crab_F, 2)` — **identical** to the `anova()` table a few slides back.
 
 ::: callout-important
 **✅ In a one-way ANOVA all three types agree**
@@ -704,7 +728,7 @@ Anova(crab_sum, type = "III")
 options(contrasts = c("contr.treatment", "contr.poly"))
 ```
 
-The `crab_type` row is **still** `r round(ss_among, 4)` and F = `r round(crab_F, 2)`. **Only the (Intercept) row moved — [it now tests the grand mean instead of the reference group's mean.]{.underline}**
+The `crab_type` row is **still** `r round(ss_among, 4)` and F = `r round(crab_F, 2)`. **Only the (Intercept) row moved — [it now tests the grand mean instead of the reference group's mean.]{.underline}** The next slide shows that row in `summary()`.
 :::
 
 ::::: {.column width="45%"}
@@ -723,6 +747,34 @@ Same model, same residuals, same F. Different bookkeeping.
 :::
 :::::
 :::::::
+
+## It Is the Coding That Moves the Intercept {.tight-code}
+
+:::::: columns
+::: {.column width="58%"}
+`anova()` never showed you the intercept, so run `summary()` on both fits and watch the one row that changed:
+
+```{r analysis-of-variance-06c2}
+# contr.treatment — R's default
+round(summary(crab_model)$coefficients[, 1:2], 3)
+
+# contr.sum — the model refit for Type III
+round(summary(crab_sum)$coefficients[, 1:2], 3)
+```
+:::
+
+:::: {.column width="42%"}
+`r round(coef(crab_model)[1], 3)` is the **reference group's** mean (*female*). `r round(coef(crab_sum)[1], 3)` is the **grand mean** — and the slopes are now deviations from it, `crab_type1`…`crab_type3`.
+
+::: callout-important
+**✅ Type III does not move the intercept — `contr.sum` does**
+
+They just travel together, because Type III is only well defined under grand-mean coding. Ask a **treatment**-coded model for Type III and its (Intercept) row still tests the reference mean: SS = `r round(Anova(crab_model, type = "III")["(Intercept)", "Sum Sq"], 1)` against `r round(Anova(crab_sum, type = "III")["(Intercept)", "Sum Sq"], 1)` under `contr.sum`.
+
+The `crab_type` row is `r round(ss_among, 3)` either way.
+:::
+::::
+::::::
 
 ## `options()` Is Global · Always Set It Back
 

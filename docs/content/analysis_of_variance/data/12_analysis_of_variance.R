@@ -84,15 +84,17 @@ ss_among + ss_within
 # =====================================================================
 
 # ── Part 3.1 · The ANOVA ──────────────────────────────────────────────
-# YOUR TURN. Fit crab_model, print its anova() table, and pull out the
-# R-squared. The formula is response ~ factor.
+# YOUR TURN. Fit crab_model, print its summary(), then its anova()
+# table. The formula is response ~ factor. Look at summary() FIRST --
+# that is the only one of the two that shows you the intercept.
 
 # * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 # * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 # YOUR TURN: Match the table to what you computed in Part 2.
 #   Sum Sq, crab_type =            Sum Sq, Residuals =
 #   Df =        and             F =            p =
-#   R squared =           (compare with ss_among / ss_total)
+#   R squared =
+#   (Intercept) =            -- which group's mean is that, and why?           (compare with ss_among / ss_total)
 
 # * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 # * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
