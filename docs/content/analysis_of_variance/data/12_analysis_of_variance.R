@@ -25,6 +25,7 @@
 # FILLED IN.
 library(tidyverse)
 library(car)
+library(emmeans)
 
 source("themes_functions/r_themes_and_functions.R")
 
@@ -42,9 +43,6 @@ count(crab_df, crab_type)
 # YOUR TURN: Which group looks warmest, and does the picture match the
 # radiator prediction?
 
-
-
-
 # * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 # * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
@@ -53,8 +51,9 @@ count(crab_df, crab_type)
 # =====================================================================
 
 # ── Part 2.1 · Build the sums of squares ──────────────────────────────
-# PART FILLED IN. The grand mean and the group means are set up for
-# you; build the three sums of squares yourself.
+# FILLED IN. Read it line by line and see where each deviation comes
+# from -- the statistics is in understanding the three sums, not in
+# typing them.
 grand_mean <- mean(crab_df$body_temp_c)
 
 crab_parts <- crab_df %>%
@@ -62,21 +61,20 @@ crab_parts <- crab_df %>%
   mutate(group_mean = mean(body_temp_c)) %>%
   ungroup()
 
-# YOUR TURN. Each one is sum of (something - something)^2:
-#   ss_total  - every observation from the grand mean
-#   ss_among  - every group mean from the grand mean
-#   ss_within - every observation from its own group mean
-# Print all three, then check that ss_among + ss_within gives ss_total.
+ss_total <- sum((crab_parts$body_temp_c - grand_mean)^2)
+ss_among <- sum((crab_parts$group_mean - grand_mean)^2)
+ss_within <- sum((crab_parts$body_temp_c - crab_parts$group_mean)^2)
+
+c(total = ss_total, among = ss_among, within = ss_within)
+
+ss_among + ss_within
 
 # * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 # * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 # YOUR TURN: Does the partition add up, and what fraction does the
 # grouping explain?
-#   ss_among + ss_within =              ss_total =
-#   ss_among / ss_total =
-
-
-
+#   ss_among + ss_within =            ss_total =
+#   ss_among / ss_total  =
 
 # * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 # * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
@@ -96,21 +94,45 @@ crab_parts <- crab_df %>%
 #   Df =        and             F =            p =
 #   R squared =           (compare with ss_among / ss_total)
 
-
-
-
 # * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 # * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 # * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 # * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: Write down exactly what this p-value licenses you to say --
+# YOUR TURN: Write down exactly what this p-value  says --
 # and one thing it does NOT.
 #   It says:
 #   It does not say:
 
+# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
+# ── Part 3.2 · Type I, II and III sums of squares ──────────────
+# anova() gives Type I. Types II and III come from car::Anova() -- note
+# the capital A.
+#
+# YOUR TURN. Print Anova(crab_model, type = "II") and compare the
+# crab_type row with the anova() table you just made.
 
+# FILLED IN -- a true Type III needs contr.sum, and the model refit
+# AFTER the option changes. The last line puts R back the way it was;
+# never leave it out.
+options(contrasts = c("contr.sum", "contr.poly"))
+
+crab_sum <- lm(body_temp_c ~ crab_type, data = crab_df)
+Anova(crab_sum, type = "III")
+
+options(contrasts = c("contr.treatment", "contr.poly"))
+
+# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+# YOUR TURN: Fill in the crab_type sum of squares from each table.
+#   Type I   =          Type II  =          Type III =
+#
+#   Why are they identical in a one-way ANOVA?
+#
+#   Which row DID change between contr.treatment and contr.sum, and
+#   what is it testing in each case?
 
 # * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 # * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
@@ -136,20 +158,6 @@ par(mfrow = c(1, 1))
 #   Shapiro H0 =                  p =            pass?
 #   Levene  H0 =                  p =            pass?
 
-
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: The third assumption is independence. Why can no plot or
-# test here check it?
-
-
-
-
 # * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 # * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
@@ -168,20 +176,11 @@ par(mfrow = c(1, 1))
 #   Reference:              Why:
 #   Each coefficient is "degrees hotter than a                    "
 
-
-
-
 # * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 # * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 # ── Part 5.2 · Set the reference level ────────────────────────────────
-# PART FILLED IN — the fct_relevel() call. Refitting and printing is
-# yours.
-crab_df <- crab_df %>%
-  mutate(crab_type = fct_relevel(crab_type, "intact male"))
-
-# YOUR TURN. Refit crab_model on the releveled data, print its
-# coefficient table, and print its anova() table.
+# PART FILLED IN — the fct_relevel() call.
 
 # * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 # * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
@@ -192,9 +191,6 @@ crab_df <- crab_df %>%
 #
 #   Why does the F-test not care which level is first?
 
-
-
-
 # * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 # * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
@@ -203,19 +199,32 @@ crab_df <- crab_df %>%
 # =====================================================================
 
 # ── Part 6.1 · Which groups actually differ? ──────────────────────────
-# YOUR TURN. Run Tukey's HSD on the model. It needs an aov() object,
-# so wrap the model: TukeyHSD(aov(...)).
+# FILLED IN. Tukey's HSD needs an aov() object, so the model gets
+# wrapped. This is the classic call -- see it once, then move on.
+TukeyHSD(aov(crab_model))
+
+# ── Part 6.2 · The same comparisons with emmeans ──────────────────────
+# YOUR TURN. emmeans is what we will use on every model from here on.
+# Step 1: save the estimated marginal means for crab_type as crab_emm
+#         -- emmeans(model, ~ factor) -- and print it.
+# Step 2: pass crab_emm to pairs() with adjust = "tukey".
 
 # * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 # * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 # YOUR TURN: Fill in the adjusted p-values for the three comparisons
-# with the control.
+# with the control. The p-values are the same from either call; the
+# signs are not, because emmeans subtracts the other way round.
 #   female - intact male             =
 #   male major removed - intact male =
 #   male minor removed - intact male =
 
+# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
-
+# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+# YOUR TURN: In the emmeans table every group has the same SE. Where
+# does that SE come from, and why is it not each group's own SD?
 
 # * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 # * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
@@ -226,9 +235,6 @@ crab_df <- crab_df %>%
 # claw makes males hotter. Does the Tukey output support it? One
 # sentence, using the number.
 
-
-
-
 # * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 # * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
@@ -236,9 +242,6 @@ crab_df <- crab_df %>%
 # * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 # YOUR TURN: Females ARE significantly hotter than every male group.
 # Why does that not rescue the hypothesis?
-
-
-
 
 # * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 # * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
@@ -253,11 +256,6 @@ crab_df <- crab_df %>%
 # needs the test, F with BOTH degrees of freedom, the p-value, R-squared
 # and the post-hoc method -- including the comparison that was NOT
 # significant.
-
-
-
-
-
 
 # * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 # * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
@@ -288,10 +286,10 @@ final_plot
 
 ggsave(
   "figures/crab_anova.pdf",
-  plot   = final_plot,
-  width  = 7,
+  plot = final_plot,
+  width = 7,
   height = 4.5,
-  units  = "in"
+  units = "in"
 )
 
 # Open the PDF and check the bars run in the order you releveled to,

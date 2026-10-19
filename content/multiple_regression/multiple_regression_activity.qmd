@@ -3,7 +3,7 @@ order: 11
 week: 7
 title: "Activity: Multiple Regression"
 subtitle: "Several predictors"
-description: "In-class activity on Loyn's Victorian forest-bird data: fit predictors alone and together, diagnose collinearity, simplify the model, and set a factor's reference level with fct_relevel()."
+description: "In-class activity on Loyn's Victorian forest-bird data: a worked two-predictor model first, then all six at once, collinearity, model choice, and setting a factor's reference level with fct_relevel()."
 author: "Bill Perry"
 metadata-files:
   - ../../_templates/activities.yml
@@ -18,7 +18,7 @@ format:
 
 The lecture's dataset: **56 remnant forest patches** in Victoria, Australia, from Loyn (1987). Bird `abundance` is the response, and six patch characteristics are the candidate predictors.
 
-You will do four things, in this order: fit the predictors **one at a time**, fit them **all at once** and see what happens, work out **why** it happened, and then decide what to keep.
+The order matters today. You will fit the predictors **one at a time**, then build **one clean two-predictor model** and read it carefully — that is the worked example. Only then do you put **all six** in at once and watch what happens.
 
 ------------------------------------------------------------------------
 
@@ -76,12 +76,43 @@ How many are significant? __________
 
 ------------------------------------------------------------------------
 
-# Part 3 · All of them at once
+# Part 3 · Two predictors — the worked example
+
+Area and grazing were the two strongest predictors on their own. Put **both** in one model. This is the whole idea of multiple regression in its simplest form: one response, two predictors, two slopes.
 
 **▶ Run this:**
 
 ``` r
-# ── Part 3.1 · All of them at once ──────────────────────────────────────
+# ── Part 3.1 · Two predictors — the worked example ──────────────────────
+reduced_model <- lm(abundance ~ log_area + grazing, data = bird_df)
+
+summary(reduced_model)
+```
+
+✏️ **Your turn:** Write the fitted equation out, with the numbers in it.
+
+```
+abundance = ______ + ______ × log_area + ______ × grazing
+```
+
+✏️ **Your turn:** Read each slope as a sentence. The phrase you need is *"holding the other predictor constant."*
+
+```
+log_area: ___________________________________________________
+
+grazing:  ___________________________________________________
+```
+
+Notice that **both slopes shrank** compared with Part 2 — area from about 9.8 to 6.9, grazing from about −5.0 to −2.9. Part 4 is about why.
+
+------------------------------------------------------------------------
+
+# Part 4 · Now all six at once
+
+**▶ Run this:**
+
+``` r
+# ── Part 4.1 · Now all six at once ──────────────────────────────────────
 full_model <- lm(abundance ~ log_area + log_dist +
                    log_dist_larger + year_isolated +
                    grazing + altitude_m,
@@ -90,15 +121,15 @@ full_model <- lm(abundance ~ log_area + log_dist +
 summary(full_model)
 ```
 
-✏️ **Your turn:** Which predictors are still significant?
+✏️ **Your turn:** Which predictors are still significant, and what happened to grazing?
 
 ```
 Still significant: _________________________________________
 
-grazing slope alone = __________   in this model = __________
+grazing slope:  alone ______   two-predictor ______   here ______
 ```
 
-✏️ **Your turn:** Both grazing slopes came from the same 56 patches. Is one of them wrong? Explain what each one is actually measuring.
+✏️ **Your turn:** All three grazing slopes came from the same 56 patches. Is any of them wrong? Say what each one is actually measuring.
 
 ```
 ____________________________________________________________
@@ -108,12 +139,12 @@ ____________________________________________________________
 
 ------------------------------------------------------------------------
 
-# Part 4 · Why it happened
+# Part 5 · Why it happened
 
 **▶ Run this:**
 
 ``` r
-# ── Part 4.1 · Why it happened ──────────────────────────────────────────
+# ── Part 5.1 · Why it happened ──────────────────────────────────────────
 bird_df %>%
   select(log_area, log_dist, log_dist_larger,
          year_isolated, grazing, altitude_m) %>%
@@ -139,21 +170,14 @@ ____________________________________________________________
 
 ------------------------------------------------------------------------
 
-# Part 5 · Simplify the model
+# Part 6 · Which model do you keep?
 
-**▶ Run this** — drop the four predictors that earned nothing, then test whether dropping them cost anything:
+**▶ Run this** — test whether the four extra predictors earned anything, then compare the two models on AIC:
 
 ``` r
-# ── Part 5.1 · Simplify the model ───────────────────────────────────────
-reduced_model <- lm(abundance ~ log_area + grazing, data = bird_df)
-
+# ── Part 6.1 · Which model do you keep? ─────────────────────────────────
 anova(reduced_model, full_model)
-```
 
-**▶ Run this** — compare the two models the other way:
-
-``` r
-# ── Part 5.2 · Simplify the model ───────────────────────────────────────
 tibble(
   model  = c("six predictors", "log_area + grazing"),
   adj_r2 = c(summary(full_model)$adj.r.squared,
@@ -172,12 +196,12 @@ Model I keep: _______________________________________________
 
 ------------------------------------------------------------------------
 
-# Part 6 · Check the assumptions
+# Part 7 · Check the assumptions
 
 **▶ Run this:**
 
 ``` r
-# ── Part 6.1 · Check the assumptions ────────────────────────────────────
+# ── Part 7.1 · Check the assumptions ────────────────────────────────────
 par(mfrow = c(2, 2))
 plot(reduced_model)
 par(mfrow = c(1, 1))
@@ -199,14 +223,14 @@ Influential points: _________________________________________
 
 ------------------------------------------------------------------------
 
-# Part 7 · Grazing as a factor
+# Part 8 · Grazing as a factor
 
 Grazing has been a number, 1 to 5, which forces every step to cost the same. Now let it be a **category** so each level is estimated separately.
 
 **▶ Run this** — make it a factor and look at the order R chose:
 
 ``` r
-# ── Part 7.1 · Grazing as a factor ──────────────────────────────────────
+# ── Part 8.1 · Grazing as a factor ──────────────────────────────────────
 bird_df <- bird_df %>%
   mutate(grazing_class = factor(grazing_class))
 
@@ -224,7 +248,7 @@ Reference level: __________   Why: _________________________
 **▶ Run this** — put the least-grazed level first instead:
 
 ``` r
-# ── Part 7.2 · Grazing as a factor ──────────────────────────────────────
+# ── Part 8.2 · Grazing as a factor ──────────────────────────────────────
 bird_df <- bird_df %>%
   mutate(grazing_class = fct_relevel(grazing_class,
                                      "minimal", "light", "moderate",
@@ -249,28 +273,22 @@ heavy:    __________  p = __________
 intense:  __________  p = __________
 ```
 
-✏️ **Your turn:** Compare the R² and F-statistic of the two models in 7.1 and 7.2. What changed, and what did not?
+✏️ **Your turn:** The R² and F-statistic are identical in 8.1 and 8.2 — only the coefficients moved. Given that, what did fitting grazing as the *number* 1–5 (one slope of about −2.9 birds per step, back in Part 3) hide from you?
 
 ```
-Changed: ____________________________________________________
+____________________________________________________________
 
-Did not change: _____________________________________________
-```
-
-✏️ **Your turn:** Fitting grazing as the number 1–5 gave one slope of about −2.9 birds per step. What does the factor version show that the number version hid?
-
-```
 ____________________________________________________________
 ```
 
 ------------------------------------------------------------------------
 
-# Part 8 · The figure you hand in
+# Part 9 · The figure you hand in
 
 **▶ Run this:**
 
 ``` r
-# ── Part 8.1 · The figure you hand in ───────────────────────────────────
+# ── Part 9.1 · The figure you hand in ───────────────────────────────────
 final_plot <- ggplot(bird_df, aes(log_area, abundance,
                                   colour = grazing_class)) +
   geom_point(size = 2.5) +
@@ -303,7 +321,8 @@ ggsave(
 
 At this point you can:
 
-- [ ] Fit several predictors one at a time and then together, and explain why the slopes differ
+- [ ] Fit a two-predictor model and read each partial slope as "holding the other constant"
+- [ ] Explain why a slope changes when another predictor joins the model
 - [ ] Read a correlation matrix and `vif()` output
 - [ ] Say what a dataset cannot separate, rather than that a predictor "has no effect"
 - [ ] Drop predictors and test whether it cost anything, with `anova()` and with AIC
@@ -324,6 +343,12 @@ At this point you can:
 
 **[Homework 6 — Multiple Regression: When Predictors Tell the Same Story](../../homeworks/multiple_regression_homework/multiple_regression_homework.qmd)**
 
+Multiple regression takes two class days, so this one is **due the following week**.
+
 **Seventy-three North American grassland sites**, six climate and geography predictors, and one response: the proportion of the plant community that is C3 grass. Two of the predictors are so tangled that dropping one reverses the sign of the other — so the honest conclusion is about what the data *cannot* separate, which is exactly the move you practised in class.
 
-**Data:** [`grassland_c3.csv`](../../homeworks/multiple_regression_homework/data/grassland_c3.csv) — Quinn & Keough, *Experimental Design and Data Analysis for Biologists*, Box 6.1 (`paruelo.csv`); originally Paruelo & Lauenroth (1996), *Ecological Applications*.
+[📥 Grassland data](../../homeworks/multiple_regression_homework/data/grassland_c3.csv){.btn .btn-primary download="grassland_c3.csv"} [📥 Homework skeleton (.R)](../../homeworks/multiple_regression_homework/11_multiple_regression_homework.R){.btn .btn-primary download="11_multiple_regression_homework.R"}
+
+The homework has **its own skeleton**, separate from the one you used in class. Its header opens with **the eight-step process** for testing a multiple regression — the same order you worked through today — so use that as your checklist rather than starting from a blank script.
+
+**Data source:** Quinn & Keough, *Experimental Design and Data Analysis for Biologists*, Box 6.1 (`paruelo.csv`); originally Paruelo & Lauenroth (1996), *Ecological Applications*.

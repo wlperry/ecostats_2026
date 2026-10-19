@@ -14,13 +14,16 @@
 #
 # 56 remnant forest patches in Victoria, Australia (Loyn 1987):
 # bird abundance against six patch characteristics.
+#
+# The order matters. One predictor at a time, then ONE clean
+# two-predictor model read carefully, then all six at once.
 # =====================================================================
 
 # =====================================================================
 # PART 1 · SETUP AND THE DATA
 # =====================================================================
 
-# ── Part 1.1 · Setup and the data ─────────────────────────────────────
+# ── Part 1.1 · Setup and the data ───────────────────────────────────────
 # FILLED IN.
 library(tidyverse)
 library(car)
@@ -49,7 +52,7 @@ bird_df
 # PART 2 · ONE PREDICTOR AT A TIME
 # =====================================================================
 
-# ── Part 2.1 · One predictor at a time ────────────────────────────────
+# ── Part 2.1 · One predictor at a time ──────────────────────────────────
 # YOUR TURN. Three separate simple regressions of abundance on
 # log_area, on grazing, and on year_isolated. Print a summary of each.
 
@@ -68,19 +71,58 @@ bird_df
 # * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 # =====================================================================
-# PART 3 · ALL OF THEM AT ONCE
+# PART 3 · TWO PREDICTORS — THE WORKED EXAMPLE
+# =====================================================================
+# Area and grazing were the two strongest predictors on their own. Put
+# BOTH in one model: one response, two predictors, two slopes. This is
+# multiple regression in its simplest form.
+
+# ── Part 3.1 · Two predictors — the worked example ──────────────────────
+# YOUR TURN. Fit reduced_model with log_area and grazing together, and
+# print its summary.
+
+# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+# YOUR TURN: Write the fitted equation out, with the numbers in it.
+#   abundance =         +         x log_area +         x grazing
+
+
+
+
+# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+
+# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+# YOUR TURN: Read each slope as a sentence. The phrase you need is
+# "holding the other predictor constant."
+#   log_area:
+#   grazing:
+
+
+
+
+# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+
+# Notice that BOTH slopes shrank compared with Part 2 -- area from
+# about 9.8 to 6.9, grazing from about -5.0 to -2.9. Part 4 is why.
+
+# =====================================================================
+# PART 4 · NOW ALL SIX AT ONCE
 # =====================================================================
 
-# ── Part 3.1 · All of them at once ────────────────────────────────────
+# ── Part 4.1 · Now all six at once ──────────────────────────────────────
 # YOUR TURN. Fit full_model with all six predictors together --
 # log_area, log_dist, log_dist_larger, year_isolated, grazing and
 # altitude_m -- and print its summary.
 
 # * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 # * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: Which predictors are still significant?
+# YOUR TURN: Which predictors are still significant, and what happened
+# to grazing?
 #   Still significant:
-#   grazing slope alone =           in this model =
+#   grazing slope: alone        two-predictor        here
 
 
 
@@ -90,8 +132,8 @@ bird_df
 
 # * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 # * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: Both grazing slopes came from the same 56 patches. Is one
-# of them wrong? Explain what each one is actually measuring.
+# YOUR TURN: All three grazing slopes came from the same 56 patches. Is
+# any of them wrong? Say what each one is actually measuring.
 
 
 
@@ -102,10 +144,10 @@ bird_df
 # * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 # =====================================================================
-# PART 4 · WHY IT HAPPENED
+# PART 5 · WHY IT HAPPENED
 # =====================================================================
 
-# ── Part 4.1 · Why it happened ────────────────────────────────────────
+# ── Part 5.1 · Why it happened ──────────────────────────────────────────
 # YOUR TURN. Print the rounded correlation matrix of the six
 # predictors, and then the VIFs of full_model.
 
@@ -134,15 +176,15 @@ bird_df
 # * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 # =====================================================================
-# PART 5 · SIMPLIFY THE MODEL
+# PART 6 · WHICH MODEL DO YOU KEEP?
 # =====================================================================
 
-# ── Part 5.1 · Simplify the model ─────────────────────────────────────
-# YOUR TURN. Fit reduced_model with only log_area and grazing, then use
-# anova() to test the reduced model against the full one.
+# ── Part 6.1 · Which model do you keep? ─────────────────────────────────
+# PART FILLED IN — the comparison tibble is bookkeeping. The anova()
+# call is yours.
 
-# ── Part 5.2 · Simplify the model ─────────────────────────────────────
-# FILLED IN — assembling a comparison tibble is bookkeeping.
+# YOUR TURN. Test reduced_model against full_model with anova().
+
 tibble(
   model  = c("six predictors", "log_area + grazing"),
   adj_r2 = c(summary(full_model)$adj.r.squared,
@@ -162,11 +204,62 @@ tibble(
 # * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 # * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
+# ── Part 6.2 · Which predictors do you keep? ───────────────────
+# anova() and AIC compare whole models. Partial eta squared and delta
+# R^2 rank the predictors inside one model, so you can see which terms
+# are carrying it and which are along for the ride.
+#
+#   partial eta^2 = SS_predictor / (SS_predictor + SS_residual)
+#   delta R^2     = SS_predictor / SS_total
+#
+# eta^2 ranks them. delta R^2 is what R^2 would lose if the predictor
+# were dropped -- its unique contribution.
+
+# YOUR TURN. Get the Type II sums of squares for full_model with
+# Anova() and store them in anova_full.
+
+# YOUR TURN. Compute the residual and total sums of squares.
+#   ss_res_full <- sum(residuals(          )^2)
+#   ss_tot      <- sum((bird_df$abundance - mean(                ))^2)
+
+# YOUR TURN. Build the table. Drop the Residuals row, add both
+# columns, and sort so the strongest predictor is on top.
+#
+# tibble(
+#   predictor = rownames(anova_full),
+#   SS        = anova_full[, "Sum Sq"]
+# ) %>%
+#   filter(predictor !=         ) %>%
+#   mutate(pEta2 =        ,
+#          dR2   =        ) %>%
+#   arrange(desc(      ))
+
+# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+# YOUR TURN: Read your table.
+#   Strongest predictor (pEta2 =        ):
+#   Two weakest predictors:
+#
+#   Now add up the dR2 column and compare it to the model's R^2:
+#   sum of dR2 =            model R^2 =
+#   Why don't they match? Where is the missing variance?
+#
+#
+#   One of your weak predictors might be useless and another might
+#   just be tangled with a stronger one. Which tool from Part 5 tells
+#   you which is which?
+
+
+
+
+# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+
 # =====================================================================
-# PART 6 · CHECK THE ASSUMPTIONS
+# PART 7 · CHECK THE ASSUMPTIONS
 # =====================================================================
 
-# ── Part 6.1 · Check the assumptions ──────────────────────────────────
+# ── Part 7.1 · Check the assumptions ────────────────────────────────────
 # PART FILLED IN — the par() bookkeeping only. The Shapiro test on the
 # residuals is yours.
 par(mfrow = c(2, 2))
@@ -190,13 +283,13 @@ par(mfrow = c(1, 1))
 # * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 # =====================================================================
-# PART 7 · GRAZING AS A FACTOR
+# PART 8 · GRAZING AS A FACTOR
 # =====================================================================
 # Grazing has been a number, 1 to 5, which forces every step to cost
 # the same. Now let it be a category so each level is estimated
 # separately.
 
-# ── Part 7.1 · Grazing as a factor ────────────────────────────────────
+# ── Part 8.1 · Grazing as a factor ──────────────────────────────────────
 # YOUR TURN. Turn grazing_class into a factor with factor(), print its
 # levels(), and fit abundance ~ log_area + grazing_class.
 
@@ -212,7 +305,7 @@ par(mfrow = c(1, 1))
 # * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 # * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
-# ── Part 7.2 · Grazing as a factor ────────────────────────────────────
+# ── Part 8.2 · Grazing as a factor ──────────────────────────────────────
 # PART FILLED IN — the fct_relevel() call, because naming five levels
 # in order is typing. Fitting and printing the model is yours.
 bird_df <- bird_df %>%
@@ -242,22 +335,12 @@ levels(bird_df$grazing_class)
 
 # * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 # * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: Compare the R-squared and F-statistic of the two models in
-# 7.1 and 7.2. What changed, and what did not?
-#   Changed:
-#   Did not change:
+# YOUR TURN: The R-squared and F-statistic are identical in 8.1 and
+# 8.2 -- only the coefficients moved. Given that, what did fitting
+# grazing as the NUMBER 1-5 (one slope of about -2.9 birds per step,
+# back in Part 3) hide from you?
 
 
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: Fitting grazing as the number 1-5 gave one slope of about
-# -2.9 birds per step. What does the factor version show that the
-# number version hid?
 
 
 
@@ -266,10 +349,10 @@ levels(bird_df$grazing_class)
 # * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 # =====================================================================
-# PART 8 · THE FIGURE YOU HAND IN
+# PART 9 · THE FIGURE YOU HAND IN
 # =====================================================================
 
-# ── Part 8.1 · The figure you hand in ─────────────────────────────────
+# ── Part 9.1 · The figure you hand in ───────────────────────────────────
 # FILLED IN — this is the one plot that gets the full treatment, and it
 # is far too much typing for class time. Read it, run it, change the
 # title if you can say it better.
