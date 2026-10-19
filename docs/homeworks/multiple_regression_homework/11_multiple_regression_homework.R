@@ -15,13 +15,46 @@
 # that is C3 grass, against six climate and geography predictors.
 # Two of those predictors carry nearly the same information.
 # (Paruelo & Lauenroth, via Quinn & Keough, Box 6-1)
+#
+# Multiple regression took two class days, so this is due the FOLLOWING
+# week. Work through it in order -- each part feeds the next.
+# =====================================================================
+
+# =====================================================================
+# THE PROCESS -- the order to test a multiple regression in
+# =====================================================================
+# This is the sequence the whole unit has been building toward. It is
+# the same eight steps whatever the dataset, and the parts below follow
+# it exactly. Read it once before you start.
+#
+#   1. LOOK AT THE RESPONSE.  Does it need a transform? (Part 1)
+#   2. ONE PREDICTOR AT A TIME.  What does each claim on its own?
+#      Write the slopes down -- you cannot see a slope change later if
+#      you never recorded what it started as. (Part 2)
+#   3. PUT TWO TOGETHER.  Watch what happens to the first slope when
+#      the second joins it. (Part 3)
+#   4. DIAGNOSE WHY IT MOVED.  Correlation matrix first, then VIFs.
+#      The matrix tells you WHICH pair; the VIF tells you HOW BADLY.
+#      Neither is a pass/fail test. (Part 4)
+#   5. FIT THE FULL MODEL.  Then check the residuals -- diagnostics
+#      come BEFORE you start comparing models, because a model that
+#      fails its assumptions is not worth comparing. (Part 5)
+#   6. COMPARE MODELS, TWO WAYS.  AIC ranks any models on the same
+#      rows; anova() formally tests a NESTED pair. Agreement is
+#      reassuring; disagreement is itself a finding. (Part 6)
+#   7. SAY WHAT THE DATA CANNOT DO.  A non-significant partial slope
+#      is not evidence of no effect. (Part 7)
+#   8. ONE FIGURE, AND ONE SENTENCE you would defend in print. (Part 8)
+#
+# Steps 4 and 7 are the ones people skip, and they are the two this
+# dataset is built to punish.
 # =====================================================================
 
 # =====================================================================
 # PART 1 · SETUP AND THE DATA
 # =====================================================================
 
-# ── Part 1.1 · Setup and the data ─────────────────────────────────────
+# ── Part 1.1 · Setup and the data ───────────────────────────────────────
 # FILLED IN. The response is logged because c3_proportion is a bounded
 # proportion containing zeros; the + 0.1 keeps log10() finite.
 library(tidyverse)
@@ -38,7 +71,7 @@ grass_df
 # PART 2 · ONE PREDICTOR AT A TIME
 # =====================================================================
 
-# ── Part 2.1 · One predictor at a time ────────────────────────────────
+# ── Part 2.1 · One predictor at a time ──────────────────────────────────
 # YOUR TURN. Fit log_c3 on mean_annual_temp_c, and then on latitude,
 # one at a time. Print a summary of each.
 
@@ -60,7 +93,7 @@ grass_df
 # PART 3 · PUT THEM IN THE SAME MODEL
 # =====================================================================
 
-# ── Part 3.1 · Put them in the same model ─────────────────────────────
+# ── Part 3.1 · Put them in the same model ───────────────────────────────
 # YOUR TURN. Fit temp_lat with BOTH predictors and print its summary.
 
 # * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
@@ -92,7 +125,7 @@ grass_df
 # PART 4 · DIAGNOSE IT
 # =====================================================================
 
-# ── Part 4.1 · Diagnose it ────────────────────────────────────────────
+# ── Part 4.1 · Diagnose it ──────────────────────────────────────────────
 # PART FILLED IN — selecting the six predictor columns is typing, not
 # statistics. The correlation matrix and the VIFs are yours.
 predictors <- grass_df %>%
@@ -130,7 +163,7 @@ predictors <- grass_df %>%
 # PART 5 · THE FULL MODEL
 # =====================================================================
 
-# ── Part 5.1 · The full model ─────────────────────────────────────────
+# ── Part 5.1 · The full model ───────────────────────────────────────────
 # PART FILLED IN — the six-term formula is long to type. Printing the
 # summary and the VIFs is yours.
 full_model <- lm(log_c3 ~ mean_annual_precip_mm + mean_annual_temp_c +
@@ -166,7 +199,7 @@ full_model <- lm(log_c3 ~ mean_annual_precip_mm + mean_annual_temp_c +
 # * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 # * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
-# ── Part 5.2 · The full model ─────────────────────────────────────────
+# ── Part 5.2 · The full model ───────────────────────────────────────────
 # PART FILLED IN — the par() bookkeeping only. The Shapiro test on the
 # residuals is yours.
 par(mfrow = c(2, 2))
@@ -179,7 +212,7 @@ par(mfrow = c(1, 1))
 # PART 6 · CHOOSE A MODEL
 # =====================================================================
 
-# ── Part 6.1 · Choose a model ─────────────────────────────────────────
+# ── Part 6.1 · Choose a model ───────────────────────────────────────────
 # YOUR TURN. Fit the four models below, then build one tibble with a
 # row per model holding adj_r2 and AIC, add delta_AIC, and arrange by
 # AIC. The pattern is on the "Putting It Together" slide.
@@ -198,6 +231,26 @@ par(mfrow = c(1, 1))
 #   temperature only
 #
 #   Model I would report:
+
+
+
+
+# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+
+# ── Part 6.2 · Choose a model ───────────────────────────────────────────
+# YOUR TURN. The latitude-only model is NESTED inside full_model -- its
+# one predictor is a subset of the six -- so anova() applies. Test it
+# against full_model.
+
+# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+# YOUR TURN: Do the two routes agree? In class the anova() test and AIC
+# pointed the same way -- do they here?
+#   anova: F =            df =            p =
+#   Dropping the other five predictors costs:
+#   Lowest AIC was:
+#   Agree?
 
 
 
@@ -254,7 +307,7 @@ par(mfrow = c(1, 1))
 # PART 8 · THE FIGURE YOU HAND IN
 # =====================================================================
 
-# ── Part 8.1 · The figure you hand in ─────────────────────────────────
+# ── Part 8.1 · The figure you hand in ───────────────────────────────────
 # PART FILLED IN — the ggsave() call is set up for you. Build the plot
 # it saves: log_c3 against your strongest predictor, with a fitted line
 # and confidence band, a title, a subtitle, axis labels with units, and
@@ -263,13 +316,14 @@ par(mfrow = c(1, 1))
 # final_plot <- ggplot(...) +
 #   ...
 
-ggsave(
-  "figures/grassland_c3.pdf",
-  plot   = final_plot,
-  width  = 6,
-  height = 4,
-  units  = "in"
-)
+# Uncomment this once final_plot exists -- it will error until then.
+# ggsave(
+#   "figures/grassland_c3.pdf",
+#   plot   = final_plot,
+#   width  = 6,
+#   height = 4,
+#   units  = "in"
+# )
 
 # * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 # * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
