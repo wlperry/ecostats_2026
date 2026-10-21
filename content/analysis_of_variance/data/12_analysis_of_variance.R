@@ -211,6 +211,22 @@ TukeyHSD(aov(crab_model))
 #         -- emmeans(model, ~ factor) -- and print it.
 # Step 2: pass crab_emm to pairs() with adjust = "tukey".
 
+# ── Part 6.3 · Compact letter display ────────────────────────────────
+# FILLED IN -- new syntax, not new statistics. Note the multcomp::
+# prefix: do NOT run library(multcomp), it masks dplyr::select() and
+# your pipes will start failing for no visible reason.
+multcomp::cld(crab_emm, Letters = letters, adjust = "tukey")
+
+# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+# YOUR TURN: Read the letters.
+#   Which groups share a letter with intact male?
+#   A shared letter means
+#   and it does NOT mean
+
+# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+
 # * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 # * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 # YOUR TURN: Fill in the adjusted p-values for the three comparisons
