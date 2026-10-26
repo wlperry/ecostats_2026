@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="author" content="Bill Perry">
-<meta name="description" content="Hands-on activity: factorial ANOVA, estimated marginal means, and Type I/II/III sums of squares, run on both a balanced and a naturally unbalanced version of the palmerpenguins species-by-sex dataset.">
+<meta name="description" content="Hands-on activity: factorial ANOVA, estimated marginal means, and Type I/II/III sums of squares, run first on a balanced subsample of the palmerpenguins species-by-sex data and then on the full, naturally unbalanced dataset.">
 
 <title>Activity: Two-Way ANOVA – UMD Biostatistics</title>
 <style>
@@ -120,7 +120,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <link rel="stylesheet" href="../../css/main.css">
 <link rel="stylesheet" href="../../css/main.css">
 <meta property="og:title" content="Activity: Two-Way ANOVA – UMD Biostatistics">
-<meta property="og:description" content="Hands-on activity: factorial ANOVA, estimated marginal means, and Type I/II/III sums of squares, run on both a balanced and a naturally unbalanced version of the palmerpenguins species-by-sex dataset.">
+<meta property="og:description" content="Hands-on activity: factorial ANOVA, estimated marginal means, and Type I/II/III sums of squares, run first on a balanced subsample of the palmerpenguins species-by-sex data and then on the full, naturally unbalanced dataset.">
 <meta property="og:site_name" content="UMD Biostatistics">
 </head>
 
@@ -359,7 +359,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../../links.qmd" class="sidebar-item-text sidebar-link">
+  <a href="../../links.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">Helpful Links</span></a>
   </div>
 </li>
@@ -419,7 +419,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 <div>
   <div class="description">
-    Hands-on activity: factorial ANOVA, estimated marginal means, and Type I/II/III sums of squares, run on both a balanced and a naturally unbalanced version of the palmerpenguins species-by-sex dataset.
+    Hands-on activity: factorial ANOVA, estimated marginal means, and Type I/II/III sums of squares, run first on a balanced subsample of the palmerpenguins species-by-sex data and then on the full, naturally unbalanced dataset.
   </div>
 </div>
 
@@ -442,458 +442,52 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </header>
 
 
-<section id="worksheet-two-way-factorial-anova" class="level1">
-<h1>Worksheet: Two-Way (Factorial) ANOVA</h1>
-</section>
-<section id="part-1-setup-and-data" class="level1">
-<h1>Part 1 · Setup and Data</h1>
-<p><strong>▶ Run this in your Script:</strong></p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 1.1 · Setup and Data ───────────────────────────────────────────</span></span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(palmerpenguins) <span class="co"># has the data for penguins and they are cute</span></span>
-<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(car)             <span class="co"># For Levene's test and Type III SS</span></span>
-<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(emmeans)         <span class="co"># For estimated marginal means</span></span>
-<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(broom)           <span class="co"># For tidying model outputs</span></span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(patchwork)       <span class="co"># For combining plots</span></span>
-<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tidyverse)</span>
-<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="fu">theme_set</span>(<span class="fu">theme_light</span>(<span class="at">base_size =</span> <span class="dv">12</span>))</span>
-<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>p_df <span class="ot">&lt;-</span> penguins <span class="sc">%&gt;%</span></span>
-<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(<span class="at">spp =</span> species, sex, body_mass_g) <span class="sc">%&gt;%</span></span>
-<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename</span>(<span class="at">mass_g =</span> body_mass_g)</span>
-<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a><span class="fu">head</span>(p_df)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>▶ Run this</strong> — check for and remove missing values:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 1.2 · Setup and Data ───────────────────────────────────────────</span></span>
-<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>p_df <span class="sc">%&gt;%</span></span>
-<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise_all</span>(<span class="sc">~</span><span class="fu">sum</span>(<span class="fu">is.na</span>(.)))</span>
-<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>p_df <span class="ot">&lt;-</span> p_df <span class="sc">%&gt;%</span></span>
-<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="sc">!</span><span class="fu">is.na</span>(mass_g),</span>
-<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>         <span class="sc">!</span><span class="fu">is.na</span>(sex),</span>
-<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>         <span class="sc">!</span><span class="fu">is.na</span>(spp))</span>
-<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a><span class="fu">head</span>(p_df)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>▶ Run this</strong> — summary statistics by group:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 1.3 · Setup and Data ───────────────────────────────────────────</span></span>
-<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>p_df <span class="sc">%&gt;%</span></span>
-<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(spp, sex) <span class="sc">%&gt;%</span></span>
-<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(</span>
-<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">mean_mass =</span> <span class="fu">mean</span>(mass_g, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
-<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>    <span class="at">sd_mass =</span> <span class="fu">sd</span>(mass_g, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
-<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">n =</span> <span class="fu">sum</span>(<span class="sc">!</span><span class="fu">is.na</span>(mass_g)),</span>
-<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">se_mass =</span> sd_mass<span class="sc">/</span>n<span class="sc">^</span>.<span class="dv">5</span>,</span>
-<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">.groups =</span> <span class="st">'drop'</span></span>
-<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>  )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="callout callout-style-default callout-tip callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-Tip
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p><strong>🚀 If you finish early:</strong> How many species and sexes are there? Compute <code>n_distinct()</code> for each column of <code>p_df</code> to confirm.</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 1.4 · Setup and Data ───────────────────────────────────────────</span></span>
-<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Write your code in the R script:</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-</div>
-</div>
-<hr>
-</section>
-<section id="part-2-building-a-balanced-dataset" class="level1">
-<h1>Part 2 · Building a Balanced Dataset</h1>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 2.1 · Building a Balanced Dataset ──────────────────────────────</span></span>
-<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>original_n <span class="ot">&lt;-</span> p_df <span class="sc">%&gt;%</span></span>
-<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">count</span>(spp, sex) <span class="sc">%&gt;%</span></span>
-<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(spp, sex)</span>
-<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>p_df <span class="sc">%&gt;%</span></span>
-<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">count</span>(spp, sex) <span class="sc">%&gt;%</span></span>
-<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_wider</span>(<span class="at">names_from =</span> sex, <span class="at">values_from =</span> n, <span class="at">values_fill =</span> <span class="dv">0</span>)</span>
-<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a>min_n <span class="ot">&lt;-</span> <span class="fu">min</span>(original_n<span class="sc">$</span>n)</span>
-<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a>min_n</span>
-<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb5-13"><a href="#cb5-13" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">123</span>) <span class="co"># for reproducibility</span></span>
-<span id="cb5-14"><a href="#cb5-14" aria-hidden="true" tabindex="-1"></a>pb_df <span class="ot">&lt;-</span> p_df <span class="sc">%&gt;%</span></span>
-<span id="cb5-15"><a href="#cb5-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(spp, sex) <span class="sc">%&gt;%</span></span>
-<span id="cb5-16"><a href="#cb5-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">sample_n</span>(min_n) <span class="sc">%&gt;%</span></span>
-<span id="cb5-17"><a href="#cb5-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ungroup</span>()</span>
-<span id="cb5-18"><a href="#cb5-18" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb5-19"><a href="#cb5-19" aria-hidden="true" tabindex="-1"></a>balanced_n <span class="ot">&lt;-</span> pb_df <span class="sc">%&gt;%</span></span>
-<span id="cb5-20"><a href="#cb5-20" aria-hidden="true" tabindex="-1"></a>  <span class="fu">count</span>(spp, sex) <span class="sc">%&gt;%</span></span>
-<span id="cb5-21"><a href="#cb5-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_wider</span>(<span class="at">names_from =</span> sex, <span class="at">values_from =</span> n, <span class="at">values_fill =</span> <span class="dv">0</span>)</span>
-<span id="cb5-22"><a href="#cb5-22" aria-hidden="true" tabindex="-1"></a>balanced_n</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 2.2 · Building a Balanced Dataset ──────────────────────────────</span></span>
-<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>summary_df <span class="ot">&lt;-</span> pb_df <span class="sc">%&gt;%</span></span>
-<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(spp, sex) <span class="sc">%&gt;%</span></span>
-<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(</span>
-<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">n =</span> <span class="fu">sum</span>(<span class="sc">!</span><span class="fu">is.na</span>(mass_g)),</span>
-<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>    <span class="at">mean_mass =</span> <span class="fu">mean</span>(mass_g),</span>
-<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">sd_mass =</span> <span class="fu">sd</span>(mass_g),</span>
-<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">se_mass =</span> sd_mass<span class="sc">/</span><span class="fu">sqrt</span>(n),</span>
-<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">.groups =</span> <span class="st">'drop'</span></span>
-<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">%&gt;%</span></span>
-<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(spp, sex)</span>
-<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span>(summary_df)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>✏️ <strong>Your turn:</strong> What was <code>min_n</code>? How many total observations were dropped to force balance?</p>
-<p><code>________________________</code></p>
-<hr>
-</section>
-<section id="part-3-fitting-the-balanced-factorial-anova" class="level1">
-<h1>Part 3 · Fitting the Balanced Factorial ANOVA</h1>
-<p>The factorial ANOVA needs the same assumptions checked after fitting the model: independence of observations, normality of residuals, homogeneity of variances.</p>
-<p><strong>▶ Run this:</strong></p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 3.1 · Fitting the Balanced Factorial ANOVA ─────────────────────</span></span>
-<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="fu">options</span>(<span class="at">contrasts =</span> <span class="fu">c</span>(<span class="st">"contr.sum"</span>, <span class="st">"contr.poly"</span>))  <span class="co"># for Type III SS</span></span>
-<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>pb_model <span class="ot">&lt;-</span> <span class="fu">lm</span>(mass_g <span class="sc">~</span> spp <span class="sc">*</span> sex, <span class="at">data =</span> pb_df)</span>
-<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(pb_model)</span>
-<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a><span class="fu">Anova</span>(pb_model, <span class="at">type =</span> <span class="dv">3</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>✏️ <strong>Your turn:</strong> Is the species:sex interaction significant?</p>
-<p><code>________________________</code></p>
-<hr>
-</section>
-<section id="part-4-assumptions-and-diagnostics-balanced-model" class="level1">
-<h1>Part 4 · Assumptions and Diagnostics — Balanced Model</h1>
-<p><strong>▶ Run this</strong> — the base R diagnostic plots:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 4.1 · Assumptions and Diagnostics ──────────────────────────────</span></span>
-<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="fu">par</span>(<span class="at">mfrow =</span> <span class="fu">c</span>(<span class="dv">2</span>, <span class="dv">2</span>))</span>
-<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(pb_model)</span>
-<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a><span class="fu">par</span>(<span class="at">mfrow =</span> <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">1</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>▶ Run this</strong> — build a residuals data frame and check normality:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 4.2 · Assumptions and Diagnostics ──────────────────────────────</span></span>
-<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>pb_resid_df <span class="ot">&lt;-</span> <span class="fu">augment</span>(pb_model)</span>
-<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(pb_resid_df, <span class="fu">aes</span>(<span class="at">sample =</span> .resid)) <span class="sc">+</span></span>
-<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">stat_qq</span>() <span class="sc">+</span></span>
-<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">stat_qq_line</span>() <span class="sc">+</span></span>
-<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Q-Q Plot of Residuals"</span>, <span class="at">x =</span> <span class="st">"Theoretical Quantiles"</span>, <span class="at">y =</span> <span class="st">"Sample Quantiles"</span>)</span>
-<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(pb_resid_df, <span class="fu">aes</span>(<span class="at">x =</span> .resid)) <span class="sc">+</span></span>
-<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_histogram</span>(<span class="at">bins =</span> <span class="dv">15</span>, <span class="at">fill =</span> <span class="st">"snow"</span>, <span class="at">color =</span> <span class="st">"black"</span>) <span class="sc">+</span></span>
-<span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Histogram of Residuals"</span>, <span class="at">x =</span> <span class="st">"Residuals"</span>, <span class="at">y =</span> <span class="st">"Count"</span>)</span>
-<span id="cb9-12"><a href="#cb9-12" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb9-13"><a href="#cb9-13" aria-hidden="true" tabindex="-1"></a><span class="fu">shapiro.test</span>(<span class="fu">residuals</span>(pb_model))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>▶ Run this</strong> — check homogeneity of variance:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 4.3 · Assumptions and Diagnostics ──────────────────────────────</span></span>
-<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="fu">leveneTest</span>(mass_g <span class="sc">~</span> spp <span class="sc">*</span> sex, <span class="at">data =</span> pb_df)</span>
-<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(pb_resid_df, <span class="fu">aes</span>(<span class="at">x =</span> .fitted, <span class="at">y =</span> .resid)) <span class="sc">+</span></span>
-<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>() <span class="sc">+</span></span>
-<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_hline</span>(<span class="at">yintercept =</span> <span class="dv">0</span>, <span class="at">linetype =</span> <span class="st">"dashed"</span>, <span class="at">color =</span> <span class="st">"red"</span>) <span class="sc">+</span></span>
-<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Residuals vs Fitted Values"</span>, <span class="at">x =</span> <span class="st">"Fitted Values"</span>, <span class="at">y =</span> <span class="st">"Residuals"</span>)</span>
-<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a>pb_resid_group_df <span class="ot">&lt;-</span> pb_df <span class="sc">%&gt;%</span></span>
-<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">residuals =</span> <span class="fu">residuals</span>(pb_model))</span>
-<span id="cb10-11"><a href="#cb10-11" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-12"><a href="#cb10-12" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(pb_resid_group_df, <span class="fu">aes</span>(<span class="at">x =</span> <span class="fu">interaction</span>(spp, sex), <span class="at">y =</span> residuals)) <span class="sc">+</span></span>
-<span id="cb10-13"><a href="#cb10-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_boxplot</span>() <span class="sc">+</span></span>
-<span id="cb10-14"><a href="#cb10-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Residuals by Group"</span>, <span class="at">x =</span> <span class="st">"Species:Sex Combination"</span>, <span class="at">y =</span> <span class="st">"Residuals"</span>) <span class="sc">+</span></span>
-<span id="cb10-15"><a href="#cb10-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme</span>(<span class="at">axis.text.x =</span> <span class="fu">element_text</span>(<span class="at">angle =</span> <span class="dv">45</span>, <span class="at">hjust =</span> <span class="dv">1</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="callout callout-style-default callout-tip callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-Tip
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p><strong>🚀 If you finish early:</strong> Do any of the six species:sex groups have visibly larger residual spread than the others in the last boxplot? Which one(s)?</p>
-<pre><code>________________________________________________________</code></pre>
-</div>
-</div>
-<hr>
-</section>
-<section id="part-5-estimated-marginal-means-and-post-hoc-balanced-model" class="level1">
-<h1>Part 5 · Estimated Marginal Means and Post-Hoc — Balanced Model</h1>
-<p><strong>▶ Run this</strong> — main effect of species:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 5.1 · Estimated Marginal Means and Post-Hoc ────────────────────</span></span>
-<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>sppb_emm <span class="ot">&lt;-</span> <span class="fu">emmeans</span>(pb_model, <span class="sc">~</span> spp)</span>
-<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>sppb_emm</span>
-<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a><span class="fu">pairs</span>(sppb_emm)</span>
-<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(sppb_emm)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>▶ Run this</strong> — main effect of sex:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb13"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 5.2 · Estimated Marginal Means and Post-Hoc ────────────────────</span></span>
-<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>sexb_emm <span class="ot">&lt;-</span> <span class="fu">emmeans</span>(pb_model, <span class="sc">~</span> sex)</span>
-<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>sexb_emm</span>
-<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a><span class="fu">pairs</span>(sexb_emm)</span>
-<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(sexb_emm)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>▶ Run this</strong> — the interaction, compared to raw means:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb14"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 5.3 · Estimated Marginal Means and Post-Hoc ────────────────────</span></span>
-<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>interactionb_emm <span class="ot">&lt;-</span> <span class="fu">emmeans</span>(pb_model, <span class="sc">~</span> spp <span class="sc">*</span> sex)</span>
-<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>interactionb_emm</span>
-<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>pb_df <span class="sc">%&gt;%</span></span>
-<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(spp, sex) <span class="sc">%&gt;%</span></span>
-<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">raw_mean =</span> <span class="fu">mean</span>(mass_g), <span class="at">.groups =</span> <span class="st">'drop'</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_wider</span>(<span class="at">names_from =</span> sex, <span class="at">values_from =</span> raw_mean)</span>
-<span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb14-10"><a href="#cb14-10" aria-hidden="true" tabindex="-1"></a><span class="fu">pairs</span>(interactionb_emm)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>▶ Run this</strong> — compact letter display and an interaction plot:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb15"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 5.4 · Estimated Marginal Means and Post-Hoc ────────────────────</span></span>
-<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>cldb_interaction <span class="ot">&lt;-</span> multcomp<span class="sc">::</span><span class="fu">cld</span>(interactionb_emm,</span>
-<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>                       <span class="at">Letters =</span> letters,</span>
-<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>                       <span class="at">adjust =</span> <span class="st">"sidak"</span>)</span>
-<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>cldb_df <span class="ot">&lt;-</span> <span class="fu">as.data.frame</span>(cldb_interaction) <span class="sc">%&gt;%</span></span>
-<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(spp, sex)</span>
-<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span>(cldb_df)</span>
-<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a><span class="fu">emmip</span>(pb_model, sex <span class="sc">~</span> spp, <span class="at">CIs =</span> <span class="cn">TRUE</span>) <span class="sc">+</span></span>
-<span id="cb15-10"><a href="#cb15-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Interaction Plot"</span>, <span class="at">x =</span> <span class="st">"Species"</span>, <span class="at">y =</span> <span class="st">"Body Mass (g)"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>▶ Run this</strong> — a publication-quality version of that plot:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb16"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 5.5 · Estimated Marginal Means and Post-Hoc ────────────────────</span></span>
-<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>pubb_interaction_df <span class="ot">&lt;-</span> <span class="fu">as.data.frame</span>(interactionb_emm)</span>
-<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>pubb_plot <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(pubb_interaction_df, <span class="fu">aes</span>(<span class="at">x =</span> spp, <span class="at">y =</span> emmean,</span>
-<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>                                       <span class="at">color =</span> sex, <span class="at">group =</span> sex)) <span class="sc">+</span></span>
-<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_line</span>(<span class="at">linewidth =</span> <span class="dv">1</span>, <span class="at">position =</span> <span class="fu">position_dodge</span>(<span class="at">width =</span> <span class="fl">0.2</span>)) <span class="sc">+</span></span>
-<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>(<span class="at">size =</span> <span class="dv">3</span>, <span class="at">position =</span> <span class="fu">position_dodge</span>(<span class="at">width =</span> <span class="fl">0.2</span>)) <span class="sc">+</span></span>
-<span id="cb16-8"><a href="#cb16-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_errorbar</span>(<span class="fu">aes</span>(<span class="at">ymin =</span> emmean <span class="sc">-</span> SE, <span class="at">ymax =</span> emmean <span class="sc">+</span> SE),</span>
-<span id="cb16-9"><a href="#cb16-9" aria-hidden="true" tabindex="-1"></a>                <span class="at">width =</span> <span class="fl">0.2</span>, <span class="at">position =</span> <span class="fu">position_dodge</span>(<span class="at">width =</span> <span class="fl">0.2</span>)) <span class="sc">+</span></span>
-<span id="cb16-10"><a href="#cb16-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Species"</span>, <span class="at">y =</span> <span class="st">"Body Mass (g)"</span>, <span class="at">color =</span> <span class="st">"Sex"</span>) <span class="sc">+</span></span>
-<span id="cb16-11"><a href="#cb16-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_light</span>()</span>
-<span id="cb16-12"><a href="#cb16-12" aria-hidden="true" tabindex="-1"></a>pubb_plot</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>✏️ <strong>Your turn:</strong> Using the compact letter display (<code>cldb_df</code>), which species/sex combinations are <em>not</em> significantly different from each other?</p>
-<p><code>________________________</code></p>
-<div class="callout callout-style-default callout-tip callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-Tip
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p><strong>🚀 If you finish early:</strong> <code>emmip(pb_model, sex ~ spp, ...)</code> plots sex as separate lines across species. Swap the formula to <code>emmip(pb_model, spp ~ sex, CIs = TRUE)</code> instead. How does the plot’s emphasis change?</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb17"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 5.6 · Estimated Marginal Means and Post-Hoc ────────────────────</span></span>
-<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Write your code in the R script:</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-</div>
-</div>
-<hr>
-</section>
-<section id="part-6-understanding-sums-of-squares-types-balanced-model" class="level1">
-<h1>Part 6 · Understanding Sums-of-Squares Types — Balanced Model</h1>
-<p><strong>▶ Run this</strong> — fit and compare all three types of SS:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb18"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 6.1 · Understanding Sums-of-Squares Types ──────────────────────</span></span>
-<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>type1b_anova <span class="ot">&lt;-</span> <span class="fu">anova</span>(pb_model)          <span class="co"># Type I - order matters!</span></span>
-<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>type1b_anova</span>
-<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a>type2b_anova <span class="ot">&lt;-</span> <span class="fu">Anova</span>(pb_model, <span class="at">type =</span> <span class="dv">2</span>)  <span class="co"># Type II</span></span>
-<span id="cb18-6"><a href="#cb18-6" aria-hidden="true" tabindex="-1"></a>type2b_anova</span>
-<span id="cb18-7"><a href="#cb18-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb18-8"><a href="#cb18-8" aria-hidden="true" tabindex="-1"></a>type3b_anova <span class="ot">&lt;-</span> <span class="fu">Anova</span>(pb_model, <span class="at">type =</span> <span class="dv">3</span>)  <span class="co"># Type III</span></span>
-<span id="cb18-9"><a href="#cb18-9" aria-hidden="true" tabindex="-1"></a>type3b_anova</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb19"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 6.2 · Understanding Sums-of-Squares Types ──────────────────────</span></span>
-<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>ssb_comparison_df <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
-<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">Effect =</span> <span class="fu">c</span>(<span class="st">"Species"</span>, <span class="st">"Sex"</span>, <span class="st">"Species:Sex"</span>),</span>
-<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">Type_I_F =</span> <span class="fu">round</span>(type1b_anova<span class="sc">$</span><span class="st">`</span><span class="at">F value</span><span class="st">`</span>[<span class="dv">1</span><span class="sc">:</span><span class="dv">3</span>], <span class="dv">2</span>),</span>
-<span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">Type_II_F =</span> <span class="fu">round</span>(type2b_anova<span class="sc">$</span><span class="st">`</span><span class="at">F value</span><span class="st">`</span>[<span class="dv">2</span><span class="sc">:</span><span class="dv">4</span>], <span class="dv">2</span>),</span>
-<span id="cb19-6"><a href="#cb19-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">Type_III_F =</span> <span class="fu">round</span>(type3b_anova<span class="sc">$</span><span class="st">`</span><span class="at">F value</span><span class="st">`</span>[<span class="dv">2</span><span class="sc">:</span><span class="dv">4</span>], <span class="dv">2</span>)</span>
-<span id="cb19-7"><a href="#cb19-7" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb19-8"><a href="#cb19-8" aria-hidden="true" tabindex="-1"></a>ssb_comparison_df</span>
-<span id="cb19-9"><a href="#cb19-9" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb19-10"><a href="#cb19-10" aria-hidden="true" tabindex="-1"></a>pb_comparison_df <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
-<span id="cb19-11"><a href="#cb19-11" aria-hidden="true" tabindex="-1"></a>  <span class="at">Effect =</span> <span class="fu">c</span>(<span class="st">"Species"</span>, <span class="st">"Sex"</span>, <span class="st">"Species:Sex"</span>),</span>
-<span id="cb19-12"><a href="#cb19-12" aria-hidden="true" tabindex="-1"></a>  <span class="at">Type_I_p =</span> <span class="fu">round</span>(type1b_anova<span class="sc">$</span><span class="st">`</span><span class="at">Pr(&gt;F)</span><span class="st">`</span>[<span class="dv">1</span><span class="sc">:</span><span class="dv">3</span>], <span class="dv">4</span>),</span>
-<span id="cb19-13"><a href="#cb19-13" aria-hidden="true" tabindex="-1"></a>  <span class="at">Type_II_p =</span> <span class="fu">round</span>(type2b_anova<span class="sc">$</span><span class="st">`</span><span class="at">Pr(&gt;F)</span><span class="st">`</span>[<span class="dv">2</span><span class="sc">:</span><span class="dv">4</span>], <span class="dv">4</span>),</span>
-<span id="cb19-14"><a href="#cb19-14" aria-hidden="true" tabindex="-1"></a>  <span class="at">Type_III_p =</span> <span class="fu">round</span>(type3b_anova<span class="sc">$</span><span class="st">`</span><span class="at">Pr(&gt;F)</span><span class="st">`</span>[<span class="dv">2</span><span class="sc">:</span><span class="dv">4</span>], <span class="dv">4</span>)</span>
-<span id="cb19-15"><a href="#cb19-15" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb19-16"><a href="#cb19-16" aria-hidden="true" tabindex="-1"></a>pb_comparison_df</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>✏️ <strong>Your turn:</strong> For this <em>balanced</em> dataset, do the three SS types give the same F-values for the main effects? Is that what you’d expect?</p>
-<p><code>________________________</code></p>
-<hr>
-</section>
-<section id="part-7-the-same-analysis-unbalanced" class="level1">
-<h1>Part 7 · The Same Analysis, Unbalanced</h1>
-<p>Now let’s redo the whole analysis on the full, naturally unbalanced <code>p_df</code> (not the balanced <code>pb_df</code> subsample) — and see what changes.</p>
-<p><strong>▶ Run this</strong> — fit the model and check the ANOVA table:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb20"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 7.1 · The Same Analysis, Unbalanced ────────────────────────────</span></span>
-<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a>pu_model <span class="ot">&lt;-</span> <span class="fu">lm</span>(mass_g <span class="sc">~</span> spp <span class="sc">*</span> sex, <span class="at">data =</span> p_df)</span>
-<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(pu_model)</span>
-<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a><span class="fu">Anova</span>(pu_model, <span class="at">type =</span> <span class="dv">3</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>▶ Run this</strong> — diagnostics:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb21"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 7.2 · The Same Analysis, Unbalanced ────────────────────────────</span></span>
-<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a><span class="fu">par</span>(<span class="at">mfrow =</span> <span class="fu">c</span>(<span class="dv">2</span>, <span class="dv">2</span>))</span>
-<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(pu_model)</span>
-<span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a><span class="fu">par</span>(<span class="at">mfrow =</span> <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">1</span>))</span>
-<span id="cb21-5"><a href="#cb21-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb21-6"><a href="#cb21-6" aria-hidden="true" tabindex="-1"></a>pu_resid_df <span class="ot">&lt;-</span> <span class="fu">augment</span>(pu_model)</span>
-<span id="cb21-7"><a href="#cb21-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb21-8"><a href="#cb21-8" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(pu_resid_df, <span class="fu">aes</span>(<span class="at">sample =</span> .resid)) <span class="sc">+</span></span>
-<span id="cb21-9"><a href="#cb21-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">stat_qq</span>() <span class="sc">+</span></span>
-<span id="cb21-10"><a href="#cb21-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">stat_qq_line</span>() <span class="sc">+</span></span>
-<span id="cb21-11"><a href="#cb21-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Q-Q Plot of Residuals"</span>, <span class="at">x =</span> <span class="st">"Theoretical Quantiles"</span>, <span class="at">y =</span> <span class="st">"Sample Quantiles"</span>)</span>
-<span id="cb21-12"><a href="#cb21-12" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb21-13"><a href="#cb21-13" aria-hidden="true" tabindex="-1"></a><span class="fu">shapiro.test</span>(<span class="fu">residuals</span>(pu_model))</span>
-<span id="cb21-14"><a href="#cb21-14" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb21-15"><a href="#cb21-15" aria-hidden="true" tabindex="-1"></a><span class="fu">leveneTest</span>(mass_g <span class="sc">~</span> spp <span class="sc">*</span> sex, <span class="at">data =</span> p_df)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>▶ Run this</strong> — EMMs, pairwise comparisons, and the interaction plot:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb22"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 7.3 · The Same Analysis, Unbalanced ────────────────────────────</span></span>
-<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>sppu_emm <span class="ot">&lt;-</span> <span class="fu">emmeans</span>(pu_model, <span class="sc">~</span> spp)</span>
-<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a>sppu_emm</span>
-<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a><span class="fu">pairs</span>(sppu_emm)</span>
-<span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-6"><a href="#cb22-6" aria-hidden="true" tabindex="-1"></a>sexu_emm <span class="ot">&lt;-</span> <span class="fu">emmeans</span>(pu_model, <span class="sc">~</span> sex)</span>
-<span id="cb22-7"><a href="#cb22-7" aria-hidden="true" tabindex="-1"></a>sexu_emm</span>
-<span id="cb22-8"><a href="#cb22-8" aria-hidden="true" tabindex="-1"></a><span class="fu">pairs</span>(sexu_emm)</span>
-<span id="cb22-9"><a href="#cb22-9" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-10"><a href="#cb22-10" aria-hidden="true" tabindex="-1"></a>interactionu_emm <span class="ot">&lt;-</span> <span class="fu">emmeans</span>(pu_model, <span class="sc">~</span> spp <span class="sc">*</span> sex)</span>
-<span id="cb22-11"><a href="#cb22-11" aria-hidden="true" tabindex="-1"></a>interactionu_emm</span>
-<span id="cb22-12"><a href="#cb22-12" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-13"><a href="#cb22-13" aria-hidden="true" tabindex="-1"></a><span class="co"># Compare to raw means</span></span>
-<span id="cb22-14"><a href="#cb22-14" aria-hidden="true" tabindex="-1"></a>p_df <span class="sc">%&gt;%</span></span>
-<span id="cb22-15"><a href="#cb22-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(spp, sex) <span class="sc">%&gt;%</span></span>
-<span id="cb22-16"><a href="#cb22-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">raw_mean =</span> <span class="fu">mean</span>(mass_g), <span class="at">.groups =</span> <span class="st">'drop'</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb22-17"><a href="#cb22-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_wider</span>(<span class="at">names_from =</span> sex, <span class="at">values_from =</span> raw_mean)</span>
-<span id="cb22-18"><a href="#cb22-18" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-19"><a href="#cb22-19" aria-hidden="true" tabindex="-1"></a>cldu_interaction <span class="ot">&lt;-</span> multcomp<span class="sc">::</span><span class="fu">cld</span>(interactionu_emm,</span>
-<span id="cb22-20"><a href="#cb22-20" aria-hidden="true" tabindex="-1"></a>                       <span class="at">Letters =</span> letters,</span>
-<span id="cb22-21"><a href="#cb22-21" aria-hidden="true" tabindex="-1"></a>                       <span class="at">adjust =</span> <span class="st">"sidak"</span>)</span>
-<span id="cb22-22"><a href="#cb22-22" aria-hidden="true" tabindex="-1"></a>cldu_df <span class="ot">&lt;-</span> <span class="fu">as.data.frame</span>(cldu_interaction) <span class="sc">%&gt;%</span></span>
-<span id="cb22-23"><a href="#cb22-23" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(spp, sex)</span>
-<span id="cb22-24"><a href="#cb22-24" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span>(cldu_df)</span>
-<span id="cb22-25"><a href="#cb22-25" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-26"><a href="#cb22-26" aria-hidden="true" tabindex="-1"></a><span class="fu">emmip</span>(pu_model, sex <span class="sc">~</span> spp, <span class="at">CIs =</span> <span class="cn">TRUE</span>) <span class="sc">+</span></span>
-<span id="cb22-27"><a href="#cb22-27" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Interaction Plot"</span>, <span class="at">x =</span> <span class="st">"Species"</span>, <span class="at">y =</span> <span class="st">"Body Mass (g)"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>▶ Run this</strong> — compare all three SS types on the unbalanced data:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb23"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 7.4 · The Same Analysis, Unbalanced ────────────────────────────</span></span>
-<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a>type1_anova <span class="ot">&lt;-</span> <span class="fu">anova</span>(pu_model)</span>
-<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a>type1_anova</span>
-<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a>type2_anova <span class="ot">&lt;-</span> <span class="fu">Anova</span>(pu_model, <span class="at">type =</span> <span class="dv">2</span>)</span>
-<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a>type2_anova</span>
-<span id="cb23-7"><a href="#cb23-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb23-8"><a href="#cb23-8" aria-hidden="true" tabindex="-1"></a>type3_anova <span class="ot">&lt;-</span> <span class="fu">Anova</span>(pu_model, <span class="at">type =</span> <span class="dv">3</span>)</span>
-<span id="cb23-9"><a href="#cb23-9" aria-hidden="true" tabindex="-1"></a>type3_anova</span>
-<span id="cb23-10"><a href="#cb23-10" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb23-11"><a href="#cb23-11" aria-hidden="true" tabindex="-1"></a>ss_comparison_df <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
-<span id="cb23-12"><a href="#cb23-12" aria-hidden="true" tabindex="-1"></a>  <span class="at">Effect =</span> <span class="fu">c</span>(<span class="st">"Species"</span>, <span class="st">"Sex"</span>, <span class="st">"Species:Sex"</span>),</span>
-<span id="cb23-13"><a href="#cb23-13" aria-hidden="true" tabindex="-1"></a>  <span class="at">Type_I_F =</span> <span class="fu">round</span>(type1_anova<span class="sc">$</span><span class="st">`</span><span class="at">F value</span><span class="st">`</span>[<span class="dv">1</span><span class="sc">:</span><span class="dv">3</span>], <span class="dv">2</span>),</span>
-<span id="cb23-14"><a href="#cb23-14" aria-hidden="true" tabindex="-1"></a>  <span class="at">Type_II_F =</span> <span class="fu">round</span>(type2_anova<span class="sc">$</span><span class="st">`</span><span class="at">F value</span><span class="st">`</span>[<span class="dv">2</span><span class="sc">:</span><span class="dv">4</span>], <span class="dv">2</span>),</span>
-<span id="cb23-15"><a href="#cb23-15" aria-hidden="true" tabindex="-1"></a>  <span class="at">Type_III_F =</span> <span class="fu">round</span>(type3_anova<span class="sc">$</span><span class="st">`</span><span class="at">F value</span><span class="st">`</span>[<span class="dv">2</span><span class="sc">:</span><span class="dv">4</span>], <span class="dv">2</span>)</span>
-<span id="cb23-16"><a href="#cb23-16" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb23-17"><a href="#cb23-17" aria-hidden="true" tabindex="-1"></a>ss_comparison_df</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>✏️ <strong>Your turn:</strong> Now compare <code>ss_comparison_df</code> from this <em>unbalanced</em> run to <code>ssb_comparison_df</code> from Part 6. Do the three SS types now disagree with each other?</p>
-<p><code>________________________</code></p>
-<div class="callout callout-style-default callout-tip callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-Tip
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p><strong>🚀 If you finish early:</strong> Compute the difference in AIC between <code>pb_model</code> (balanced) and <code>pu_model</code> (unbalanced) — they’re not directly comparable since they’re fit to different data, but compare their <code>summary()$r.squared</code> instead. Does using <em>more</em> (unbalanced) data change how much variance is explained?</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb24"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 7.5 · The Same Analysis, Unbalanced ────────────────────────────</span></span>
-<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Write your code in the R script:</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-</div>
-</div>
-<hr>
-</section>
-<section id="part-8-writing-up-the-results" class="level1">
-<h1>Part 8 · Writing Up the Results</h1>
-<p>A two-way factorial ANOVA revealed that body mass in penguins was significantly affected by both species and sex. Linear model coefficient estimates indicated that body mass in the reference condition (Adelie females) was some baseline value; males weighed a certain amount more than females on average; Chinstrap and Gentoo penguins each differed from Adelie by their own amount. Post-hoc pairwise comparisons using estimated marginal means with Tukey adjustment showed significant differences between species pairs. Type III sums of squares were used to account for the unbalanced design, with Type I and Type II SS showing similar results for the main effects when the interaction was not the primary focus.</p>
-<p>✏️ <strong>Your turn:</strong> Using your own <code>pu_model</code> output from Part 7, fill in the specific numbers for this results paragraph — the F-statistics, degrees of freedom, p-values, and coefficient estimates.</p>
-<pre><code>________________________________________________________
-________________________________________________________
-________________________________________________________</code></pre>
-<hr>
-</section>
-<section id="review-and-checkpoint" class="level1">
-<h1>Review and checkpoint</h1>
-<p>At this point you can:</p>
-<ul class="task-list">
-<li><label><input type="checkbox">Build a balanced subsample from an unbalanced dataset</label></li>
-<li><label><input type="checkbox">Fit a two-way factorial ANOVA with <code>lm()</code> and interpret main effects and the interaction</label></li>
-<li><label><input type="checkbox">Check ANOVA assumptions with diagnostic plots, Shapiro-Wilk, and Levene’s test</label></li>
-<li><label><input type="checkbox">Compute estimated marginal means and pairwise/interaction comparisons with <code>emmeans()</code></label></li>
-<li><label><input type="checkbox">Explain the difference between Type I, Type II, and Type III sums of squares, and when they agree vs.&nbsp;disagree</label></li>
-<li><label><input type="checkbox">Explain why EMMs differ from simple group means in an unbalanced design</label></li>
-</ul>
-<div class="callout callout-style-default callout-note callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-Note
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p><strong>📤 What to turn in before next class</strong></p>
-<p>Upload both of these to the course management system:</p>
+<section id="in-class-activity-13-two-way-factorial-anova" class="level1">
+<h1>In-class Activity 13: Two-Way (Factorial) ANOVA</h1>
+<section id="todays-objectives" class="level3">
+<h3 class="anchored">Today’s Objectives</h3>
 <ol type="1">
-<li>Your code — the <code>scripts/</code> folder (or just <code>13_two_way_anova.R</code>)</li>
-<li>This worksheet, with your written answers</li>
+<li>Recognize a factorial design and state its three null hypotheses</li>
+<li>Say what <em>balanced</em> means, and what it costs to force it</li>
+<li>Fit a two-way factorial ANOVA with <code>lm()</code> and read the interaction first</li>
+<li>Check the assumptions on the residuals, not the raw data</li>
+<li>Compute estimated marginal means, and see why they are not just group means</li>
+<li>Compare Type I, II, and III sums of squares on a <strong>balanced</strong> design</li>
+<li>Run the same model on the <strong>unbalanced</strong> design and watch the three types come apart</li>
+<li>Report the result, and show the interaction as a figure</li>
 </ol>
-</div>
-</div>
-<hr>
-</section>
-<section id="part-9-take-home-extension-crayfish-growth-by-range-and-lake" class="level1">
-<h1>Part 9 · Take-Home Extension — Crayfish Growth by Range and Lake</h1>
-<p><em>Due Monday, November 2 — before the following class.</em></p>
-<p>Same workflow as Parts 1–7 — fit the factorial model, check assumptions, get EMMs, compare SS types — new dataset, new question. This time you decide which SS type to trust and why; nobody walks you through it step by step.</p>
-<section id="background" class="level2">
-<h2 class="anchored" data-anchor-id="background">Background</h2>
-<p>Sargent &amp; Lodge (2014) reared young-of-year rusty crayfish (<em>Orconectes rusticus</em>) from both native (Ohio) and invasive (Wisconsin) populations in enclosures across three northern Wisconsin lakes — a natural range × lake factorial design.</p>
-<p><strong>▶ Run this:</strong></p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb26"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 9.1 · Take-Home Extension ──────────────────────────────────────</span></span>
-<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a>cray_df <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="st">"data/sargent_lodge_crayfish.csv"</span>)</span>
-<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a><span class="fu">head</span>(cray_df)</span>
-<span id="cb26-4"><a href="#cb26-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb26-5"><a href="#cb26-5" aria-hidden="true" tabindex="-1"></a>cray_df <span class="sc">%&gt;%</span> <span class="fu">count</span>(range, lake)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-</section>
-<section id="your-task" class="level2">
-<h2 class="anchored" data-anchor-id="your-task">Your Task</h2>
-<p><strong>Question:</strong> Does the effect of population range (Native vs.&nbsp;Invasive) on crayfish growth rate depend on which lake they’re in?</p>
-<p>✏️ <strong>Your turn:</strong> State your hypotheses for both main effects and the interaction. Look at how balanced (or not) the design is across <code>range</code> and <code>lake</code> — you already ran <code>count(range, lake)</code> above — and decide which sums-of-squares type is appropriate here, and why. Justify your choice, fit the model, interpret it, and report the result properly.</p>
-<pre><code>H0 (range) =
-________________________________________________________
-H0 (lake) =
-________________________________________________________
-H0 (interaction) =
-________________________________________________________
-SS type I will use and why:
-________________________________________________________</code></pre>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb28"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 9.2 · Take-Home Extension ──────────────────────────────────────</span></span>
-<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Write your code in the R script:</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<pre><code>Interpretation:
-________________________________________________________
-________________________________________________________</code></pre>
-</section>
-<section id="final-figure" class="level2">
-<h2 class="anchored" data-anchor-id="final-figure">Final Figure</h2>
-<p>Produce one publication-quality interaction plot (growth rate by lake, colored by range) — proper axis labels, no default <code>ggplot</code> grey background — and export it with <code>ggsave()</code>.</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb30"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 9.3 · Take-Home Extension ──────────────────────────────────────</span></span>
-<span id="cb30-2"><a href="#cb30-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Write your code in the R script:</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout callout-style-default callout-tip callout-titled">
 <div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
 <div class="callout-title-container flex-fill">
-Note
+<span class="screen-reader-only">Tip</span>📂 Files for today
 </div>
 </div>
 <div class="callout-body-container callout-body">
-<p><strong>📤 What to turn in — due Nov 2</strong></p>
-<p>Your write-up should include:</p>
-<ul class="task-list">
-<li><label><input type="checkbox">The question</label></li>
-<li><label><input type="checkbox">Your hypotheses</label></li>
-<li><label><input type="checkbox">Which SS type you used, and your justification for choosing it</label></li>
-<li><label><input type="checkbox">The code and its output</label></li>
-<li><label><input type="checkbox">Your interpretation of the result</label></li>
-<li><label><input type="checkbox">A final figure showing the result</label></li>
+<p><a href="data/13_two_way_anova.R" class="btn btn-primary" download="13_two_way_anova.R">📥 Script skeleton (.R)</a></p>
+<ul>
+<li>Save the skeleton as <code>scripts/13_two_way_anova.R</code> in your project.</li>
+<li><strong>No data file.</strong> The penguin data comes from the <code>palmerpenguins</code> package.</li>
+</ul>
+</div>
+</div>
+<div class="callout callout-style-default callout-important callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Important</span>What you hand in
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<ul>
+<li><strong>All of today’s code is right here in this activity.</strong> Type it into your script as we go and run it chunk by chunk. The skeleton has the plumbing — libraries, the data read, the summarise block, the balancing — and nothing else. Every line of statistics you type yourself.</li>
+<li>The <strong>Q</strong> boxes are <strong>things to think about</strong>, not inline homework. Read them, talk them over, answer them in your head. You do <strong>not</strong> have to type answers into the script, and they are not graded.</li>
+<li>The <strong>write-up</strong> at the bottom — sections 8 and 9 — <em>is</em> graded. Those answers go into the script as <code>#</code> comments.</li>
+<li>Hand in <code>scripts/13_two_way_anova.R</code>. Run it top to bottom (<strong>Ctrl/Cmd + Shift + Enter</strong>) first — it must run with no errors.</li>
 </ul>
 </div>
 </div>
@@ -903,22 +497,323 @@ Note
 <i class="callout-icon"></i>
 </div>
 <div class="callout-title-container flex-fill">
-Note
+<span class="screen-reader-only">Note</span>🔮 Predict before you run
 </div>
 </div>
 <div class="callout-body-container callout-body">
-<p><strong>Reference</strong></p>
-<p>Sargent, L.W. &amp; Lodge, D.M. (2014). Evolution of invasive traits in nonindigenous species: increased survival and faster growth in invasive populations of rusty crayfish (<em>Orconectes rusticus</em>). <em>Evolutionary Applications</em>, 7, 949–961.</p>
+<p>Factorial ANOVA is easy to fake your way through by reading p-values off a table after the fact. Before each model, say out loud what you expect — which terms will be significant, whether the lines will be parallel — then run it. A wrong prediction points straight at the thing you misunderstood.</p>
 </div>
 </div>
+<div class="callout callout-style-default callout-tip callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Tip</span>The <code>invisible(NULL)</code> lines in the skeleton
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Every section ends with <code>invisible(NULL)</code>. It is a <strong>bumper</strong>. Press Ctrl/Cmd + Enter on a section’s last real line and your cursor jumps to the next line <em>that has code on it</em> — without the bumper, that is the next section, way down past the next heading. With it, the cursor stops right there and you keep your place. It does nothing and prints nothing.</p>
+</div>
+</div>
+<p>Keep the plots plain today — no labels, colors, or themes. The goal is to <strong>read</strong> them. The one exception is the final figure in section 9, which is the graded deliverable.</p>
+<hr>
+<blockquote class="blockquote">
+<h2 id="block-1-the-design-and-the-data-after-lecture-parts-12" class="anchored" data-anchor-id="todays-objectives">🧩 Block 1 — The design and the data <em>(after lecture Parts 1–2)</em></h2>
+<p>Sections 1–2: see the factorial structure, then build a balanced copy of it.</p>
+</blockquote>
+</section>
+</section>
+<section id="section-1-the-data" class="level1">
+<h1>Section 1 · The data</h1>
+<p><em>Written for you in the skeleton — run it and read it.</em></p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ---- Libraries -------------------------------------------</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(palmerpenguins)</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(car)        <span class="co"># Anova(), leveneTest()</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(emmeans)    <span class="co"># emmeans(), emmip()</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(broom)      <span class="co"># augment()</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tidyverse)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ---- 1 The data ------------------------------------------</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>p_df <span class="ot">&lt;-</span> penguins <span class="sc">%&gt;%</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(<span class="at">spp =</span> species, sex, <span class="at">mass_g =</span> body_mass_g) <span class="sc">%&gt;%</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">drop_na</span>(spp, sex, mass_g)</span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="fu">head</span>(p_df)</span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>p_df <span class="sc">%&gt;%</span></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(spp, sex) <span class="sc">%&gt;%</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(</span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>    <span class="at">n =</span> <span class="fu">n</span>(),</span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>    <span class="at">mean_mass =</span> <span class="fu">mean</span>(mass_g),</span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>    <span class="at">sd_mass =</span> <span class="fu">sd</span>(mass_g),</span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>    <span class="at">se_mass =</span> sd_mass <span class="sc">/</span> <span class="fu">sqrt</span>(n),</span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>    <span class="at">.groups =</span> <span class="st">"drop"</span></span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>  )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>Two factors — <code>spp</code> with 3 levels, <code>sex</code> with 2 — crossed, so every species appears with both sexes. That is a <strong>3 × 2 factorial design</strong>, and it has six cells.</p>
+<p>✏️ <strong>Q1:</strong> Six groups, one response. A factorial ANOVA tests <strong>three</strong> separate null hypotheses, not one. State all three in words.</p>
+<p>✏️ <strong>Q2:</strong> Look at the <code>n</code> column. Are the six cells the same size?</p>
 <hr>
 </section>
+<section id="section-2-count-the-cells-then-force-balance" class="level1">
+<h1>Section 2 · Count the cells, then force balance</h1>
+<p><em>Written for you in the skeleton — this is bookkeeping, not statistics.</em></p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ---- 2 Count the cells, then force balance ---------------</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>p_df <span class="sc">%&gt;%</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">count</span>(spp, sex) <span class="sc">%&gt;%</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_wider</span>(<span class="at">names_from =</span> sex, <span class="at">values_from =</span> n)</span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>min_n <span class="ot">&lt;-</span> <span class="fu">min</span>(<span class="fu">count</span>(p_df, spp, sex)<span class="sc">$</span>n)</span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>min_n</span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">123</span>)</span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>pb_df <span class="ot">&lt;-</span> p_df <span class="sc">%&gt;%</span></span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(spp, sex) <span class="sc">%&gt;%</span></span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">slice_sample</span>(<span class="at">n =</span> min_n) <span class="sc">%&gt;%</span></span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ungroup</span>()</span>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a>pb_df <span class="sc">%&gt;%</span></span>
+<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">count</span>(spp, sex) <span class="sc">%&gt;%</span></span>
+<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_wider</span>(<span class="at">names_from =</span> sex, <span class="at">values_from =</span> n)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><code>slice_sample(n = min_n)</code> inside <code>group_by()</code> takes a random <code>min_n</code> rows <strong>from each cell</strong>, so every cell ends up the same size. <code>set.seed(123)</code> makes that random draw repeatable — everyone in the room gets the same <code>pb_df</code>.</p>
+<p>✏️ <strong>Q3:</strong> What was <code>min_n</code>? <code>p_df</code> has 333 birds; how many are in <code>pb_df</code>, and how many did we throw away to get balance?</p>
+<p>✏️ <strong>Q4:</strong> Look carefully at the original counts. <strong>How many of the six cells were actually unbalanced?</strong> (Count them — the answer is smaller than you think.)</p>
+<p>✏️ <strong>Q5:</strong> Throwing away a third of your data to get balance is a real cost. Why would anyone pay it on purpose? What does balance buy you?</p>
+<blockquote class="blockquote">
+<p>💡 <strong>Key idea:</strong> we are about to run the <em>same</em> analysis twice — once on <code>pb_df</code> (balanced) and once on <code>p_df</code> (unbalanced) — so that every difference you see between them is caused by the imbalance and nothing else. That is the whole design of today’s activity.</p>
+</blockquote>
+<hr>
+<blockquote class="blockquote">
+<h2 id="block-2-fit-it-and-check-it-after-lecture-parts-35" class="anchored" data-anchor-id="section-2-count-the-cells-then-force-balance">🧩 Block 2 — Fit it and check it <em>(after lecture Parts 3–5)</em></h2>
+<p>Sections 3–4: fit the balanced factorial model, then check the assumptions.</p>
+</blockquote>
+</section>
+<section id="section-3-fit-the-balanced-factorial-model" class="level1">
+<h1>Section 3 · Fit the balanced factorial model</h1>
+<p>The <code>options()</code> line is already in your skeleton. It has to run <strong>before</strong> you fit anything, because it changes how R codes the factors — and if it is wrong, Type III sums of squares come out silently wrong rather than loudly broken.</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ---- 3 Fit the balanced factorial model ------------------</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="fu">options</span>(<span class="at">contrasts =</span> <span class="fu">c</span>(<span class="st">"contr.sum"</span>, <span class="st">"contr.poly"</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<blockquote class="blockquote">
+<p>🔮 <strong>Predict first:</strong> three terms — species, sex, and the interaction. Which will be significant? Will the interaction be?</p>
+</blockquote>
+<p><strong>▶ Type this yourself:</strong></p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>pb_model <span class="ot">&lt;-</span> <span class="fu">lm</span>(mass_g <span class="sc">~</span> spp <span class="sc">*</span> sex, <span class="at">data =</span> pb_df)</span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(pb_model)</span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a><span class="fu">Anova</span>(pb_model, <span class="at">type =</span> <span class="dv">3</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>The formula <code>mass_g ~ spp * sex</code> is shorthand. R expands the <code>*</code> into three terms: <code>spp + sex + spp:sex</code> — the two main effects and the interaction.</p>
+<p>✏️ <strong>Q6:</strong> Read the <code>spp:sex</code> row of the <code>Anova()</code> table first, before the two main effects. Why does the interaction get read first? (What does a significant interaction do to the <em>meaning</em> of a main effect?)</p>
+<p>✏️ <strong>Q7:</strong> Report the interaction: <em>F</em>, df, and <em>p</em>. Significant at α = 0.05?</p>
+<p>✏️ <strong>Q8:</strong> <code>summary()</code> and <code>Anova()</code> are both describing the same model. What does <code>Anova()</code> give you that <code>summary()</code>’s coefficient table does not?</p>
+<hr>
+</section>
+<section id="section-4-assumptions" class="level1">
+<h1>Section 4 · Assumptions</h1>
+<p>The four-panel plot is the one you have run every week. It is in your skeleton.</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ---- 4 Assumptions ---------------------------------------</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="fu">par</span>(<span class="at">mfrow =</span> <span class="fu">c</span>(<span class="dv">2</span>, <span class="dv">2</span>))</span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(pb_model)</span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a><span class="fu">par</span>(<span class="at">mfrow =</span> <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">1</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>▶ Type this yourself:</strong></p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>pb_resid_df <span class="ot">&lt;-</span> <span class="fu">augment</span>(pb_model)</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(pb_resid_df, <span class="fu">aes</span>(<span class="at">sample =</span> .resid)) <span class="sc">+</span></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">stat_qq</span>() <span class="sc">+</span></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">stat_qq_line</span>()</span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(pb_resid_df, <span class="fu">aes</span>(<span class="at">x =</span> .fitted, <span class="at">y =</span> .resid)) <span class="sc">+</span></span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>() <span class="sc">+</span></span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_hline</span>(<span class="at">yintercept =</span> <span class="dv">0</span>, <span class="at">linetype =</span> <span class="st">"dashed"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>▶ Type this yourself:</strong></p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="fu">shapiro.test</span>(<span class="fu">residuals</span>(pb_model))</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a><span class="fu">leveneTest</span>(mass_g <span class="sc">~</span> spp <span class="sc">*</span> sex, <span class="at">data =</span> pb_df)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>✏️ <strong>Q9:</strong> Normality is an assumption about the <strong>residuals</strong>, not about the raw body masses. Why does that distinction matter here? (The three species have very different mean masses — what would a histogram of all 204 raw masses look like?)</p>
+<p>✏️ <strong>Q10:</strong> <code>leveneTest()</code> is testing equal variance across <em>how many</em> groups here? Look at the df.</p>
+<p>✏️ <strong>Q11:</strong> Both tests passed, or both failed? Either way — a factorial ANOVA on balanced data is fairly robust to unequal variance. Why would that robustness disappear once the design is unbalanced?</p>
+<hr>
+<blockquote class="blockquote">
+<h2 id="block-3-marginal-means-and-sums-of-squares-after-lecture-parts-67" class="anchored" data-anchor-id="section-4-assumptions">🧩 Block 3 — Marginal means and sums of squares <em>(after lecture Parts 6–7)</em></h2>
+<p>Sections 5–6: get the estimated marginal means, then compare the three SS types on balanced data.</p>
+</blockquote>
+</section>
+<section id="section-5-estimated-marginal-means-and-post-hoc" class="level1">
+<h1>Section 5 · Estimated marginal means and post-hoc</h1>
+<p>An <strong>estimated marginal mean</strong> is the model’s estimate of a group mean, <em>averaging over the other factor</em>. The “averaging over” is the part that matters later.</p>
+<p><strong>▶ Type this yourself:</strong></p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ---- 5 Estimated marginal means and post-hoc -------------</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>spp_emm <span class="ot">&lt;-</span> <span class="fu">emmeans</span>(pb_model, <span class="sc">~</span> spp)</span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>spp_emm</span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a><span class="fu">pairs</span>(spp_emm)</span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>sex_emm <span class="ot">&lt;-</span> <span class="fu">emmeans</span>(pb_model, <span class="sc">~</span> sex)</span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a>sex_emm</span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a><span class="fu">pairs</span>(sex_emm)</span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a>cell_emm <span class="ot">&lt;-</span> <span class="fu">emmeans</span>(pb_model, <span class="sc">~</span> spp <span class="sc">*</span> sex)</span>
+<span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a>cell_emm</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<blockquote class="blockquote">
+<p>⚠️ <strong>Watch out!</strong> <code>emmeans()</code> prints <code>NOTE: Results may be misleading due to involvement in interactions</code>. That is not an error — it is reminding you of Q6. With a significant interaction, the <em>marginal</em> mean for a species is an average across two sexes that behave differently.</p>
+</blockquote>
+<blockquote class="blockquote">
+<p>🔮 <strong>Predict first:</strong> before you run the next chunk — on a <strong>balanced</strong> design, will the EMM for each cell equal the raw mean of that cell? Exactly, or just close?</p>
+</blockquote>
+<p><strong>▶ Type this yourself:</strong></p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="fu">as.data.frame</span>(cell_emm) <span class="sc">%&gt;%</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(spp, sex, emmean) <span class="sc">%&gt;%</span></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_wider</span>(<span class="at">names_from =</span> sex, <span class="at">values_from =</span> emmean)</span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a>pb_df <span class="sc">%&gt;%</span></span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(spp, sex) <span class="sc">%&gt;%</span></span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">raw_mean =</span> <span class="fu">mean</span>(mass_g), <span class="at">.groups =</span> <span class="st">"drop"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_wider</span>(<span class="at">names_from =</span> sex, <span class="at">values_from =</span> raw_mean)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>✏️ <strong>Q12:</strong> Compare the two tables. Do the EMMs match the raw cell means? Was your prediction right? <strong>Why</strong> does it come out that way on a balanced design?</p>
+<p><strong>▶ Type this yourself:</strong></p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>cld_df <span class="ot">&lt;-</span> multcomp<span class="sc">::</span><span class="fu">cld</span>(cell_emm, <span class="at">Letters =</span> letters, <span class="at">adjust =</span> <span class="st">"sidak"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">as.data.frame</span>() <span class="sc">%&gt;%</span></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(spp, sex)</span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>cld_df</span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a><span class="fu">emmip</span>(pb_model, sex <span class="sc">~</span> spp, <span class="at">CIs =</span> <span class="cn">TRUE</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>✏️ <strong>Q13:</strong> In a compact letter display, cells sharing a letter are <strong>not</strong> distinguishable. Which cells share a letter?</p>
+<p>✏️ <strong>Q14:</strong> <code>emmip()</code> draws one line per sex across the three species. If there were <strong>no</strong> interaction, what would those two lines look like? Do yours look like that?</p>
+<p>✏️ <strong>Q15:</strong> Does the interaction plot tell you the same thing as the <code>spp:sex</code> <em>p</em>-value from Q7? Say how.</p>
+<hr>
+</section>
+<section id="section-6-the-three-sums-of-squares-types-balanced" class="level1">
+<h1>Section 6 · The three sums-of-squares types, balanced</h1>
+<p>Three different ways to decide what “the effect of species” means when there is more than one term in the model:</p>
+<ul>
+<li><strong>Type I</strong> — <em>sequential</em>. Each term gets credit for whatever it explains after the terms listed before it. Order in the formula matters.</li>
+<li><strong>Type II</strong> — each main effect conditions on the <em>other main effect</em>, but not on the interaction.</li>
+<li><strong>Type III</strong> — each term conditions on <em>everything else</em>, interaction included.</li>
+</ul>
+<blockquote class="blockquote">
+<p>🔮 <strong>Predict first:</strong> on this <strong>balanced</strong> dataset, will the three types give the same <em>F</em>-values, or different ones?</p>
+</blockquote>
+<p><strong>▶ Type this yourself:</strong></p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ---- 6 The three sums-of-squares types, balanced ---------</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a><span class="fu">anova</span>(pb_model)            <span class="co"># Type I</span></span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a><span class="fu">Anova</span>(pb_model, <span class="at">type =</span> <span class="dv">2</span>)  <span class="co"># Type II</span></span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a><span class="fu">Anova</span>(pb_model, <span class="at">type =</span> <span class="dv">3</span>)  <span class="co"># Type III</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>✏️ <strong>Q16:</strong> Write down the <em>F</em>-value for <code>spp</code> under all three types. What do you notice? Was your prediction right?</p>
+<p>✏️ <strong>Q17:</strong> Explain <em>why</em> they come out that way. (What is it about equal cell sizes that makes “order of entry” stop mattering?)</p>
+<blockquote class="blockquote">
+<p>💡 <strong>Key idea:</strong> on a perfectly balanced design the three SS types are the same number, so the choice is irrelevant and nobody has to defend it. Everything written about Type I vs.&nbsp;II vs.&nbsp;III is about what happens when that stops being true — which is section 7.</p>
+</blockquote>
+<hr>
+<blockquote class="blockquote">
+<h2 id="block-4-the-payoff-after-lecture-parts-810" class="anchored" data-anchor-id="section-6-the-three-sums-of-squares-types-balanced">🧩 Block 4 — The payoff <em>(after lecture Parts 8–10)</em></h2>
+<p>Section 7: the same analysis, unbalanced. This is the one you do on your own.</p>
+</blockquote>
+</section>
+<section id="section-7-the-same-model-unbalanced-you-write-this-one" class="level1">
+<h1>Section 7 · The same model, unbalanced <em>(you write this one)</em></h1>
+<p><strong>This is where we are headed all day.</strong> You have run four moves on <code>pb_df</code>: fit, check, EMMs, compare SS types. Now run the same four on the full <code>p_df</code> — all 333 birds, imbalance and all — and see what changes.</p>
+<p>Only <strong>one</strong> of the six cells is unbalanced (Q4), so the honest expectation is that very little changes.</p>
+<blockquote class="blockquote">
+<p>🔮 <strong>Predict first:</strong> with just one slightly-uneven cell out of six, will the three SS types still agree? Will the EMMs still match the raw means?</p>
+</blockquote>
+<p><strong>▶ Type this yourself:</strong></p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb13"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ---- 7 The same model, unbalanced ------------------------</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>pu_model <span class="ot">&lt;-</span> <span class="fu">lm</span>(mass_g <span class="sc">~</span> spp <span class="sc">*</span> sex, <span class="at">data =</span> p_df)</span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(pu_model)</span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a><span class="fu">Anova</span>(pu_model, <span class="at">type =</span> <span class="dv">3</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>▶ Type this yourself</strong> — the three SS types, as in section 6:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb14"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="fu">anova</span>(pu_model)            <span class="co"># Type I</span></span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a><span class="fu">Anova</span>(pu_model, <span class="at">type =</span> <span class="dv">2</span>)  <span class="co"># Type II</span></span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a><span class="fu">Anova</span>(pu_model, <span class="at">type =</span> <span class="dv">3</span>)  <span class="co"># Type III</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>▶ Type this yourself</strong> — the EMMs against the raw means, as in section 5:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb15"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>pu_cell_emm <span class="ot">&lt;-</span> <span class="fu">emmeans</span>(pu_model, <span class="sc">~</span> spp <span class="sc">*</span> sex)</span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a><span class="fu">as.data.frame</span>(pu_cell_emm) <span class="sc">%&gt;%</span></span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(spp, sex, emmean) <span class="sc">%&gt;%</span></span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_wider</span>(<span class="at">names_from =</span> sex, <span class="at">values_from =</span> emmean)</span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a>p_df <span class="sc">%&gt;%</span></span>
+<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(spp, sex) <span class="sc">%&gt;%</span></span>
+<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">raw_mean =</span> <span class="fu">mean</span>(mass_g), <span class="at">.groups =</span> <span class="st">"drop"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb15-10"><a href="#cb15-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_wider</span>(<span class="at">names_from =</span> sex, <span class="at">values_from =</span> raw_mean)</span>
+<span id="cb15-11"><a href="#cb15-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-12"><a href="#cb15-12" aria-hidden="true" tabindex="-1"></a><span class="fu">emmeans</span>(pu_model, <span class="sc">~</span> spp)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>▶ Type this yourself</strong> — the assumption checks:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb16"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="fu">shapiro.test</span>(<span class="fu">residuals</span>(pu_model))</span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a><span class="fu">leveneTest</span>(mass_g <span class="sc">~</span> spp <span class="sc">*</span> sex, <span class="at">data =</span> p_df)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>✏️ <strong>Q18:</strong> Fill in the <em>F</em>-values and compare the two runs:</p>
+<pre><code>                 balanced          unbalanced
+            I     II    III     I     II    III
+spp
+sex
+spp:sex</code></pre>
+<p>✏️ <strong>Q19:</strong> Which terms’ <em>F</em>-values moved apart across the three types, and which one did <strong>not</strong> move at all? Why is the interaction term immune?</p>
+<p>✏️ <strong>Q20:</strong> Compare the marginal EMM for Gentoo to the raw Gentoo mean. They differ by about 10 g. Where does that 10 g come from? (Gentoo has 58 females and 61 males — and males are heavier.)</p>
+<p>✏️ <strong>Q21:</strong> Which SS type would you report for this model, and why? Which would you report if the interaction had come out non-significant?</p>
+<p>✏️ <strong>Q22:</strong> You had two versions of this analysis: one on 204 balanced birds, one on all 333. Which would you actually publish, and what did forcing balance buy you that was worth 129 birds?</p>
+<blockquote class="blockquote">
+<p>💡 <strong>Key idea:</strong> imbalance is not a formatting problem, it is an <em>interpretation</em> problem. Once cells are uneven, “the effect of species” stops being one number and becomes a question about what you are holding constant. The three SS types are three different answers to that question. On balanced data they collapse into one, which is why balance is worth something — and why Type III is the safe default when you do not have it.</p>
+</blockquote>
+<hr>
 </section>
 <section id="homework" class="level1">
 <h1>Homework</h1>
 <p><strong><a href="../../homeworks/factorial_anova_homework/factorial_anova_homework.html">Homework 8 — Factorial ANOVA</a></strong></p>
-<p>A two-factor design on <strong>rusty crayfish growth</strong>: native (Ohio) versus invasive (Wisconsin) populations, grown in enclosures in three northern Wisconsin lakes. Population origin × lake, with the interaction as the interesting term, plus the assumption checks and a publication-quality figure.</p>
+<p>A two-factor design on <strong>rusty crayfish growth</strong>: native (Ohio) versus invasive (Wisconsin) populations, grown in enclosures in three northern Wisconsin lakes. Population origin × lake, with the interaction as the interesting term, plus the assumption checks and a publication-quality figure — and this time <em>you</em> decide which SS type to trust, and defend it.</p>
 <p><strong>Data:</strong> <a href="../../homeworks/factorial_anova_homework/data/sargent_lodge_crayfish.csv"><code>sargent_lodge_crayfish.csv</code></a> — Sargent &amp; Lodge (2014), <em>Evolutionary Applications</em> 7: 949–961. You meet these data again in Homework 9, where <code>lake</code> becomes a random effect.</p>
+<p>Start a new script for it — do not add it to <code>13_two_way_anova.R</code>.</p>
+<hr>
+</section>
+<section id="write-up-graded" class="level1">
+<h1>Write-up — graded</h1>
+<p><em>These go into the bottom of your script, as <code>#</code> comments after <code>ANSWER:</code>.</em></p>
+<section id="section-8-report-the-model" class="level2">
+<h2 class="anchored" data-anchor-id="section-8-report-the-model">Section 8 · Report the model</h2>
+<p>Use your <code>pu_model</code> from section 7.</p>
+<p>✏️ <strong>Q23:</strong> Fill in the Type III table:</p>
+<pre><code>effect        F      df      p
+spp
+sex
+spp:sex</code></pre>
+<p>✏️ <strong>Q24:</strong> One sentence per term — species, sex, interaction — saying what each result means for <strong>penguins</strong>, not for the model.</p>
+<p>✏️ <strong>Q25:</strong> Which SS type did you report, and why was it the right choice for an unbalanced design?</p>
+</section>
+<section id="section-9-the-final-figure" class="level2">
+<h2 class="anchored" data-anchor-id="section-9-the-final-figure">Section 9 · The final figure</h2>
+<p>One publication-quality interaction plot: body mass by species, with sex as separate lines or colors, error bars from the EMMs. Proper axis labels, a real theme, readable sizing — this one is graded on presentation. Build it from <code>pu_cell_emm</code>, not from the raw means, and export it with <code>ggsave()</code>.</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb19"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ---- 9 The final figure ----------------------------------</span></span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>pub_df <span class="ot">&lt;-</span> <span class="fu">as.data.frame</span>(pu_cell_emm)</span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a><span class="co"># ... your plot here, then:</span></span>
+<span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a><span class="co"># ggsave("figures/13_penguin_interaction.pdf", width = 7, height = 5)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>✏️ <strong>Q26:</strong> Your figure shows the interaction term as a picture. Are the lines parallel? Say how the figure and the <code>spp:sex</code> <em>p</em>-value agree.</p>
+<hr>
+</section>
+</section>
+<section id="review-and-checkpoint" class="level1">
+<h1>Review and checkpoint</h1>
+<p>At this point you should be able to:</p>
+<ul class="task-list">
+<li><label><input type="checkbox">Recognize a factorial design and state its three null hypotheses</label></li>
+<li><label><input type="checkbox">Explain what balance is, how to force it, and what it costs</label></li>
+<li><label><input type="checkbox">Fit a two-way factorial ANOVA with <code>lm()</code> and read the interaction before the main effects</label></li>
+<li><label><input type="checkbox">Check normality and equal variance on the <strong>residuals</strong></label></li>
+<li><label><input type="checkbox">Compute estimated marginal means, and explain why they equal raw means only when the design is balanced</label></li>
+<li><label><input type="checkbox">Explain Type I, II, and III sums of squares, and say when they agree and when they do not</label></li>
+<li><label><input type="checkbox">Choose and defend an SS type for an unbalanced design</label></li>
+<li><label><input type="checkbox">Show an interaction as a figure, and match it to the <em>p</em>-value</label></li>
+</ul>
+<p>Run your whole script top to bottom with <strong>Ctrl/Cmd + Shift + Enter</strong>. It must run clean.</p>
+<blockquote class="blockquote">
+<p>💡 <strong>Key idea:</strong> real data is almost never balanced — something dies, a sample is lost, a site is unreachable. The point of today was not that imbalance is fatal; it is that imbalance makes you <em>choose</em>, and you should know which choice you made and why.</p>
+</blockquote>
 
 
 </section>

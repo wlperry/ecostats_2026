@@ -3,7 +3,7 @@ order: 14
 week: 9
 title: "Activity: Nested ANOVA"
 subtitle: "Nested designs"
-description: "Hands-on activity: nested ANOVA the traditional way (aov with an Error term, afex) and post-hoc comparisons on the sea urchin grazing / algae cover dataset."
+description: "Hands-on activity: nested ANOVA on the sea urchin grazing / algae cover dataset. Fit it the wrong way first, then with patch as the error term, and prove the nested F-test is really a test on the patch means."
 author: "Bill Perry"
 metadata-files:
   - ../../_templates/activities.yml
@@ -12,202 +12,332 @@ format:
   docx: default
 ---
 
-# Worksheet: Nested ANOVA
+# In-class Activity 14: Nested ANOVA
 
-# Part 1 · Setup and Data
+### Today's Objectives
 
-**▶ Run this in your Script:**
+1.  Tell a nested design from a factorial one by looking at the data
+2.  Count how many times a treatment was actually *applied*, not how many rows you have
+3.  Fit the **wrong** model first — two different ways of getting it wrong
+4.  Fit the right one, with `patch` as the error term
+5.  Cross-check it with `afex::aov_car()`
+6.  Run post-hoc comparisons on the correct model
+7.  Prove the nested *F*-test is really a one-way ANOVA on the patch means
+8.  Name what goes wrong when you forget the design, and report the result honestly
+
+::: callout-tip
+## 📂 Files for today
+
+[📥 Urchin data](data/andrew.csv){.btn .btn-primary download="andrew.csv"} [📥 Script skeleton (.R)](data/14_nested_anova.R){.btn .btn-primary download="14_nested_anova.R"}
+
+-   Save the skeleton as `scripts/14_nested_anova.R`, and `andrew.csv` in your `data/` folder.
+:::
+
+::: callout-important
+## What you hand in
+
+-   **All of today's code is right here in this activity.** Type it into your script as we go and run it chunk by chunk. The skeleton has the plumbing — libraries, the data read, the treatment recode, the summarise block — and nothing else. Every line of statistics you type yourself.
+-   The **Q** boxes are **things to think about**, not inline homework. Read them, talk them over, answer them in your head. You do **not** have to type answers into the script, and they are not graded.
+-   The **write-up** at the bottom — sections 7 and 8 — *is* graded. Those answers go into the script as `#` comments.
+-   Hand in `scripts/14_nested_anova.R`. Run it top to bottom (**Ctrl/Cmd + Shift + Enter**) first — it must run with no errors.
+:::
+
+::: callout-note
+## 🔮 Predict before you run
+
+Today has a trap in it, on purpose. Section 3 gives you an answer that looks great and is wrong. Before you run each model, say out loud what you expect the *p*-value to do — then run it. The gap between your prediction and the output is the lesson.
+:::
+
+::: callout-tip
+## The `invisible(NULL)` lines in the skeleton
+
+Every section ends with `invisible(NULL)`. It is a **bumper**. Press Ctrl/Cmd + Enter on a section's last real line and your cursor jumps to the next line *that has code on it* — without the bumper, that is the next section, way down past the next heading. With it, the cursor stops right there and you keep your place. It does nothing and prints nothing.
+:::
+
+Keep the plots plain today — no labels, colors, or themes. The goal is to **read** them. The one exception is the final figure in section 8, which is the graded deliverable.
+
+------------------------------------------------------------------------
+
+> ## 🧩 Block 1 — What makes a design nested *(after lecture Parts 1–3)*
+>
+> Sections 1–2: read the data, then see the nesting in it.
+
+# Section 1 · The data
+
+*Written for you in the skeleton — run it and read it.*
 
 ``` r
-# ── Part 1.1 · Setup and Data ───────────────────────────────────────────
+# ---- Libraries -------------------------------------------
 library(janitor)
-library(afex)
-library(emmeans)       # For estimated marginal means
+library(afex)       # aov_car()
+library(emmeans)
 library(tidyverse)
 
 options(scipen = 999)
 options(contrasts = c("contr.treatment", "contr.poly"))
-
-u_df <- read_csv("data/andrew.csv") %>% clean_names()
-
-u_df <- u_df %>%
-  # Map to Quinn & Keough's Table 9.1 densities. NOTE the file's dens_33 /
-  # dens_66 labels are the reverse of the book's percentages -- verified by
-  # matching patch means: dens_33 is the book's 66% group, dens_66 its 33%.
-  mutate(treat = case_when(
-         treat == "removal" ~ "0%",     # book  0% density, mean algae 39.2
-         treat == "dens_66" ~ "33%",    # book 33% density, mean algae 19.0
-         treat == "dens_33" ~ "66%",    # book 66% density, mean algae 21.6
-         treat == "control" ~ "100%",   # book 100% density, mean algae 1.3
-         TRUE ~ "other")) %>%
-  mutate(treat = factor(treat,
-                        levels = c("0%", "33%", "66%", "100%"),
-                        labels = c("0%", "33%", "66%", "100%")),
-         patch = as_factor(patch))
-
-head(u_df)
-levels(u_df$treat)
 ```
 
-`u_df` contains: `patch` (random patches 1–16 where treatments were applied), `treat` (urchin density — 0%, 33%, 66%, 100% of natural density), `quad` (replicate quadrats within each patch:treatment combination), `algae` (percentage cover of filamentous algae — the response variable).
+Andrew's sea urchin grazing experiment. Sixteen patches of reef each got **one** urchin-density treatment; five quadrats were then scored for algae cover inside every patch.
 
-**▶ Run this** — summary statistics and a first plot:
+| Column  | What it is                                     |
+|---------|------------------------------------------------|
+| `treat` | urchin density — 0%, 33%, 66%, 100% of natural |
+| `patch` | reef patch 1–16, each with **one** treatment   |
+| `quad`  | quadrat within a patch                         |
+| `algae` | % cover of filamentous algae — the response    |
 
 ``` r
-# ── Part 1.2 · Setup and Data ───────────────────────────────────────────
-summary_stats <- u_df %>%
-  group_by(treat) %>%
-  summarise(
-    n = sum(!is.na(algae)),
-    mean = mean(algae, na.rm = TRUE),
-    sd = sd(algae, na.rm = TRUE),
-    se = sd / sqrt(n),
-    min = min(algae, na.rm = TRUE),
-    max = max(algae, na.rm = TRUE),
-    .groups = 'drop'
+# ---- 1 The data ------------------------------------------
+u_df <- read_csv("data/andrew.csv") %>%
+  clean_names() %>%
+  mutate(
+    treat = case_when(
+      treat == "removal" ~ "0%",     # book   0% density
+      treat == "dens_66" ~ "33%",    # book  33% density
+      treat == "dens_33" ~ "66%",    # book  66% density
+      treat == "control" ~ "100%"    # book 100% density
+    ),
+    treat = factor(treat, levels = c("0%", "33%", "66%", "100%")),
+    patch = as_factor(patch)
   )
-summary_stats
 
-dodge_position <- position_dodge(width = 0.3)
+head(u_df)
 
 u_df %>%
-  ggplot(aes(treat, algae, color = patch)) +
-  stat_summary(fun = "mean", geom = "point", position = dodge_position) +
-  stat_summary(fun.data = "mean_se", geom = "errorbar", width = 0.2, position = dodge_position)
+  group_by(treat) %>%
+  summarise(
+    n_quads = n(),
+    n_patches = n_distinct(patch),
+    mean_algae = mean(algae),
+    sd_algae = sd(algae),
+    .groups = "drop"
+  )
 ```
 
-✏️ **Your turn:** How many patches are nested within each treatment?
+> ⚠️ **Watch out!** The file's `dens_33` / `dens_66` labels are the **reverse** of the book's percentages. That is verified by matching patch means against Quinn & Keough Table 9.1 — `dens_33` is the book's 66% group and `dens_66` its 33%. The recode above fixes it, which is why it is written for you.
 
-`________________________`
+✏️ **Q1:** You have 80 rows. How many times was the treatment actually **applied**? Those two numbers are not the same — what is each one?
+
+✏️ **Q2:** Read the `mean_algae` column. The treatment means run from about 1.3% to 39.2%. Eyeballing it, does urchin density look like it matters?
 
 ------------------------------------------------------------------------
 
-# Part 2 · Fitting the Nested Model — Base R and afex
+# Section 2 · See the nesting
 
-Since `patch` is nested within `treat`, we need the correct error term — the traditional `aov()` approach lets us specify this directly.
+> 🔮 **Predict first:** if you tabulate `patch` against `treat`, how many of the 64 cells will be non-zero?
 
-**▶ Run this:**
+**▶ Type this yourself:**
 
 ``` r
-# ── Part 2.1 · Fitting the Nested Model ─────────────────────────────────
-# This gives you the correct F-test using PATCH as the error term.
-# Patch IDs are unique (1-16) and each patch got exactly one treatment,
-# so Error(patch) is enough -- Error(treat:patch) gives the same numbers
-# but warns "Error() model is singular".
+# ---- 2 See the nesting -----------------------------------
+u_df %>%
+  count(treat, patch) %>%
+  pivot_wider(names_from = treat, values_from = n, values_fill = 0)
+```
+
+**▶ Type this yourself:**
+
+``` r
+u_df %>%
+  ggplot(aes(x = treat, y = algae, color = patch)) +
+  geom_point(position = position_dodge(width = 0.5))
+```
+
+✏️ **Q3:** Does patch 3 ever appear under the 0% treatment? Does *any* patch appear under more than one treatment?
+
+✏️ **Q4:** In a **factorial** design every level of one factor appears with every level of the other. By that test, is this factorial or nested? Write the one-sentence rule you would use to tell them apart.
+
+✏️ **Q5:** Look at the spread of points **within** a single treatment — pick 0%. Are the four patches in that treatment similar to each other, or wildly different?
+
+> 💡 **Key idea:** `patch` is not a second factor you are interested in. It is the level at which the treatment was *applied* — the experimental unit. The quadrats inside a patch are subsamples of that unit, not independent replicates of the treatment.
+
+------------------------------------------------------------------------
+
+> ## 🧩 Block 2 — The wrong model, then the right one *(after lecture Parts 4–6, 8)*
+>
+> Sections 3–4: fit it ignoring the nesting, then fix it.
+
+# Section 3 · The wrong way — two of them
+
+There are two ways to get this wrong, and you are going to make both on purpose so you can recognize them later.
+
+> 🔮 **Predict first:** with 80 observations and treatment means from 1.3% to 39.2%, will either of these come out significant?
+
+**▶ Type this yourself** — the naive factorial. `patch` *is* in the model, but treatment gets tested against the leftover quadrat-to-quadrat variation:
+
+``` r
+# ---- 3 The wrong way - two of them -----------------------
+naive_model <- lm(algae ~ treat + patch, data = u_df)
+anova(naive_model)
+```
+
+**▶ Type this yourself** — the cruder mistake: leave `patch` out altogether, so all 80 quadrats are treated as independent replicates of the treatment:
+
+``` r
+ignore_model <- aov(algae ~ treat, data = u_df)
+summary(ignore_model)
+```
+
+✏️ **Q6:** Write down *F*, both df, and *p* for `treat` from **both** models. Significant at α = 0.05? By how much?
+
+✏️ **Q7:** The two wrong answers are not even the same wrong answer. Look at the residual mean squares — 298.6 against 531. Why does leaving `patch` out make the denominator *bigger*, and so the *F* smaller?
+
+✏️ **Q8:** `anova(naive_model)` also gives you a row for `patch`: *F* = 5.93, *p* < 0.001. Patches genuinely differ from one another. Hold onto that — it is the thing section 4 is about to make you pay for.
+
+✏️ **Q9:** Where did the residual df come from in each model? Count them out from 80 observations, 4 treatments, 16 patches. What is each model claiming your sample size is?
+
+------------------------------------------------------------------------
+
+# Section 4 · The right way — patch as the error term
+
+The treatment was applied to **patches**, so the treatment effect has to be tested against **patch-to-patch** variation, not quadrat-to-quadrat variation. `Error(patch)` tells `aov()` exactly that.
+
+> 🔮 **Predict first:** the data has not changed and the treatment means have not changed. Will the *p*-value move a little, or a lot? Which direction?
+
+**▶ Type this yourself:**
+
+``` r
+# ---- 4 The right way - patch as the error term -----------
 nested_model <- aov(algae ~ treat + Error(patch), data = u_df)
 summary(nested_model)
 ```
 
-**▶ Run this** — the `afex` package, recommended for unbalanced designs:
+> ⚠️ **Watch out!** `Error(patch)` is enough here — patch IDs are unique 1–16 and each patch got exactly one treatment. Writing `Error(treat:patch)` gives identical numbers but warns `Error() model is singular`.
+
+**▶ Type this yourself** — cross-check with `afex`, which is the better tool for unbalanced nested designs:
 
 ``` r
-# ── Part 2.2 · Fitting the Nested Model ─────────────────────────────────
-model_afx <- aov_car(algae ~ treat + Error(patch),
-                     data = u_df)
+model_afx <- aov_car(algae ~ treat + Error(patch), data = u_df)
 summary(model_afx)
 ```
 
-✏️ **Your turn:** Do `nested_model` and `model_afx` agree on whether the treatment effect is significant?
+`aov_car()` prints a note that it is aggregating to one value per design cell — that is expected, and it is doing the same thing section 6 will make you do by hand.
 
-`________________________`
+✏️ **Q10:** Write down the *F*, both df, and the *p* for the nested model. Compare to Q6. Was your prediction right?
+
+✏️ **Q11:** Now compare the **treatment sums of squares** in section 3 and section 4. They are the same number. So what actually changed between the two models?
+
+✏️ **Q12:** The residual df went from 76 to 12. Explain where 12 comes from. (16 patches, 4 treatments.)
+
+✏️ **Q13:** Do `nested_model` and `model_afx` agree? They should — if they do not, one of them has a typo.
+
+> 💡 **Key idea:** the numerator of the *F*-ratio did not move at all. The whole change is in the **denominator** — what you are willing to call noise. Treating subsamples as replicates shrinks the denominator, inflates *F*, and manufactures significance out of nothing. That is **pseudoreplication**, and it is the most common fatal flaw in ecological papers.
 
 ------------------------------------------------------------------------
 
-# Part 3 · Post-Hoc Comparisons
+> ## 🧩 Block 3 — Post-hoc, and where the variance lives *(after lecture Parts 5, 7)*
+>
+> Sections 5–6: compare the treatments, then prove what the nested test is really doing.
 
-**▶ Run this:**
+# Section 5 · Post-hoc comparisons
+
+**▶ Type this yourself:**
 
 ``` r
-# ── Part 3.1 · Post-Hoc Comparisons ─────────────────────────────────────
+# ---- 5 Post-hoc comparisons ------------------------------
 emm <- emmeans(nested_model, ~ treat)
-summary(emm)
+emm
 
-pairs_result <- pairs(emm, adjust = "sidak")
-pairs_result
+pairs(emm, adjust = "sidak")
 
-cld_result <- multcomp::cld(emm, alpha = 0.05, Letters = letters)
-cld_result
+multcomp::cld(emm, alpha = 0.05, Letters = letters)
 ```
 
-✏️ **Your turn:** Mean algae cover for Control (1.30%) looks much lower than the reduced-density treatments (66%: 21.55%, 33%: 19.00%, Removed: 39.20%). Based on your compact letter display, are any of those differences actually statistically significant at α = 0.05?
+> ⚠️ **Watch out!** `emmeans()` warns `EMMs are biased unless design is perfectly balanced`. Here the design *is* balanced — 4 patches per treatment, 5 quadrats per patch — so you can read past it. It fires on any `aovlist` object.
 
-`________________________`
+✏️ **Q14:** The treatment means run from 1.3% to 39.2% — a 30-fold spread. How many letters does the compact letter display use?
+
+✏️ **Q15:** How can means that far apart fail to be distinguishable? Look at the `SE` column — what is the standard error on each mean, and where did it come from?
+
+✏️ **Q16:** Read the last line of the `cld()` output carefully: *"If two or more means share the same grouping symbol, then we cannot show them to be different. But we also did not show them to be the same."* Why is that second sentence there?
 
 ------------------------------------------------------------------------
 
-# Part 4 · Visualization and Reporting
+# Section 6 · Where the variance actually is *(you write this one)*
 
-**▶ Run this** — a publication-style boxplot:
+**This is the payoff.** The claim is that the nested *F*-test is not really a test on 80 quadrats at all — it is a one-way ANOVA on the **16 patch means**, wearing a disguise. Prove it.
 
-``` r
-# ── Part 4.1 · Visualization and Reporting ──────────────────────────────
-ggplot(u_df, aes(x = treat, y = algae, fill = treat)) +
-  geom_boxplot(alpha = 0.7, outlier.shape = NA) +
-  geom_jitter(width = 0.2, alpha = 0.4, size = 1) +
-  scale_fill_viridis_d(option = "D", end = 0.85) +
-  labs(
-    title = "Effect of Urchin Density on Filamentous Algae Cover",
-    x = "Urchin Density Treatment",
-    y = "Filamentous Algae Cover (%)",
-    caption = "Boxplots showing the distribution of algal cover across urchin density treatments."
-  ) +
-  theme(
-    legend.position = "none",
-    plot.title = element_text(face = "bold", size = 14),
-    axis.title = element_text(face = "bold", size = 12),
-    plot.caption = element_text(hjust = 0, face = "italic", size = 10)
-  )
-```
+> 🔮 **Predict first:** collapse the data to one mean per patch — 16 rows — and run an ordinary one-way ANOVA on those. What *F* and *p* will you get?
 
-**▶ Run this** — a mean ± SE plot:
+**▶ Type this yourself:**
 
 ``` r
-# ── Part 4.2 · Visualization and Reporting ──────────────────────────────
-ggplot(summary_stats, aes(x = treat, y = mean, group = 1)) +
-  geom_point(size = 3, shape = 21, fill = "white") +
-  geom_errorbar(aes(ymin = mean - se, ymax = mean + se), width = 0.2) +
-  labs(
-    title = "Mean Algae Cover by Urchin Density Treatment",
-    x = "Urchin Density Treatment",
-    y = "Mean Filamentous Algae Cover (%)",
-    caption = "Mean (+/- SE) percentage cover of filamentous algae across urchin density treatments."
-  ) +
-  theme(
-    plot.title = element_text(face = "bold", size = 14),
-    axis.title = element_text(face = "bold", size = 12),
-    plot.caption = element_text(hjust = 0, face = "italic", size = 10)
-  )
+# ---- 6 Where the variance actually is --------------------
+patch_df <- u_df %>%
+  group_by(treat, patch) %>%
+  summarise(mean_algae = mean(algae), .groups = "drop")
+
+patch_df
 ```
 
-::: callout-note
-**Scientific interpretation**
+**▶ Type this yourself:**
 
-This nested ANOVA reveals substantial spatial heterogeneity in algae cover, with significant variation among patches within each treatment. The substantial patch-to-patch variability shown in Part 2's ANOVA table is exactly why `patch` needed to be modeled explicitly, rather than being pooled into the residual — a good reminder that pseudoreplication doesn't just bias your F-test, it hides real biological variation.
-:::
+``` r
+patch_model <- aov(mean_algae ~ treat, data = patch_df)
+summary(patch_model)
+```
 
-✏️ **Your turn:** Write a 2–3 sentence results paragraph for this analysis, using your own F-statistic, df, and p-value from Part 2.
+✏️ **Q17:** Compare this *F*, df, and *p* to section 4. Exactly the same, or just close? Was your prediction right?
+
+✏️ **Q18:** The sums of squares are *not* the same as section 4 — they are exactly 1/5 of them. Why 1/5?
+
+✏️ **Q19:** So what did the five quadrats per patch actually buy you? (They did not buy you df for the treatment test — look at Q12.)
+
+✏️ **Q20:** Print `patch_df` and look at the four patch means inside the **0%** treatment: roughly 34.2, 62.0, 2.2, 58.4. Would running **more quadrats per patch** have made this experiment better able to detect a treatment effect? What would have?
+
+> 💡 **Key idea:** subsamples make each experimental unit's value more precise. They do **not** make you more replicated. If you want power to detect a treatment effect, you need more patches — more places where the treatment was independently applied. Twenty quadrats in four patches is still *n* = 4.
+
+------------------------------------------------------------------------
+
+# Write-up — graded
+
+*These go into the bottom of your script, as `#` comments after `ANSWER:`.*
+
+## Section 7 · Report the model
+
+✏️ **Q21:** Fill in all three models:
 
 ```
-________________________________________________________
-________________________________________________________
+                              F      df        p
+naive factorial (treat+patch)
+patch ignored entirely
+nested, Error(patch)
 ```
+
+✏️ **Q22:** Write a 2–3 sentence results paragraph for the **correct** model, using your own *F*, df, and *p*.
+
+✏️ **Q23:** If you had reported either of the section 3 numbers instead, what would you have claimed? What is the name for that mistake?
+
+✏️ **Q24:** Does this experiment show urchins have **no** effect on algae cover? Be careful here — separate "we did not detect an effect" from "there is no effect," and say which one you are entitled to.
+
+## Section 8 · The final figure
+
+One publication-quality figure that shows the **nesting**: treatment on the x-axis, the patch means as points, so a reader can see the among-patch spread the *F*-test is actually working with. Proper axis labels, a real theme, readable sizing — this one is graded on presentation. Export it with `ggsave()`.
+
+``` r
+# ---- 8 The final figure ----------------------------------
+# Build it from patch_df, then:
+# ggsave("figures/14_urchin_patches.pdf", width = 7, height = 5)
+```
+
+✏️ **Q25:** Your figure shows why the test came out the way it did. Point at the specific feature of the figure that explains the non-significant *p*-value.
 
 ------------------------------------------------------------------------
 
 # Review and checkpoint
 
-At this point you can:
+At this point you should be able to:
 
-- [ ] Explain why `patch` nested in `treat` cannot be analyzed as a simple factorial design
-- [ ] Fit a nested ANOVA with `aov(..., Error(...))` and with `afex::aov_car()`
-- [ ] Compute EMMs and post-hoc comparisons for a nested design
-- [ ] Write a properly formatted nested-ANOVA results sentence
+-   [ ] Tell a nested design from a factorial one by tabulating the two factors
+-   [ ] Identify the experimental unit, and distinguish it from a subsample
+-   [ ] Explain why `patch` nested in `treat` cannot be analyzed as a factorial design
+-   [ ] Fit a nested ANOVA with `aov(..., Error(...))` and cross-check it with `afex::aov_car()`
+-   [ ] Say what pseudoreplication does to *F*, and which part of the ratio it corrupts
+-   [ ] Compute EMMs and post-hoc comparisons on a nested model
+-   [ ] Show that the nested test is a one-way ANOVA on the unit means
+-   [ ] Explain why more subsamples do not buy replication
+-   [ ] Report a non-significant result without overclaiming
 
-::: callout-note
-**📤 What to turn in before next class**
+Run your whole script top to bottom with **Ctrl/Cmd + Shift + Enter**. It must run clean.
 
-Upload both of these to the course management system:
-
-1. Your code — the `scripts/` folder (or just `14_nested_anova.R`)
-2. This worksheet, with your written answers
-:::
+> 💡 **Key idea:** in two weeks these same data come back as a **linear mixed model**, with `patch` as a random effect instead of an error term. `Error()` is the 1960s way to get the right denominator; a random effect is the modern way, and it also tells you *how much* of the variation lives among patches. Same design, same question, better machinery.

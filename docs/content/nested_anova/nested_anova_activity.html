@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="author" content="Bill Perry">
-<meta name="description" content="Hands-on activity: nested ANOVA the traditional way (aov with an Error term, afex) and post-hoc comparisons on the sea urchin grazing / algae cover dataset.">
+<meta name="description" content="Hands-on activity: nested ANOVA on the sea urchin grazing / algae cover dataset. Fit it the wrong way first, then with patch as the error term, and prove the nested F-test is really a test on the patch means.">
 
 <title>Activity: Nested ANOVA – UMD Biostatistics</title>
 <style>
@@ -120,7 +120,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <link rel="stylesheet" href="../../css/main.css">
 <link rel="stylesheet" href="../../css/main.css">
 <meta property="og:title" content="Activity: Nested ANOVA – UMD Biostatistics">
-<meta property="og:description" content="Hands-on activity: nested ANOVA the traditional way (aov with an Error term, afex) and post-hoc comparisons on the sea urchin grazing / algae cover dataset.">
+<meta property="og:description" content="Hands-on activity: nested ANOVA on the sea urchin grazing / algae cover dataset. Fit it the wrong way first, then with patch as the error term, and prove the nested F-test is really a test on the patch means.">
 <meta property="og:site_name" content="UMD Biostatistics">
 </head>
 
@@ -359,7 +359,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../../links.qmd" class="sidebar-item-text sidebar-link">
+  <a href="../../links.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">Helpful Links</span></a>
   </div>
 </li>
@@ -419,7 +419,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 <div>
   <div class="description">
-    Hands-on activity: nested ANOVA the traditional way (aov with an Error term, afex) and post-hoc comparisons on the sea urchin grazing / algae cover dataset.
+    Hands-on activity: nested ANOVA on the sea urchin grazing / algae cover dataset. Fit it the wrong way first, then with patch as the error term, and prove the nested F-test is really a test on the patch means.
   </div>
 </div>
 
@@ -442,184 +442,318 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </header>
 
 
-<section id="worksheet-nested-anova" class="level1">
-<h1>Worksheet: Nested ANOVA</h1>
+<section id="in-class-activity-14-nested-anova" class="level1">
+<h1>In-class Activity 14: Nested ANOVA</h1>
+<section id="todays-objectives" class="level3">
+<h3 class="anchored">Today’s Objectives</h3>
+<ol type="1">
+<li>Tell a nested design from a factorial one by looking at the data</li>
+<li>Count how many times a treatment was actually <em>applied</em>, not how many rows you have</li>
+<li>Fit the <strong>wrong</strong> model first — two different ways of getting it wrong</li>
+<li>Fit the right one, with <code>patch</code> as the error term</li>
+<li>Cross-check it with <code>afex::aov_car()</code></li>
+<li>Run post-hoc comparisons on the correct model</li>
+<li>Prove the nested <em>F</em>-test is really a one-way ANOVA on the patch means</li>
+<li>Name what goes wrong when you forget the design, and report the result honestly</li>
+</ol>
+<div class="callout callout-style-default callout-tip callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Tip</span>📂 Files for today
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><a href="data/andrew.csv" class="btn btn-primary" download="andrew.csv">📥 Urchin data</a> <a href="data/14_nested_anova.R" class="btn btn-primary" download="14_nested_anova.R">📥 Script skeleton (.R)</a></p>
+<ul>
+<li>Save the skeleton as <code>scripts/14_nested_anova.R</code>, and <code>andrew.csv</code> in your <code>data/</code> folder.</li>
+</ul>
+</div>
+</div>
+<div class="callout callout-style-default callout-important callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Important</span>What you hand in
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<ul>
+<li><strong>All of today’s code is right here in this activity.</strong> Type it into your script as we go and run it chunk by chunk. The skeleton has the plumbing — libraries, the data read, the treatment recode, the summarise block — and nothing else. Every line of statistics you type yourself.</li>
+<li>The <strong>Q</strong> boxes are <strong>things to think about</strong>, not inline homework. Read them, talk them over, answer them in your head. You do <strong>not</strong> have to type answers into the script, and they are not graded.</li>
+<li>The <strong>write-up</strong> at the bottom — sections 7 and 8 — <em>is</em> graded. Those answers go into the script as <code>#</code> comments.</li>
+<li>Hand in <code>scripts/14_nested_anova.R</code>. Run it top to bottom (<strong>Ctrl/Cmd + Shift + Enter</strong>) first — it must run with no errors.</li>
+</ul>
+</div>
+</div>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>🔮 Predict before you run
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Today has a trap in it, on purpose. Section 3 gives you an answer that looks great and is wrong. Before you run each model, say out loud what you expect the <em>p</em>-value to do — then run it. The gap between your prediction and the output is the lesson.</p>
+</div>
+</div>
+<div class="callout callout-style-default callout-tip callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Tip</span>The <code>invisible(NULL)</code> lines in the skeleton
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Every section ends with <code>invisible(NULL)</code>. It is a <strong>bumper</strong>. Press Ctrl/Cmd + Enter on a section’s last real line and your cursor jumps to the next line <em>that has code on it</em> — without the bumper, that is the next section, way down past the next heading. With it, the cursor stops right there and you keep your place. It does nothing and prints nothing.</p>
+</div>
+</div>
+<p>Keep the plots plain today — no labels, colors, or themes. The goal is to <strong>read</strong> them. The one exception is the final figure in section 8, which is the graded deliverable.</p>
+<hr>
+<blockquote class="blockquote">
+<h2 id="block-1-what-makes-a-design-nested-after-lecture-parts-13" class="anchored" data-anchor-id="todays-objectives">🧩 Block 1 — What makes a design nested <em>(after lecture Parts 1–3)</em></h2>
+<p>Sections 1–2: read the data, then see the nesting in it.</p>
+</blockquote>
 </section>
-<section id="part-1-setup-and-data" class="level1">
-<h1>Part 1 · Setup and Data</h1>
-<p><strong>▶ Run this in your Script:</strong></p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 1.1 · Setup and Data ───────────────────────────────────────────</span></span>
+</section>
+<section id="section-1-the-data" class="level1">
+<h1>Section 1 · The data</h1>
+<p><em>Written for you in the skeleton — run it and read it.</em></p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ---- Libraries -------------------------------------------</span></span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(janitor)</span>
-<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(afex)</span>
-<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(emmeans)       <span class="co"># For estimated marginal means</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(afex)       <span class="co"># aov_car()</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(emmeans)</span>
 <span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tidyverse)</span>
 <span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="fu">options</span>(<span class="at">scipen =</span> <span class="dv">999</span>)</span>
-<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="fu">options</span>(<span class="at">contrasts =</span> <span class="fu">c</span>(<span class="st">"contr.treatment"</span>, <span class="st">"contr.poly"</span>))</span>
-<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>u_df <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="st">"data/andrew.csv"</span>) <span class="sc">%&gt;%</span> <span class="fu">clean_names</span>()</span>
-<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>u_df <span class="ot">&lt;-</span> u_df <span class="sc">%&gt;%</span></span>
-<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Map to Quinn &amp; Keough's Table 9.1 densities. </span><span class="al">NOTE</span><span class="co"> the file's dens_33 /</span></span>
-<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>  <span class="co"># dens_66 labels are the reverse of the book's percentages -- verified by</span></span>
-<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>  <span class="co"># matching patch means: dens_33 is the book's 66% group, dens_66 its 33%.</span></span>
-<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">treat =</span> <span class="fu">case_when</span>(</span>
-<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>         treat <span class="sc">==</span> <span class="st">"removal"</span> <span class="sc">~</span> <span class="st">"0%"</span>,     <span class="co"># book  0% density, mean algae 39.2</span></span>
-<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>         treat <span class="sc">==</span> <span class="st">"dens_66"</span> <span class="sc">~</span> <span class="st">"33%"</span>,    <span class="co"># book 33% density, mean algae 19.0</span></span>
-<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a>         treat <span class="sc">==</span> <span class="st">"dens_33"</span> <span class="sc">~</span> <span class="st">"66%"</span>,    <span class="co"># book 66% density, mean algae 21.6</span></span>
-<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a>         treat <span class="sc">==</span> <span class="st">"control"</span> <span class="sc">~</span> <span class="st">"100%"</span>,   <span class="co"># book 100% density, mean algae 1.3</span></span>
-<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a>         <span class="cn">TRUE</span> <span class="sc">~</span> <span class="st">"other"</span>)) <span class="sc">%&gt;%</span></span>
-<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">treat =</span> <span class="fu">factor</span>(treat,</span>
-<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a>                        <span class="at">levels =</span> <span class="fu">c</span>(<span class="st">"0%"</span>, <span class="st">"33%"</span>, <span class="st">"66%"</span>, <span class="st">"100%"</span>),</span>
-<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a>                        <span class="at">labels =</span> <span class="fu">c</span>(<span class="st">"0%"</span>, <span class="st">"33%"</span>, <span class="st">"66%"</span>, <span class="st">"100%"</span>)),</span>
-<span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a>         <span class="at">patch =</span> <span class="fu">as_factor</span>(patch))</span>
-<span id="cb1-26"><a href="#cb1-26" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-27"><a href="#cb1-27" aria-hidden="true" tabindex="-1"></a><span class="fu">head</span>(u_df)</span>
-<span id="cb1-28"><a href="#cb1-28" aria-hidden="true" tabindex="-1"></a><span class="fu">levels</span>(u_df<span class="sc">$</span>treat)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><code>u_df</code> contains: <code>patch</code> (random patches 1–16 where treatments were applied), <code>treat</code> (urchin density — 0%, 33%, 66%, 100% of natural density), <code>quad</code> (replicate quadrats within each patch:treatment combination), <code>algae</code> (percentage cover of filamentous algae — the response variable).</p>
-<p><strong>▶ Run this</strong> — summary statistics and a first plot:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 1.2 · Setup and Data ───────────────────────────────────────────</span></span>
-<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>summary_stats <span class="ot">&lt;-</span> u_df <span class="sc">%&gt;%</span></span>
-<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(treat) <span class="sc">%&gt;%</span></span>
-<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(</span>
-<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">n =</span> <span class="fu">sum</span>(<span class="sc">!</span><span class="fu">is.na</span>(algae)),</span>
-<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    <span class="at">mean =</span> <span class="fu">mean</span>(algae, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
-<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">sd =</span> <span class="fu">sd</span>(algae, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
-<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">se =</span> sd <span class="sc">/</span> <span class="fu">sqrt</span>(n),</span>
-<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">min =</span> <span class="fu">min</span>(algae, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
-<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>    <span class="at">max =</span> <span class="fu">max</span>(algae, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
-<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>    <span class="at">.groups =</span> <span class="st">'drop'</span></span>
-<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>  )</span>
-<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>summary_stats</span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="fu">options</span>(<span class="at">contrasts =</span> <span class="fu">c</span>(<span class="st">"contr.treatment"</span>, <span class="st">"contr.poly"</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>Andrew’s sea urchin grazing experiment. Sixteen patches of reef each got <strong>one</strong> urchin-density treatment; five quadrats were then scored for algae cover inside every patch.</p>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th>Column</th>
+<th>What it is</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>treat</code></td>
+<td>urchin density — 0%, 33%, 66%, 100% of natural</td>
+</tr>
+<tr class="even">
+<td><code>patch</code></td>
+<td>reef patch 1–16, each with <strong>one</strong> treatment</td>
+</tr>
+<tr class="odd">
+<td><code>quad</code></td>
+<td>quadrat within a patch</td>
+</tr>
+<tr class="even">
+<td><code>algae</code></td>
+<td>% cover of filamentous algae — the response</td>
+</tr>
+</tbody>
+</table>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ---- 1 The data ------------------------------------------</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>u_df <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="st">"data/andrew.csv"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">clean_names</span>() <span class="sc">%&gt;%</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">treat =</span> <span class="fu">case_when</span>(</span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>      treat <span class="sc">==</span> <span class="st">"removal"</span> <span class="sc">~</span> <span class="st">"0%"</span>,     <span class="co"># book   0% density</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>      treat <span class="sc">==</span> <span class="st">"dens_66"</span> <span class="sc">~</span> <span class="st">"33%"</span>,    <span class="co"># book  33% density</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>      treat <span class="sc">==</span> <span class="st">"dens_33"</span> <span class="sc">~</span> <span class="st">"66%"</span>,    <span class="co"># book  66% density</span></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>      treat <span class="sc">==</span> <span class="st">"control"</span> <span class="sc">~</span> <span class="st">"100%"</span>    <span class="co"># book 100% density</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>    ),</span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>    <span class="at">treat =</span> <span class="fu">factor</span>(treat, <span class="at">levels =</span> <span class="fu">c</span>(<span class="st">"0%"</span>, <span class="st">"33%"</span>, <span class="st">"66%"</span>, <span class="st">"100%"</span>)),</span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>    <span class="at">patch =</span> <span class="fu">as_factor</span>(patch)</span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>  )</span>
 <span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>dodge_position <span class="ot">&lt;-</span> <span class="fu">position_dodge</span>(<span class="at">width =</span> <span class="fl">0.3</span>)</span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a><span class="fu">head</span>(u_df)</span>
 <span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a>u_df <span class="sc">%&gt;%</span></span>
-<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(treat, algae, <span class="at">color =</span> patch)) <span class="sc">+</span></span>
-<span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a>  <span class="fu">stat_summary</span>(<span class="at">fun =</span> <span class="st">"mean"</span>, <span class="at">geom =</span> <span class="st">"point"</span>, <span class="at">position =</span> dodge_position) <span class="sc">+</span></span>
-<span id="cb2-20"><a href="#cb2-20" aria-hidden="true" tabindex="-1"></a>  <span class="fu">stat_summary</span>(<span class="at">fun.data =</span> <span class="st">"mean_se"</span>, <span class="at">geom =</span> <span class="st">"errorbar"</span>, <span class="at">width =</span> <span class="fl">0.2</span>, <span class="at">position =</span> dodge_position)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>✏️ <strong>Your turn:</strong> How many patches are nested within each treatment?</p>
-<p><code>________________________</code></p>
+<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(treat) <span class="sc">%&gt;%</span></span>
+<span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(</span>
+<span id="cb2-20"><a href="#cb2-20" aria-hidden="true" tabindex="-1"></a>    <span class="at">n_quads =</span> <span class="fu">n</span>(),</span>
+<span id="cb2-21"><a href="#cb2-21" aria-hidden="true" tabindex="-1"></a>    <span class="at">n_patches =</span> <span class="fu">n_distinct</span>(patch),</span>
+<span id="cb2-22"><a href="#cb2-22" aria-hidden="true" tabindex="-1"></a>    <span class="at">mean_algae =</span> <span class="fu">mean</span>(algae),</span>
+<span id="cb2-23"><a href="#cb2-23" aria-hidden="true" tabindex="-1"></a>    <span class="at">sd_algae =</span> <span class="fu">sd</span>(algae),</span>
+<span id="cb2-24"><a href="#cb2-24" aria-hidden="true" tabindex="-1"></a>    <span class="at">.groups =</span> <span class="st">"drop"</span></span>
+<span id="cb2-25"><a href="#cb2-25" aria-hidden="true" tabindex="-1"></a>  )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<blockquote class="blockquote">
+<p>⚠️ <strong>Watch out!</strong> The file’s <code>dens_33</code> / <code>dens_66</code> labels are the <strong>reverse</strong> of the book’s percentages. That is verified by matching patch means against Quinn &amp; Keough Table 9.1 — <code>dens_33</code> is the book’s 66% group and <code>dens_66</code> its 33%. The recode above fixes it, which is why it is written for you.</p>
+</blockquote>
+<p>✏️ <strong>Q1:</strong> You have 80 rows. How many times was the treatment actually <strong>applied</strong>? Those two numbers are not the same — what is each one?</p>
+<p>✏️ <strong>Q2:</strong> Read the <code>mean_algae</code> column. The treatment means run from about 1.3% to 39.2%. Eyeballing it, does urchin density look like it matters?</p>
 <hr>
 </section>
-<section id="part-2-fitting-the-nested-model-base-r-and-afex" class="level1">
-<h1>Part 2 · Fitting the Nested Model — Base R and afex</h1>
-<p>Since <code>patch</code> is nested within <code>treat</code>, we need the correct error term — the traditional <code>aov()</code> approach lets us specify this directly.</p>
-<p><strong>▶ Run this:</strong></p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 2.1 · Fitting the Nested Model ─────────────────────────────────</span></span>
-<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="co"># This gives you the correct F-test using PATCH as the error term.</span></span>
-<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="co"># Patch IDs are unique (1-16) and each patch got exactly one treatment,</span></span>
-<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="co"># so Error(patch) is enough -- Error(treat:patch) gives the same numbers</span></span>
-<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="co"># but warns "Error() model is singular".</span></span>
-<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>nested_model <span class="ot">&lt;-</span> <span class="fu">aov</span>(algae <span class="sc">~</span> treat <span class="sc">+</span> <span class="fu">Error</span>(patch), <span class="at">data =</span> u_df)</span>
-<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(nested_model)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>▶ Run this</strong> — the <code>afex</code> package, recommended for unbalanced designs:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 2.2 · Fitting the Nested Model ─────────────────────────────────</span></span>
-<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>model_afx <span class="ot">&lt;-</span> <span class="fu">aov_car</span>(algae <span class="sc">~</span> treat <span class="sc">+</span> <span class="fu">Error</span>(patch),</span>
-<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>                     <span class="at">data =</span> u_df)</span>
-<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(model_afx)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>✏️ <strong>Your turn:</strong> Do <code>nested_model</code> and <code>model_afx</code> agree on whether the treatment effect is significant?</p>
-<p><code>________________________</code></p>
+<section id="section-2-see-the-nesting" class="level1">
+<h1>Section 2 · See the nesting</h1>
+<blockquote class="blockquote">
+<p>🔮 <strong>Predict first:</strong> if you tabulate <code>patch</code> against <code>treat</code>, how many of the 64 cells will be non-zero?</p>
+</blockquote>
+<p><strong>▶ Type this yourself:</strong></p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ---- 2 See the nesting -----------------------------------</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>u_df <span class="sc">%&gt;%</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">count</span>(treat, patch) <span class="sc">%&gt;%</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_wider</span>(<span class="at">names_from =</span> treat, <span class="at">values_from =</span> n, <span class="at">values_fill =</span> <span class="dv">0</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>▶ Type this yourself:</strong></p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>u_df <span class="sc">%&gt;%</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> treat, <span class="at">y =</span> algae, <span class="at">color =</span> patch)) <span class="sc">+</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>(<span class="at">position =</span> <span class="fu">position_dodge</span>(<span class="at">width =</span> <span class="fl">0.5</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>✏️ <strong>Q3:</strong> Does patch 3 ever appear under the 0% treatment? Does <em>any</em> patch appear under more than one treatment?</p>
+<p>✏️ <strong>Q4:</strong> In a <strong>factorial</strong> design every level of one factor appears with every level of the other. By that test, is this factorial or nested? Write the one-sentence rule you would use to tell them apart.</p>
+<p>✏️ <strong>Q5:</strong> Look at the spread of points <strong>within</strong> a single treatment — pick 0%. Are the four patches in that treatment similar to each other, or wildly different?</p>
+<blockquote class="blockquote">
+<p>💡 <strong>Key idea:</strong> <code>patch</code> is not a second factor you are interested in. It is the level at which the treatment was <em>applied</em> — the experimental unit. The quadrats inside a patch are subsamples of that unit, not independent replicates of the treatment.</p>
+</blockquote>
+<hr>
+<blockquote class="blockquote">
+<h2 id="block-2-the-wrong-model-then-the-right-one-after-lecture-parts-46-8" class="anchored" data-anchor-id="section-2-see-the-nesting">🧩 Block 2 — The wrong model, then the right one <em>(after lecture Parts 4–6, 8)</em></h2>
+<p>Sections 3–4: fit it ignoring the nesting, then fix it.</p>
+</blockquote>
+</section>
+<section id="section-3-the-wrong-way-two-of-them" class="level1">
+<h1>Section 3 · The wrong way — two of them</h1>
+<p>There are two ways to get this wrong, and you are going to make both on purpose so you can recognize them later.</p>
+<blockquote class="blockquote">
+<p>🔮 <strong>Predict first:</strong> with 80 observations and treatment means from 1.3% to 39.2%, will either of these come out significant?</p>
+</blockquote>
+<p><strong>▶ Type this yourself</strong> — the naive factorial. <code>patch</code> <em>is</em> in the model, but treatment gets tested against the leftover quadrat-to-quadrat variation:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ---- 3 The wrong way - two of them -----------------------</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>naive_model <span class="ot">&lt;-</span> <span class="fu">lm</span>(algae <span class="sc">~</span> treat <span class="sc">+</span> patch, <span class="at">data =</span> u_df)</span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="fu">anova</span>(naive_model)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>▶ Type this yourself</strong> — the cruder mistake: leave <code>patch</code> out altogether, so all 80 quadrats are treated as independent replicates of the treatment:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>ignore_model <span class="ot">&lt;-</span> <span class="fu">aov</span>(algae <span class="sc">~</span> treat, <span class="at">data =</span> u_df)</span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(ignore_model)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>✏️ <strong>Q6:</strong> Write down <em>F</em>, both df, and <em>p</em> for <code>treat</code> from <strong>both</strong> models. Significant at α = 0.05? By how much?</p>
+<p>✏️ <strong>Q7:</strong> The two wrong answers are not even the same wrong answer. Look at the residual mean squares — 298.6 against 531. Why does leaving <code>patch</code> out make the denominator <em>bigger</em>, and so the <em>F</em> smaller?</p>
+<p>✏️ <strong>Q8:</strong> <code>anova(naive_model)</code> also gives you a row for <code>patch</code>: <em>F</em> = 5.93, <em>p</em> &lt; 0.001. Patches genuinely differ from one another. Hold onto that — it is the thing section 4 is about to make you pay for.</p>
+<p>✏️ <strong>Q9:</strong> Where did the residual df come from in each model? Count them out from 80 observations, 4 treatments, 16 patches. What is each model claiming your sample size is?</p>
 <hr>
 </section>
-<section id="part-3-post-hoc-comparisons" class="level1">
-<h1>Part 3 · Post-Hoc Comparisons</h1>
-<p><strong>▶ Run this:</strong></p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 3.1 · Post-Hoc Comparisons ─────────────────────────────────────</span></span>
-<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>emm <span class="ot">&lt;-</span> <span class="fu">emmeans</span>(nested_model, <span class="sc">~</span> treat)</span>
-<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(emm)</span>
-<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>pairs_result <span class="ot">&lt;-</span> <span class="fu">pairs</span>(emm, <span class="at">adjust =</span> <span class="st">"sidak"</span>)</span>
-<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>pairs_result</span>
-<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>cld_result <span class="ot">&lt;-</span> multcomp<span class="sc">::</span><span class="fu">cld</span>(emm, <span class="at">alpha =</span> <span class="fl">0.05</span>, <span class="at">Letters =</span> letters)</span>
-<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>cld_result</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>✏️ <strong>Your turn:</strong> Mean algae cover for Control (1.30%) looks much lower than the reduced-density treatments (66%: 21.55%, 33%: 19.00%, Removed: 39.20%). Based on your compact letter display, are any of those differences actually statistically significant at α = 0.05?</p>
-<p><code>________________________</code></p>
+<section id="section-4-the-right-way-patch-as-the-error-term" class="level1">
+<h1>Section 4 · The right way — patch as the error term</h1>
+<p>The treatment was applied to <strong>patches</strong>, so the treatment effect has to be tested against <strong>patch-to-patch</strong> variation, not quadrat-to-quadrat variation. <code>Error(patch)</code> tells <code>aov()</code> exactly that.</p>
+<blockquote class="blockquote">
+<p>🔮 <strong>Predict first:</strong> the data has not changed and the treatment means have not changed. Will the <em>p</em>-value move a little, or a lot? Which direction?</p>
+</blockquote>
+<p><strong>▶ Type this yourself:</strong></p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ---- 4 The right way - patch as the error term -----------</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>nested_model <span class="ot">&lt;-</span> <span class="fu">aov</span>(algae <span class="sc">~</span> treat <span class="sc">+</span> <span class="fu">Error</span>(patch), <span class="at">data =</span> u_df)</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(nested_model)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<blockquote class="blockquote">
+<p>⚠️ <strong>Watch out!</strong> <code>Error(patch)</code> is enough here — patch IDs are unique 1–16 and each patch got exactly one treatment. Writing <code>Error(treat:patch)</code> gives identical numbers but warns <code>Error() model is singular</code>.</p>
+</blockquote>
+<p><strong>▶ Type this yourself</strong> — cross-check with <code>afex</code>, which is the better tool for unbalanced nested designs:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>model_afx <span class="ot">&lt;-</span> <span class="fu">aov_car</span>(algae <span class="sc">~</span> treat <span class="sc">+</span> <span class="fu">Error</span>(patch), <span class="at">data =</span> u_df)</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(model_afx)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><code>aov_car()</code> prints a note that it is aggregating to one value per design cell — that is expected, and it is doing the same thing section 6 will make you do by hand.</p>
+<p>✏️ <strong>Q10:</strong> Write down the <em>F</em>, both df, and the <em>p</em> for the nested model. Compare to Q6. Was your prediction right?</p>
+<p>✏️ <strong>Q11:</strong> Now compare the <strong>treatment sums of squares</strong> in section 3 and section 4. They are the same number. So what actually changed between the two models?</p>
+<p>✏️ <strong>Q12:</strong> The residual df went from 76 to 12. Explain where 12 comes from. (16 patches, 4 treatments.)</p>
+<p>✏️ <strong>Q13:</strong> Do <code>nested_model</code> and <code>model_afx</code> agree? They should — if they do not, one of them has a typo.</p>
+<blockquote class="blockquote">
+<p>💡 <strong>Key idea:</strong> the numerator of the <em>F</em>-ratio did not move at all. The whole change is in the <strong>denominator</strong> — what you are willing to call noise. Treating subsamples as replicates shrinks the denominator, inflates <em>F</em>, and manufactures significance out of nothing. That is <strong>pseudoreplication</strong>, and it is the most common fatal flaw in ecological papers.</p>
+</blockquote>
+<hr>
+<blockquote class="blockquote">
+<h2 id="block-3-post-hoc-and-where-the-variance-lives-after-lecture-parts-5-7" class="anchored" data-anchor-id="section-4-the-right-way-patch-as-the-error-term">🧩 Block 3 — Post-hoc, and where the variance lives <em>(after lecture Parts 5, 7)</em></h2>
+<p>Sections 5–6: compare the treatments, then prove what the nested test is really doing.</p>
+</blockquote>
+</section>
+<section id="section-5-post-hoc-comparisons" class="level1">
+<h1>Section 5 · Post-hoc comparisons</h1>
+<p><strong>▶ Type this yourself:</strong></p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ---- 5 Post-hoc comparisons ------------------------------</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>emm <span class="ot">&lt;-</span> <span class="fu">emmeans</span>(nested_model, <span class="sc">~</span> treat)</span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>emm</span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a><span class="fu">pairs</span>(emm, <span class="at">adjust =</span> <span class="st">"sidak"</span>)</span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a>multcomp<span class="sc">::</span><span class="fu">cld</span>(emm, <span class="at">alpha =</span> <span class="fl">0.05</span>, <span class="at">Letters =</span> letters)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<blockquote class="blockquote">
+<p>⚠️ <strong>Watch out!</strong> <code>emmeans()</code> warns <code>EMMs are biased unless design is perfectly balanced</code>. Here the design <em>is</em> balanced — 4 patches per treatment, 5 quadrats per patch — so you can read past it. It fires on any <code>aovlist</code> object.</p>
+</blockquote>
+<p>✏️ <strong>Q14:</strong> The treatment means run from 1.3% to 39.2% — a 30-fold spread. How many letters does the compact letter display use?</p>
+<p>✏️ <strong>Q15:</strong> How can means that far apart fail to be distinguishable? Look at the <code>SE</code> column — what is the standard error on each mean, and where did it come from?</p>
+<p>✏️ <strong>Q16:</strong> Read the last line of the <code>cld()</code> output carefully: <em>“If two or more means share the same grouping symbol, then we cannot show them to be different. But we also did not show them to be the same.”</em> Why is that second sentence there?</p>
 <hr>
 </section>
-<section id="part-4-visualization-and-reporting" class="level1">
-<h1>Part 4 · Visualization and Reporting</h1>
-<p><strong>▶ Run this</strong> — a publication-style boxplot:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 4.1 · Visualization and Reporting ──────────────────────────────</span></span>
-<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(u_df, <span class="fu">aes</span>(<span class="at">x =</span> treat, <span class="at">y =</span> algae, <span class="at">fill =</span> treat)) <span class="sc">+</span></span>
-<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_boxplot</span>(<span class="at">alpha =</span> <span class="fl">0.7</span>, <span class="at">outlier.shape =</span> <span class="cn">NA</span>) <span class="sc">+</span></span>
-<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_jitter</span>(<span class="at">width =</span> <span class="fl">0.2</span>, <span class="at">alpha =</span> <span class="fl">0.4</span>, <span class="at">size =</span> <span class="dv">1</span>) <span class="sc">+</span></span>
-<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_fill_viridis_d</span>(<span class="at">option =</span> <span class="st">"D"</span>, <span class="at">end =</span> <span class="fl">0.85</span>) <span class="sc">+</span></span>
-<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(</span>
-<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">title =</span> <span class="st">"Effect of Urchin Density on Filamentous Algae Cover"</span>,</span>
-<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">x =</span> <span class="st">"Urchin Density Treatment"</span>,</span>
-<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">y =</span> <span class="st">"Filamentous Algae Cover (%)"</span>,</span>
-<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>    <span class="at">caption =</span> <span class="st">"Boxplots showing the distribution of algal cover across urchin density treatments."</span></span>
-<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">+</span></span>
-<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme</span>(</span>
-<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a>    <span class="at">legend.position =</span> <span class="st">"none"</span>,</span>
-<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a>    <span class="at">plot.title =</span> <span class="fu">element_text</span>(<span class="at">face =</span> <span class="st">"bold"</span>, <span class="at">size =</span> <span class="dv">14</span>),</span>
-<span id="cb6-15"><a href="#cb6-15" aria-hidden="true" tabindex="-1"></a>    <span class="at">axis.title =</span> <span class="fu">element_text</span>(<span class="at">face =</span> <span class="st">"bold"</span>, <span class="at">size =</span> <span class="dv">12</span>),</span>
-<span id="cb6-16"><a href="#cb6-16" aria-hidden="true" tabindex="-1"></a>    <span class="at">plot.caption =</span> <span class="fu">element_text</span>(<span class="at">hjust =</span> <span class="dv">0</span>, <span class="at">face =</span> <span class="st">"italic"</span>, <span class="at">size =</span> <span class="dv">10</span>)</span>
-<span id="cb6-17"><a href="#cb6-17" aria-hidden="true" tabindex="-1"></a>  )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>▶ Run this</strong> — a mean ± SE plot:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 4.2 · Visualization and Reporting ──────────────────────────────</span></span>
-<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(summary_stats, <span class="fu">aes</span>(<span class="at">x =</span> treat, <span class="at">y =</span> mean, <span class="at">group =</span> <span class="dv">1</span>)) <span class="sc">+</span></span>
-<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>(<span class="at">size =</span> <span class="dv">3</span>, <span class="at">shape =</span> <span class="dv">21</span>, <span class="at">fill =</span> <span class="st">"white"</span>) <span class="sc">+</span></span>
-<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_errorbar</span>(<span class="fu">aes</span>(<span class="at">ymin =</span> mean <span class="sc">-</span> se, <span class="at">ymax =</span> mean <span class="sc">+</span> se), <span class="at">width =</span> <span class="fl">0.2</span>) <span class="sc">+</span></span>
-<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(</span>
-<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>    <span class="at">title =</span> <span class="st">"Mean Algae Cover by Urchin Density Treatment"</span>,</span>
-<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">x =</span> <span class="st">"Urchin Density Treatment"</span>,</span>
-<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">y =</span> <span class="st">"Mean Filamentous Algae Cover (%)"</span>,</span>
-<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">caption =</span> <span class="st">"Mean (+/- SE) percentage cover of filamentous algae across urchin density treatments."</span></span>
-<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">+</span></span>
-<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme</span>(</span>
-<span id="cb7-12"><a href="#cb7-12" aria-hidden="true" tabindex="-1"></a>    <span class="at">plot.title =</span> <span class="fu">element_text</span>(<span class="at">face =</span> <span class="st">"bold"</span>, <span class="at">size =</span> <span class="dv">14</span>),</span>
-<span id="cb7-13"><a href="#cb7-13" aria-hidden="true" tabindex="-1"></a>    <span class="at">axis.title =</span> <span class="fu">element_text</span>(<span class="at">face =</span> <span class="st">"bold"</span>, <span class="at">size =</span> <span class="dv">12</span>),</span>
-<span id="cb7-14"><a href="#cb7-14" aria-hidden="true" tabindex="-1"></a>    <span class="at">plot.caption =</span> <span class="fu">element_text</span>(<span class="at">hjust =</span> <span class="dv">0</span>, <span class="at">face =</span> <span class="st">"italic"</span>, <span class="at">size =</span> <span class="dv">10</span>)</span>
-<span id="cb7-15"><a href="#cb7-15" aria-hidden="true" tabindex="-1"></a>  )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="callout callout-style-default callout-note callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-Note
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p><strong>Scientific interpretation</strong></p>
-<p>This nested ANOVA reveals substantial spatial heterogeneity in algae cover, with significant variation among patches within each treatment. The substantial patch-to-patch variability shown in Part 2’s ANOVA table is exactly why <code>patch</code> needed to be modeled explicitly, rather than being pooled into the residual — a good reminder that pseudoreplication doesn’t just bias your F-test, it hides real biological variation.</p>
-</div>
-</div>
-<p>✏️ <strong>Your turn:</strong> Write a 2–3 sentence results paragraph for this analysis, using your own F-statistic, df, and p-value from Part 2.</p>
-<pre><code>________________________________________________________
-________________________________________________________</code></pre>
+<section id="section-6-where-the-variance-actually-is-you-write-this-one" class="level1">
+<h1>Section 6 · Where the variance actually is <em>(you write this one)</em></h1>
+<p><strong>This is the payoff.</strong> The claim is that the nested <em>F</em>-test is not really a test on 80 quadrats at all — it is a one-way ANOVA on the <strong>16 patch means</strong>, wearing a disguise. Prove it.</p>
+<blockquote class="blockquote">
+<p>🔮 <strong>Predict first:</strong> collapse the data to one mean per patch — 16 rows — and run an ordinary one-way ANOVA on those. What <em>F</em> and <em>p</em> will you get?</p>
+</blockquote>
+<p><strong>▶ Type this yourself:</strong></p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ---- 6 Where the variance actually is --------------------</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>patch_df <span class="ot">&lt;-</span> u_df <span class="sc">%&gt;%</span></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(treat, patch) <span class="sc">%&gt;%</span></span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">mean_algae =</span> <span class="fu">mean</span>(algae), <span class="at">.groups =</span> <span class="st">"drop"</span>)</span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>patch_df</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>▶ Type this yourself:</strong></p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>patch_model <span class="ot">&lt;-</span> <span class="fu">aov</span>(mean_algae <span class="sc">~</span> treat, <span class="at">data =</span> patch_df)</span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(patch_model)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>✏️ <strong>Q17:</strong> Compare this <em>F</em>, df, and <em>p</em> to section 4. Exactly the same, or just close? Was your prediction right?</p>
+<p>✏️ <strong>Q18:</strong> The sums of squares are <em>not</em> the same as section 4 — they are exactly 1/5 of them. Why 1/5?</p>
+<p>✏️ <strong>Q19:</strong> So what did the five quadrats per patch actually buy you? (They did not buy you df for the treatment test — look at Q12.)</p>
+<p>✏️ <strong>Q20:</strong> Print <code>patch_df</code> and look at the four patch means inside the <strong>0%</strong> treatment: roughly 34.2, 62.0, 2.2, 58.4. Would running <strong>more quadrats per patch</strong> have made this experiment better able to detect a treatment effect? What would have?</p>
+<blockquote class="blockquote">
+<p>💡 <strong>Key idea:</strong> subsamples make each experimental unit’s value more precise. They do <strong>not</strong> make you more replicated. If you want power to detect a treatment effect, you need more patches — more places where the treatment was independently applied. Twenty quadrats in four patches is still <em>n</em> = 4.</p>
+</blockquote>
 <hr>
+</section>
+<section id="write-up-graded" class="level1">
+<h1>Write-up — graded</h1>
+<p><em>These go into the bottom of your script, as <code>#</code> comments after <code>ANSWER:</code>.</em></p>
+<section id="section-7-report-the-model" class="level2">
+<h2 class="anchored" data-anchor-id="section-7-report-the-model">Section 7 · Report the model</h2>
+<p>✏️ <strong>Q21:</strong> Fill in all three models:</p>
+<pre><code>                              F      df        p
+naive factorial (treat+patch)
+patch ignored entirely
+nested, Error(patch)</code></pre>
+<p>✏️ <strong>Q22:</strong> Write a 2–3 sentence results paragraph for the <strong>correct</strong> model, using your own <em>F</em>, df, and <em>p</em>.</p>
+<p>✏️ <strong>Q23:</strong> If you had reported either of the section 3 numbers instead, what would you have claimed? What is the name for that mistake?</p>
+<p>✏️ <strong>Q24:</strong> Does this experiment show urchins have <strong>no</strong> effect on algae cover? Be careful here — separate “we did not detect an effect” from “there is no effect,” and say which one you are entitled to.</p>
+</section>
+<section id="section-8-the-final-figure" class="level2">
+<h2 class="anchored" data-anchor-id="section-8-the-final-figure">Section 8 · The final figure</h2>
+<p>One publication-quality figure that shows the <strong>nesting</strong>: treatment on the x-axis, the patch means as points, so a reader can see the among-patch spread the <em>F</em>-test is actually working with. Proper axis labels, a real theme, readable sizing — this one is graded on presentation. Export it with <code>ggsave()</code>.</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb13"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ---- 8 The final figure ----------------------------------</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Build it from patch_df, then:</span></span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a><span class="co"># ggsave("figures/14_urchin_patches.pdf", width = 7, height = 5)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>✏️ <strong>Q25:</strong> Your figure shows why the test came out the way it did. Point at the specific feature of the figure that explains the non-significant <em>p</em>-value.</p>
+<hr>
+</section>
 </section>
 <section id="review-and-checkpoint" class="level1">
 <h1>Review and checkpoint</h1>
-<p>At this point you can:</p>
+<p>At this point you should be able to:</p>
 <ul class="task-list">
-<li><label><input type="checkbox">Explain why <code>patch</code> nested in <code>treat</code> cannot be analyzed as a simple factorial design</label></li>
-<li><label><input type="checkbox">Fit a nested ANOVA with <code>aov(..., Error(...))</code> and with <code>afex::aov_car()</code></label></li>
-<li><label><input type="checkbox">Compute EMMs and post-hoc comparisons for a nested design</label></li>
-<li><label><input type="checkbox">Write a properly formatted nested-ANOVA results sentence</label></li>
+<li><label><input type="checkbox">Tell a nested design from a factorial one by tabulating the two factors</label></li>
+<li><label><input type="checkbox">Identify the experimental unit, and distinguish it from a subsample</label></li>
+<li><label><input type="checkbox">Explain why <code>patch</code> nested in <code>treat</code> cannot be analyzed as a factorial design</label></li>
+<li><label><input type="checkbox">Fit a nested ANOVA with <code>aov(..., Error(...))</code> and cross-check it with <code>afex::aov_car()</code></label></li>
+<li><label><input type="checkbox">Say what pseudoreplication does to <em>F</em>, and which part of the ratio it corrupts</label></li>
+<li><label><input type="checkbox">Compute EMMs and post-hoc comparisons on a nested model</label></li>
+<li><label><input type="checkbox">Show that the nested test is a one-way ANOVA on the unit means</label></li>
+<li><label><input type="checkbox">Explain why more subsamples do not buy replication</label></li>
+<li><label><input type="checkbox">Report a non-significant result without overclaiming</label></li>
 </ul>
-<div class="callout callout-style-default callout-note callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-Note
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p><strong>📤 What to turn in before next class</strong></p>
-<p>Upload both of these to the course management system:</p>
-<ol type="1">
-<li>Your code — the <code>scripts/</code> folder (or just <code>14_nested_anova.R</code>)</li>
-<li>This worksheet, with your written answers</li>
-</ol>
-</div>
-</div>
+<p>Run your whole script top to bottom with <strong>Ctrl/Cmd + Shift + Enter</strong>. It must run clean.</p>
+<blockquote class="blockquote">
+<p>💡 <strong>Key idea:</strong> in two weeks these same data come back as a <strong>linear mixed model</strong>, with <code>patch</code> as a random effect instead of an error term. <code>Error()</code> is the 1960s way to get the right denominator; a random effect is the modern way, and it also tells you <em>how much</em> of the variation lives among patches. Same design, same question, better machinery.</p>
+</blockquote>
 
 
 </section>

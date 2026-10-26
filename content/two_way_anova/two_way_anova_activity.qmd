@@ -3,7 +3,7 @@ order: 13
 week: 9
 title: "Activity: Two-Way ANOVA"
 subtitle: "Factorial designs"
-description: "Hands-on activity: factorial ANOVA, estimated marginal means, and Type I/II/III sums of squares, run on both a balanced and a naturally unbalanced version of the palmerpenguins species-by-sex dataset."
+description: "Hands-on activity: factorial ANOVA, estimated marginal means, and Type I/II/III sums of squares, run first on a balanced subsample of the palmerpenguins species-by-sex data and then on the full, naturally unbalanced dataset."
 author: "Bill Perry"
 metadata-files:
   - ../../_templates/activities.yml
@@ -12,537 +12,378 @@ format:
   docx: default
 ---
 
-# Worksheet: Two-Way (Factorial) ANOVA
+# In-class Activity 13: Two-Way (Factorial) ANOVA
 
-# Part 1 · Setup and Data
+### Today's Objectives
 
-**▶ Run this in your Script:**
+1.  Recognize a factorial design and state its three null hypotheses
+2.  Say what *balanced* means, and what it costs to force it
+3.  Fit a two-way factorial ANOVA with `lm()` and read the interaction first
+4.  Check the assumptions on the residuals, not the raw data
+5.  Compute estimated marginal means, and see why they are not just group means
+6.  Compare Type I, II, and III sums of squares on a **balanced** design
+7.  Run the same model on the **unbalanced** design and watch the three types come apart
+8.  Report the result, and show the interaction as a figure
+
+::: callout-tip
+## 📂 Files for today
+
+[📥 Script skeleton (.R)](data/13_two_way_anova.R){.btn .btn-primary download="13_two_way_anova.R"}
+
+-   Save the skeleton as `scripts/13_two_way_anova.R` in your project.
+-   **No data file.** The penguin data comes from the `palmerpenguins` package.
+:::
+
+::: callout-important
+## What you hand in
+
+-   **All of today's code is right here in this activity.** Type it into your script as we go and run it chunk by chunk. The skeleton has the plumbing — libraries, the data read, the summarise block, the balancing — and nothing else. Every line of statistics you type yourself.
+-   The **Q** boxes are **things to think about**, not inline homework. Read them, talk them over, answer them in your head. You do **not** have to type answers into the script, and they are not graded.
+-   The **write-up** at the bottom — sections 8 and 9 — *is* graded. Those answers go into the script as `#` comments.
+-   Hand in `scripts/13_two_way_anova.R`. Run it top to bottom (**Ctrl/Cmd + Shift + Enter**) first — it must run with no errors.
+:::
+
+::: callout-note
+## 🔮 Predict before you run
+
+Factorial ANOVA is easy to fake your way through by reading p-values off a table after the fact. Before each model, say out loud what you expect — which terms will be significant, whether the lines will be parallel — then run it. A wrong prediction points straight at the thing you misunderstood.
+:::
+
+::: callout-tip
+## The `invisible(NULL)` lines in the skeleton
+
+Every section ends with `invisible(NULL)`. It is a **bumper**. Press Ctrl/Cmd + Enter on a section's last real line and your cursor jumps to the next line *that has code on it* — without the bumper, that is the next section, way down past the next heading. With it, the cursor stops right there and you keep your place. It does nothing and prints nothing.
+:::
+
+Keep the plots plain today — no labels, colors, or themes. The goal is to **read** them. The one exception is the final figure in section 9, which is the graded deliverable.
+
+------------------------------------------------------------------------
+
+> ## 🧩 Block 1 — The design and the data *(after lecture Parts 1–2)*
+>
+> Sections 1–2: see the factorial structure, then build a balanced copy of it.
+
+# Section 1 · The data
+
+*Written for you in the skeleton — run it and read it.*
 
 ``` r
-# ── Part 1.1 · Setup and Data ───────────────────────────────────────────
-library(palmerpenguins) # has the data for penguins and they are cute
-library(car)             # For Levene's test and Type III SS
-library(emmeans)         # For estimated marginal means
-library(broom)           # For tidying model outputs
-library(patchwork)       # For combining plots
+# ---- Libraries -------------------------------------------
+library(palmerpenguins)
+library(car)        # Anova(), leveneTest()
+library(emmeans)    # emmeans(), emmip()
+library(broom)      # augment()
 library(tidyverse)
+```
 
-theme_set(theme_light(base_size = 12))
-
+``` r
+# ---- 1 The data ------------------------------------------
 p_df <- penguins %>%
-  select(spp = species, sex, body_mass_g) %>%
-  rename(mass_g = body_mass_g)
+  select(spp = species, sex, mass_g = body_mass_g) %>%
+  drop_na(spp, sex, mass_g)
+
 head(p_df)
-```
 
-**▶ Run this** — check for and remove missing values:
-
-``` r
-# ── Part 1.2 · Setup and Data ───────────────────────────────────────────
-p_df %>%
-  summarise_all(~sum(is.na(.)))
-
-p_df <- p_df %>%
-  filter(!is.na(mass_g),
-         !is.na(sex),
-         !is.na(spp))
-head(p_df)
-```
-
-**▶ Run this** — summary statistics by group:
-
-``` r
-# ── Part 1.3 · Setup and Data ───────────────────────────────────────────
 p_df %>%
   group_by(spp, sex) %>%
   summarise(
-    mean_mass = mean(mass_g, na.rm = TRUE),
-    sd_mass = sd(mass_g, na.rm = TRUE),
-    n = sum(!is.na(mass_g)),
-    se_mass = sd_mass/n^.5,
-    .groups = 'drop'
+    n = n(),
+    mean_mass = mean(mass_g),
+    sd_mass = sd(mass_g),
+    se_mass = sd_mass / sqrt(n),
+    .groups = "drop"
   )
 ```
 
-::: callout-tip
-**🚀 If you finish early:** How many species and sexes are there? Compute `n_distinct()` for each column of `p_df` to confirm.
+Two factors — `spp` with 3 levels, `sex` with 2 — crossed, so every species appears with both sexes. That is a **3 × 2 factorial design**, and it has six cells.
 
-``` r
-# ── Part 1.4 · Setup and Data ───────────────────────────────────────────
-# Write your code in the R script:
-```
-:::
+✏️ **Q1:** Six groups, one response. A factorial ANOVA tests **three** separate null hypotheses, not one. State all three in words.
+
+✏️ **Q2:** Look at the `n` column. Are the six cells the same size?
 
 ------------------------------------------------------------------------
 
-# Part 2 · Building a Balanced Dataset
+# Section 2 · Count the cells, then force balance
+
+*Written for you in the skeleton — this is bookkeeping, not statistics.*
 
 ``` r
-# ── Part 2.1 · Building a Balanced Dataset ──────────────────────────────
-original_n <- p_df %>%
-  count(spp, sex) %>%
-  arrange(spp, sex)
-
+# ---- 2 Count the cells, then force balance ---------------
 p_df %>%
   count(spp, sex) %>%
-  pivot_wider(names_from = sex, values_from = n, values_fill = 0)
+  pivot_wider(names_from = sex, values_from = n)
 
-min_n <- min(original_n$n)
+min_n <- min(count(p_df, spp, sex)$n)
 min_n
 
-set.seed(123) # for reproducibility
+set.seed(123)
 pb_df <- p_df %>%
   group_by(spp, sex) %>%
-  sample_n(min_n) %>%
+  slice_sample(n = min_n) %>%
   ungroup()
 
-balanced_n <- pb_df %>%
+pb_df %>%
   count(spp, sex) %>%
-  pivot_wider(names_from = sex, values_from = n, values_fill = 0)
-balanced_n
+  pivot_wider(names_from = sex, values_from = n)
 ```
 
-``` r
-# ── Part 2.2 · Building a Balanced Dataset ──────────────────────────────
-summary_df <- pb_df %>%
-  group_by(spp, sex) %>%
-  summarise(
-    n = sum(!is.na(mass_g)),
-    mean_mass = mean(mass_g),
-    sd_mass = sd(mass_g),
-    se_mass = sd_mass/sqrt(n),
-    .groups = 'drop'
-  ) %>%
-  arrange(spp, sex)
-print(summary_df)
-```
+`slice_sample(n = min_n)` inside `group_by()` takes a random `min_n` rows **from each cell**, so every cell ends up the same size. `set.seed(123)` makes that random draw repeatable — everyone in the room gets the same `pb_df`.
 
-✏️ **Your turn:** What was `min_n`? How many total observations were dropped to force balance?
+✏️ **Q3:** What was `min_n`? `p_df` has 333 birds; how many are in `pb_df`, and how many did we throw away to get balance?
 
-`________________________`
+✏️ **Q4:** Look carefully at the original counts. **How many of the six cells were actually unbalanced?** (Count them — the answer is smaller than you think.)
+
+✏️ **Q5:** Throwing away a third of your data to get balance is a real cost. Why would anyone pay it on purpose? What does balance buy you?
+
+> 💡 **Key idea:** we are about to run the *same* analysis twice — once on `pb_df` (balanced) and once on `p_df` (unbalanced) — so that every difference you see between them is caused by the imbalance and nothing else. That is the whole design of today's activity.
 
 ------------------------------------------------------------------------
 
-# Part 3 · Fitting the Balanced Factorial ANOVA
+> ## 🧩 Block 2 — Fit it and check it *(after lecture Parts 3–5)*
+>
+> Sections 3–4: fit the balanced factorial model, then check the assumptions.
 
-The factorial ANOVA needs the same assumptions checked after fitting the model: independence of observations, normality of residuals, homogeneity of variances.
+# Section 3 · Fit the balanced factorial model
 
-**▶ Run this:**
+The `options()` line is already in your skeleton. It has to run **before** you fit anything, because it changes how R codes the factors — and if it is wrong, Type III sums of squares come out silently wrong rather than loudly broken.
 
 ``` r
-# ── Part 3.1 · Fitting the Balanced Factorial ANOVA ─────────────────────
-options(contrasts = c("contr.sum", "contr.poly"))  # for Type III SS
+# ---- 3 Fit the balanced factorial model ------------------
+options(contrasts = c("contr.sum", "contr.poly"))
+```
 
+> 🔮 **Predict first:** three terms — species, sex, and the interaction. Which will be significant? Will the interaction be?
+
+**▶ Type this yourself:**
+
+``` r
 pb_model <- lm(mass_g ~ spp * sex, data = pb_df)
+
 summary(pb_model)
 
 Anova(pb_model, type = 3)
 ```
 
-✏️ **Your turn:** Is the species:sex interaction significant?
+The formula `mass_g ~ spp * sex` is shorthand. R expands the `*` into three terms: `spp + sex + spp:sex` — the two main effects and the interaction.
 
-`________________________`
+✏️ **Q6:** Read the `spp:sex` row of the `Anova()` table first, before the two main effects. Why does the interaction get read first? (What does a significant interaction do to the *meaning* of a main effect?)
+
+✏️ **Q7:** Report the interaction: *F*, df, and *p*. Significant at α = 0.05?
+
+✏️ **Q8:** `summary()` and `Anova()` are both describing the same model. What does `Anova()` give you that `summary()`'s coefficient table does not?
 
 ------------------------------------------------------------------------
 
-# Part 4 · Assumptions and Diagnostics — Balanced Model
+# Section 4 · Assumptions
 
-**▶ Run this** — the base R diagnostic plots:
+The four-panel plot is the one you have run every week. It is in your skeleton.
 
 ``` r
-# ── Part 4.1 · Assumptions and Diagnostics ──────────────────────────────
+# ---- 4 Assumptions ---------------------------------------
 par(mfrow = c(2, 2))
 plot(pb_model)
 par(mfrow = c(1, 1))
 ```
 
-**▶ Run this** — build a residuals data frame and check normality:
+**▶ Type this yourself:**
 
 ``` r
-# ── Part 4.2 · Assumptions and Diagnostics ──────────────────────────────
 pb_resid_df <- augment(pb_model)
 
 ggplot(pb_resid_df, aes(sample = .resid)) +
   stat_qq() +
-  stat_qq_line() +
-  labs(title = "Q-Q Plot of Residuals", x = "Theoretical Quantiles", y = "Sample Quantiles")
-
-ggplot(pb_resid_df, aes(x = .resid)) +
-  geom_histogram(bins = 15, fill = "snow", color = "black") +
-  labs(title = "Histogram of Residuals", x = "Residuals", y = "Count")
-
-shapiro.test(residuals(pb_model))
-```
-
-**▶ Run this** — check homogeneity of variance:
-
-``` r
-# ── Part 4.3 · Assumptions and Diagnostics ──────────────────────────────
-leveneTest(mass_g ~ spp * sex, data = pb_df)
+  stat_qq_line()
 
 ggplot(pb_resid_df, aes(x = .fitted, y = .resid)) +
   geom_point() +
-  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
-  labs(title = "Residuals vs Fitted Values", x = "Fitted Values", y = "Residuals")
-
-pb_resid_group_df <- pb_df %>%
-  mutate(residuals = residuals(pb_model))
-
-ggplot(pb_resid_group_df, aes(x = interaction(spp, sex), y = residuals)) +
-  geom_boxplot() +
-  labs(title = "Residuals by Group", x = "Species:Sex Combination", y = "Residuals") +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  geom_hline(yintercept = 0, linetype = "dashed")
 ```
 
-::: callout-tip
-**🚀 If you finish early:** Do any of the six species:sex groups have visibly larger residual spread than the others in the last boxplot? Which one(s)?
+**▶ Type this yourself:**
 
+``` r
+shapiro.test(residuals(pb_model))
+
+leveneTest(mass_g ~ spp * sex, data = pb_df)
 ```
-________________________________________________________
-```
-:::
+
+✏️ **Q9:** Normality is an assumption about the **residuals**, not about the raw body masses. Why does that distinction matter here? (The three species have very different mean masses — what would a histogram of all 204 raw masses look like?)
+
+✏️ **Q10:** `leveneTest()` is testing equal variance across *how many* groups here? Look at the df.
+
+✏️ **Q11:** Both tests passed, or both failed? Either way — a factorial ANOVA on balanced data is fairly robust to unequal variance. Why would that robustness disappear once the design is unbalanced?
 
 ------------------------------------------------------------------------
 
-# Part 5 · Estimated Marginal Means and Post-Hoc — Balanced Model
+> ## 🧩 Block 3 — Marginal means and sums of squares *(after lecture Parts 6–7)*
+>
+> Sections 5–6: get the estimated marginal means, then compare the three SS types on balanced data.
 
-**▶ Run this** — main effect of species:
+# Section 5 · Estimated marginal means and post-hoc
+
+An **estimated marginal mean** is the model's estimate of a group mean, *averaging over the other factor*. The "averaging over" is the part that matters later.
+
+**▶ Type this yourself:**
 
 ``` r
-# ── Part 5.1 · Estimated Marginal Means and Post-Hoc ────────────────────
-sppb_emm <- emmeans(pb_model, ~ spp)
-sppb_emm
-pairs(sppb_emm)
-plot(sppb_emm)
+# ---- 5 Estimated marginal means and post-hoc -------------
+spp_emm <- emmeans(pb_model, ~ spp)
+spp_emm
+pairs(spp_emm)
+
+sex_emm <- emmeans(pb_model, ~ sex)
+sex_emm
+pairs(sex_emm)
+
+cell_emm <- emmeans(pb_model, ~ spp * sex)
+cell_emm
 ```
 
-**▶ Run this** — main effect of sex:
+> ⚠️ **Watch out!** `emmeans()` prints `NOTE: Results may be misleading due to involvement in interactions`. That is not an error — it is reminding you of Q6. With a significant interaction, the *marginal* mean for a species is an average across two sexes that behave differently.
+
+> 🔮 **Predict first:** before you run the next chunk — on a **balanced** design, will the EMM for each cell equal the raw mean of that cell? Exactly, or just close?
+
+**▶ Type this yourself:**
 
 ``` r
-# ── Part 5.2 · Estimated Marginal Means and Post-Hoc ────────────────────
-sexb_emm <- emmeans(pb_model, ~ sex)
-sexb_emm
-pairs(sexb_emm)
-plot(sexb_emm)
-```
-
-**▶ Run this** — the interaction, compared to raw means:
-
-``` r
-# ── Part 5.3 · Estimated Marginal Means and Post-Hoc ────────────────────
-interactionb_emm <- emmeans(pb_model, ~ spp * sex)
-interactionb_emm
+as.data.frame(cell_emm) %>%
+  select(spp, sex, emmean) %>%
+  pivot_wider(names_from = sex, values_from = emmean)
 
 pb_df %>%
   group_by(spp, sex) %>%
-  summarise(raw_mean = mean(mass_g), .groups = 'drop') %>%
+  summarise(raw_mean = mean(mass_g), .groups = "drop") %>%
   pivot_wider(names_from = sex, values_from = raw_mean)
-
-pairs(interactionb_emm)
 ```
 
-**▶ Run this** — compact letter display and an interaction plot:
+✏️ **Q12:** Compare the two tables. Do the EMMs match the raw cell means? Was your prediction right? **Why** does it come out that way on a balanced design?
+
+**▶ Type this yourself:**
 
 ``` r
-# ── Part 5.4 · Estimated Marginal Means and Post-Hoc ────────────────────
-cldb_interaction <- multcomp::cld(interactionb_emm,
-                       Letters = letters,
-                       adjust = "sidak")
-cldb_df <- as.data.frame(cldb_interaction) %>%
+cld_df <- multcomp::cld(cell_emm, Letters = letters, adjust = "sidak") %>%
+  as.data.frame() %>%
   arrange(spp, sex)
-print(cldb_df)
 
-emmip(pb_model, sex ~ spp, CIs = TRUE) +
-  labs(title = "Interaction Plot", x = "Species", y = "Body Mass (g)")
+cld_df
+
+emmip(pb_model, sex ~ spp, CIs = TRUE)
 ```
 
-**▶ Run this** — a publication-quality version of that plot:
+✏️ **Q13:** In a compact letter display, cells sharing a letter are **not** distinguishable. Which cells share a letter?
 
-``` r
-# ── Part 5.5 · Estimated Marginal Means and Post-Hoc ────────────────────
-pubb_interaction_df <- as.data.frame(interactionb_emm)
+✏️ **Q14:** `emmip()` draws one line per sex across the three species. If there were **no** interaction, what would those two lines look like? Do yours look like that?
 
-pubb_plot <- ggplot(pubb_interaction_df, aes(x = spp, y = emmean,
-                                       color = sex, group = sex)) +
-  geom_line(linewidth = 1, position = position_dodge(width = 0.2)) +
-  geom_point(size = 3, position = position_dodge(width = 0.2)) +
-  geom_errorbar(aes(ymin = emmean - SE, ymax = emmean + SE),
-                width = 0.2, position = position_dodge(width = 0.2)) +
-  labs(x = "Species", y = "Body Mass (g)", color = "Sex") +
-  theme_light()
-pubb_plot
-```
-
-✏️ **Your turn:** Using the compact letter display (`cldb_df`), which species/sex combinations are *not* significantly different from each other?
-
-`________________________`
-
-::: callout-tip
-**🚀 If you finish early:** `emmip(pb_model, sex ~ spp, ...)` plots sex as separate lines across species. Swap the formula to `emmip(pb_model, spp ~ sex, CIs = TRUE)` instead. How does the plot's emphasis change?
-
-``` r
-# ── Part 5.6 · Estimated Marginal Means and Post-Hoc ────────────────────
-# Write your code in the R script:
-```
-:::
+✏️ **Q15:** Does the interaction plot tell you the same thing as the `spp:sex` *p*-value from Q7? Say how.
 
 ------------------------------------------------------------------------
 
-# Part 6 · Understanding Sums-of-Squares Types — Balanced Model
+# Section 6 · The three sums-of-squares types, balanced
 
-**▶ Run this** — fit and compare all three types of SS:
+Three different ways to decide what "the effect of species" means when there is more than one term in the model:
 
-``` r
-# ── Part 6.1 · Understanding Sums-of-Squares Types ──────────────────────
-type1b_anova <- anova(pb_model)          # Type I - order matters!
-type1b_anova
+-   **Type I** — *sequential*. Each term gets credit for whatever it explains after the terms listed before it. Order in the formula matters.
+-   **Type II** — each main effect conditions on the *other main effect*, but not on the interaction.
+-   **Type III** — each term conditions on *everything else*, interaction included.
 
-type2b_anova <- Anova(pb_model, type = 2)  # Type II
-type2b_anova
+> 🔮 **Predict first:** on this **balanced** dataset, will the three types give the same *F*-values, or different ones?
 
-type3b_anova <- Anova(pb_model, type = 3)  # Type III
-type3b_anova
-```
+**▶ Type this yourself:**
 
 ``` r
-# ── Part 6.2 · Understanding Sums-of-Squares Types ──────────────────────
-ssb_comparison_df <- data.frame(
-  Effect = c("Species", "Sex", "Species:Sex"),
-  Type_I_F = round(type1b_anova$`F value`[1:3], 2),
-  Type_II_F = round(type2b_anova$`F value`[2:4], 2),
-  Type_III_F = round(type3b_anova$`F value`[2:4], 2)
-)
-ssb_comparison_df
+# ---- 6 The three sums-of-squares types, balanced ---------
+anova(pb_model)            # Type I
 
-pb_comparison_df <- data.frame(
-  Effect = c("Species", "Sex", "Species:Sex"),
-  Type_I_p = round(type1b_anova$`Pr(>F)`[1:3], 4),
-  Type_II_p = round(type2b_anova$`Pr(>F)`[2:4], 4),
-  Type_III_p = round(type3b_anova$`Pr(>F)`[2:4], 4)
-)
-pb_comparison_df
+Anova(pb_model, type = 2)  # Type II
+
+Anova(pb_model, type = 3)  # Type III
 ```
 
-✏️ **Your turn:** For this *balanced* dataset, do the three SS types give the same F-values for the main effects? Is that what you'd expect?
+✏️ **Q16:** Write down the *F*-value for `spp` under all three types. What do you notice? Was your prediction right?
 
-`________________________`
+✏️ **Q17:** Explain *why* they come out that way. (What is it about equal cell sizes that makes "order of entry" stop mattering?)
+
+> 💡 **Key idea:** on a perfectly balanced design the three SS types are the same number, so the choice is irrelevant and nobody has to defend it. Everything written about Type I vs. II vs. III is about what happens when that stops being true — which is section 7.
 
 ------------------------------------------------------------------------
 
-# Part 7 · The Same Analysis, Unbalanced
+> ## 🧩 Block 4 — The payoff *(after lecture Parts 8–10)*
+>
+> Section 7: the same analysis, unbalanced. This is the one you do on your own.
 
-Now let's redo the whole analysis on the full, naturally unbalanced `p_df` (not the balanced `pb_df` subsample) — and see what changes.
+# Section 7 · The same model, unbalanced *(you write this one)*
 
-**▶ Run this** — fit the model and check the ANOVA table:
+**This is where we are headed all day.** You have run four moves on `pb_df`: fit, check, EMMs, compare SS types. Now run the same four on the full `p_df` — all 333 birds, imbalance and all — and see what changes.
+
+Only **one** of the six cells is unbalanced (Q4), so the honest expectation is that very little changes.
+
+> 🔮 **Predict first:** with just one slightly-uneven cell out of six, will the three SS types still agree? Will the EMMs still match the raw means?
+
+**▶ Type this yourself:**
 
 ``` r
-# ── Part 7.1 · The Same Analysis, Unbalanced ────────────────────────────
+# ---- 7 The same model, unbalanced ------------------------
 pu_model <- lm(mass_g ~ spp * sex, data = p_df)
+
 summary(pu_model)
 
 Anova(pu_model, type = 3)
 ```
 
-**▶ Run this** — diagnostics:
+**▶ Type this yourself** — the three SS types, as in section 6:
 
 ``` r
-# ── Part 7.2 · The Same Analysis, Unbalanced ────────────────────────────
-par(mfrow = c(2, 2))
-plot(pu_model)
-par(mfrow = c(1, 1))
+anova(pu_model)            # Type I
 
-pu_resid_df <- augment(pu_model)
+Anova(pu_model, type = 2)  # Type II
 
-ggplot(pu_resid_df, aes(sample = .resid)) +
-  stat_qq() +
-  stat_qq_line() +
-  labs(title = "Q-Q Plot of Residuals", x = "Theoretical Quantiles", y = "Sample Quantiles")
+Anova(pu_model, type = 3)  # Type III
+```
 
+**▶ Type this yourself** — the EMMs against the raw means, as in section 5:
+
+``` r
+pu_cell_emm <- emmeans(pu_model, ~ spp * sex)
+
+as.data.frame(pu_cell_emm) %>%
+  select(spp, sex, emmean) %>%
+  pivot_wider(names_from = sex, values_from = emmean)
+
+p_df %>%
+  group_by(spp, sex) %>%
+  summarise(raw_mean = mean(mass_g), .groups = "drop") %>%
+  pivot_wider(names_from = sex, values_from = raw_mean)
+
+emmeans(pu_model, ~ spp)
+```
+
+**▶ Type this yourself** — the assumption checks:
+
+``` r
 shapiro.test(residuals(pu_model))
 
 leveneTest(mass_g ~ spp * sex, data = p_df)
 ```
 
-**▶ Run this** — EMMs, pairwise comparisons, and the interaction plot:
-
-``` r
-# ── Part 7.3 · The Same Analysis, Unbalanced ────────────────────────────
-sppu_emm <- emmeans(pu_model, ~ spp)
-sppu_emm
-pairs(sppu_emm)
-
-sexu_emm <- emmeans(pu_model, ~ sex)
-sexu_emm
-pairs(sexu_emm)
-
-interactionu_emm <- emmeans(pu_model, ~ spp * sex)
-interactionu_emm
-
-# Compare to raw means
-p_df %>%
-  group_by(spp, sex) %>%
-  summarise(raw_mean = mean(mass_g), .groups = 'drop') %>%
-  pivot_wider(names_from = sex, values_from = raw_mean)
-
-cldu_interaction <- multcomp::cld(interactionu_emm,
-                       Letters = letters,
-                       adjust = "sidak")
-cldu_df <- as.data.frame(cldu_interaction) %>%
-  arrange(spp, sex)
-print(cldu_df)
-
-emmip(pu_model, sex ~ spp, CIs = TRUE) +
-  labs(title = "Interaction Plot", x = "Species", y = "Body Mass (g)")
-```
-
-**▶ Run this** — compare all three SS types on the unbalanced data:
-
-``` r
-# ── Part 7.4 · The Same Analysis, Unbalanced ────────────────────────────
-type1_anova <- anova(pu_model)
-type1_anova
-
-type2_anova <- Anova(pu_model, type = 2)
-type2_anova
-
-type3_anova <- Anova(pu_model, type = 3)
-type3_anova
-
-ss_comparison_df <- data.frame(
-  Effect = c("Species", "Sex", "Species:Sex"),
-  Type_I_F = round(type1_anova$`F value`[1:3], 2),
-  Type_II_F = round(type2_anova$`F value`[2:4], 2),
-  Type_III_F = round(type3_anova$`F value`[2:4], 2)
-)
-ss_comparison_df
-```
-
-✏️ **Your turn:** Now compare `ss_comparison_df` from this *unbalanced* run to `ssb_comparison_df` from Part 6. Do the three SS types now disagree with each other?
-
-`________________________`
-
-::: callout-tip
-**🚀 If you finish early:** Compute the difference in AIC between `pb_model` (balanced) and `pu_model` (unbalanced) — they're not directly comparable since they're fit to different data, but compare their `summary()$r.squared` instead. Does using *more* (unbalanced) data change how much variance is explained?
-
-``` r
-# ── Part 7.5 · The Same Analysis, Unbalanced ────────────────────────────
-# Write your code in the R script:
-```
-:::
-
-------------------------------------------------------------------------
-
-# Part 8 · Writing Up the Results
-
-A two-way factorial ANOVA revealed that body mass in penguins was significantly affected by both species and sex. Linear model coefficient estimates indicated that body mass in the reference condition (Adelie females) was some baseline value; males weighed a certain amount more than females on average; Chinstrap and Gentoo penguins each differed from Adelie by their own amount. Post-hoc pairwise comparisons using estimated marginal means with Tukey adjustment showed significant differences between species pairs. Type III sums of squares were used to account for the unbalanced design, with Type I and Type II SS showing similar results for the main effects when the interaction was not the primary focus.
-
-✏️ **Your turn:** Using your own `pu_model` output from Part 7, fill in the specific numbers for this results paragraph — the F-statistics, degrees of freedom, p-values, and coefficient estimates.
+✏️ **Q18:** Fill in the *F*-values and compare the two runs:
 
 ```
-________________________________________________________
-________________________________________________________
-________________________________________________________
+                 balanced          unbalanced
+            I     II    III     I     II    III
+spp
+sex
+spp:sex
 ```
 
-------------------------------------------------------------------------
+✏️ **Q19:** Which terms' *F*-values moved apart across the three types, and which one did **not** move at all? Why is the interaction term immune?
 
-# Review and checkpoint
+✏️ **Q20:** Compare the marginal EMM for Gentoo to the raw Gentoo mean. They differ by about 10 g. Where does that 10 g come from? (Gentoo has 58 females and 61 males — and males are heavier.)
 
-At this point you can:
+✏️ **Q21:** Which SS type would you report for this model, and why? Which would you report if the interaction had come out non-significant?
 
-- [ ] Build a balanced subsample from an unbalanced dataset
-- [ ] Fit a two-way factorial ANOVA with `lm()` and interpret main effects and the interaction
-- [ ] Check ANOVA assumptions with diagnostic plots, Shapiro-Wilk, and Levene's test
-- [ ] Compute estimated marginal means and pairwise/interaction comparisons with `emmeans()`
-- [ ] Explain the difference between Type I, Type II, and Type III sums of squares, and when they agree vs. disagree
-- [ ] Explain why EMMs differ from simple group means in an unbalanced design
+✏️ **Q22:** You had two versions of this analysis: one on 204 balanced birds, one on all 333. Which would you actually publish, and what did forcing balance buy you that was worth 129 birds?
 
-::: callout-note
-**📤 What to turn in before next class**
-
-Upload both of these to the course management system:
-
-1. Your code — the `scripts/` folder (or just `13_two_way_anova.R`)
-2. This worksheet, with your written answers
-:::
-
-------------------------------------------------------------------------
-
-# Part 9 · Take-Home Extension — Crayfish Growth by Range and Lake
-
-*Due Monday, November 2 — before the following class.*
-
-Same workflow as Parts 1–7 — fit the factorial model, check assumptions, get EMMs, compare SS types — new dataset, new question. This time you decide which SS type to trust and why; nobody walks you through it step by step.
-
-## Background
-
-Sargent & Lodge (2014) reared young-of-year rusty crayfish (*Orconectes rusticus*) from both native (Ohio) and invasive (Wisconsin) populations in enclosures across three northern Wisconsin lakes — a natural range × lake factorial design.
-
-**▶ Run this:**
-
-``` r
-# ── Part 9.1 · Take-Home Extension ──────────────────────────────────────
-cray_df <- read_csv("data/sargent_lodge_crayfish.csv")
-head(cray_df)
-
-cray_df %>% count(range, lake)
-```
-
-## Your Task
-
-**Question:** Does the effect of population range (Native vs. Invasive) on crayfish growth rate depend on which lake they're in?
-
-✏️ **Your turn:** State your hypotheses for both main effects and the interaction. Look at how balanced (or not) the design is across `range` and `lake` — you already ran `count(range, lake)` above — and decide which sums-of-squares type is appropriate here, and why. Justify your choice, fit the model, interpret it, and report the result properly.
-
-```
-H0 (range) =
-________________________________________________________
-H0 (lake) =
-________________________________________________________
-H0 (interaction) =
-________________________________________________________
-SS type I will use and why:
-________________________________________________________
-```
-
-``` r
-# ── Part 9.2 · Take-Home Extension ──────────────────────────────────────
-# Write your code in the R script:
-```
-
-```
-Interpretation:
-________________________________________________________
-________________________________________________________
-```
-
-## Final Figure
-
-Produce one publication-quality interaction plot (growth rate by lake, colored by range) — proper axis labels, no default `ggplot` grey background — and export it with `ggsave()`.
-
-``` r
-# ── Part 9.3 · Take-Home Extension ──────────────────────────────────────
-# Write your code in the R script:
-```
-
-::: callout-note
-**📤 What to turn in — due Nov 2**
-
-Your write-up should include:
-
-- [ ] The question
-- [ ] Your hypotheses
-- [ ] Which SS type you used, and your justification for choosing it
-- [ ] The code and its output
-- [ ] Your interpretation of the result
-- [ ] A final figure showing the result
-:::
-
-::: callout-note
-**Reference**
-
-Sargent, L.W. & Lodge, D.M. (2014). Evolution of invasive traits in nonindigenous species: increased survival and faster growth in invasive populations of rusty crayfish (*Orconectes rusticus*). *Evolutionary Applications*, 7, 949–961.
-:::
+> 💡 **Key idea:** imbalance is not a formatting problem, it is an *interpretation* problem. Once cells are uneven, "the effect of species" stops being one number and becomes a question about what you are holding constant. The three SS types are three different answers to that question. On balanced data they collapse into one, which is why balance is worth something — and why Type III is the safe default when you do not have it.
 
 ------------------------------------------------------------------------
 
@@ -550,6 +391,64 @@ Sargent, L.W. & Lodge, D.M. (2014). Evolution of invasive traits in nonindigenou
 
 **[Homework 8 — Factorial ANOVA](../../homeworks/factorial_anova_homework/factorial_anova_homework.qmd)**
 
-A two-factor design on **rusty crayfish growth**: native (Ohio) versus invasive (Wisconsin) populations, grown in enclosures in three northern Wisconsin lakes. Population origin × lake, with the interaction as the interesting term, plus the assumption checks and a publication-quality figure.
+A two-factor design on **rusty crayfish growth**: native (Ohio) versus invasive (Wisconsin) populations, grown in enclosures in three northern Wisconsin lakes. Population origin × lake, with the interaction as the interesting term, plus the assumption checks and a publication-quality figure — and this time *you* decide which SS type to trust, and defend it.
 
 **Data:** [`sargent_lodge_crayfish.csv`](../../homeworks/factorial_anova_homework/data/sargent_lodge_crayfish.csv) — Sargent & Lodge (2014), *Evolutionary Applications* 7: 949–961. You meet these data again in Homework 9, where `lake` becomes a random effect.
+
+Start a new script for it — do not add it to `13_two_way_anova.R`.
+
+------------------------------------------------------------------------
+
+# Write-up — graded
+
+*These go into the bottom of your script, as `#` comments after `ANSWER:`.*
+
+## Section 8 · Report the model
+
+Use your `pu_model` from section 7.
+
+✏️ **Q23:** Fill in the Type III table:
+
+```
+effect        F      df      p
+spp
+sex
+spp:sex
+```
+
+✏️ **Q24:** One sentence per term — species, sex, interaction — saying what each result means for **penguins**, not for the model.
+
+✏️ **Q25:** Which SS type did you report, and why was it the right choice for an unbalanced design?
+
+## Section 9 · The final figure
+
+One publication-quality interaction plot: body mass by species, with sex as separate lines or colors, error bars from the EMMs. Proper axis labels, a real theme, readable sizing — this one is graded on presentation. Build it from `pu_cell_emm`, not from the raw means, and export it with `ggsave()`.
+
+``` r
+# ---- 9 The final figure ----------------------------------
+pub_df <- as.data.frame(pu_cell_emm)
+
+# ... your plot here, then:
+# ggsave("figures/13_penguin_interaction.pdf", width = 7, height = 5)
+```
+
+✏️ **Q26:** Your figure shows the interaction term as a picture. Are the lines parallel? Say how the figure and the `spp:sex` *p*-value agree.
+
+------------------------------------------------------------------------
+
+# Review and checkpoint
+
+At this point you should be able to:
+
+-   [ ] Recognize a factorial design and state its three null hypotheses
+-   [ ] Explain what balance is, how to force it, and what it costs
+-   [ ] Fit a two-way factorial ANOVA with `lm()` and read the interaction before the main effects
+-   [ ] Check normality and equal variance on the **residuals**
+-   [ ] Compute estimated marginal means, and explain why they equal raw means only when the design is balanced
+-   [ ] Explain Type I, II, and III sums of squares, and say when they agree and when they do not
+-   [ ] Choose and defend an SS type for an unbalanced design
+-   [ ] Show an interaction as a figure, and match it to the *p*-value
+
+Run your whole script top to bottom with **Ctrl/Cmd + Shift + Enter**. It must run clean.
+
+> 💡 **Key idea:** real data is almost never balanced — something dies, a sample is lost, a site is unreachable. The point of today was not that imbalance is fatal; it is that imbalance makes you *choose*, and you should know which choice you made and why.

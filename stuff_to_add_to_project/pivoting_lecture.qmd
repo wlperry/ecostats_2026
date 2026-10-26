@@ -1,0 +1,671 @@
+---
+title: "Lecture 15 — Wide, Long, and Wild: Pivoting Real Data"
+subtitle: "Reshaping Lake Superior ice cover data with pivot_longer() and pivot_wider()"
+author: "Bill Perry"
+date: today
+
+# --- Fields the SITE reads for ordering / listings / homepage ---
+# These are the ONLY things you need to edit to move this lecture around.
+# The folder name and filename never have to change.
+order: 15
+week: 8
+type: lecture             # lecture | activity | homework | assignment | common_code
+description: >
+  Lake Superior Ice Data and how to pivot and summarize data.
+categories: [tidyverse, descriptive-stats]
+
+format:
+  revealjs:
+    output-ext: "slides.html"
+    theme: [default, ../../css/theme.scss, simple]
+    css: ../../css/main.css
+    slide-number: true
+    transition: fade
+    background-transition: none
+    scrollable: true
+    smaller: true
+    width: 1280
+    height: 720
+    margin: 0.1
+    min-scale: 0.2
+    max-scale: 2.0
+    fig-format: png
+    fig-width: 5
+    fig-height: 3.8
+    code-overflow: wrap
+    highlight-style: github
+  docx: default
+  pptx:
+    reference-doc: ../../ms_templates/umd_slides.pptx
+    embed-resources: true
+    fig-width: 6.5
+    fig-height: 4
+    fig-dpi: 300
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+```{r setup}
+#| echo: false
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+options(width = 65)   # printed R output wraps at 65 too
+```
+
+# Where We Left Off (Lecture 14)
+
+- **Started the final project** — claimed a topic and a candidate dataset
+- Sized up a new dataset in R with `read_csv()`, `glimpse()`, `dim()`, `head()`
+- Wrote H₀ and Hₐ for a question you chose yourself
+
+::: callout-note
+**✅ Transition**
+
+- Every dataset we've analyzed so far came to us **already tidy** — one row per observation, one column per variable.
+- Today's dataset will **not** be tidy.
+- We'll learn how to fix that.
+:::
+
+# Goals for Today
+
+:::::: columns
+:::: {.column width="60%"}
+- Download a genuinely **messy, wide** real-world dataset — Lake Superior daily ice cover
+- Understand **why** wide data is hard for R (and great for humans)
+- Learn `pivot_longer()` — turn wide data into tidy long data
+- Learn `pivot_wider()` — turn long data back into a human-readable summary table
+- Handle a tricky real-world wrinkle: **winter seasons that cross the new year**
+- Recreate NOAA's own "spaghetti plot" comparing every year of ice cover
+- Ask: is Lake Superior's **maximum ice cover** changing over time?
+
+::: callout-tip
+**🖐 Try it yourself**
+
+By the end you'll have reshaped real NOAA ice data and built the same kind of plot NOAA scientists publish.
+:::
+::::
+
+::: {.column width="40%"}
+**Tools today:**
+
+- `tidyverse`, `janitor`
+
+**Textbook:**
+
+- 📖 R4DS 2e — Hadley Wickham
+  - [Ch. 5 Data tidying](https://r4ds.hadley.nz/data-tidy)
+  - [Ch. 17 Dates and times](https://r4ds.hadley.nz/datetimes)
+- 📖 Data Carpentry — [R for Ecologists](https://datacarpentry.github.io/R-ecology-lesson/)
+:::
+::::::
+
+# 🧩 Chunk 1 of 4 · Why Wide Data Is a Problem
+
+**We will cover:** where the ice data comes from, why "wide" data breaks tidy tools, and reading the messy text file into R.
+
+::: callout-tip
+**🖐 After this chunk: Activity Parts 1–2** (read the raw file and inspect its wide shape).
+:::
+
+# Meet the Data: Lake Superior Ice Cover
+
+:::::: columns
+:::: {.column width="60%"}
+**NOAA-GLERL** (Great Lakes Environmental Research Laboratory) has tracked daily Great Lakes ice cover since **1973** — over 50 years of satellite-derived ice charts.
+
+**Today's dataset:** daily percent ice cover for Lake Superior, one row per **day-of-winter**, one column per **year**.
+
+**Source:**\
+`https://www.glerl.noaa.gov/data/ice/glicd/daily/sup.txt`
+
+::: callout-important
+This is a **plain text file living on a government server** — not a tidy CSV. This is what real environmental data often looks like.
+:::
+::::
+
+::: {.column width="40%"}
+![Great Lakes ice cover monitoring includes satellite imagery, field sampling, and decades of charts.](https://www.glerl.noaa.gov/data/ice/imgs/ice_collage.jpg)
+:::
+::::::
+
+# What Does "Wide" Data Look Like?
+
+::: callout-note
+**🔮 Predict first:** This table has one column per year — 53 of them. Before the next slides: can `ggplot()` use this shape directly? If not, what has to change first?
+:::
+
+::::: columns
+::: {.column width="60%"}
+```         
+        1973 1974 1975 ... 2024 2025
+Nov-10    NA   NA   NA       NA   NA
+Nov-11    NA   NA   NA       NA   NA
+...
+Jan-15   2.1  4.0  1.8      8.2  6.5
+...
+```
+
+- **One row** per calendar day-of-winter (Nov 10 → \~May)
+- **One column per year** — 53 columns, one for each ice season since 1973
+- Lots of `NA` — many days simply had no ice that year or that month
+
+This format is **perfect for a human** scanning a printed table. It's **terrible for R and ggplot**.
+:::
+
+::: {.column width="40%"}
+**Why this breaks tidy tools:**
+
+- `ggplot()` wants one column to map to `x`, one to `y`
+- Here, "year" is hiding as 53 separate **column names**, not as data values
+- `group_by(year)` is impossible — there's no `year` column to group by!
+
+📖 R4DS Ch. 5.2 — "every value in its own cell"
+:::
+:::::
+
+# Load Libraries and Read the Raw File
+
+:::::: columns
+::: {.column width="60%"}
+```{r load-libs-07}
+# Load packages at the top — always -------------------
+library(tidyverse) # data manipulation + ggplot2
+library(janitor) # clean_names() and friends
+```
+
+```{r read-raw-07}
+# Read the messy text file directly from the web -------
+url <- "https://www.glerl.noaa.gov/data/ice/glicd/daily/sup.txt"
+
+ice_raw <- read.table(
+  url,
+  header = TRUE,
+  na.strings = c("-999", "-99.00", "NA")
+) %>%
+  rownames_to_column(var = "date") %>%
+  as_tibble()
+
+dim(ice_raw)       # rows x columns - look how WIDE
+ice_raw[1:3, 1:5]  # just the first few columns
+```
+:::
+
+:::: {.column width="40%"}
+**What's happening here:**
+
+- `read.table()` beats `read_csv()` here — the file isn't comma-separated
+- `na.strings` says which placeholders really mean "missing"
+- The day labels (`Nov-10`…) were **row names**, not a column — `rownames_to_column()` fixes that
+
+::: callout-important
+Column names `X1973`, `X1974`… — R adds an `X` because a name can't start with a number!
+:::
+::::
+::::::
+
+# 🛑 Pause — Do Activity Parts 1–2 Now
+
+Read `sup.txt` straight from the web with `read.table()`, turn the row labels into a real `date` column, and look at the wide shape. Predict how many columns it has before you run it.
+
+# 🧩 Chunk 2 of 4 · Reshape with pivot_longer & Fix Dates
+
+**We will cover:** `pivot_longer()` to make the data tidy, the before/after shape, and the tricky winters-cross-the-new-year date fix.
+
+::: callout-tip
+**🖐 After this chunk: Activity Parts 3–4** (pivot to long, then fix the calendar-year wrinkle).
+:::
+
+# `pivot_longer()` — Collapsing Wide to Long
+
+::: callout-note
+**🔮 Predict first:** `ice_raw` is \~190 rows × 53 columns. After `pivot_longer()`, how many **columns** will `ice_long` have?
+:::
+
+::::: columns
+::: {.column width="60%"}
+```{r pivot-longer-07}
+# Collapse all year columns into year + ice_cover ------
+ice_long <- ice_raw %>%
+  pivot_longer(
+    cols = -date,
+    names_to = "year",
+    names_prefix = "X",
+    values_to = "ice_cover"
+  )
+
+ice_long <- ice_long %>%
+  arrange(year, date)
+
+head(ice_long)
+```
+:::
+
+::: {.column width="40%"}
+**Reading the arguments:**
+
+- `cols = -date` — pivot *every column except* `date`
+- `names_to = "year"` — the old **column names** become values in a new `year` column
+- `names_prefix = "X"` — strip the `X` that R glued onto the numbers
+- `values_to = "ice_cover"` — the old **cell values** become a new `ice_cover` column
+
+📖 R4DS Ch. 5.3 — `pivot_longer()` for wide-to-long
+:::
+:::::
+
+# Before and After: Same Data, Different Shape
+
+:::::: columns
+::: {.column width="60%"}
+**Wide (`ice_raw`):**
+
+| date   | X1973 | X1974 | X1975 |
+|--------|-------|-------|-------|
+| Nov-10 | NA    | NA    | NA    |
+| Jan-15 | 2.1   | 4.0   | 1.8   |
+
+**Long (`ice_long`):**
+
+| date   | year | ice_cover |
+|--------|------|-----------|
+| Jan-15 | 1973 | 2.1       |
+| Jan-15 | 1974 | 4.0       |
+| Jan-15 | 1975 | 1.8       |
+:::
+
+:::: {.column width="40%"}
+**Same information. Completely different shape.**
+
+- Wide: 53 columns, \~190 rows
+- Long: 3 columns, \~190 × 53 rows
+- The long version has **one row per observation** — exactly what `ggplot()` and `group_by()` expect
+
+::: callout-tip
+Once a dataset's categories are trapped in column names instead of a column of values, this reshape is usually the first thing you reach for — it's what turns a spreadsheet into something `group_by()` can work with.
+:::
+::::
+::::::
+
+# A Tricky Real-World Wrinkle: Winters Cross the New Year
+
+::::: columns
+::: {.column width="60%"}
+**The problem:** a season runs **Nov → May**, but NOAA labels it by the year winter **ends** in — so `Nov-10` under `1974` really happened in **November 1973**.
+
+```{r fix-dates-07}
+# Assign Nov/Dec to the PREVIOUS calendar year ----------
+ice_clean <- ice_long %>%
+  mutate(
+    year = as.numeric(year),
+    calendar_year = if_else(
+      str_starts(date, "Nov|Dec"),
+      year - 1,
+      year
+    ),
+    full_date = ymd(paste(calendar_year, date, sep = "-")),
+    month = month(full_date, label = TRUE)
+  ) %>%
+  drop_na(ice_cover, full_date)
+
+head(ice_clean)
+```
+:::
+
+::: {.column width="40%"}
+**Reading the logic:**
+
+- `str_starts(date, "Nov|Dec")` — does this row's day-of-winter text start with "Nov" or "Dec"?
+- If yes, subtract 1 from `year` to get the real calendar year
+- `ymd()` (from `lubridate`) glues the pieces into one real R `Date`
+- `drop_na()` removes rows with no real date or no ice reading
+
+📖 R4DS Ch. 17 — working with dates and times
+:::
+:::::
+
+# 🛑 Pause — Do Activity Parts 3–4 Now
+
+Pivot the data long with `pivot_longer()`, then fix the winters that cross the new year with `if_else()` + `ymd()`. Predict the new shape before you run it.
+
+# 🧩 Chunk 3 of 4 · Summarize & Pivot Back Wider
+
+**We will cover:** `group_by() %>% summarize()` on the newly-tidy data, and `pivot_wider()` to build a readable year-by-month table.
+
+::: callout-tip
+**🖐 After this chunk: Activity Parts 5–6** (summarize by month, then make a pivot table).
+:::
+
+# Summarize Now That We're Long
+
+::::: columns
+::: {.column width="60%"}
+```{r monthly-avg-07}
+# Mean ice cover per year-month --------------------------
+monthly_avg <- ice_clean %>%
+  group_by(year, month) %>%
+  summarize(
+    mean_ice = mean(ice_cover, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+monthly_avg <- monthly_avg %>%
+  mutate(month_date = ymd(paste(year, month, "01", sep = "-")))
+
+head(monthly_avg)
+```
+:::
+
+::: {.column width="40%"}
+**This should look familiar.**
+
+- Exactly the same `group_by() %>% summarize()` pattern from Lecture 12's Duluth weather data
+- We could **not** have written this on the wide data — there was no `year` or `month` column to group by until we pivoted
+
+The reshape wasn't just cosmetic — it **unlocked** every tidyverse tool we already know.
+:::
+:::::
+
+# `pivot_wider()` — Going Back the Other Direction
+
+::::: columns
+::: {.column width="60%"}
+```{r pivot-wider-07}
+# Turn long data into a year-by-month summary table ------
+ice_pivot_table <- ice_clean %>%
+  pivot_wider(
+    id_cols = year,
+    names_from = month,
+    values_from = ice_cover,
+    values_fn = mean
+  )
+
+print(ice_pivot_table)
+```
+:::
+
+::: {.column width="40%"}
+**`pivot_wider()` is the mirror image of `pivot_longer()`:**
+
+- `id_cols = year` — one row per year
+- `names_from = month` — month values become new column headers
+- `values_from = ice_cover` — fills the cells
+- `values_fn = mean` — averages if multiple days land in the same year-month cell
+
+This recreates an Excel-style pivot table — but computed, not copy-pasted.
+
+📖 R4DS Ch. 5.4 — `pivot_wider()`
+:::
+:::::
+
+# Why Learn Both Directions?
+
+:::::: columns
+::: {.column width="60%"}
+| Direction | When to use it |
+|------------------------------|------------------------------------------|
+| `pivot_longer()` | Data arrives wide (one column per year/site/etc.) and you need it tidy for `ggplot()` or `group_by()` |
+| `pivot_wider()` | You have tidy long data but need a **human-readable summary table** — for a report, a colleague, or Excel |
+
+**Real data rarely arrives tidy.** Spreadsheets from agencies, field data sheets, and government text files are almost always shaped for human eyes, not for R.
+:::
+
+:::: {.column width="40%"}
+::: callout-important
+**Expect to reach for `pivot_longer()` again in your own research.** Government text files, field data sheets, and Excel exports are so often shaped one-column-per-year or one-column-per-site that this pivot comes up in almost any real dataset you didn't design yourself.
+:::
+::::
+::::::
+
+# 🛑 Pause — Do Activity Parts 5–6 Now
+
+Summarize mean ice cover by year-month, then use `pivot_wider()` to build the Excel-style table. Predict how many rows and columns the wide table will have.
+
+# 🧩 Chunk 4 of 4 · Visualize & Model the Trend
+
+**We will cover:** rebuilding NOAA's spaghetti plot, pulling each year's peak ice with `slice_max()`, and modeling whether maximum ice cover is declining.
+
+::: callout-tip
+**🖐 After this chunk: Activity Parts 7–9** (spaghetti plot, yearly maximum, trend model).
+:::
+
+# NOAA's Own "Spaghetti Plot"
+
+::::: columns
+::: {.column width="60%"}
+NOAA publishes this plot live every winter — **current year** (black), **historical average** (red), **every past year** (thin blue):
+
+![NOAA's live Lake Superior ice cover comparison — current season vs. historical average vs. all past years.](https://www.glerl.noaa.gov/data/ice/spaghetti/sup_ice_compare.png)
+
+Today we build **our own version** from the data we just tidied.
+:::
+
+::: {.column width="40%"}
+**Why "spaghetti plot"?**
+
+- Dozens of thin overlapping lines look like noodles
+- Each line is one year's whole ice season, Nov → May
+- The pattern that emerges — or doesn't — is the climate story
+
+A good example of the **same chart type** showing up in published science.
+:::
+:::::
+
+# Prep: Put Every Winter on One Shared Axis
+
+::::: columns
+::: {.column width="60%"}
+```{r prep-spaghetti-07}
+# Force every date onto one fake shared year -------------
+ice_plot_data <- ice_clean %>%
+  mutate(
+    plot_date = if_else(
+      month(full_date) >= 10,
+      update(full_date, year = 1999),
+      update(full_date, year = 2000)
+    )
+  )
+
+# Historical average for each day-of-winter ---------------
+historical_avg <- ice_plot_data %>%
+  group_by(plot_date) %>%
+  summarize(avg_ice = mean(ice_cover, na.rm = TRUE))
+
+current_yr <- max(ice_plot_data$year)
+past_years <- ice_plot_data %>% filter(year < current_yr)
+current_year_data <- ice_plot_data %>% filter(year == current_yr)
+```
+:::
+
+::: {.column width="40%"}
+**The trick:** every winter spans two real calendar years (e.g. Nov 1973–May 1974). To overlay them, we relabel every date onto **one fake shared year** (1999 for fall, 2000 for spring) — only the month/day matters for the x-axis.
+
+This is a common trick for any **seasonal, cyclical** time series.
+:::
+:::::
+
+# Build the Spaghetti Plot
+
+::::: columns
+::: {.column width="60%"}
+```{r spaghetti-plot-07}
+#| fig-format: png
+#| fig-height: 2.6
+#| fig-alt: "Line plot of Lake Superior ice cover by day of winter (November through May). Many thin, semi-transparent blue lines each trace one past winter; a thick red line shows the historical daily average; a thick black line traces the current winter, drawn on top of the others. The y-axis is percent ice cover."
+ice_spaghetti_plot <- ggplot() +
+  geom_line(
+    data = past_years,
+    aes(x = plot_date, y = ice_cover, group = year),
+    color = "blue",
+    alpha = 0.15
+  ) +
+  geom_line(
+    data = historical_avg,
+    aes(x = plot_date, y = avg_ice),
+    color = "red",
+    linewidth = 1.2
+  ) +
+  geom_line(
+    data = current_year_data,
+    aes(x = plot_date, y = ice_cover),
+    color = "black",
+    linewidth = 1.2
+  ) +
+  scale_x_date(date_labels = "%b", date_breaks = "1 month") +
+  labs(
+    title = "Lake Superior Average Ice Cover",
+    subtitle = paste("Comparing", current_yr,
+                     "to Historical Data"),
+    x = NULL,
+    y = "Ice Cover (%)"
+  ) +
+  theme_bw()
+
+ice_spaghetti_plot
+```
+:::
+
+::: {.column width="40%"}
+**Three layers, three `geom_line()` calls:**
+
+- Thin blue — every past year, faded so patterns stand out
+- Thick red — the 50+ year average
+- Thick black — this year, drawn last so it sits on top
+
+Compare it to NOAA's published plot — did we recreate it?
+:::
+:::::
+
+# A New Question: Is Maximum Ice Cover Changing?
+
+::: callout-note
+**🔮 Predict first:** Over 50+ years, is Lake Superior's *maximum* winter ice cover **declining, flat, or rising**?
+:::
+
+::::: columns
+::: {.column width="60%"}
+- **New question:** has each winter's **peak** ice cover changed over 50 years?
+
+```{r max-ice-07}
+# Find the single highest ice-cover day each year --------
+max_ice_per_year <- ice_clean %>%
+  group_by(year) %>%
+  slice_max(order_by = ice_cover, n = 1, with_ties = FALSE)
+
+head(max_ice_per_year %>% arrange(ice_cover))
+```
+
+`slice_max()` keeps only the single row with the highest value in each group — here, one row per year: the date and value of that winter's ice peak.
+:::
+
+::: {.column width="40%"}
+**This also gives us the "ice-on/ice-off" story:**
+
+- The **date** of each year's maximum is itself meaningful — an early peak (Jan) vs. a late peak (Mar/Apr) tells you something about how long the ice season lasted
+- 1998's max ice cover was only \~11%, on Jan 16 — a nearly ice-free winter
+- 1979's max was \~97%, on Feb 25 — almost total coverage
+:::
+:::::
+
+# Model the Trend in Maximum Ice Cover
+
+::: callout-note
+**🔮 Predict first:** Given the huge year-to-year scatter in Great Lakes ice, do you expect the slope's p-value to be **below or above 0.05**? Predict before you read `summary()`.
+:::
+
+::::: columns
+::: {.column width="55%"}
+```{r max-ice-lm-07}
+# Fit a regression: max ice cover by year ---------------
+max_ice_model <- lm(ice_cover ~ year,
+                    data = max_ice_per_year)
+
+summary(max_ice_model)
+```
+:::
+
+::: {.column width="45%"}
+- **Same `lm()` as the Regression lecture**, with `X = year` and `Y = ice_cover`
+- The **slope** = percentage points of max ice gained or lost per year
+- Read the slope's `Pr(>|t|)` to decide if the trend is real
+- Then read the **R²** — it is small here
+  - the trend is real, and it explains only a slice of the variation
+  - both numbers, or you have told half the story
+:::
+:::::
+
+# Plot the Trend
+
+::::: columns
+::: {.column width="55%"}
+```{r max-ice-plot-07}
+#| fig-format: png
+#| fig-height: 3.4
+#| fig-alt: "Scatterplot of each year's maximum ice cover (percent) versus year, spanning roughly 1973 to the present, with a firebrick-colored linear trend line and a shaded confidence ribbon overlaid on the scattered points."
+max_ice_plot <- max_ice_per_year %>%
+  ggplot(aes(x = year, y = ice_cover)) +
+  geom_point(size = 2) +
+  geom_smooth(method = "lm", color = "firebrick") +
+  labs(
+    title = "Lake Superior — Annual Maximum Ice Cover",
+    x = "Year",
+    y = "Max Ice Cover (%)"
+  ) +
+  theme_minimal()
+
+max_ice_plot
+```
+:::
+
+::: {.column width="45%"}
+- Notice the **huge year-to-year scatter**
+  - Great Lakes ice is famously variable
+  - driven by short-term weather — ENSO, the polar vortex
+  - not just a steady climate trend
+- This is real data
+  - the story is messier, and more honest, than a clean line
+:::
+:::::
+
+# 🛑 Pause — Do Activity Parts 7–9 Now
+
+Build the spaghetti plot, pull each winter's peak with `slice_max()`, and fit `lm(ice_cover ~ year)`. Predict the trend's direction and significance before you run it.
+
+# What We Learned Today
+
+::::: columns
+::: {.column width="60%"}
+**Concepts:**
+
+- Real data is often **wide** — shaped for human eyes, not for R
+- `pivot_longer()` collapses many columns into key-value pairs, unlocking `group_by()` and `ggplot()`
+- `pivot_wider()` does the reverse — builds a readable summary table from tidy data
+- Seasonal data that **crosses the calendar year boundary** needs careful date logic
+- `slice_max()` pulls out the single extreme value per group — useful for "ice-on/ice-off" type questions
+- The same `lm()` workflow applies to *any* time-indexed variable
+
+**R skills:**
+
+- `read.table()` + `rownames_to_column()` for messy text files
+- `pivot_longer()` / `pivot_wider()`
+- `str_starts()`, `if_else()`, `ymd()`, `update()` for date wrangling
+- `slice_max(order_by = ..., n = 1)`
+:::
+
+::: {.column width="40%"}
+**References:**
+
+- 📖 R4DS Ch. 5 — Data tidying
+- 📖 R4DS Ch. 17 — Dates and times
+- 📖 Data Carpentry — R for Ecologists
+
+**Data source:**
+
+- NOAA-GLERL Great Lakes Ice Cover Database\
+  `glerl.noaa.gov/data/ice`
+
+**Up next — Lecture 16:**
+
+- **Joins** — two tables that each hold half the story
+- Homework: the same pivot workflow on a Great Lake of your choice
+:::
+:::::

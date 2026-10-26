@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="author" content="Bill Perry">
-<meta name="description" content="Hands-on activity: fitting a linear mixed model with lme4::lmer(), F-test vs.&nbsp;Chi-square tests, DHARMa diagnostics, and comparing results back to a traditional nested ANOVA, on the sea urchin grazing / algae cover dataset.">
+<meta name="description" content="Hands-on activity: refitting the sea urchin nested design with lme4::lmer(), choosing between the F-test and the Chi-square test when they disagree, reading variance components and the ICC, and proving the mixed model reproduces the traditional nested ANOVA.">
 
 <title>Activity: Linear Mixed Models – UMD Biostatistics</title>
 <style>
@@ -120,7 +120,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <link rel="stylesheet" href="../../css/main.css">
 <link rel="stylesheet" href="../../css/main.css">
 <meta property="og:title" content="Activity: Linear Mixed Models – UMD Biostatistics">
-<meta property="og:description" content="Hands-on activity: fitting a linear mixed model with lme4::lmer(), F-test vs.&nbsp;Chi-square tests, DHARMa diagnostics, and comparing results back to a traditional nested ANOVA, on the sea urchin grazing / algae cover dataset.">
+<meta property="og:description" content="Hands-on activity: refitting the sea urchin nested design with lme4::lmer(), choosing between the F-test and the Chi-square test when they disagree, reading variance components and the ICC, and proving the mixed model reproduces the traditional nested ANOVA.">
 <meta property="og:site_name" content="UMD Biostatistics">
 </head>
 
@@ -359,7 +359,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../../links.qmd" class="sidebar-item-text sidebar-link">
+  <a href="../../links.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">Helpful Links</span></a>
   </div>
 </li>
@@ -419,7 +419,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 <div>
   <div class="description">
-    Hands-on activity: fitting a linear mixed model with lme4::lmer(), F-test vs.&nbsp;Chi-square tests, DHARMa diagnostics, and comparing results back to a traditional nested ANOVA, on the sea urchin grazing / algae cover dataset.
+    Hands-on activity: refitting the sea urchin nested design with lme4::lmer(), choosing between the F-test and the Chi-square test when they disagree, reading variance components and the ICC, and proving the mixed model reproduces the traditional nested ANOVA.
   </div>
 </div>
 
@@ -442,274 +442,53 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </header>
 
 
-<section id="worksheet-linear-mixed-models" class="level1">
-<h1>Worksheet: Linear Mixed Models</h1>
-</section>
-<section id="part-1-setup-the-sea-urchin-data-again" class="level1">
-<h1>Part 1 · Setup — The Sea Urchin Data, Again</h1>
-<p><strong>▶ Run this in your Script:</strong></p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 1.1 · Setup ────────────────────────────────────────────────────</span></span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dotwhisker)</span>
-<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(janitor)</span>
-<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(car)          <span class="co"># For Levene's test and Type III SS</span></span>
-<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(lme4)          <span class="co"># For mixed-effects models</span></span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(lmerTest)      <span class="co"># For p-values in mixed models</span></span>
-<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(emmeans)       <span class="co"># For estimated marginal means</span></span>
-<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(performance)   <span class="co"># For model diagnostics</span></span>
-<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(DHARMa)        <span class="co"># For residual diagnostics</span></span>
-<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tidyverse)</span>
-<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a><span class="fu">options</span>(<span class="at">scipen =</span> <span class="dv">999</span>)</span>
-<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a><span class="fu">options</span>(<span class="at">contrasts =</span> <span class="fu">c</span>(<span class="st">"contr.treatment"</span>, <span class="st">"contr.poly"</span>))</span>
-<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>u_df <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="st">"data/andrew.csv"</span>) <span class="sc">%&gt;%</span> <span class="fu">clean_names</span>()</span>
-<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>u_df <span class="ot">&lt;-</span> u_df <span class="sc">%&gt;%</span></span>
-<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Map to Quinn &amp; Keough's Table 9.1 densities. </span><span class="al">NOTE</span><span class="co"> the file's dens_33 /</span></span>
-<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a>  <span class="co"># dens_66 labels are the reverse of the book's percentages -- verified by</span></span>
-<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a>  <span class="co"># matching patch means: dens_33 is the book's 66% group, dens_66 its 33%.</span></span>
-<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">treat =</span> <span class="fu">case_when</span>(</span>
-<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a>         treat <span class="sc">==</span> <span class="st">"removal"</span> <span class="sc">~</span> <span class="st">"0%"</span>,     <span class="co"># book  0% density, mean algae 39.2</span></span>
-<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a>         treat <span class="sc">==</span> <span class="st">"dens_66"</span> <span class="sc">~</span> <span class="st">"33%"</span>,    <span class="co"># book 33% density, mean algae 19.0</span></span>
-<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a>         treat <span class="sc">==</span> <span class="st">"dens_33"</span> <span class="sc">~</span> <span class="st">"66%"</span>,    <span class="co"># book 66% density, mean algae 21.6</span></span>
-<span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a>         treat <span class="sc">==</span> <span class="st">"control"</span> <span class="sc">~</span> <span class="st">"100%"</span>,   <span class="co"># book 100% density, mean algae 1.3</span></span>
-<span id="cb1-26"><a href="#cb1-26" aria-hidden="true" tabindex="-1"></a>         <span class="cn">TRUE</span> <span class="sc">~</span> <span class="st">"other"</span>)) <span class="sc">%&gt;%</span></span>
-<span id="cb1-27"><a href="#cb1-27" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">treat =</span> <span class="fu">factor</span>(treat,</span>
-<span id="cb1-28"><a href="#cb1-28" aria-hidden="true" tabindex="-1"></a>                        <span class="at">levels =</span> <span class="fu">c</span>(<span class="st">"0%"</span>, <span class="st">"33%"</span>, <span class="st">"66%"</span>, <span class="st">"100%"</span>),</span>
-<span id="cb1-29"><a href="#cb1-29" aria-hidden="true" tabindex="-1"></a>                        <span class="at">labels =</span> <span class="fu">c</span>(<span class="st">"0%"</span>, <span class="st">"33%"</span>, <span class="st">"66%"</span>, <span class="st">"100%"</span>)),</span>
-<span id="cb1-30"><a href="#cb1-30" aria-hidden="true" tabindex="-1"></a>         <span class="at">patch =</span> <span class="fu">as_factor</span>(patch))</span>
-<span id="cb1-31"><a href="#cb1-31" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-32"><a href="#cb1-32" aria-hidden="true" tabindex="-1"></a><span class="fu">head</span>(u_df)</span>
-<span id="cb1-33"><a href="#cb1-33" aria-hidden="true" tabindex="-1"></a><span class="fu">levels</span>(u_df<span class="sc">$</span>treat)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><code>u_df</code> contains: <code>patch</code> (random patches 1–16 where treatments were applied), <code>treat</code> (urchin density — 0%, 33%, 66%, 100% of natural density), <code>quad</code> (replicate quadrats within each patch:treatment combination), <code>algae</code> (percentage cover of filamentous algae — the response variable).</p>
-<div class="callout callout-style-default callout-tip callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-Tip
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p><strong>🖐 Notice</strong></p>
-<p>If you still have <code>nested_model</code> from the Nested ANOVA activity in your environment, keep it around — Part 4 asks you to compare its p-value to what you get here.</p>
-</div>
-</div>
-<hr>
-</section>
-<section id="part-2-the-modern-way-mixed-models" class="level1">
-<h1>Part 2 · The Modern Way — Mixed Models</h1>
-<p>Fixed effects go in as a plain variable name. Random effects can be coded a few different ways, depending on the design:</p>
-<ul>
-<li><strong>Random intercept, fixed slope:</strong> <code>+ (1|random)</code> — e.g., <code>color ~ fixed + (1|group)</code></li>
-<li><strong>Random intercept, random slope:</strong> <code>+ (fixed|random)</code> — e.g., <code>color ~ fixed + (fixed|group)</code></li>
-<li><strong>Nested design</strong> (a sample can exist only within a larger grouping): <code>y ~ color + (1|greenbox/graybox)</code>, equivalent to <code>y ~ color + (1|greenbox) + (1|greenbox:graybox)</code> — this models random variation in the intercept for each patch, and also for each quadrat within each patch</li>
-<li><strong>Fully crossed design</strong> (not nested): <code>y ~ color + (1|green_box) + (1|gray_box)</code></li>
-</ul>
-<p><strong>▶ Run this</strong> — fit the mixed model:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 2.1 · The Modern Way ───────────────────────────────────────────</span></span>
-<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>mixed_model <span class="ot">&lt;-</span> <span class="fu">lmer</span>(algae <span class="sc">~</span> treat <span class="sc">+</span> (<span class="dv">1</span><span class="sc">|</span>patch), <span class="at">data =</span> u_df,</span>
-<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>                    <span class="at">control =</span> <span class="fu">lmerControl</span>(<span class="at">calc.derivs =</span> <span class="cn">FALSE</span>))</span>
-<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(mixed_model)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>▶ Run this</strong> — Method 1, the F-test (more conservative, better for small samples):</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 2.2 · The Modern Way ───────────────────────────────────────────</span></span>
-<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>f_result <span class="ot">&lt;-</span> <span class="fu">Anova</span>(mixed_model, <span class="at">type =</span> <span class="dv">3</span>,</span>
-<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>                  <span class="at">test.statistic =</span> <span class="st">"F"</span>)</span>
-<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>f_result</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<blockquote class="blockquote">
-<p>💡 Look at the header R prints: <strong>“Kenward-Roger df”</strong>. <code>car::Anova()</code> has no <code>ddf</code> argument — it always uses Kenward-Roger for <code>test.statistic = "F"</code>. (If you want Satterthwaite instead, use <code>lmerTest::anova(mixed_model)</code>.) Both are approximations to the denominator df; they agree closely here.</p>
-</blockquote>
-<p><strong>▶ Run this</strong> — Method 2, the Chi-square test (more liberal, assumes large samples):</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 2.3 · The Modern Way ───────────────────────────────────────────</span></span>
-<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>anova_car <span class="ot">&lt;-</span> <span class="fu">Anova</span>(mixed_model,</span>
-<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>                   <span class="at">type =</span> <span class="dv">3</span>,</span>
-<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>                   <span class="at">test.statistic =</span> <span class="st">"Chisq"</span>)</span>
-<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>anova_car</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<blockquote class="blockquote">
-<p>💡 Chi-square = F × numerator df. The two differ because the F-test accounts for the denominator df (reflecting sample size), while Chi-square assumes infinite denominator df. <strong>Rule of thumb:</strong> under 100 observations or &lt; 20 random-effect levels, use the F-test; over 500 observations and &gt; 50 random-effect levels, Chi-square is fine; in between, the F-test is safer.</p>
-</blockquote>
-<p>✏️ <strong>Your turn:</strong> Do the F-test and Chi-square p-values agree on significance here? Given the rule of thumb above, which one should you trust more for this dataset (16 patches)?</p>
-<p><code>________________________</code></p>
-<div class="callout callout-style-default callout-tip callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-Tip
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p><strong>🚀 If you finish early:</strong> Refit <code>mixed_model</code> using <code>(1|treat:patch)</code> instead of <code>(1|patch)</code>. Does the model summary change? (Hint: since patch numbers are already unique to a treatment in this dataset, the two notations should behave the same here — but they wouldn’t if patch IDs were reused across treatments.)</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 2.4 · The Modern Way ───────────────────────────────────────────</span></span>
-<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Write your code in the R script:</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-</div>
-</div>
-<hr>
-</section>
-<section id="part-3-model-diagnostics" class="level1">
-<h1>Part 3 · Model Diagnostics</h1>
-<p><strong>▶ Run this</strong> — DHARMa’s simulation-based diagnostics, purpose-built for mixed models:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 3.1 · Model Diagnostics ────────────────────────────────────────</span></span>
-<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">123</span>)</span>
-<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>simulation_output <span class="ot">&lt;-</span> <span class="fu">simulateResiduals</span>(<span class="at">fittedModel =</span> mixed_model,</span>
-<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>                                       <span class="at">plot =</span> <span class="cn">FALSE</span>)</span>
-<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a><span class="fu">plotQQunif</span>(simulation_output)</span>
-<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a><span class="fu">plotResiduals</span>(simulation_output)</span>
-<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a><span class="fu">testDispersion</span>(simulation_output)</span>
-<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a><span class="fu">testOutliers</span>(simulation_output)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>▶ Run this</strong> — a couple of other useful diagnostic views:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 3.2 · Model Diagnostics ────────────────────────────────────────</span></span>
-<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(mixed_model, <span class="at">type =</span> <span class="fu">c</span>(<span class="st">"p"</span>, <span class="st">"smooth"</span>))</span>
-<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Cook's-distance-style influence plot (values &gt; 0.5 are worth a look)</span></span>
-<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>car<span class="sc">::</span><span class="fu">influencePlot</span>(mixed_model)</span>
-<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Coefficient plot for the fixed effects</span></span>
-<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>dotwhisker<span class="sc">::</span><span class="fu">dwplot</span>(mixed_model, <span class="at">effects =</span> <span class="st">"fixed"</span>) <span class="sc">+</span></span>
-<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_vline</span>(<span class="at">xintercept =</span> <span class="dv">0</span>, <span class="at">color =</span> <span class="st">"darkblue"</span>, <span class="at">linewidth =</span> <span class="dv">1</span>)</span>
-<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a><span class="co"># Variance components</span></span>
-<span id="cb7-12"><a href="#cb7-12" aria-hidden="true" tabindex="-1"></a><span class="fu">VarCorr</span>(mixed_model)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>✏️ <strong>Your turn:</strong> From <code>VarCorr(mixed_model)</code>, how does the variance attributed to <code>patch</code> compare to the residual variance? What does that tell you about spatial heterogeneity in this system?</p>
-<p><code>________________________</code></p>
-<div class="callout callout-style-default callout-tip callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-Tip
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p><strong>🚀 If you finish early:</strong> DHARMa’s <code>testDispersion()</code> checks for over/under-dispersion. Look up (<code>?testDispersion</code>) what a significant result would mean, and write a one-sentence summary.</p>
-<pre><code>________________________________________________________</code></pre>
-</div>
-</div>
-<div class="callout callout-style-default callout-note callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-Note
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p><strong>Scientific interpretation</strong></p>
-<p>This mixed-model analysis reveals substantial spatial heterogeneity in algae cover, with significant variation among patches within each treatment. Whether the urchin-density treatment effect itself reaches significance depends on which test (F vs.&nbsp;Chi-square) you use — a good reminder that “significant” is sensitive to analytical choices in nested designs. The substantial variance component associated with patches nested within treatments shows why spatial heterogeneity needs to be accounted for when designing and analyzing ecological field experiments.</p>
-</div>
-</div>
-<p>✏️ <strong>Your turn:</strong> Write a 2–3 sentence results paragraph for this analysis, using your own F-statistic, df, p-value, and variance component numbers from Parts 2–3.</p>
-<pre><code>________________________________________________________
-________________________________________________________</code></pre>
-<hr>
-</section>
-<section id="part-4-comparing-the-two-approaches" class="level1">
-<h1>Part 4 · Comparing the Two Approaches</h1>
-<p>The linear mixed-model approach (<code>lmer</code>) gives similar results to the traditional nested ANOVA (<code>aov</code> with an <code>Error()</code> term) from last class. The main advantage of the mixed-model approach is its more elegant handling of random effects, easier extension to unbalanced or more complex designs, and the extensive diagnostic tools available through packages like <code>DHARMa</code>.</p>
-<p>✏️ <strong>Your turn:</strong> Compare the p-value for <code>treat</code> you got from <code>nested_model</code> in the Nested ANOVA activity to the p-value from <code>satt_result</code> here. Are they close? Which approach would you reach for first on a future nested design of your own, and why?</p>
-<p><code>________________________</code></p>
-<hr>
-</section>
-<section id="review-and-checkpoint" class="level1">
-<h1>Review and checkpoint</h1>
-<p>At this point you can:</p>
-<ul class="task-list">
-<li><label><input type="checkbox">Fit a nested design as a mixed model with <code>lme4::lmer()</code>, using correct random-effects notation</label></li>
-<li><label><input type="checkbox">Choose between the F-test and Chi-square test for a mixed model, using the rule of thumb from lecture</label></li>
-<li><label><input type="checkbox">Run DHARMa diagnostics on a mixed model</label></li>
-<li><label><input type="checkbox">Read variance components from <code>VarCorr()</code> and explain what they mean biologically</label></li>
-<li><label><input type="checkbox">Compare a mixed-model result to the equivalent traditional nested ANOVA result</label></li>
-</ul>
-<div class="callout callout-style-default callout-note callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-Note
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p><strong>📤 What to turn in before next class</strong></p>
-<p>Upload both of these to the course management system:</p>
+<section id="in-class-activity-16-linear-mixed-models" class="level1">
+<h1>In-class Activity 16: Linear Mixed Models</h1>
+<section id="todays-objectives" class="level3">
+<h3 class="anchored" data-anchor-id="todays-objectives">Today’s Objectives</h3>
 <ol type="1">
-<li>Your code — the <code>scripts/</code> folder (or just <code>15_linear_mixed_models.R</code>)</li>
-<li>This worksheet, with your written answers</li>
+<li>Tell a fixed effect from a random effect, and say why <code>patch</code> is random</li>
+<li>Write random-effects notation for nested and for crossed designs</li>
+<li>Fit a nested design as a mixed model with <code>lme4::lmer()</code></li>
+<li>Run the <em>F</em>-test and the Chi-square test, and find that they disagree</li>
+<li>Choose between them, and defend the choice</li>
+<li>Read variance components and the ICC — information the nested ANOVA never gave you</li>
+<li>Run DHARMa diagnostics on a mixed model</li>
+<li>Prove <code>lmer()</code> reproduces <code>aov(... + Error())</code> on a balanced design</li>
 </ol>
-</div>
-</div>
-<hr>
-</section>
-<section id="part-5-take-home-extension-a-linear-mixed-model-for-crayfish-growth" class="level1">
-<h1>Part 5 · Take-Home Extension — A Linear Mixed Model for Crayfish Growth</h1>
-<p><em>Due Wednesday, November 4 — before the next class.</em></p>
-<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout callout-style-default callout-tip callout-titled">
 <div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
 <div class="callout-title-container flex-fill">
-Note
+<span class="screen-reader-only">Tip</span>📂 Files for today
 </div>
 </div>
 <div class="callout-body-container callout-body">
-<p>This is your first time building a mixed model entirely from scratch, using the same <code>lmer()</code> syntax from Part 2, on a new dataset with a different kind of random effect (lake, rather than nested patches).</p>
+<p><a href="data/andrew.csv" class="btn btn-primary" download="andrew.csv">📥 Urchin data</a> <a href="data/16_linear_mixed_models.R" class="btn btn-primary" download="16_linear_mixed_models.R">📥 Script skeleton (.R)</a></p>
+<ul>
+<li>Save the skeleton as <code>scripts/16_linear_mixed_models.R</code>, and <code>andrew.csv</code> in your <code>data/</code> folder.</li>
+<li>Same data as Activity 14 — if you still have that script, keep it open.</li>
+</ul>
 </div>
 </div>
-<section id="background" class="level2">
-<h2 class="anchored" data-anchor-id="background">Background</h2>
-<p>Sargent &amp; Lodge (2014) reared young-of-year rusty crayfish (<em>Orconectes rusticus</em>) from native (Ohio) and invasive (Wisconsin) populations in enclosures across three northern Wisconsin lakes. Individual crayfish within the same lake share that lake’s conditions, so they’re not independent of each other — lake should be treated as a random effect.</p>
-<p><strong>▶ Run this:</strong></p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 5.1 · Take-Home Extension ──────────────────────────────────────</span></span>
-<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>cray_df <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="st">"data/sargent_lodge_crayfish.csv"</span>)</span>
-<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a><span class="fu">head</span>(cray_df)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-</section>
-<section id="your-task" class="level2">
-<h2 class="anchored" data-anchor-id="your-task">Your Task</h2>
-<p><strong>Question:</strong> Does crayfish growth rate differ between native and invasive populations, once you account for the fact that crayfish were grown in different lakes?</p>
-<p>✏️ <strong>Your turn:</strong> State your hypotheses for the fixed effect of range. Decide how you want to specify the random effect of lake (a random intercept is enough here — this is not a nested design like Part 2’s patches-within-treatments). Justify your model, fit it, run diagnostics, interpret the fixed effect and the variance components, and report the result properly.</p>
-<pre><code>H0 =
-________________________________________________________
-Ha =
-________________________________________________________
-Model I will use and why:
-________________________________________________________</code></pre>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 5.2 · Take-Home Extension ──────────────────────────────────────</span></span>
-<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Write your code in the R script:</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<pre><code>Interpretation:
-________________________________________________________
-________________________________________________________</code></pre>
-</section>
-<section id="final-figure" class="level2">
-<h2 class="anchored" data-anchor-id="final-figure">Final Figure</h2>
-<p>Produce one publication-quality figure comparing growth rate between ranges — proper axis labels, no default <code>ggplot</code> grey background — and export it with <code>ggsave()</code>.</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb14"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 5.3 · Take-Home Extension ──────────────────────────────────────</span></span>
-<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Write your code in the R script:</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout callout-style-default callout-important callout-titled">
 <div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
 <div class="callout-title-container flex-fill">
-Note
+<span class="screen-reader-only">Important</span>What you hand in
 </div>
 </div>
 <div class="callout-body-container callout-body">
-<p><strong>📤 What to turn in — due Nov 4</strong></p>
-<p>Your write-up should include:</p>
-<ul class="task-list">
-<li><label><input type="checkbox">The question</label></li>
-<li><label><input type="checkbox">Your hypotheses</label></li>
-<li><label><input type="checkbox">Which model you used, and your justification for it</label></li>
-<li><label><input type="checkbox">The code and its output</label></li>
-<li><label><input type="checkbox">Your interpretation of the result (including the random effect)</label></li>
-<li><label><input type="checkbox">A final figure showing the result</label></li>
+<ul>
+<li><strong>All of today’s code is right here in this activity.</strong> Type it into your script as we go and run it chunk by chunk. The skeleton has the plumbing — libraries and the data read — and nothing else. Every line of statistics you type yourself.</li>
+<li><strong>Section 6 has no code here either.</strong> It is a direct comparison back to Activity 14, and you have already written every line of it once.</li>
+<li>The <strong>Q</strong> boxes are <strong>things to think about</strong>, not inline homework. Read them, talk them over, answer them in your head. You do <strong>not</strong> have to type answers into the script, and they are not graded.</li>
+<li>The <strong>write-up</strong> at the bottom — sections 7 and 8 — <em>is</em> graded. Those answers go into the script as <code>#</code> comments.</li>
+<li>Hand in <code>scripts/16_linear_mixed_models.R</code>. Run it top to bottom (<strong>Ctrl/Cmd + Shift + Enter</strong>) first — it must run with no errors.</li>
 </ul>
 </div>
 </div>
@@ -719,22 +498,310 @@ Note
 <i class="callout-icon"></i>
 </div>
 <div class="callout-title-container flex-fill">
-Note
+<span class="screen-reader-only">Note</span>🔮 Predict before you run
 </div>
 </div>
 <div class="callout-body-container callout-body">
-<p><strong>Reference</strong></p>
-<p>Sargent, L.W. &amp; Lodge, D.M. (2014). Evolution of invasive traits in nonindigenous species: increased survival and faster growth in invasive populations of rusty crayfish (<em>Orconectes rusticus</em>). <em>Evolutionary Applications</em>, 7, 949–961.</p>
+<p>Today’s trap is not a broken assumption — it is two legitimate tests that give you different answers on either side of α = 0.05. Before you run each one, say which way you expect it to come out.</p>
 </div>
 </div>
+<div class="callout callout-style-default callout-tip callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Tip</span>The <code>invisible(NULL)</code> lines in the skeleton
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Every section ends with <code>invisible(NULL)</code>. It is a <strong>bumper</strong>. Press Ctrl/Cmd + Enter on a section’s last real line and your cursor jumps to the next line <em>that has code on it</em> — without the bumper, that is the next section, way down past the next heading. With it, the cursor stops right there and you keep your place. It does nothing and prints nothing.</p>
+</div>
+</div>
+<p>Keep the plots plain today — no labels, colors, or themes. The goal is to <strong>read</strong> them. The one exception is the final figure in section 8, which is the graded deliverable.</p>
 <hr>
 </section>
+<section id="where-this-fits" class="level2">
+<h2 class="anchored" data-anchor-id="where-this-fits">Where this fits</h2>
+<p>In <strong>Activity 14</strong> you analysed the sea urchin experiment with <code>aov(algae ~ treat + Error(patch))</code>. It gave the right answer — <em>F</em> = 2.72 on 3 and 12 df, <em>p</em> = 0.091 — by forcing the treatment to be tested against patch-to-patch variation.</p>
+<p><code>Error()</code> is the 1960s way to get the right denominator. It works, and it is brittle: it needs a balanced design, it cannot handle more than one grouping cleanly, and it tells you nothing about <em>how much</em> variation lives among patches.</p>
+<p>A <strong>mixed model</strong> does the same job by naming <code>patch</code> as a <strong>random effect</strong>. Same question, better machinery — and one new piece of output that the nested ANOVA simply could not produce.</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 22%">
+<col style="width: 39%">
+<col style="width: 37%">
+</colgroup>
+<thead>
+<tr class="header">
+<th></th>
+<th>Fixed effect</th>
+<th>Random effect</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>What it is</td>
+<td>levels you chose</td>
+<td>levels drawn from a population</td>
+</tr>
+<tr class="even">
+<td>What you want</td>
+<td>the difference between them</td>
+<td>how much they vary</td>
+</tr>
+<tr class="odd">
+<td>Here</td>
+<td><code>treat</code> — the four densities</td>
+<td><code>patch</code> — 16 bits of reef</td>
+</tr>
+<tr class="even">
+<td>Generalizes to</td>
+<td>these four densities</td>
+<td>reef patches in general</td>
+</tr>
+</tbody>
+</table>
+<p>Random-effects notation:</p>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th>Code</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>(1|group)</code></td>
+<td>a random intercept for each group</td>
+</tr>
+<tr class="even">
+<td><code>(slope|group)</code></td>
+<td>random intercept <strong>and</strong> random slope</td>
+</tr>
+<tr class="odd">
+<td><code>(1|outer/inner)</code></td>
+<td><code>inner</code> nested inside <code>outer</code></td>
+</tr>
+<tr class="even">
+<td><code>(1|a) + (1|b)</code></td>
+<td>crossed, not nested</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<blockquote class="blockquote">
+<h2 id="block-1-fixed-random-and-the-model-after-lecture-parts-13" class="anchored">🧩 Block 1 — Fixed, random, and the model <em>(after lecture Parts 1–3)</em></h2>
+<p>Sections 1–2: the data again, then the mixed model.</p>
+</blockquote>
+</section>
+</section>
+<section id="section-1-the-sea-urchin-data-again" class="level1">
+<h1>Section 1 · The sea urchin data, again</h1>
+<p><em>Written for you in the skeleton — run it and read it.</em></p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ---- Libraries -------------------------------------------</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(janitor)</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(car)          <span class="co"># Anova()</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(lme4)         <span class="co"># lmer()</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(lmerTest)     <span class="co"># Satterthwaite df and p-values</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(emmeans)</span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(performance)  <span class="co"># icc()</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(DHARMa)</span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tidyverse)</span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a><span class="fu">options</span>(<span class="at">scipen =</span> <span class="dv">999</span>)</span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a><span class="fu">options</span>(<span class="at">contrasts =</span> <span class="fu">c</span>(<span class="st">"contr.treatment"</span>, <span class="st">"contr.poly"</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ---- 1 The sea urchin data, again ------------------------</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>u_df <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="st">"data/andrew.csv"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">clean_names</span>() <span class="sc">%&gt;%</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">treat =</span> <span class="fu">case_when</span>(</span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>      treat <span class="sc">==</span> <span class="st">"removal"</span> <span class="sc">~</span> <span class="st">"0%"</span>,</span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>      treat <span class="sc">==</span> <span class="st">"dens_66"</span> <span class="sc">~</span> <span class="st">"33%"</span>,</span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>      treat <span class="sc">==</span> <span class="st">"dens_33"</span> <span class="sc">~</span> <span class="st">"66%"</span>,</span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>      treat <span class="sc">==</span> <span class="st">"control"</span> <span class="sc">~</span> <span class="st">"100%"</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>    ),</span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>    <span class="at">treat =</span> <span class="fu">factor</span>(treat, <span class="at">levels =</span> <span class="fu">c</span>(<span class="st">"0%"</span>, <span class="st">"33%"</span>, <span class="st">"66%"</span>, <span class="st">"100%"</span>)),</span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>    <span class="at">patch =</span> <span class="fu">as_factor</span>(patch)</span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a><span class="fu">head</span>(u_df)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>✏️ <strong>Q1:</strong> In Activity 14 you got <em>p</em> = 0.091 and stopped there. Two weeks on, what question about those 16 patches is still completely unanswered?</p>
+<hr>
+</section>
+<section id="section-2-fit-the-mixed-model" class="level1">
+<h1>Section 2 · Fit the mixed model</h1>
+<p><strong>▶ Type this yourself:</strong></p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ---- 2 Fit the mixed model -------------------------------</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>mixed_model <span class="ot">&lt;-</span> <span class="fu">lmer</span>(algae <span class="sc">~</span> treat <span class="sc">+</span> (<span class="dv">1</span><span class="sc">|</span>patch), <span class="at">data =</span> u_df,</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>                    <span class="at">control =</span> <span class="fu">lmerControl</span>(<span class="at">calc.derivs =</span> <span class="cn">FALSE</span>))</span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(mixed_model)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><code>control = lmerControl(calc.derivs = FALSE)</code> just suppresses a convergence check that is noisy on small datasets. It does not change the fit.</p>
+<p>✏️ <strong>Q2:</strong> Find the <strong>Random effects</strong> block in the summary. There are two rows. What is each one, and what are the two numbers?</p>
+<p>✏️ <strong>Q3:</strong> Why is <code>patch</code> the random effect and <code>treat</code> the fixed one? What would it <em>mean</em> to call <code>patch</code> fixed — what would you be claiming you wanted to know?</p>
+<p>✏️ <strong>Q4:</strong> The summary reports <code>Number of obs: 80, groups: patch, 16</code>. Which of those two numbers is your real replication for testing <code>treat</code>?</p>
+<hr>
+<blockquote class="blockquote">
+<h2 id="block-2-two-tests-that-disagree-after-lecture-parts-45" class="anchored" data-anchor-id="section-2-fit-the-mixed-model">🧩 Block 2 — Two tests that disagree <em>(after lecture Parts 4–5)</em></h2>
+<p>Section 3: the same model, three tests, two different answers.</p>
+</blockquote>
+</section>
+<section id="section-3-two-tests-two-answers" class="level1">
+<h1>Section 3 · Two tests, two answers</h1>
+<p>Mixed models have an awkward problem: there is no single agreed way to count the denominator degrees of freedom. Different approximations give different <em>p</em>-values.</p>
+<blockquote class="blockquote">
+<p>🔮 <strong>Predict first:</strong> Activity 14’s nested ANOVA gave <em>p</em> = 0.091. Will the mixed model’s <em>F</em>-test land near that, or somewhere else?</p>
+</blockquote>
+<p><strong>▶ Type this yourself</strong> — the <em>F</em>-test, with Kenward-Roger df:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ---- 3 Two tests, two answers ----------------------------</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="fu">Anova</span>(mixed_model, <span class="at">type =</span> <span class="dv">3</span>, <span class="at">test.statistic =</span> <span class="st">"F"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<blockquote class="blockquote">
+<p>💡 Read the header R prints: <strong>“Kenward-Roger df”</strong>. <code>car::Anova()</code> has no <code>ddf</code> argument — it always uses Kenward-Roger when you ask for <code>test.statistic = "F"</code>.</p>
+</blockquote>
+<p><strong>▶ Type this yourself</strong> — the Satterthwaite version, which is what <code>lmerTest</code> adds:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="fu">anova</span>(mixed_model)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<blockquote class="blockquote">
+<p>🔮 <strong>Predict first:</strong> before the next chunk — the Chi-square test is the same model again. Same answer, or different?</p>
+</blockquote>
+<p><strong>▶ Type this yourself</strong> — the Chi-square test:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="fu">Anova</span>(mixed_model, <span class="at">type =</span> <span class="dv">3</span>, <span class="at">test.statistic =</span> <span class="st">"Chisq"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>✏️ <strong>Q5:</strong> Write down all three <em>p</em>-values. Two agree and one does not. Which is the odd one out, and which side of 0.05 does it fall on?</p>
+<p>✏️ <strong>Q6:</strong> Chi-square = <em>F</em> × numerator df, and the Chi-square test assumes <strong>infinite</strong> denominator df. How many do you actually have? Is 12 infinite?</p>
+<p>✏️ <strong>Q7:</strong> The rule of thumb: under ~100 observations or fewer than ~20 random-effect levels, use the <em>F</em>-test; over ~500 observations and more than ~50 levels, Chi-square is fine; in between, the <em>F</em>-test is safer. You have 80 observations and 16 patches. Which does the rule pick?</p>
+<p>✏️ <strong>Q8:</strong> Here is the uncomfortable part. If you had run <strong>only</strong> the Chi-square test, you would have reported a significant treatment effect and never known. What does that tell you about running one test and stopping?</p>
+<p>✏️ <strong>Q9:</strong> Could you defend the <em>F</em>-test to a reviewer who wanted the Chi-square? Write the one sentence you would say.</p>
+<blockquote class="blockquote">
+<p>💡 <strong>Key idea:</strong> this is not a case of one test being broken. Both are legitimate approximations; they differ because one of them pretends you have more information than you do. When two defensible analyses straddle α = 0.05, the honest move is to say so and justify your choice — not to pick the one you like and delete the other.</p>
+</blockquote>
+<hr>
+<blockquote class="blockquote">
+<h2 id="block-3-what-the-nested-anova-couldnt-tell-you-after-lecture-parts-67" class="anchored" data-anchor-id="section-3-two-tests-two-answers">🧩 Block 3 — What the nested ANOVA couldn’t tell you <em>(after lecture Parts 6–7)</em></h2>
+<p>Sections 4–5: variance components, then diagnostics.</p>
+</blockquote>
+</section>
+<section id="section-4-variance-components-the-new-information" class="level1">
+<h1>Section 4 · Variance components — the new information</h1>
+<p>Everything so far has reproduced Activity 14. <strong>This</strong> is what <code>Error(patch)</code> could never give you.</p>
+<blockquote class="blockquote">
+<p>🔮 <strong>Predict first:</strong> look back at Activity 14’s patch means — within the 0% treatment alone they ran from 2.2% to 62%. Before you run this: is more of the variation among <strong>patches</strong>, or among <strong>quadrats within</strong> a patch?</p>
+</blockquote>
+<p><strong>▶ Type this yourself:</strong></p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ---- 4 Variance components - the new information ---------</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="fu">VarCorr</span>(mixed_model)</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a><span class="fu">icc</span>(mixed_model)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>✏️ <strong>Q10:</strong> Write down the patch variance and the residual variance. Which is bigger?</p>
+<p>✏️ <strong>Q11:</strong> The <strong>ICC</strong> (intraclass correlation) is the share of total variance sitting among patches. What is yours? Say what it means in one plain sentence about this reef.</p>
+<p>✏️ <strong>Q12:</strong> What would an ICC near <strong>zero</strong> mean about the patches? Near <strong>one</strong>?</p>
+<p>✏️ <strong>Q13:</strong> The nested ANOVA in Activity 14 gave you a <em>p</em>-value and nothing else. Name the practical decision you could make with the ICC that you could not make with the <em>p</em>-value alone. (Think about designing the <em>next</em> experiment.)</p>
+<p><strong>▶ Type this yourself</strong> — the treatment means from the model:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>emm <span class="ot">&lt;-</span> <span class="fu">emmeans</span>(mixed_model, <span class="sc">~</span> treat)</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>emm</span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a><span class="fu">pairs</span>(emm, <span class="at">adjust =</span> <span class="st">"sidak"</span>)</span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>multcomp<span class="sc">::</span><span class="fu">cld</span>(emm, <span class="at">Letters =</span> letters)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>✏️ <strong>Q14:</strong> Look hard at the confidence limits on the <code>33%</code> and <code>100%</code> means. They go <strong>below zero</strong>. Algae cover is a percentage — it cannot be negative.</p>
+<p>✏️ <strong>Q15:</strong> You spent all of last week on models that refuse to predict impossible values. So what is this model assuming about <code>algae</code> that is not true, and what would you do about it? (You do not have to fix it today — name the fix.)</p>
+<blockquote class="blockquote">
+<p>💡 <strong>Key idea:</strong> the mixed model fixed the <em>error structure</em> and left the <em>distribution</em> alone. Last week you fixed the distribution and left the error structure alone. Real data often needs both at once — that is a generalized linear <strong>mixed</strong> model, <code>glmer()</code>, and you now have both halves of it.</p>
+</blockquote>
+<hr>
+</section>
+<section id="section-5-diagnostics" class="level1">
+<h1>Section 5 · Diagnostics</h1>
+<p><strong>▶ Type this yourself:</strong></p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ---- 5 Diagnostics ---------------------------------------</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">123</span>)</span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>sim_mixed <span class="ot">&lt;-</span> <span class="fu">simulateResiduals</span>(mixed_model, <span class="at">plot =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a><span class="fu">plotQQunif</span>(sim_mixed)</span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a><span class="fu">plotResiduals</span>(sim_mixed)</span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a><span class="fu">testDispersion</span>(sim_mixed)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>▶ Type this yourself:</strong></p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(mixed_model)</span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>resid_df <span class="ot">&lt;-</span> u_df <span class="sc">%&gt;%</span></span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">.resid =</span> <span class="fu">residuals</span>(mixed_model))</span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(resid_df, <span class="fu">aes</span>(<span class="at">x =</span> patch, <span class="at">y =</span> .resid)) <span class="sc">+</span></span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_boxplot</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>✏️ <strong>Q16:</strong> Do the DHARMa diagnostics look acceptable?</p>
+<p>✏️ <strong>Q17:</strong> A mixed model also assumes the <strong>random effects</strong> are normally distributed. You have 16 patches. Is that enough to check that assumption honestly? What would you say in a paper?</p>
+<hr>
+</section>
+<section id="section-6-does-it-agree-with-activity-14-you-write-this-one" class="level1">
+<h1>Section 6 · Does it agree with Activity 14? <em>(you write this one)</em></h1>
+<p><strong>No code on this page.</strong> You wrote every line of this once already, two weeks ago.</p>
+<p><strong>The claim:</strong> on a balanced design, <code>lmer(algae ~ treat + (1|patch))</code> and <code>aov(algae ~ treat + Error(patch))</code> are the <em>same test</em>. Check it.</p>
+<p>Work through:</p>
+<ol type="a">
+<li>Refit Activity 14’s nested model: <code>aov()</code> with <code>+ Error(patch)</code> on <code>u_df</code>.</li>
+<li>Put its <em>F</em>, df, and <em>p</em> next to the <em>F</em>-test from section 3.</li>
+<li>Collapse to the 16 patch means and run a plain one-way <code>aov()</code> — as you did in Activity 14 — and add that row too.</li>
+<li>Three rows, one table. Decide which numbers match and which do not.</li>
+</ol>
+<p>✏️ <strong>Q18:</strong> Do all three agree? Exactly, or just closely?</p>
+<p>✏️ <strong>Q19:</strong> If the <em>F</em>-test is identical to a method from the 1960s, what did you actually gain by fitting a mixed model? Name <strong>two</strong> things — section 4 is one of them.</p>
+<p>✏️ <strong>Q20:</strong> This design is perfectly balanced: 4 patches per treatment, 5 quadrats per patch. Where would <code>aov(Error())</code> and <code>lmer()</code> start to come apart? (What if one patch had been lost to a storm?)</p>
+<blockquote class="blockquote">
+<p>💡 <strong>Key idea:</strong> the mixed model did not give you a <em>better p-value</em> — it gave you the same one, plus variance components, plus a path to unbalanced data, crossed random effects, and non-normal responses. That is why it replaced <code>Error()</code>, not because the old answer was wrong.</p>
+</blockquote>
+<hr>
 </section>
 <section id="homework" class="level1">
 <h1>Homework</h1>
 <p><strong><a href="../../homeworks/lmm_homework/lmm_homework.html">Homework 9 — Linear Mixed Models</a></strong></p>
-<p>The <strong>rusty crayfish</strong> growth experiment again — but now <code>lake</code> is a random effect rather than a fixed factor. Same data as Homework 8, deliberately: the comparison between the two analyses is the assignment.</p>
+<p>The <strong>rusty crayfish</strong> growth experiment — but now <code>lake</code> is a <strong>random</strong> effect rather than a fixed factor. Same data as Homework 8, deliberately: the comparison between the two analyses <em>is</em> the assignment.</p>
 <p><strong>Data:</strong> <a href="../../homeworks/lmm_homework/data/sargent_lodge_crayfish.csv"><code>sargent_lodge_crayfish.csv</code></a> — Sargent &amp; Lodge (2014), <em>Evolutionary Applications</em> 7: 949–961.</p>
+<p>Start a new script for it — do not add it to <code>16_linear_mixed_models.R</code>.</p>
+<hr>
+</section>
+<section id="write-up-graded" class="level1">
+<h1>Write-up — graded</h1>
+<p><em>These go into the bottom of your script, as <code>#</code> comments after <code>ANSWER:</code>.</em></p>
+<section id="section-7-report-the-model" class="level2">
+<h2 class="anchored" data-anchor-id="section-7-report-the-model">Section 7 · Report the model</h2>
+<p>✏️ <strong>Q21:</strong> Fill in the table:</p>
+<pre><code>method                        F / Chisq   df      p
+lmer, F (Kenward-Roger)
+lmer, F (Satterthwaite)
+lmer, chi-square
+aov with Error(patch)</code></pre>
+<p>✏️ <strong>Q22:</strong> Variance components: patch, residual, and the ICC.</p>
+<p>✏️ <strong>Q23:</strong> A 2–3 sentence results paragraph. Report the fixed effect with the test you chose <strong>and</strong> the variance component — both belong in the sentence.</p>
+<p>✏️ <strong>Q24:</strong> Does this experiment show urchins have <strong>no</strong> effect on algae cover? Same question as Activity 14 — has your answer changed now that you can see the variance components?</p>
+<p>✏️ <strong>Q25:</strong> You now have three ways to analyse a nested design: <code>aov</code> with <code>Error()</code>, <code>lmer</code> with a random intercept, and a one-way ANOVA on the unit means. Which would you reach for first on a design of your own, and why?</p>
+</section>
+<section id="section-8-the-final-figure" class="level2">
+<h2 class="anchored" data-anchor-id="section-8-the-final-figure">Section 8 · The final figure</h2>
+<p>One publication-quality figure showing <strong>both</strong> levels of variation: the treatment means with their intervals from the model, and the individual patch means behind them. Proper axis labels, a real theme, readable sizing — this one is graded on presentation. Export it with <code>ggsave()</code>.</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ---- 8 The final figure ----------------------------------</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a><span class="co"># ... your plot here, then:</span></span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a><span class="co"># ggsave("figures/16_urchin_mixed.pdf", width = 7, height = 5)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>✏️ <strong>Q26:</strong> Your figure shows two kinds of spread — among patches within a treatment, and among treatments. Which one is bigger, and which one does the <em>p</em>-value care about?</p>
+<hr>
+</section>
+</section>
+<section id="review-and-checkpoint" class="level1">
+<h1>Review and checkpoint</h1>
+<p>At this point you should be able to:</p>
+<ul class="task-list">
+<li><label><input type="checkbox">Tell a fixed effect from a random effect, and justify which is which</label></li>
+<li><label><input type="checkbox">Write random-effects notation for nested, crossed, and random-slope designs</label></li>
+<li><label><input type="checkbox">Fit a nested design with <code>lmer()</code> and read its random-effects block</label></li>
+<li><label><input type="checkbox">Choose between the <em>F</em>-test and the Chi-square test, and defend the choice</label></li>
+<li><label><input type="checkbox">Explain what happens when two defensible tests straddle α = 0.05</label></li>
+<li><label><input type="checkbox">Read variance components and the ICC, and say what they mean biologically</label></li>
+<li><label><input type="checkbox">Use the ICC to plan a better experiment</label></li>
+<li><label><input type="checkbox">Run DHARMa diagnostics on a mixed model</label></li>
+<li><label><input type="checkbox">Show that <code>lmer()</code> reproduces <code>aov(... + Error())</code> on a balanced design, and say where they diverge</label></li>
+</ul>
+<p>Run your whole script top to bottom with <strong>Ctrl/Cmd + Shift + Enter</strong>. It must run clean.</p>
+<blockquote class="blockquote">
+<p>💡 <strong>Key idea:</strong> you have now changed both halves of the linear model — the distribution (week 10) and the error structure (this week). Put them together and you have <code>glmer()</code>: a count response with a random effect, which is what most real ecological field data actually is.</p>
+</blockquote>
 
 
 </section>
