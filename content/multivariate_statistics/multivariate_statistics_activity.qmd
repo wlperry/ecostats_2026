@@ -1,9 +1,9 @@
 ---
 order: 18
 week: 13
-title: "Activity: Multivariate Statistics (MANOVA)"
-subtitle: "MANOVA"
-description: "Hands-on activity: principal component analysis on the Darlingtonia (cobra lily) morphology dataset — standardization, correlations, PCA, loadings, scores, and distances between site centroids."
+title: "Activity: Multivariate Statistics"
+subtitle: "Distance and ordination"
+description: "Hands-on activity: standardization, the dissimilarity matrix and why the choice of metric matters, a first PCA on Darlingtonia cobra lily morphology, a first Bray-Curtis NMDS on Doubs River fish counts, and testing group differences with PERMANOVA."
 author: "Bill Perry"
 metadata-files:
   - ../../_templates/activities.yml
@@ -12,338 +12,447 @@ format:
   docx: default
 ---
 
-# Worksheet: Multivariate Statistics
+# In-class Activity 18: Multivariate Statistics
 
-[📥 Download the data](data/darlingtonia.csv){.btn .btn-primary download="darlingtonia.csv"}
+### Today's Objectives
+
+1.  Say why multivariate data cannot be handled one variable at a time
+2.  Standardize a set of variables, and say when you should **not**
+3.  Build a **dissimilarity matrix** and explain why it is the hub of everything downstream
+4.  Choose between Euclidean, Manhattan, Bray–Curtis and Jaccard, and defend the choice
+5.  Run a PCA, read a scree plot, and interpret loadings as biology
+6.  Translate an **arbitrary component sign** into a correct sentence
+7.  Run an NMDS on count data and read its **stress**
+8.  Test group differences with **PERMANOVA**, and check its dispersion assumption
+
+::: callout-tip
+## 📂 Files for today
+
+[📥 Script skeleton (.R)](data/18_multivariate_statistics.R){.btn .btn-primary download="18_multivariate_statistics.R"} [📥 Darlingtonia data](data/darlingtonia.csv){.btn .btn-primary download="darlingtonia.csv"} [📥 Doubs fish counts](data/DoubsSpe.csv){.btn .btn-primary download="DoubsSpe.csv"} [📥 Doubs environment](data/DoubsEnv.csv){.btn .btn-primary download="DoubsEnv.csv"}
+
+-   Save the skeleton as `scripts/18_multivariate_statistics.R`, and all three `.csv` files in your `data/` folder.
+-   You will meet the Doubs data again in **week 15**, where NMDS gets the full treatment.
+:::
+
+::: callout-important
+## What you hand in
+
+-   **All of today's code is right here in this activity.** Type it into your script as we go and run it chunk by chunk. The skeleton has the plumbing — libraries and the three data reads — and nothing else. Every line of statistics you type yourself.
+-   **Section 7 has no code here either.** By then you will have run a whole ordination workflow once, so you start the second one on your own.
+-   The **Q** boxes are **things to think about**, not inline homework. Read them, talk them over, answer them in your head. They are not graded.
+-   The **write-up** at the bottom — sections 9, 10 and 11 — *is* graded. Those answers go into the script as `#` comments.
+-   Hand in `scripts/18_multivariate_statistics.R`. Run it top to bottom (**Ctrl/Cmd + Shift + Enter**) first — it must run with no errors.
+:::
+
+::: callout-note
+## 🔮 Predict before you run
+
+Today has two decisions in it. **First**: which distance metric does each dataset need? **Second**: before you look at any output, will the four Darlingtonia sites separate, or overlap? Commit to an answer out loud before each one.
+:::
+
+::: callout-tip
+## The `invisible(NULL)` lines in the skeleton
+
+Every section ends with `invisible(NULL)`. It is a **bumper**. Press Ctrl/Cmd + Enter on a section's last real line and your cursor jumps to the next line *that has code on it* — without the bumper, that is the next section, way past the heading. With it, the cursor stops right there and you keep your place. It does nothing and prints nothing.
+:::
+
+Keep the plots plain today — no labels, colors, or themes beyond what the code here gives you. The one exception is the final figure in section 11, which is the graded deliverable.
+
+------------------------------------------------------------------------
+
+## Where this fits
+
+Every model from week 6 to week 12 had **one** response variable. Today there is no single response: a plant is its whole shape, and a river site is its whole fish community.
+
+| | What it is | Example today |
+|----|----|----|
+| **Weeks 6–12** | one response, variance partitioned | lifespan ~ treatment + thorax |
+| **Today** | many responses at once, summarized | 10 traits → 3 components |
+| **Weeks 14–15** | the machinery, in full | PCA; NMDS and cluster analysis |
+
+------------------------------------------------------------------------
+
+# Setup
 
 **▶ Run this in your Script:**
 
 ``` r
 # ── Setup (1) ───────────────────────────────────────────────────────────
-library(car)
-library(emmeans)
-library(psych)
 library(vegan)
-library(ggfortify)
+library(psych)
+library(emmeans)
 library(corrplot)
-library(FactoMineR)
 library(factoextra)
 library(ggrepel)
-library(plotly)
-library(broom)
-library(patchwork)
-library(janitor)
 library(tidyverse)
 
-theme_set(theme_minimal(base_size = 9))
+# Permutation tests resample at random. Fixing the seed makes your
+# numbers reproducible -- yours will match your neighbour's.
+set.seed(42)
+
+theme_set(theme_minimal(base_size = 11))
 ```
 
 ------------------------------------------------------------------------
 
-# Part 1 · Load and Explore the Data
+# Block A · Data, standardization, and distance
+
+*After lecture Parts 1–3.*
+
+# 1 · Load and look
 
 **▶ Run this:**
 
 ``` r
-# ── Part 1.1 · Load and Explore the Data ────────────────────────────────
+# ── Part 1.1 · Load the two datasets ────────────────────────────────────
 darlingtonia <- read_csv("data/darlingtonia.csv")
 
-head(darlingtonia)
+doubs_spe <- read_csv("data/DoubsSpe.csv") %>% rename(site = 1)
 
-darlingtonia %>%
-  count(site, name = "n_plants")
+# das is distance from the river's source, so it orders the
+# sites upstream -> downstream. We cut it into three reaches.
+doubs_env <- read_csv("data/DoubsEnv.csv") %>%
+  rename(site = 1) %>%
+  mutate(reach = factor(
+    case_when(das <  100 ~ "Upstream",
+              das <  250 ~ "Midstream",
+              TRUE       ~ "Downstream"),
+    levels = c("Upstream", "Midstream", "Downstream")))
+
+darlingtonia %>% count(site)
 ```
 
-**▶ Run this** — visualize the raw data by site (notice the different scales!):
+**▶ Run this** — the raw variables, on their own scales:
 
 ``` r
-# ── Part 1.2 · Load and Explore the Data ────────────────────────────────
-darl_long <- darlingtonia %>%
-  pivot_longer(cols = -site,
-               names_to = "variable",
-               values_to = "value")
-
-ggplot(darl_long, aes(x = site, y = value, fill = site)) +
+# ── Part 1.2 · The scale problem, in a picture ──────────────────────────
+darlingtonia %>%
+  pivot_longer(-site, names_to = "variable", values_to = "value") %>%
+  ggplot(aes(site, value, fill = site)) +
   geom_boxplot() +
-  facet_wrap(~variable, scales = "free_y", ncol = 2) +
-  theme_minimal(base_size = 7) +
-  theme(legend.position = "none",
-        axis.text.x = element_text(angle = 45, hjust = 1)) +
-  labs(title = "Raw Data by Site",
-       subtitle = "Notice the different scales!")
+  facet_wrap(~variable, scales = "free_y")
 ```
 
-✏️ **Your turn:** Which variable(s) have the largest values (dominating the raw scale), and which have the smallest?
+::: callout-note
+## ✏️ Q1
 
-`________________________`
+Which variable has the largest numbers? Which has the smallest? If you computed a distance on these raw values, which variable would decide the answer almost single-handedly?
+:::
 
-------------------------------------------------------------------------
+# 2 · Standardize
 
-# Part 2 · Standardization
-
-**▶ Run this** — check means and SDs by site before standardizing:
+**▶ Run this:**
 
 ``` r
-# ── Part 2.1 · Standardization ──────────────────────────────────────────
+# ── Part 2.1 · How bad is the scale problem? ────────────────────────────
 darlingtonia %>%
-  group_by(site) %>%
-  summarize(
-    mean_height = mean(height),
-    sd_height = sd(height),
-    mean_wingmass = mean(wingmass_g),
-    sd_wingmass = sd(wingmass_g)
-  )
-
-# After standardization, both will have:
-# mean = 0, sd = 1
+  summarize(sd_height   = sd(height),
+            sd_wingmass = sd(wingmass_g),
+            ratio       = sd(height) / sd(wingmass_g))
 ```
 
-**▶ Run this** — standardize all numeric variables and visualize:
+**▶ Run this** — z-score every variable:
 
 ``` r
-# ── Part 2.2 · Standardization ──────────────────────────────────────────
-darl_numeric <- darlingtonia %>%
-  dplyr::select(-site)
+# ── Part 2.2 · Standardize ──────────────────────────────────────────────
+darl_numeric <- darlingtonia %>% dplyr::select(-site)
 
-# Standardize using scale() - centers (mean=0) and scales (sd=1) each variable
 darl_scaled <- scale(darl_numeric)
 
-darl_scaled_df <- as.data.frame(darl_scaled)
-
-darl_scaled_df %>%
-  select(height, mouth_diam, wingmass_g) %>%
-  pivot_longer(cols = c(height, mouth_diam, wingmass_g), names_to = "variable", values_to = "value") %>%
-  ggplot(aes(x = variable, y = value, fill = variable)) +
-  geom_boxplot() +
-  labs(title = "Standardized Data (same scale)") +
-  theme(legend.position = "none")
+round(colMeans(darl_scaled), 3)
+round(apply(darl_scaled, 2, sd), 3)
 ```
 
-------------------------------------------------------------------------
+::: callout-note
+## ✏️ Q2
 
-# Part 3 · Correlations
+The means came back as 0 and the SDs as 1 — by construction, not by luck. So what *information* did standardizing destroy, and why are we willing to lose it here?
+:::
 
-**▶ Run this:**
+# 3 · Distance, and the choice of metric
+
+**▶ Run this** — the distance between two plants, two ways:
 
 ``` r
-# ── Part 3.1 · Correlations ─────────────────────────────────────────────
-cor_matrix <- cor(darl_numeric)
+# ── Part 3.1 · Euclidean distance between two objects ───────────────────
+sqrt(sum((darl_scaled[1, ] - darl_scaled[2, ])^2))
 
-corrplot(cor_matrix,
-         method = "color",
-         type = "upper",
-         order = "hclust",
-         tl.col = "black",
-         tl.cex = 0.7,
-         addCoef.col = "black",
-         number.cex = 0.6,
-         title = "Correlation Matrix\n(Darlingtonia variables)",
-         mar = c(0,0,2,0))
-
-round(cor_matrix, 2)
+as.matrix(dist(darl_scaled))[1, 2]
 ```
 
-✏️ **Your turn:** Which pair of variables has the strongest correlation? Does that make biological sense?
-
-`________________________`
-
-------------------------------------------------------------------------
-
-# Part 4 · Running PCA
-
-**▶ Run this:**
+**▶ Run this** — the corner of the full dissimilarity matrix:
 
 ``` r
-# ── Part 4.1 · Running PCA ──────────────────────────────────────────────
-pca_result <- prcomp(darl_numeric,
-                     center = TRUE,
-                     scale. = TRUE)
+# ── Part 3.2 · The dissimilarity matrix ─────────────────────────────────
+d_darl <- dist(darl_scaled)
 
-summary(pca_result)
+round(as.matrix(d_darl)[1:5, 1:5], 2)
 ```
 
-**▶ Run this** — a scree plot to decide how many components to keep:
+::: callout-note
+## ✏️ Q3
+
+The matrix is symmetric with zeros down the diagonal. Why must both of those be true? What would it mean if a diagonal entry were not zero?
+:::
+
+**▶ Run this** — now the fish counts, which are a different animal entirely:
 
 ``` r
-# ── Part 4.2 · Running PCA ──────────────────────────────────────────────
-fviz_eig(pca_result,
-         addlabels = TRUE,
-         ylim = c(0, 50))
+# ── Part 3.3 · Why community data is different ──────────────────────────
+doubs_mat <- as.matrix(doubs_spe %>% dplyr::select(-site))
+
+# what fraction of the table is zeros?
+mean(doubs_mat == 0)
+
+# sites 1 and 29 -- how many species does each hold?
+rowSums(doubs_mat > 0)[c(1, 29)]
 ```
 
-✏️ **Your turn:** Based on the scree plot, how many components would you retain, and why?
-
-`________________________`
-
-------------------------------------------------------------------------
-
-# Part 5 · Interpreting Loadings
-
-**▶ Run this** — view the loadings for the first 3 PCs:
+**▶ Run this** — the same pair of sites, under four metrics:
 
 ``` r
-# ── Part 5.1 · Interpreting Loadings ────────────────────────────────────
-loadings <- pca_result$rotation[, 1:3]
-round(loadings, 3)
+# ── Part 3.4 · Four metrics, one pair of sites ──────────────────────────
+e <- as.matrix(vegdist(doubs_mat, method = "euclidean"))
+m <- as.matrix(vegdist(doubs_mat, method = "manhattan"))
+b <- as.matrix(vegdist(doubs_mat, method = "bray"))
+j <- as.matrix(vegdist(doubs_mat > 0, method = "jaccard"))
+
+c(euclidean = e[1, 29],
+  manhattan = m[1, 29],
+  bray      = b[1, 29],
+  jaccard   = j[1, 29])
 ```
 
-**▶ Run this** — PC1 loadings, sorted and visualized:
+::: callout-note
+## ✏️ Q4
 
-``` r
-# ── Part 5.2 · Interpreting Loadings ────────────────────────────────────
-pc1_loads <- tibble(
-  Variable = rownames(pca_result$rotation),
-  Loading = pca_result$rotation[, 1]) %>%
-  arrange(desc(abs(Loading)))
-pc1_loads
+Sites 1 and 29 share **no** species at all. Bray–Curtis and Jaccard both return exactly 1.0. What does 1.0 mean on those scales, and why can Euclidean distance never give you that information?
+:::
 
-pc1_loads %>%
-  ggplot(aes(x = reorder(Variable, Loading), y = Loading)) +
-  geom_col(aes(fill = Loading > 0), show.legend = FALSE) +
-  coord_flip() +
-  geom_hline(yintercept = 0, linetype = "dashed") +
-  labs(title = "PC1 Loadings",
-       subtitle = "Overall Plant Size",
-       x = "Variable",
-       y = "Loading") +
-  scale_fill_manual(values = c("FALSE" = "coral", "TRUE" = "darkblue")) +
-  theme_minimal()
-```
+::: callout-note
+## ✏️ Q5
 
-**▶ Run this** — same for PC2:
-
-``` r
-# ── Part 5.3 · Interpreting Loadings ────────────────────────────────────
-pc2_loads <- tibble(
-  Variable = rownames(pca_result$rotation),
-  Loading = pca_result$rotation[, 2]
-) %>%
-  arrange(desc(abs(Loading)))
-
-pc2_loads
-
-pc2_loads %>%
-  ggplot(aes(x = reorder(Variable, Loading), y = Loading)) +
-  geom_col(aes(fill = Loading > 0), show.legend = FALSE) +
-  coord_flip() +
-  geom_hline(yintercept = 0, linetype = "dashed") +
-  labs(title = "PC2 Loadings",
-       subtitle = "Shape: Height vs. Wing Size",
-       x = "Variable",
-       y = "Loading") +
-  scale_fill_manual(values = c("FALSE" = "coral", "TRUE" = "darkblue")) +
-  theme_minimal()
-```
-
-✏️ **Your turn:** Based on the loadings, write a one-sentence biological interpretation of PC1 and PC2 (what does a high score on each mean?).
-
-```
-PC1 = ________________________________________________
-PC2 = ________________________________________________
-```
-
-::: callout-tip
-**🚀 If you finish early:** Repeat this loadings analysis for PC3 (`pca_result$rotation[, 3]`). What does PC3 seem to represent?
-
-``` r
-# ── Part 5.4 · Interpreting Loadings ────────────────────────────────────
-# Write your code in the R script:
-```
+Site 1 holds one species; site 29 holds 26. Most of the 27 species are absent from **both**. Euclidean distance treats every shared absence as a point of similarity. Give one ecological reason a species might be missing from a site that has nothing to do with the site resembling any other site.
 :::
 
 ------------------------------------------------------------------------
 
-# Part 6 · Scores and Ordination
+# Block B · A first PCA
 
-**▶ Run this** — view PC scores for individual plants:
+*After lecture Parts 4–5.*
+
+# 4 · Correlations, then PCA
+
+**▶ Run this** — does PCA have anything to collapse?
 
 ``` r
-# ── Part 6.1 · Scores and Ordination ────────────────────────────────────
+# ── Part 4.1 · Correlations ─────────────────────────────────────────────
+cor_matrix <- cor(darl_numeric)
+
+corrplot(cor_matrix, method = "color", type = "upper",
+         order = "hclust", addCoef.col = "black",
+         tl.cex = 0.7, number.cex = 0.6)
+```
+
+::: callout-note
+## ✏️ Q6
+
+Find the strongest correlation in the matrix. Does it make biological sense? Now find a pair that is close to zero — what does that pair tell you about the number of components you are likely to need?
+:::
+
+**▶ Run this:**
+
+``` r
+# ── Part 4.2 · Run the PCA ──────────────────────────────────────────────
+pca_result <- prcomp(darl_numeric, center = TRUE, scale. = TRUE)
+
+summary(pca_result)
+```
+
+**▶ Run this** — a scree plot:
+
+``` r
+# ── Part 4.3 · Scree plot ───────────────────────────────────────────────
+fviz_eig(pca_result, addlabels = TRUE, ylim = c(0, 60))
+```
+
+::: callout-note
+## ✏️ Q7
+
+Where is the elbow? How many components would you keep, and what is your cumulative percentage at that point? Would the Kaiser rule (eigenvalue > 1) give you the same answer? Check it:
+
+``` r
+sum(pca_result$sdev^2 > 1)
+```
+:::
+
+# 5 · Loadings, and the sign trap
+
+**▶ Run this:**
+
+``` r
+# ── Part 5.1 · Loadings for the first three components ──────────────────
+round(pca_result$rotation[, 1:3], 3)
+```
+
+**▶ Run this** — PC1, as a picture:
+
+``` r
+# ── Part 5.2 · PC1 loadings ─────────────────────────────────────────────
+tibble(Variable = rownames(pca_result$rotation),
+       Loading  = pca_result$rotation[, 1]) %>%
+  ggplot(aes(reorder(Variable, Loading), Loading)) +
+  geom_col(aes(fill = Loading > 0), show.legend = FALSE) +
+  coord_flip() +
+  geom_hline(yintercept = 0, linetype = "dashed")
+```
+
+::: callout-important
+## ⚠️ Before you write a word about PC1
+
+Look at the **sign** of the loadings on your screen. If they are mostly negative, then a **high** PC1 score means a **small** plant. If they are mostly positive, a high score means a large one.
+
+Either answer is correct — an eigenvector defines a line, and a line has no preferred end. What is *not* correct is writing "site X scores higher on PC1" and leaving it there. Translate it into biology first.
+:::
+
+::: callout-note
+## ✏️ Q8
+
+Write one sentence saying what a **high PC1 score** means for a cobra lily, in plain biological English, with the sign on your screen resolved. No component numbers in the sentence.
+:::
+
+**▶ Run this** — the other two components:
+
+``` r
+# ── Part 5.3 · PC2 and PC3 loadings ─────────────────────────────────────
+round(pca_result$rotation[, 2], 3)
+round(pca_result$rotation[, 3], 3)
+```
+
+::: callout-note
+## ✏️ Q9
+
+PC2 and PC3 are each dominated by a small group of variables, not by all ten. Name the variables that dominate each, and give each component a two-word biological name.
+:::
+
+# 6 · Scores, ordination, and a biplot
+
+**▶ Run this:**
+
+``` r
+# ── Part 6.1 · Scores ───────────────────────────────────────────────────
 pc_scores <- as_tibble(pca_result$x) %>%
-  mutate(site = darlingtonia$site,
-         plant_id = 1:n())
-
-pc_scores %>%
-  select(plant_id, site, PC1, PC2, PC3) %>%
-  head(10)
-```
-
-**▶ Run this** — a basic scores plot:
-
-``` r
-# ── Part 6.2 · Scores and Ordination ────────────────────────────────────
-ggplot(pc_scores, aes(x = PC1, y = PC2, color = site)) +
-  geom_point(size = 3, alpha = 0.7) +
-  stat_ellipse(level = 0.68, linetype = 2) +
-  labs(title = "PCA Scores Plot",
-       x = paste0("PC1: Overall Size"),
-       y = paste0("PC2: Shapeb%)"),
-       color = "Site") +
-  theme_minimal(base_size = 9) +
-  theme(legend.position = "right")
-```
-
-**▶ Run this** — an interactive 3D version using `plotly`:
-
-``` r
-# ── Part 6.3 · Scores and Ordination ────────────────────────────────────
-pc_data <- as.data.frame(pca_result$x) %>%
   mutate(site = darlingtonia$site)
 
-plot_ly(pc_data,
-        x = ~PC1, y = ~PC2, z = ~PC3,
-        color = ~site,
-        type = "scatter3d",
-        mode = "markers") %>%
-  layout(scene = list(
-    xaxis = list(title = "PC1"),
-    yaxis = list(title = "PC2"),
-    zaxis = list(title = "PC3")
-  ))
+pc_scores %>% dplyr::select(site, PC1, PC2, PC3) %>% head(10)
 ```
 
-✏️ **Your turn:** Looking at the scores plot, do the sites appear to separate from each other, or do they overlap heavily?
+**▶ Run this** — the ordination:
 
-`________________________`
+``` r
+# ── Part 6.2 · Scores plot ──────────────────────────────────────────────
+ggplot(pc_scores, aes(PC1, PC2, color = site)) +
+  geom_point(size = 3, alpha = 0.7) +
+  stat_ellipse(level = 0.68, linetype = 2)
+```
+
+**▶ Run this** — points and arrows together:
+
+``` r
+# ── Part 6.3 · Biplot ───────────────────────────────────────────────────
+fviz_pca_biplot(pca_result,
+                geom.ind = "point",
+                col.ind = darlingtonia$site,
+                addEllipses = TRUE,
+                label = "var",
+                repel = TRUE)
+```
+
+::: callout-note
+## ✏️ Q10
+
+Two arrows that lie almost on top of each other mean the two variables are strongly correlated; two at 90° mean they are nearly independent. Find one pair of each in your biplot. Does the correlation matrix from section 4 agree with you?
+:::
+
+::: callout-note
+## ✏️ Q11
+
+Which site's ellipse sits furthest from the others along PC1? Using your answer to Q8, say what that means about the plants at that site — in biology, not in scores.
+:::
 
 ------------------------------------------------------------------------
 
-# Part 7 · Distances Between Sites
+# Block C · NMDS and testing groups
 
-**▶ Run this** — calculate site centroids (mean PC scores) and the Euclidean distance between them:
+*After lecture Parts 6–7.*
 
-``` r
-# ── Part 7.1 · Distances Between Sites ──────────────────────────────────
-pc_scores_for_dist <- as.data.frame(pca_result$x) %>%
-  mutate(site = darlingtonia$site)
+# 7 · Your turn: an NMDS on the fish data
 
-site_centroids <- pc_scores_for_dist %>%
-  group_by(site) %>%
-  summarise(across(starts_with("PC"), mean)) %>%
-  ungroup()
+**There is no code for this section.** You have now run an entire ordination workflow once. Do it again on the Doubs fish, where the right metric is **not** Euclidean.
 
-site_centroids_matrix <- site_centroids %>%
-  column_to_rownames("site")
+Work out and write the code for each of these, in your script under `# ── Part 7.x`:
 
-dist_matrix <- dist(site_centroids_matrix, method = "euclidean")
-
-dist_matrix
-
-fviz_dist(dist_matrix,
-          gradient = list(low = "#00AFBB", high = "#FC4E07"))
-```
-
-✏️ **Your turn:** Which two sites are the most different from each other (largest centroid distance)? Which two are the most similar?
-
-`________________________`
+1.  Run an NMDS on `doubs_mat` using **Bray–Curtis** dissimilarity in **2** dimensions. (`metaMDS()` — look at `?metaMDS` for the `distance` and `k` arguments.)
+2.  Pull out and print the **stress**.
+3.  Extract the site scores with `scores(nmds, display = "sites")`, join on `doubs_env$reach`, and plot NMDS1 against NMDS2 coloured by reach.
 
 ::: callout-tip
-**🚀 If you finish early:** Run a quick one-way ANOVA testing whether `PC1` differs by `site` (`aov(PC1 ~ site, data = pc_scores)`), just like we did in lecture. Is the site effect significant?
+If `metaMDS()` prints pages of iteration output, add `trace = 0`.
+:::
+
+::: callout-note
+## ✏️ Q12
+
+What is your stress value? Using the rules of thumb from lecture (< 0.05 excellent, < 0.1 good, < 0.2 usable, > 0.3 meaningless), how much do you trust this 2-D map?
+:::
+
+::: callout-note
+## ✏️ Q13
+
+Your NMDS plot has no percentages on its axes and the PCA plot did. Why not? What does NMDS report **instead** of variance explained, and what exactly is it measuring?
+:::
+
+# 8 · Testing group differences
+
+**▶ Run this** — route 1, ANOVA on component scores:
 
 ``` r
-# ── Part 7.2 · Distances Between Sites ──────────────────────────────────
-# Write your code in the R script:
+# ── Part 8.1 · ANOVA on PC scores ───────────────────────────────────────
+anova_pc1 <- aov(PC1 ~ site, data = pc_scores)
+summary(anova_pc1)
+
+multcomp::cld(emmeans(anova_pc1, ~ site), Letters = letters)
 ```
+
+**▶ Run this** — route 2, PERMANOVA on the distance matrix:
+
+``` r
+# ── Part 8.2 · PERMANOVA ────────────────────────────────────────────────
+adonis2(darl_scaled ~ site, data = darlingtonia, method = "euclidean")
+```
+
+**▶ Run this** — and its one real assumption:
+
+``` r
+# ── Part 8.3 · Dispersion ───────────────────────────────────────────────
+disp <- betadisper(vegdist(darl_scaled, method = "euclidean"),
+                   darlingtonia$site)
+
+anova(disp)
+
+round(tapply(disp$distances, darlingtonia$site, mean), 2)
+```
+
+::: callout-note
+## ✏️ Q14
+
+PERMANOVA tested all ten variables at once; the ANOVA tested one component at a time. Name one thing each can tell you that the other cannot.
+:::
+
+::: callout-note
+## ✏️ Q15
+
+Is the dispersion test significant? Which site is the most variable around its own centroid? Given that result, how should you word the PERMANOVA conclusion so that it is honest?
 :::
 
 ------------------------------------------------------------------------
@@ -352,18 +461,43 @@ fviz_dist(dist_matrix,
 
 At this point you can:
 
-- [ ] Explain why standardization matters before PCA
-- [ ] Interpret a correlation matrix in the context of PCA
-- [ ] Run a PCA with `prcomp()` and read a scree plot
-- [ ] Interpret loadings to give principal components biological meaning
-- [ ] Plot and interpret PC scores, including an interactive 3D version
-- [ ] Calculate Euclidean distances between group centroids in PC space
+- [ ] Explain why standardization is required before combining variables with different units
+- [ ] Build a dissimilarity matrix and say why it is the hub of everything downstream
+- [ ] Choose between Euclidean, Manhattan, Bray–Curtis and Jaccard, and justify it
+- [ ] Explain the double-zero problem in your own words
+- [ ] Run a PCA, read a scree plot, and apply a retention rule
+- [ ] Interpret loadings as biology **with the sign resolved**
+- [ ] Run an NMDS and interpret its stress
+- [ ] Test groups with PERMANOVA and check dispersion before concluding
+
+------------------------------------------------------------------------
+
+# Write-up — this part is graded
+
+Type these answers into `scripts/18_multivariate_statistics.R` as `#` comments, in the boxes at the bottom of the skeleton.
+
+# 9 · The metric decision
+
+Write **three to four sentences**. You used Euclidean distance on the cobra lilies and Bray–Curtis on the fish. Justify each choice by naming the property of the data that drove it. Then say what would have gone wrong had you swapped them.
+
+# 10 · The site result
+
+Write **four to five sentences** reporting the Darlingtonia result as you would in a paper:
+
+-   how many components you retained and what percentage of variance they carry
+-   what each retained component means biologically, **with the sign resolved**
+-   the PERMANOVA result, with *F*, R² and *p*
+-   the dispersion check, and what it does to your confidence
+
+# 11 · The figure
+
+Produce **one** publication-quality figure: the Darlingtonia PCA ordination, coloured by site, with ellipses.
+
+This one gets the full treatment — axis labels that name the component **and** its percentage, a legend with a real title, a caption-worthy title, and a clean theme. Save it with `ggsave()` as a PDF.
 
 ::: callout-note
 **📤 What to turn in before next class**
 
-Upload both of these to the course management system:
-
-1. Your code — the `scripts/` folder (or just `09_multivariate_statistics.R`)
-2. This worksheet, with your written answers
+1.  `scripts/18_multivariate_statistics.R`, running top to bottom with no errors
+2.  Your figure from section 11, as a PDF
 :::

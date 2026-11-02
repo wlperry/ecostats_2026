@@ -22,7 +22,7 @@ format:
 4.  Fit the right one, with `patch` as the error term
 5.  Cross-check it with `afex::aov_car()`
 6.  Run post-hoc comparisons on the correct model
-7.  Prove the nested *F*-test is really a one-way ANOVA on the patch means
+7.  Prove the nested *F*-test is really a one-way ANOVA on the patch means — **and watch that break when the design goes unbalanced**
 8.  Name what goes wrong when you forget the design, and report the result honestly
 
 ::: callout-tip
@@ -217,7 +217,7 @@ summary(model_afx)
 
 ✏️ **Q11:** Now compare the **treatment sums of squares** in section 3 and section 4. They are the same number. So what actually changed between the two models?
 
-✏️ **Q12:** The residual df went from 76 to 12. Explain where 12 comes from. (16 patches, 4 treatments.)
+✏️ **Q12:** The residual df for `treat` was **64** in the naive factorial and **76** with `patch` ignored entirely — and it is **12** in the nested model. Explain where the 12 comes from. (16 patches, 4 treatments.) Which of the three is your real sample size telling you?
 
 ✏️ **Q13:** Do `nested_model` and `model_afx` agree? They should — if they do not, one of them has a typo.
 
@@ -225,9 +225,9 @@ summary(model_afx)
 
 ------------------------------------------------------------------------
 
-> ## 🧩 Block 3 — Post-hoc, and where the variance lives *(after lecture Parts 5, 7)*
+> ## 🧩 Block 3 — Post-hoc, and where the variance lives *(after lecture Part 9)*
 >
-> Sections 5–6: compare the treatments, then prove what the nested test is really doing.
+> Sections 5–6: compare the treatments, then reproduce what the nested test is really doing.
 
 # Section 5 · Post-hoc comparisons
 
@@ -255,7 +255,7 @@ multcomp::cld(emm, alpha = 0.05, Letters = letters)
 
 # Section 6 · Where the variance actually is *(you write this one)*
 
-**This is the payoff.** The claim is that the nested *F*-test is not really a test on 80 quadrats at all — it is a one-way ANOVA on the **16 patch means**, wearing a disguise. Prove it.
+**This is the payoff.** The lecture claimed the nested *F*-test is not really a test on 80 quadrats at all — it is a one-way ANOVA on the **16 patch means**, wearing a disguise. Do it yourself and see how exactly it comes out.
 
 > 🔮 **Predict first:** collapse the data to one mean per patch — 16 rows — and run an ordinary one-way ANOVA on those. What *F* and *p* will you get?
 
@@ -283,9 +283,36 @@ summary(patch_model)
 
 ✏️ **Q19:** So what did the five quadrats per patch actually buy you? (They did not buy you df for the treatment test — look at Q12.)
 
+**▶ Type this yourself** — now break the balance. A storm scours all but one quadrat out of four of the patches:
+
+``` r
+thin_df <- u_df %>%
+  filter(!(patch %in% c(2, 6, 10, 14) & quad > 1))
+
+thin_df %>% count(patch)
+
+# the nested ANOVA on the thinned data
+summary(aov(algae ~ treat + Error(patch), data = thin_df))
+
+# the patch-mean shortcut, on the same thinned data
+thin_patch_df <- thin_df %>%
+  group_by(treat, patch) %>%
+  summarise(mean_algae = mean(algae), .groups = "drop")
+
+summary(aov(mean_algae ~ treat, data = thin_patch_df))
+```
+
+✏️ **Q19b:** On the balanced data those two gave you the *same* *F* and *p*. Do they still? Write both down. Which one is more optimistic?
+
+✏️ **Q19c:** A patch mean built from **1** quadrat is noisier than one built from **5** — its variance is $\sigma^2_{patch} + \sigma^2_{within}/n_j$. The one-way ANOVA on the patch means does not know that, and weights all 16 equally. What assumption of that ANOVA is now violated *by construction*?
+
+✏️ **Q19d:** To weight each patch by how precise it is, you would need $\sigma^2_{within}$. Where did it go when you averaged? This is the real reason averaging is not a free shortcut.
+
 ✏️ **Q20:** Print `patch_df` and look at the four patch means inside the **0%** treatment: roughly 34.2, 62.0, 2.2, 58.4. Would running **more quadrats per patch** have made this experiment better able to detect a treatment effect? What would have?
 
 > 💡 **Key idea:** subsamples make each experimental unit's value more precise. They do **not** make you more replicated. If you want power to detect a treatment effect, you need more patches — more places where the treatment was independently applied. Twenty quadrats in four patches is still *n* = 4.
+>
+> **But the shortcut is only free when the design is balanced.** Once patches hold different numbers of quadrats, their means stop being equally precise, the averaging trick stops matching the nested test, and you have thrown away the one quantity — $\sigma^2_{within}$ — you would need to weight them properly. That costs you real power, and it is exactly the problem a **mixed model** is built to solve.
 
 ------------------------------------------------------------------------
 
@@ -334,7 +361,8 @@ At this point you should be able to:
 -   [ ] Fit a nested ANOVA with `aov(..., Error(...))` and cross-check it with `afex::aov_car()`
 -   [ ] Say what pseudoreplication does to *F*, and which part of the ratio it corrupts
 -   [ ] Compute EMMs and post-hoc comparisons on a nested model
--   [ ] Show that the nested test is a one-way ANOVA on the unit means
+-   [ ] Show that the nested test is a one-way ANOVA on the unit means **when the design is balanced**, and say why that equality fails when it is not
+-   [ ] Explain why unequal subsample counts make the patch means unequally precise, and what you lose by averaging them
 -   [ ] Explain why more subsamples do not buy replication
 -   [ ] Report a non-significant result without overclaiming
 

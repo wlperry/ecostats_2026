@@ -26,7 +26,7 @@ library(DHARMa)
 library(tidyverse)
 
 options(scipen = 999)
-options(contrasts = c("contr.treatment", "contr.poly"))
+options(contrasts = c("contr.sum", "contr.poly"))  # for Anova(type = 3)
 
 invisible(NULL)
 
@@ -135,6 +135,29 @@ invisible(NULL)
 
 # THINK: an ICC near zero would mean what? Near one?
 
+# ---- 4b Where that variance came from, the old way -------
+# lmer() never computed a sum of squares. Week 9 did
+# nothing else. Code is on the activity page.
+#
+#   a) the week-9 table: aov(algae ~ treat + treat:patch)
+#   b) pull MS_patch and MS_within out of it
+#   c) (MS_patch - MS_within) / 5
+
+# YOUR CODE:
+
+invisible(NULL)
+
+# THINK: did that match VarCorr()? To how many decimals?
+
+# THINK: the / 5 is quadrats per patch. If a storm had cut
+# four patches to ONE quadrat each, what would you divide
+# by? Does lmer() have to answer that question at all?
+
+# THINK: MS_patch can come out SMALLER than MS_within by
+# chance, which makes that subtraction negative. A variance
+# cannot be negative. What does lmer() report instead, and
+# what warning goes with it?
+
 
 # ---- 5 Diagnostics ---------------------------------------
 # YOUR CODE: DHARMa - simulateResiduals(), then
@@ -200,6 +223,13 @@ invisible(NULL)
 
 
 # Q2. Variance components: patch, residual, and the ICC.
+# ANSWER:
+
+
+# Q2b. The patch variance from section 4b, by hand from the
+#      mean squares. Does it match VarCorr()? One sentence
+#      on why the two agree here but would not if the
+#      design were unbalanced.
 # ANSWER:
 
 

@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="author" content="Bill Perry">
-<meta name="description" content="Hands-on activity: principal component analysis on the classic iris flower dataset — assumptions, standardization, loadings, scree plots, scores, and a manually-built biplot.">
+<meta name="description" content="Hands-on activity: principal component analysis on the classic iris flower dataset — assumptions, standardization, eigenvalues and eigenvectors, component retention rules, loadings and the arbitrary sign of a component, scores, and a biplot built by hand.">
 
 <title>Activity: Principal Component Analysis – UMD Biostatistics</title>
 <style>
@@ -120,7 +120,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <link rel="stylesheet" href="../../css/main.css">
 <link rel="stylesheet" href="../../css/main.css">
 <meta property="og:title" content="Activity: Principal Component Analysis – UMD Biostatistics">
-<meta property="og:description" content="Hands-on activity: principal component analysis on the classic iris flower dataset — assumptions, standardization, loadings, scree plots, scores, and a manually-built biplot.">
+<meta property="og:description" content="Hands-on activity: principal component analysis on the classic iris flower dataset — assumptions, standardization, eigenvalues and eigenvectors, component retention rules, loadings and the arbitrary sign of a component, scores, and a biplot built by hand.">
 <meta property="og:site_name" content="UMD Biostatistics">
 </head>
 
@@ -419,7 +419,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 <div>
   <div class="description">
-    Hands-on activity: principal component analysis on the classic iris flower dataset — assumptions, standardization, loadings, scree plots, scores, and a manually-built biplot.
+    Hands-on activity: principal component analysis on the classic iris flower dataset — assumptions, standardization, eigenvalues and eigenvectors, component retention rules, loadings and the arbitrary sign of a component, scores, and a biplot built by hand.
   </div>
 </div>
 
@@ -442,367 +442,508 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </header>
 
 
-<section id="worksheet-principal-component-analysis" class="level1">
-<h1>Worksheet: Principal Component Analysis</h1>
+<section id="in-class-activity-19-principal-component-analysis" class="level1">
+<h1>In-class Activity 19: Principal Component Analysis</h1>
+<section id="todays-objectives" class="level3">
+<h3 class="anchored" data-anchor-id="todays-objectives">Today’s Objectives</h3>
+<ol type="1">
+<li>Check the four things PCA assumes before you run it</li>
+<li>Standardize, and say why that means “use the correlation matrix”</li>
+<li>Run <code>prcomp()</code> and read every piece of what it returns</li>
+<li>Verify by hand that eigenvectors have unit length and are orthogonal</li>
+<li>Apply three component-retention rules, and resolve them when they disagree</li>
+<li>Interpret loadings as biology, <strong>with the arbitrary sign resolved</strong></li>
+<li>Build a biplot from scratch, and understand why the arrows need scaling</li>
+<li>Say whether PCA recovered a grouping it was never told about</li>
+</ol>
+<div class="callout callout-style-default callout-tip callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Tip</span>📂 Files for today
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><a href="data/19_pca.R" class="btn btn-primary" download="19_pca.R">📥 Script skeleton (.R)</a></p>
+<ul>
+<li>Save the skeleton as <code>scripts/19_pca.R</code>.</li>
+<li><strong>No data file today.</strong> <code>iris</code> ships with base R — Anderson’s 1935 measurements of 150 flowers, made famous by Fisher in 1936.</li>
+</ul>
+</div>
+</div>
+<div class="callout callout-style-default callout-important callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Important</span>What you hand in
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<ul>
+<li><strong>All of today’s code is right here in this activity.</strong> Type it into your script as we go and run it chunk by chunk. The skeleton has the plumbing and nothing else. Every line of statistics you type yourself.</li>
+<li><strong>Section 7 has no code here either.</strong> By then you will have built the pieces of a biplot separately, so you assemble it on your own.</li>
+<li>The <strong>Q</strong> boxes are <strong>things to think about</strong>, not inline homework. They are not graded.</li>
+<li>The <strong>write-up</strong> at the bottom — sections 9, 10 and 11 — <em>is</em> graded. Those answers go into the script as <code>#</code> comments.</li>
+<li>Hand in <code>scripts/19_pca.R</code>. Run it top to bottom (<strong>Ctrl/Cmd + Shift + Enter</strong>) first — it must run with no errors.</li>
+</ul>
+</div>
+</div>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>🔮 Predict before you run
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>PCA will not be told which species each flower belongs to. Before you plot anything, commit out loud: <strong>will the three species come apart on PC1 and PC2, or will they smear together?</strong> All three? Two of three?</p>
+</div>
+</div>
+<div class="callout callout-style-default callout-tip callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Tip</span>The <code>invisible(NULL)</code> lines in the skeleton
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Every section ends with <code>invisible(NULL)</code>. It is a <strong>bumper</strong> — press Ctrl/Cmd + Enter on a section’s last real line and the cursor stops there instead of jumping past the next heading. It does nothing and prints nothing.</p>
+</div>
+</div>
+<p>Keep the plots plain today. The one exception is the final figure in section 11, which is the graded deliverable.</p>
+<hr>
+</section>
+<section id="where-this-fits" class="level2">
+<h2 class="anchored" data-anchor-id="where-this-fits">Where this fits</h2>
+<p>Last week you ran a PCA and read the answer. Today you open the box.</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th></th>
+<th>What you did</th>
+<th>What you do today</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>Week 13</strong></td>
+<td>ran <code>prcomp()</code>, read the output</td>
+<td>—</td>
+</tr>
+<tr class="even">
+<td><strong>Today</strong></td>
+<td>—</td>
+<td>eigenvalues, eigenvectors, retention rules, biplots from scratch</td>
+</tr>
+<tr class="odd">
+<td><strong>Week 15</strong></td>
+<td>—</td>
+<td>what to do when Euclidean distance fails</td>
+</tr>
+</tbody>
+</table>
+<hr>
+</section>
+</section>
+<section id="setup" class="level1">
+<h1>Setup</h1>
 <p><strong>▶ Run this in your Script:</strong></p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Setup (1) ───────────────────────────────────────────────────────────</span></span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(vegan)</span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(corrplot)</span>
-<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(janitor)</span>
-<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(patchwork)</span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tidyverse)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>What is PCA?</strong> PCA (Principal Component Analysis) is a technique to:</p>
-<ul>
-<li>Reduce the number of variables in your dataset</li>
-<li>Find patterns in high-dimensional data</li>
-<li>Create new uncorrelated variables (principal components) from correlated original variables</li>
-<li>Visualize complex relationships in multivariate data</li>
-</ul>
-<p><strong>When to use PCA:</strong> you have multiple continuous variables that may be correlated, too many variables to analyze or visualize easily, need to reduce dimensionality while retaining most information, or want to explore patterns in multivariate data.</p>
-<p><strong>Key assumptions of PCA:</strong></p>
-<ol type="1">
-<li><strong>Linear relationships</strong> between variables</li>
-<li><strong>No extreme outliers</strong> (can distort results)</li>
-<li><strong>Variables should be correlated</strong> (if not, PCA won’t reduce dimensions effectively)</li>
-<li><strong>Adequate sample size</strong> (generally n &gt; 50)</li>
-<li><strong>Consider standardization</strong> when variables have different scales</li>
-</ol>
-<div class="callout callout-style-default callout-important callout-titled">
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(GGally)</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(factoextra)</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(janitor)</span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(patchwork)</span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tidyverse)</span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a><span class="fu">theme_set</span>(<span class="fu">theme_minimal</span>(<span class="at">base_size =</span> <span class="dv">11</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<hr>
+</section>
+<section id="block-a-assumptions-and-standardization" class="level1">
+<h1>Block A · Assumptions and standardization</h1>
+<p><em>After lecture Parts 1–3.</em></p>
+</section>
+<section id="the-iris-data" class="level1">
+<h1>1 · The iris data</h1>
+<p><strong>▶ Run this:</strong></p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 1.1 · Load and look ────────────────────────────────────────────</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>iris_df <span class="ot">&lt;-</span> iris <span class="sc">%&gt;%</span> <span class="fu">clean_names</span>()</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>iris_data <span class="ot">&lt;-</span> iris_df <span class="sc">%&gt;%</span> dplyr<span class="sc">::</span><span class="fu">select</span>(<span class="sc">-</span>species)</span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="fu">glimpse</span>(iris_df)</span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>iris_df <span class="sc">%&gt;%</span> <span class="fu">count</span>(species)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>▶ Run this</strong> — the four measurements, by species:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 1.2 · The raw variables ────────────────────────────────────────</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>iris_df <span class="sc">%&gt;%</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_longer</span>(<span class="sc">-</span>species, <span class="at">names_to =</span> <span class="st">"variable"</span>, <span class="at">values_to =</span> <span class="st">"value"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(species, value, <span class="at">fill =</span> species)) <span class="sc">+</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_boxplot</span>() <span class="sc">+</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">facet_wrap</span>(<span class="sc">~</span>variable, <span class="at">scales =</span> <span class="st">"free_y"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="callout callout-style-default callout-note callout-titled">
 <div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
 <div class="callout-title-container flex-fill">
-Important
+<span class="screen-reader-only">Note</span>✏️ Q1
 </div>
 </div>
 <div class="callout-body-container callout-body">
-<p><strong>Critical first step:</strong> Always <strong>standardize your data</strong> when variables are measured on different scales. This prevents variables with larger values from dominating the analysis.</p>
+<p>Which measurement separates the species most cleanly on its own? Which separates them least? If one variable already did the whole job, what would you need PCA for?</p>
 </div>
 </div>
-<hr>
 </section>
-<section id="part-1-iris-data-overview" class="level1">
-<h1>Part 1 · Iris Data Overview</h1>
-<p>We’ll analyze the famous iris dataset with measurements from three species: <em>Iris setosa</em>, <em>Iris versicolor</em>, and <em>Iris virginica</em>. Each flower has 4 measurements: sepal length, sepal width, petal length, and petal width.</p>
+<section id="check-the-assumptions" class="level1">
+<h1>2 · Check the assumptions</h1>
+<p><strong>▶ Run this</strong> — are the variables correlated?</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 2.1 · Correlations ─────────────────────────────────────────────</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>cor_matrix <span class="ot">&lt;-</span> <span class="fu">cor</span>(iris_data)</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="fu">round</span>(cor_matrix, <span class="dv">3</span>)</span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a><span class="fu">corrplot</span>(cor_matrix, <span class="at">method =</span> <span class="st">"color"</span>, <span class="at">type =</span> <span class="st">"upper"</span>,</span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>         <span class="at">addCoef.col =</span> <span class="st">"grey25"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>▶ Run this</strong> — are the relationships linear, and are there outliers?</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 2.2 · Linearity and outliers ───────────────────────────────────</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="fu">ggpairs</span>(iris_data,</span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>        <span class="at">upper =</span> <span class="fu">list</span>(<span class="at">continuous =</span> <span class="st">"cor"</span>),</span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>        <span class="at">lower =</span> <span class="fu">list</span>(<span class="at">continuous =</span> <span class="st">"smooth"</span>))</span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>iris_data <span class="sc">%&gt;%</span></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_longer</span>(<span class="fu">everything</span>(), <span class="at">names_to =</span> <span class="st">"variable"</span>, <span class="at">values_to =</span> <span class="st">"value"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(variable, value)) <span class="sc">+</span></span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_boxplot</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>✏️ Q2
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Petal length and petal width correlate at about 0.96. That is PCA’s best friend — explain why in one sentence, in terms of what PCA is trying to do.</p>
+</div>
+</div>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>✏️ Q3
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Several of the <code>ggpairs</code> panels look slightly bent rather than straight. Look at the colours in the panel for petal length vs.&nbsp;sepal length. Is the bend evidence of a genuinely non-linear relationship, or is something else producing it?</p>
+</div>
+</div>
+</section>
+<section id="standardize" class="level1">
+<h1>3 · Standardize</h1>
 <p><strong>▶ Run this:</strong></p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 1.1 · Iris Data Overview ───────────────────────────────────────</span></span>
-<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>iris_df <span class="ot">&lt;-</span> <span class="fu">read.csv</span>(<span class="st">"data/iris.csv"</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">clean_names</span>() <span class="sc">%&gt;%</span></span>
-<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">ind =</span> <span class="fu">row_number</span>()) <span class="sc">%&gt;%</span></span>
-<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">species_ind =</span> <span class="fu">paste</span>(species, ind, <span class="at">sep=</span><span class="st">"_"</span>))</span>
-<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="fu">head</span>(iris_df)</span>
-<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a><span class="co"># Get numeric values only for PCA</span></span>
-<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>iris_data_df <span class="ot">&lt;-</span> iris_df <span class="sc">%&gt;%</span></span>
-<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">select</span>(sepal_length, sepal_width, petal_length, petal_width)</span>
-<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a><span class="co"># Keep species info for later</span></span>
-<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>iris_species_df <span class="ot">&lt;-</span> iris_df <span class="sc">%&gt;%</span></span>
-<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">select</span>(species, ind, species_ind)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>▶ Run this</strong> — visualize the raw measurements by species:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 1.2 · Iris Data Overview ───────────────────────────────────────</span></span>
-<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>iris_long_df <span class="ot">&lt;-</span> iris_df <span class="sc">%&gt;%</span></span>
-<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_longer</span>(</span>
-<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">cols =</span> <span class="fu">c</span>(sepal_length, sepal_width, petal_length, petal_width),</span>
-<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">names_to =</span> <span class="st">"variable"</span>,</span>
-<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>    <span class="at">values_to =</span> <span class="st">"values"</span></span>
-<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>  )</span>
-<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>overview_plot <span class="ot">&lt;-</span> iris_long_df <span class="sc">%&gt;%</span></span>
-<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(species, values, <span class="at">color =</span> species)) <span class="sc">+</span></span>
-<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_boxplot</span>() <span class="sc">+</span></span>
-<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">facet_wrap</span>(<span class="sc">~</span>variable, <span class="at">scales =</span> <span class="st">"free"</span>) <span class="sc">+</span></span>
-<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Iris Measurements by Species"</span>,</span>
-<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a>       <span class="at">x =</span> <span class="st">"Species"</span>,</span>
-<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a>       <span class="at">y =</span> <span class="st">"Measurement Value"</span>) <span class="sc">+</span></span>
-<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>(<span class="at">base_size =</span> <span class="dv">7</span>)</span>
-<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-18"><a href="#cb3-18" aria-hidden="true" tabindex="-1"></a>overview_plot</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<hr>
-</section>
-<section id="part-2-check-pca-assumptions" class="level1">
-<h1>Part 2 · Check PCA Assumptions</h1>
-<p><strong>▶ Run this</strong> — check correlations between variables:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 2.1 · Check PCA Assumptions ────────────────────────────────────</span></span>
-<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>cor_matrix <span class="ot">&lt;-</span> <span class="fu">cor</span>(iris_data_df)</span>
-<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>cor_matrix</span>
-<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a><span class="fu">corrplot</span>(cor_matrix, <span class="at">method =</span> <span class="st">"color"</span>, <span class="at">type =</span> <span class="st">"upper"</span>,</span>
-<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>         <span class="at">addCoef.col =</span> <span class="st">"grey55"</span>, <span class="at">tl.cex =</span> <span class="fl">0.8</span>, <span class="at">number.cex =</span> <span class="fl">0.8</span>,</span>
-<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>         <span class="at">title =</span> <span class="st">"Correlation Matrix of Iris Variables"</span>,</span>
-<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>         <span class="at">mar =</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">0</span>, <span class="dv">2</span>, <span class="dv">0</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>▶ Run this</strong> — check for outliers:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 2.2 · Check PCA Assumptions ────────────────────────────────────</span></span>
-<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>outlier_plot <span class="ot">&lt;-</span> iris_data_df <span class="sc">%&gt;%</span></span>
-<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_longer</span>(<span class="fu">everything</span>(), <span class="at">names_to =</span> <span class="st">"variable"</span>, <span class="at">values_to =</span> <span class="st">"value"</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> variable, <span class="at">y =</span> value)) <span class="sc">+</span></span>
-<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_boxplot</span>() <span class="sc">+</span></span>
-<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Check for Outliers in Iris Variables"</span>,</span>
-<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>       <span class="at">x =</span> <span class="st">"Variable"</span>,</span>
-<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>       <span class="at">y =</span> <span class="st">"Value"</span>) <span class="sc">+</span></span>
-<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>() <span class="sc">+</span></span>
-<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme</span>(<span class="at">axis.text.x =</span> <span class="fu">element_text</span>(<span class="at">angle =</span> <span class="dv">45</span>, <span class="at">hjust =</span> <span class="dv">1</span>))</span>
-<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a>outlier_plot</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>✏️ <strong>Your turn:</strong> Are the iris variables sufficiently correlated for PCA to be useful? Do you see any concerning outliers?</p>
-<p><code>________________________</code></p>
-<hr>
-</section>
-<section id="part-3-standardize-the-data" class="level1">
-<h1>Part 3 · Standardize the Data</h1>
-<p>Since our variables have different scales (e.g., petal width ranges 0.1-2.5 while sepal length ranges 4-8), we need to standardize.</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 3.1 · How different are the scales? ────────────────────────────</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="fu">round</span>(<span class="fu">apply</span>(iris_data, <span class="dv">2</span>, sd), <span class="dv">3</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p><strong>▶ Run this:</strong></p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 3.1 · Standardize the Data ─────────────────────────────────────</span></span>
-<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>iris_scaled <span class="ot">&lt;-</span> <span class="fu">scale</span>(iris_data_df)</span>
-<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>iris_scaled_df <span class="ot">&lt;-</span> <span class="fu">as.data.frame</span>(iris_scaled)</span>
-<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a><span class="co"># Check standardization worked</span></span>
-<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a><span class="fu">colMeans</span>(iris_scaled_df)</span>
-<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a><span class="fu">apply</span>(iris_scaled_df, <span class="dv">2</span>, sd)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<hr>
-</section>
-<section id="part-4-perform-pca" class="level1">
-<h1>Part 4 · Perform PCA</h1>
-<p><strong>▶ Run this:</strong></p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 4.1 · Perform PCA ──────────────────────────────────────────────</span></span>
-<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>iris_pca_model <span class="ot">&lt;-</span> <span class="fu">prcomp</span>(iris_scaled, <span class="at">center =</span> <span class="cn">FALSE</span>, <span class="at">scale. =</span> <span class="cn">FALSE</span>)</span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 3.2 · Standardize ──────────────────────────────────────────────</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>iris_scaled <span class="ot">&lt;-</span> <span class="fu">scale</span>(iris_data)</span>
 <span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(iris_pca_model)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a><span class="fu">round</span>(<span class="fu">colMeans</span>(iris_scaled), <span class="dv">3</span>)</span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a><span class="fu">round</span>(<span class="fu">apply</span>(iris_scaled, <span class="dv">2</span>, sd), <span class="dv">3</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>✏️ Q4
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Petal length varies about four times as much as sepal width does. If you skipped standardization — ran PCA on the <strong>covariance</strong> matrix instead — which variable would dominate PC1, and would that be a biological finding or a bookkeeping accident?</p>
+</div>
+</div>
 <hr>
 </section>
-<section id="part-5-extract-and-understand-results" class="level1">
-<h1>Part 5 · Extract and Understand Results</h1>
-<p><strong>▶ Run this</strong> — eigenvalues and variance explained:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 5.1 · Extract and Understand Results ───────────────────────────</span></span>
-<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>eigenvalues <span class="ot">&lt;-</span> iris_pca_model<span class="sc">$</span>sdev<span class="sc">^</span><span class="dv">2</span></span>
-<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>prop_variance <span class="ot">&lt;-</span> eigenvalues <span class="sc">/</span> <span class="fu">sum</span>(eigenvalues)</span>
-<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>cumsum_variance <span class="ot">&lt;-</span> <span class="fu">cumsum</span>(prop_variance)</span>
+<section id="block-b-running-pca-and-choosing-components" class="level1">
+<h1>Block B · Running PCA and choosing components</h1>
+<p><em>After lecture Parts 4–5.</em></p>
+</section>
+<section id="run-it-and-look-inside" class="level1">
+<h1>4 · Run it, and look inside</h1>
+<p><strong>▶ Run this:</strong></p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 4.1 · Perform PCA ──────────────────────────────────────────────</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>iris_pca_model <span class="ot">&lt;-</span> <span class="fu">prcomp</span>(iris_scaled, <span class="at">center =</span> <span class="cn">FALSE</span>, <span class="at">scale. =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(iris_pca_model)</span>
 <span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>pca_summary_df <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
-<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">Component =</span> <span class="fu">paste0</span>(<span class="st">"PC"</span>, <span class="dv">1</span><span class="sc">:</span><span class="fu">length</span>(eigenvalues)),</span>
-<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a>  <span class="at">Eigenvalue =</span> eigenvalues,</span>
-<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a>  <span class="at">Prop_Variance =</span> prop_variance,</span>
-<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a>  <span class="at">Cumsum_Variance =</span> cumsum_variance</span>
-<span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb8-12"><a href="#cb8-12" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-13"><a href="#cb8-13" aria-hidden="true" tabindex="-1"></a>pca_summary_df</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>▶ Run this</strong> — component loadings:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 5.2 · Extract and Understand Results ───────────────────────────</span></span>
-<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>loadings_df <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
-<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">Variable =</span> <span class="fu">rownames</span>(iris_pca_model<span class="sc">$</span>rotation),</span>
-<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">PC1 =</span> iris_pca_model<span class="sc">$</span>rotation[, <span class="dv">1</span>],</span>
-<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">PC2 =</span> iris_pca_model<span class="sc">$</span>rotation[, <span class="dv">2</span>],</span>
-<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">PC3 =</span> iris_pca_model<span class="sc">$</span>rotation[, <span class="dv">3</span>],</span>
-<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">PC4 =</span> iris_pca_model<span class="sc">$</span>rotation[, <span class="dv">4</span>]</span>
-<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a>loadings_df</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>✏️ <strong>Your turn:</strong> Which variable has the largest loading on PC1? On PC2?</p>
-<p><code>________________________</code></p>
-<hr>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a><span class="fu">names</span>(iris_pca_model)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>▶ Run this</strong> — eigenvalues and variance explained:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 4.2 · Eigenvalues ──────────────────────────────────────────────</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>eigenvalues     <span class="ot">&lt;-</span> iris_pca_model<span class="sc">$</span>sdev<span class="sc">^</span><span class="dv">2</span></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>prop_variance   <span class="ot">&lt;-</span> eigenvalues <span class="sc">/</span> <span class="fu">sum</span>(eigenvalues)</span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>cumsum_variance <span class="ot">&lt;-</span> <span class="fu">cumsum</span>(prop_variance)</span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a><span class="fu">tibble</span>(<span class="at">Component  =</span> <span class="fu">paste0</span>(<span class="st">"PC"</span>, <span class="dv">1</span><span class="sc">:</span><span class="dv">4</span>),</span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a>       <span class="at">Eigenvalue =</span> <span class="fu">round</span>(eigenvalues, <span class="dv">3</span>),</span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a>       <span class="at">Percent    =</span> <span class="fu">round</span>(prop_variance <span class="sc">*</span> <span class="dv">100</span>, <span class="dv">2</span>),</span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a>       <span class="at">Cumulative =</span> <span class="fu">round</span>(cumsum_variance <span class="sc">*</span> <span class="dv">100</span>, <span class="dv">2</span>))</span>
+<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a><span class="co"># the eigenvalues should sum to the number of variables</span></span>
+<span id="cb9-12"><a href="#cb9-12" aria-hidden="true" tabindex="-1"></a><span class="fu">sum</span>(eigenvalues)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>✏️ Q5
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>The four eigenvalues sum to exactly 4. Why must that be true when PCA runs on a correlation matrix? What would they sum to for the ten-variable cobra lily data from last week?</p>
+</div>
+</div>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>✏️ Q6
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><code>summary()</code> reports a <strong>standard deviation</strong> for each component, not an eigenvalue. What is the relationship between the two? Check it in R.</p>
+</div>
+</div>
+<p><strong>▶ Run this</strong> — verify the eigenvector properties from lecture:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 4.3 · Eigenvector properties ───────────────────────────────────</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="co"># 1. each eigenvector has length 1</span></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a><span class="fu">round</span>(<span class="fu">colSums</span>(iris_pca_model<span class="sc">$</span>rotation<span class="sc">^</span><span class="dv">2</span>), <span class="dv">3</span>)</span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a><span class="co"># 2. PC1 and PC2 are orthogonal (dot product = 0)</span></span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a><span class="fu">round</span>(<span class="fu">sum</span>(iris_pca_model<span class="sc">$</span>rotation[, <span class="dv">1</span>] <span class="sc">*</span> iris_pca_model<span class="sc">$</span>rotation[, <span class="dv">2</span>]), <span class="dv">10</span>)</span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a><span class="co"># 3. and so the scores are uncorrelated</span></span>
+<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a><span class="fu">round</span>(<span class="fu">cor</span>(iris_pca_model<span class="sc">$</span>x[, <span class="dv">1</span>], iris_pca_model<span class="sc">$</span>x[, <span class="dv">2</span>]), <span class="dv">10</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>✏️ Q7
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Property 3 is the reason you are allowed to drop PC scores straight into a multiple regression or an ANOVA. What problem does it spare you, and why would the four <strong>original</strong> iris variables have caused that problem?</p>
+</div>
+</div>
 </section>
-<section id="part-6-determine-number-of-components" class="level1">
-<h1>Part 6 · Determine Number of Components</h1>
+<section id="how-many-components" class="level1">
+<h1>5 · How many components?</h1>
 <p><strong>▶ Run this</strong> — a scree plot:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 6.1 · Determine Number of Components ───────────────────────────</span></span>
-<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>scree_data_df <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
-<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">Component =</span> <span class="fu">factor</span>(<span class="dv">1</span><span class="sc">:</span><span class="dv">4</span>),</span>
-<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">Variance =</span> prop_variance <span class="sc">*</span> <span class="dv">100</span></span>
-<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a>scree_plot <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(scree_data_df, <span class="fu">aes</span>(<span class="at">x =</span> Component, <span class="at">y =</span> Variance)) <span class="sc">+</span></span>
-<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_col</span>(<span class="at">fill =</span> <span class="st">"darkblue"</span>) <span class="sc">+</span></span>
-<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_line</span>(<span class="fu">aes</span>(<span class="at">group =</span> <span class="dv">1</span>), <span class="at">linewidth =</span> <span class="dv">1</span>) <span class="sc">+</span></span>
-<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>(<span class="at">size =</span> <span class="dv">3</span>) <span class="sc">+</span></span>
-<span id="cb10-11"><a href="#cb10-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Scree Plot - Variance Explained by Each Component"</span>,</span>
-<span id="cb10-12"><a href="#cb10-12" aria-hidden="true" tabindex="-1"></a>       <span class="at">x =</span> <span class="st">"Principal Component"</span>,</span>
-<span id="cb10-13"><a href="#cb10-13" aria-hidden="true" tabindex="-1"></a>       <span class="at">y =</span> <span class="st">"% of Variance Explained"</span>) <span class="sc">+</span></span>
-<span id="cb10-14"><a href="#cb10-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span>
-<span id="cb10-15"><a href="#cb10-15" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-16"><a href="#cb10-16" aria-hidden="true" tabindex="-1"></a>scree_plot</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>▶ Run this</strong> — apply decision rules:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 6.2 · Determine Number of Components ───────────────────────────</span></span>
-<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Eigenvalue &gt; 1 rule</span></span>
-<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>components_to_keep <span class="ot">&lt;-</span> <span class="fu">sum</span>(eigenvalues <span class="sc">&gt;</span> <span class="dv">1</span>)</span>
-<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>components_to_keep</span>
-<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a><span class="co"># Components explaining at least 80% variance</span></span>
-<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a>components_80_percent <span class="ot">&lt;-</span> <span class="fu">which</span>(cumsum_variance <span class="sc">&gt;=</span> <span class="fl">0.80</span>)[<span class="dv">1</span>]</span>
-<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a>components_80_percent</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<hr>
-</section>
-<section id="part-7-create-pca-scores" class="level1">
-<h1>Part 7 · Create PCA Scores</h1>
-<p><strong>▶ Run this:</strong></p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 7.1 · Create PCA Scores ────────────────────────────────────────</span></span>
-<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>pca_scores_df <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
-<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>  iris_pca_model<span class="sc">$</span>x,</span>
-<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">species =</span> iris_species_df<span class="sc">$</span>species</span>
-<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a><span class="fu">head</span>(pca_scores_df)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<hr>
-</section>
-<section id="part-8-visualize-results" class="level1">
-<h1>Part 8 · Visualize Results</h1>
-<p><strong>▶ Run this</strong> — a PCA scores plot:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb13"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 8.1 · Visualize Results ────────────────────────────────────────</span></span>
-<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>scores_plot <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(pca_scores_df, <span class="fu">aes</span>(<span class="at">x =</span> PC1, <span class="at">y =</span> PC2, <span class="at">color =</span> species)) <span class="sc">+</span></span>
-<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>(<span class="at">size =</span> <span class="dv">3</span>, <span class="at">alpha =</span> <span class="fl">0.7</span>) <span class="sc">+</span></span>
-<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">stat_ellipse</span>(<span class="at">level =</span> <span class="fl">0.68</span>, <span class="at">linetype =</span> <span class="dv">2</span>) <span class="sc">+</span></span>
-<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"PCA Scores Plot"</span>,</span>
-<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a>       <span class="at">subtitle =</span> <span class="fu">paste0</span>(<span class="st">"PC1 explains "</span>, <span class="fu">round</span>(prop_variance[<span class="dv">1</span>]<span class="sc">*</span><span class="dv">100</span>, <span class="dv">1</span>),</span>
-<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a>                        <span class="st">"% of variance, PC2 explains "</span>, <span class="fu">round</span>(prop_variance[<span class="dv">2</span>]<span class="sc">*</span><span class="dv">100</span>, <span class="dv">1</span>), <span class="st">"%"</span>),</span>
-<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a>       <span class="at">x =</span> <span class="fu">paste0</span>(<span class="st">"PC1 ("</span>, <span class="fu">round</span>(prop_variance[<span class="dv">1</span>]<span class="sc">*</span><span class="dv">100</span>, <span class="dv">1</span>), <span class="st">"%)"</span>),</span>
-<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a>       <span class="at">y =</span> <span class="fu">paste0</span>(<span class="st">"PC2 ("</span>, <span class="fu">round</span>(prop_variance[<span class="dv">2</span>]<span class="sc">*</span><span class="dv">100</span>, <span class="dv">1</span>), <span class="st">"%)"</span>),</span>
-<span id="cb13-10"><a href="#cb13-10" aria-hidden="true" tabindex="-1"></a>       <span class="at">color =</span> <span class="st">"Species"</span>) <span class="sc">+</span></span>
-<span id="cb13-11"><a href="#cb13-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>() <span class="sc">+</span></span>
-<span id="cb13-12"><a href="#cb13-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_color_manual</span>(<span class="at">values =</span> <span class="fu">c</span>(<span class="st">"#00AFBB"</span>, <span class="st">"#E7B800"</span>, <span class="st">"#FC4E07"</span>))</span>
-<span id="cb13-13"><a href="#cb13-13" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb13-14"><a href="#cb13-14" aria-hidden="true" tabindex="-1"></a>scores_plot</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>▶ Run this</strong> — a loading plot (arrows only):</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb14"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 8.2 · Visualize Results ────────────────────────────────────────</span></span>
-<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>loading_data_df <span class="ot">&lt;-</span> loadings_df <span class="sc">%&gt;%</span></span>
-<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">select</span>(Variable, PC1, PC2)</span>
-<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>loading_plot <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(loading_data_df, <span class="fu">aes</span>(<span class="at">x =</span> <span class="dv">0</span>, <span class="at">y =</span> <span class="dv">0</span>)) <span class="sc">+</span></span>
-<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_segment</span>(<span class="fu">aes</span>(<span class="at">xend =</span> PC1, <span class="at">yend =</span> PC2),</span>
-<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a>               <span class="at">arrow =</span> <span class="fu">arrow</span>(<span class="at">length =</span> <span class="fu">unit</span>(<span class="fl">0.3</span>, <span class="st">"cm"</span>)),</span>
-<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a>               <span class="at">color =</span> <span class="st">"red"</span>, <span class="at">linewidth =</span> <span class="dv">1</span>) <span class="sc">+</span></span>
-<span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_text</span>(<span class="fu">aes</span>(<span class="at">x =</span> PC1 <span class="sc">*</span> <span class="fl">1.1</span>, <span class="at">y =</span> PC2 <span class="sc">*</span> <span class="fl">1.1</span>, <span class="at">label =</span> Variable),</span>
-<span id="cb14-10"><a href="#cb14-10" aria-hidden="true" tabindex="-1"></a>            <span class="at">size =</span> <span class="dv">4</span>) <span class="sc">+</span></span>
-<span id="cb14-11"><a href="#cb14-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">xlim</span>(<span class="sc">-</span><span class="dv">1</span>, <span class="dv">1</span>) <span class="sc">+</span> <span class="fu">ylim</span>(<span class="sc">-</span><span class="dv">1</span>, <span class="dv">1</span>) <span class="sc">+</span></span>
-<span id="cb14-12"><a href="#cb14-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"PCA Loading Plot"</span>,</span>
-<span id="cb14-13"><a href="#cb14-13" aria-hidden="true" tabindex="-1"></a>       <span class="at">x =</span> <span class="fu">paste0</span>(<span class="st">"PC1 ("</span>, <span class="fu">round</span>(prop_variance[<span class="dv">1</span>]<span class="sc">*</span><span class="dv">100</span>, <span class="dv">1</span>), <span class="st">"%)"</span>),</span>
-<span id="cb14-14"><a href="#cb14-14" aria-hidden="true" tabindex="-1"></a>       <span class="at">y =</span> <span class="fu">paste0</span>(<span class="st">"PC2 ("</span>, <span class="fu">round</span>(prop_variance[<span class="dv">2</span>]<span class="sc">*</span><span class="dv">100</span>, <span class="dv">1</span>), <span class="st">"%)"</span>)) <span class="sc">+</span></span>
-<span id="cb14-15"><a href="#cb14-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>() <span class="sc">+</span></span>
-<span id="cb14-16"><a href="#cb14-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_vline</span>(<span class="at">xintercept =</span> <span class="dv">0</span>, <span class="at">linetype =</span> <span class="st">"dashed"</span>, <span class="at">alpha =</span> <span class="fl">0.5</span>) <span class="sc">+</span></span>
-<span id="cb14-17"><a href="#cb14-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_hline</span>(<span class="at">yintercept =</span> <span class="dv">0</span>, <span class="at">linetype =</span> <span class="st">"dashed"</span>, <span class="at">alpha =</span> <span class="fl">0.5</span>)</span>
-<span id="cb14-18"><a href="#cb14-18" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb14-19"><a href="#cb14-19" aria-hidden="true" tabindex="-1"></a>loading_plot</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>▶ Run this</strong> — combine scores and loadings into a manual biplot:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb15"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 8.3 · Visualize Results ────────────────────────────────────────</span></span>
-<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>arrow_scale <span class="ot">&lt;-</span> <span class="dv">3</span></span>
-<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>biplot_plot <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(pca_scores_df, <span class="fu">aes</span>(<span class="at">x =</span> PC1, <span class="at">y =</span> PC2)) <span class="sc">+</span></span>
-<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>(<span class="fu">aes</span>(<span class="at">color =</span> species), <span class="at">size =</span> <span class="dv">2</span>, <span class="at">alpha =</span> <span class="fl">0.6</span>) <span class="sc">+</span></span>
-<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_segment</span>(<span class="at">data =</span> loading_data_df,</span>
-<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a>               <span class="fu">aes</span>(<span class="at">x =</span> <span class="dv">0</span>, <span class="at">y =</span> <span class="dv">0</span>,</span>
-<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a>                   <span class="at">xend =</span> PC1 <span class="sc">*</span> arrow_scale,</span>
-<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a>                   <span class="at">yend =</span> PC2 <span class="sc">*</span> arrow_scale),</span>
-<span id="cb15-10"><a href="#cb15-10" aria-hidden="true" tabindex="-1"></a>               <span class="at">arrow =</span> <span class="fu">arrow</span>(<span class="at">length =</span> <span class="fu">unit</span>(<span class="fl">0.3</span>, <span class="st">"cm"</span>)),</span>
-<span id="cb15-11"><a href="#cb15-11" aria-hidden="true" tabindex="-1"></a>               <span class="at">color =</span> <span class="st">"black"</span>, <span class="at">linewidth =</span> <span class="fl">0.8</span>) <span class="sc">+</span></span>
-<span id="cb15-12"><a href="#cb15-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_text</span>(<span class="at">data =</span> loading_data_df,</span>
-<span id="cb15-13"><a href="#cb15-13" aria-hidden="true" tabindex="-1"></a>            <span class="fu">aes</span>(<span class="at">x =</span> PC1 <span class="sc">*</span> arrow_scale <span class="sc">*</span> <span class="fl">1.1</span>,</span>
-<span id="cb15-14"><a href="#cb15-14" aria-hidden="true" tabindex="-1"></a>                <span class="at">y =</span> PC2 <span class="sc">*</span> arrow_scale <span class="sc">*</span> <span class="fl">1.1</span>,</span>
-<span id="cb15-15"><a href="#cb15-15" aria-hidden="true" tabindex="-1"></a>                <span class="at">label =</span> Variable),</span>
-<span id="cb15-16"><a href="#cb15-16" aria-hidden="true" tabindex="-1"></a>            <span class="at">size =</span> <span class="dv">3</span>) <span class="sc">+</span></span>
-<span id="cb15-17"><a href="#cb15-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">stat_ellipse</span>(<span class="fu">aes</span>(<span class="at">color =</span> species), <span class="at">level =</span> <span class="fl">0.68</span>, <span class="at">linetype =</span> <span class="dv">2</span>) <span class="sc">+</span></span>
-<span id="cb15-18"><a href="#cb15-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"PCA Biplot - Iris Dataset"</span>,</span>
-<span id="cb15-19"><a href="#cb15-19" aria-hidden="true" tabindex="-1"></a>       <span class="at">subtitle =</span> <span class="st">"Points = Individual flowers, Arrows = Original variables"</span>,</span>
-<span id="cb15-20"><a href="#cb15-20" aria-hidden="true" tabindex="-1"></a>       <span class="at">x =</span> <span class="fu">paste0</span>(<span class="st">"PC1 ("</span>, <span class="fu">round</span>(prop_variance[<span class="dv">1</span>]<span class="sc">*</span><span class="dv">100</span>, <span class="dv">1</span>), <span class="st">"%)"</span>),</span>
-<span id="cb15-21"><a href="#cb15-21" aria-hidden="true" tabindex="-1"></a>       <span class="at">y =</span> <span class="fu">paste0</span>(<span class="st">"PC2 ("</span>, <span class="fu">round</span>(prop_variance[<span class="dv">2</span>]<span class="sc">*</span><span class="dv">100</span>, <span class="dv">1</span>), <span class="st">"%)"</span>),</span>
-<span id="cb15-22"><a href="#cb15-22" aria-hidden="true" tabindex="-1"></a>       <span class="at">color =</span> <span class="st">"Species"</span>) <span class="sc">+</span></span>
-<span id="cb15-23"><a href="#cb15-23" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>() <span class="sc">+</span></span>
-<span id="cb15-24"><a href="#cb15-24" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_color_manual</span>(<span class="at">values =</span> <span class="fu">c</span>(<span class="st">"#00AFBB"</span>, <span class="st">"#E7B800"</span>, <span class="st">"#FC4E07"</span>))</span>
-<span id="cb15-25"><a href="#cb15-25" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-26"><a href="#cb15-26" aria-hidden="true" tabindex="-1"></a>biplot_plot</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>✏️ <strong>Your turn:</strong> In the biplot, which species has the largest (most positive) PC1 scores? Which arrow(s) point in roughly the same direction as that species’ cluster?</p>
-<p><code>________________________</code></p>
-<div class="callout callout-style-default callout-tip callout-titled">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 5.1 · Scree plot ───────────────────────────────────────────────</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a><span class="fu">fviz_eig</span>(iris_pca_model, <span class="at">addlabels =</span> <span class="cn">TRUE</span>, <span class="at">ylim =</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">85</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>▶ Run this</strong> — three rules:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 5.2 · Retention rules ──────────────────────────────────────────</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Kaiser: eigenvalue &gt; 1</span></span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a><span class="fu">sum</span>(eigenvalues <span class="sc">&gt;</span> <span class="dv">1</span>)</span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a><span class="co"># first component reaching 80% cumulative</span></span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a><span class="fu">which</span>(cumsum_variance <span class="sc">&gt;=</span> <span class="fl">0.80</span>)[<span class="dv">1</span>]</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="callout callout-style-default callout-note callout-titled">
 <div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
 <div class="callout-title-container flex-fill">
-Tip
+<span class="screen-reader-only">Note</span>✏️ Q8
 </div>
 </div>
 <div class="callout-body-container callout-body">
-<p><strong>🚀 If you finish early:</strong> <code>arrow_scale &lt;- 3</code> was chosen somewhat arbitrarily to make the arrows visible against the points. Try changing it to <code>1</code> and to <code>6</code> and re-running the biplot. What changes, and what stays the same?</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb16"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 8.4 · Visualize Results ────────────────────────────────────────</span></span>
-<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Write your code in the R script:</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>Kaiser says keep one component; the 80% rule and the elbow both say keep two. These are <strong>guidelines, not tests</strong>. Give two reasons to keep PC2 anyway — one about interpretability, one about what you would be able to see.</p>
 </div>
 </div>
 <hr>
 </section>
-<section id="part-9-interpret-results" class="level1">
-<h1>Part 9 · Interpret Results</h1>
+<section id="block-c-loadings-scores-and-biplots" class="level1">
+<h1>Block C · Loadings, scores, and biplots</h1>
+<p><em>After lecture Parts 6–8.</em></p>
+</section>
+<section id="loadings-and-the-sign-trap" class="level1">
+<h1>6 · Loadings, and the sign trap</h1>
 <p><strong>▶ Run this:</strong></p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb17"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 9.1 · Interpret Results ────────────────────────────────────────</span></span>
-<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>pc1_loadings <span class="ot">&lt;-</span> iris_pca_model<span class="sc">$</span>rotation[, <span class="dv">1</span>]</span>
-<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>pc1_loadings</span>
-<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a>pc2_loadings <span class="ot">&lt;-</span> iris_pca_model<span class="sc">$</span>rotation[, <span class="dv">2</span>]</span>
-<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a>pc2_loadings</span>
-<span id="cb17-7"><a href="#cb17-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb17-8"><a href="#cb17-8" aria-hidden="true" tabindex="-1"></a>total_variance_2pc <span class="ot">&lt;-</span> <span class="fu">sum</span>(prop_variance[<span class="dv">1</span><span class="sc">:</span><span class="dv">2</span>])</span>
-<span id="cb17-9"><a href="#cb17-9" aria-hidden="true" tabindex="-1"></a>total_variance_2pc</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>✏️ <strong>Your turn:</strong> Write a one-sentence biological interpretation of PC1 and of PC2, based on the loadings you just examined.</p>
-<pre><code>PC1 = ________________________________________________
-PC2 = ________________________________________________</code></pre>
-<hr>
-</section>
-<section id="summary-checklist-for-pca" class="level1">
-<h1>Summary checklist for PCA</h1>
-<p>When conducting PCA, always follow these steps:</p>
-<div class="callout callout-style-default callout-tip callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-Tip
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p><strong>PCA checklist</strong></p>
-<ol type="1">
-<li><strong>Explore your data</strong> - check distributions and relationships.</li>
-<li><strong>Check correlations</strong> - PCA works best with correlated variables.</li>
-<li><strong>Check for outliers</strong> - they can distort results.</li>
-<li><strong>Standardize if needed</strong> - essential when variables have different scales.</li>
-<li><strong>Run PCA</strong> - extract components.</li>
-<li><strong>Determine number of components</strong> - use scree plot and variance explained.</li>
-<li><strong>Interpret loadings</strong> - understand what each component represents.</li>
-<li><strong>Visualize results</strong> - create scores plots and biplots.</li>
-<li><strong>Validate interpretation</strong> - ensure it makes biological sense.</li>
-</ol>
-</div>
-</div>
-<p><strong>Key points to remember:</strong></p>
-<ul>
-<li><strong>PCA finds new variables</strong> (components) that are linear combinations of original variables.</li>
-<li><strong>Components are uncorrelated</strong> and ordered by variance explained.</li>
-<li><strong>Standardization is crucial</strong> when variables have different units/scales.</li>
-<li><strong>First few components</strong> usually capture most variation.</li>
-<li><strong>Loadings show</strong> how original variables contribute to components.</li>
-<li><strong>Scores show</strong> where observations fall in the new component space.</li>
-</ul>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb13"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 6.1 · Loadings ─────────────────────────────────────────────────</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a><span class="fu">round</span>(iris_pca_model<span class="sc">$</span>rotation, <span class="dv">3</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="callout callout-style-default callout-important callout-titled">
 <div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
 <div class="callout-title-container flex-fill">
-Important
+<span class="screen-reader-only">Important</span>⚠️ Before you write a word about PC1
 </div>
 </div>
 <div class="callout-body-container callout-body">
-<p><strong>Key points from PCA analysis</strong></p>
+<p>Look at the <strong>signs</strong> on your screen. An eigenvector defines a line, and a line has no preferred end — your loadings may come back with the opposite signs to your neighbour’s, or to the lecture slides, and <strong>both are correct</strong>.</p>
+<p>What is not correct is writing “virginica scores higher on PC1” and stopping. Translate the sign into biology first.</p>
+</div>
+</div>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>✏️ Q9
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>On PC1, three variables load one way and <strong>sepal width</strong> loads the other. Write one sentence saying what a high PC1 score means for a flower, in plain English, with the sign on your screen resolved.</p>
+</div>
+</div>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>✏️ Q10
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Look at PC2’s loadings. One variable dominates it almost completely and two are nearly zero. Which? Given that PC2 is built out of whatever PC1 could not explain, why is that the variable you would have predicted?</p>
+</div>
+</div>
+<p><strong>▶ Run this</strong> — a loading plot, arrows only:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb14"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 6.2 · Loading plot ─────────────────────────────────────────────</span></span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>loading_data_df <span class="ot">&lt;-</span> <span class="fu">tibble</span>(</span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">Variable =</span> <span class="fu">rownames</span>(iris_pca_model<span class="sc">$</span>rotation),</span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">PC1 =</span> iris_pca_model<span class="sc">$</span>rotation[, <span class="dv">1</span>],</span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">PC2 =</span> iris_pca_model<span class="sc">$</span>rotation[, <span class="dv">2</span>])</span>
+<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(loading_data_df, <span class="fu">aes</span>(<span class="at">x =</span> <span class="dv">0</span>, <span class="at">y =</span> <span class="dv">0</span>)) <span class="sc">+</span></span>
+<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_segment</span>(<span class="fu">aes</span>(<span class="at">xend =</span> PC1, <span class="at">yend =</span> PC2),</span>
+<span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a>               <span class="at">arrow =</span> <span class="fu">arrow</span>(<span class="at">length =</span> <span class="fu">unit</span>(<span class="fl">0.3</span>, <span class="st">"cm"</span>)),</span>
+<span id="cb14-10"><a href="#cb14-10" aria-hidden="true" tabindex="-1"></a>               <span class="at">color =</span> <span class="st">"red"</span>, <span class="at">linewidth =</span> <span class="dv">1</span>) <span class="sc">+</span></span>
+<span id="cb14-11"><a href="#cb14-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_text</span>(<span class="fu">aes</span>(<span class="at">x =</span> PC1 <span class="sc">*</span> <span class="fl">1.1</span>, <span class="at">y =</span> PC2 <span class="sc">*</span> <span class="fl">1.1</span>, <span class="at">label =</span> Variable)) <span class="sc">+</span></span>
+<span id="cb14-12"><a href="#cb14-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">xlim</span>(<span class="sc">-</span><span class="fl">1.2</span>, <span class="fl">1.2</span>) <span class="sc">+</span> <span class="fu">ylim</span>(<span class="sc">-</span><span class="fl">1.2</span>, <span class="fl">1.2</span>) <span class="sc">+</span></span>
+<span id="cb14-13"><a href="#cb14-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_vline</span>(<span class="at">xintercept =</span> <span class="dv">0</span>, <span class="at">linetype =</span> <span class="st">"dashed"</span>, <span class="at">alpha =</span> <span class="fl">0.5</span>) <span class="sc">+</span></span>
+<span id="cb14-14"><a href="#cb14-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_hline</span>(<span class="at">yintercept =</span> <span class="dv">0</span>, <span class="at">linetype =</span> <span class="st">"dashed"</span>, <span class="at">alpha =</span> <span class="fl">0.5</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>✏️ Q11
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Two arrows at a small angle mean the variables are correlated; two near 90° mean they are nearly independent. Which arrow sits closest to 90° from the petal arrows, and does the correlation matrix from section 2 agree?</p>
+</div>
+</div>
+</section>
+<section id="your-turn-build-a-biplot" class="level1">
+<h1>7 · Your turn: build a biplot</h1>
+<p><strong>There is no code for this section.</strong> You now have the two halves — the points and the arrows. Put them on one plot.</p>
+<p>Work out and write the code for each of these, in your script under <code># ── Part 7.x</code>:</p>
 <ol type="1">
-<li><strong>Check assumptions first</strong> - especially correlations and outliers.</li>
-<li><strong>Standardize when necessary</strong> - prevents scale effects from dominating.</li>
-<li><strong>Use multiple criteria</strong> to decide number of components (scree plot, eigenvalue &gt; 1, variance explained).</li>
-<li><strong>Interpret components</strong> based on loadings - what do they represent biologically?</li>
-<li><strong>Visualize in 2D</strong> using first two components if they explain sufficient variance.</li>
-<li><strong>PCA is exploratory</strong> - use it to understand patterns, not for hypothesis testing.</li>
-<li><strong>Document your choices</strong> - why you kept certain components, how you interpreted them.</li>
+<li>Build <code>pca_scores_df</code> from <code>iris_pca_model$x</code> with the species column attached, and plot PC1 against PC2 coloured by species, with <code>stat_ellipse(level = 0.68)</code>.</li>
+<li>Add the loading arrows from section 6 on top of it with <code>geom_segment()</code>, multiplying both <code>PC1</code> and <code>PC2</code> by a constant <code>arrow_scale &lt;- 3</code> so the arrows are visible against the points.</li>
+<li>Label the arrows, and give both axes labels that name the component <strong>and</strong> its percentage of variance.</li>
 </ol>
-<p>Remember: PCA is a dimension reduction technique - the goal is to simplify complex data while retaining the important patterns!</p>
+<div class="callout callout-style-default callout-tip callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Tip
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>If the arrows vanish into the middle of the point cloud, your <code>arrow_scale</code> is too small; if they shoot off the plot, it is too large.</p>
+</div>
+</div>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>✏️ Q12
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Try <code>arrow_scale &lt;- 1</code> and then <code>arrow_scale &lt;- 6</code>. What changes about the figure, and what stays exactly the same? Is the scaling constant part of the analysis, or part of the drawing?</p>
+</div>
+</div>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>✏️ Q13
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Which species sits furthest along PC1 in the positive direction? Which arrows point that way? Using your answer to Q9, describe that species’ flowers without using the words “PC1” or “score”.</p>
+</div>
+</div>
+</section>
+<section id="did-pca-find-the-species" class="level1">
+<h1>8 · Did PCA find the species?</h1>
+<p><strong>▶ Run this:</strong></p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb15"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Part 8.1 · Mean scores by species ───────────────────────────────────</span></span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a><span class="fu">as_tibble</span>(iris_pca_model<span class="sc">$</span>x) <span class="sc">%&gt;%</span></span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">species =</span> iris_df<span class="sc">$</span>species) <span class="sc">%&gt;%</span></span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(species) <span class="sc">%&gt;%</span></span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="fu">across</span>(PC1<span class="sc">:</span>PC2, \(z) <span class="fu">round</span>(<span class="fu">mean</span>(z), <span class="dv">2</span>)))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>✏️ Q14
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>PC1 puts the three species in order. PC2 does something different — one species stands apart from the other two, and it is not the same one. Which species, and what does that tell you about keeping PC2 after Kaiser told you to drop it?</p>
+</div>
+</div>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>✏️ Q15
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>PCA was never given the species column. It recovered the groups from morphology alone. Does that make PCA a classification method? Explain what it would take to turn this into an actual test of whether the species differ.</p>
 </div>
 </div>
 <hr>
@@ -811,13 +952,33 @@ Important
 <h1>Review and checkpoint</h1>
 <p>At this point you can:</p>
 <ul class="task-list">
-<li><label><input type="checkbox">Check PCA assumptions (correlations, outliers, sample size)</label></li>
-<li><label><input type="checkbox">Standardize variables before running PCA</label></li>
-<li><label><input type="checkbox">Run <code>prcomp()</code> and interpret its summary output</label></li>
-<li><label><input type="checkbox">Read a scree plot and apply decision rules for component retention</label></li>
-<li><label><input type="checkbox">Interpret loadings to give principal components biological meaning</label></li>
-<li><label><input type="checkbox">Build a scores plot, a loading plot, and a combined biplot</label></li>
+<li><label><input type="checkbox">Check PCA’s assumptions — correlation, linearity, outliers, sample size</label></li>
+<li><label><input type="checkbox">Standardize, and say why that means using the correlation matrix</label></li>
+<li><label><input type="checkbox">Run <code>prcomp()</code> and name every element it returns</label></li>
+<li><label><input type="checkbox">Verify unit-length and orthogonality of eigenvectors in R</label></li>
+<li><label><input type="checkbox">Apply three retention rules and resolve them when they disagree</label></li>
+<li><label><input type="checkbox">Interpret loadings as biology <strong>with the sign resolved</strong></label></li>
+<li><label><input type="checkbox">Build a scores plot, a loading plot, and a biplot from the two</label></li>
+<li><label><input type="checkbox">Say what an ordination can and cannot tell you about groups</label></li>
 </ul>
+<hr>
+</section>
+<section id="write-up-this-part-is-graded" class="level1">
+<h1>Write-up — this part is graded</h1>
+<p>Type these answers into <code>scripts/19_pca.R</code> as <code>#</code> comments, in the boxes at the bottom of the skeleton.</p>
+</section>
+<section id="the-components" class="level1">
+<h1>9 · The components</h1>
+<p>Write <strong>three to four sentences</strong>. Say how many components you retained and why, what percentage of the variance they carry, and what each one means biologically — <strong>with the sign on your screen resolved</strong>. No sentence may contain the phrase “higher PC1” without saying what higher means.</p>
+</section>
+<section id="the-sign-problem" class="level1">
+<h1>10 · The sign problem</h1>
+<p>Write <strong>two to three sentences</strong>. A classmate runs the same code and gets PC1 loadings with the opposite signs to yours. Explain to them why neither of you is wrong, what would have to be true for one of you to be wrong, and what the two of you must do before comparing your written interpretations.</p>
+</section>
+<section id="the-figure" class="level1">
+<h1>11 · The figure</h1>
+<p>Produce <strong>one</strong> publication-quality biplot of the iris PCA.</p>
+<p>This one gets the full treatment — axis labels naming the component and its percentage, labelled arrows, a legend with a real title, a caption-worthy title, and a clean theme. Save it with <code>ggsave()</code> as a PDF.</p>
 <div class="callout callout-style-default callout-note callout-titled">
 <div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
@@ -829,10 +990,9 @@ Note
 </div>
 <div class="callout-body-container callout-body">
 <p><strong>📤 What to turn in before next class</strong></p>
-<p>Upload both of these to the course management system:</p>
 <ol type="1">
-<li>Your code — the <code>scripts/</code> folder (or just <code>09_pca.R</code>)</li>
-<li>This worksheet, with your written answers</li>
+<li><code>scripts/19_pca.R</code>, running top to bottom with no errors</li>
+<li>Your biplot from section 11, as a PDF</li>
 </ol>
 </div>
 </div>

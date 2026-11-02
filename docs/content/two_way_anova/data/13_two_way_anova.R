@@ -128,6 +128,12 @@ invisible(NULL)
 
 invisible(NULL)
 
+# YOUR CODE: joint_tests() on the model, then joint_tests()
+# again with by = "sex" - the SIMPLE effects, which is what
+# you report once the interaction is significant.
+
+invisible(NULL)
+
 # THINK: on balanced data the EMMs matched the raw means
 # exactly. Why? Watch that break in section 7.
 

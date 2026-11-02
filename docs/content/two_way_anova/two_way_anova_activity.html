@@ -116,6 +116,35 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   }
 }</script>
 
+  <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
+  <script defer="" src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-chtml.js" type="text/javascript"></script>
+
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN" && texText && texText.data) {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
 
 <link rel="stylesheet" href="../../css/main.css">
 <link rel="stylesheet" href="../../css/main.css">
@@ -454,6 +483,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <li>Compute estimated marginal means, and see why they are not just group means</li>
 <li>Compare Type I, II, and III sums of squares on a <strong>balanced</strong> design</li>
 <li>Run the same model on the <strong>unbalanced</strong> design and watch the three types come apart</li>
+<li>Follow a significant interaction with <strong>simple effects</strong>, not main effects</li>
 <li>Report the result, and show the interaction as a figure</li>
 </ol>
 <div class="callout callout-style-default callout-tip callout-titled">
@@ -640,7 +670,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </section>
 <section id="section-5-estimated-marginal-means-and-post-hoc" class="level1">
 <h1>Section 5 · Estimated marginal means and post-hoc</h1>
-<p>An <strong>estimated marginal mean</strong> is the model’s estimate of a group mean, <em>averaging over the other factor</em>. The “averaging over” is the part that matters later.</p>
+<p>An <strong>estimated marginal mean</strong> is the model’s estimate of a group mean, <em>averaging over the other factor</em> — and averaging the <strong>cell means</strong> equally, not the raw rows. The lecture’s fertilizer-and-light table is the whole idea in four numbers: when one cell is much bigger than the others, a raw <code>group_by()</code> mean lets that cell shout, and the EMM does not.</p>
+<p>Last week, with one factor, the two were always identical. From here on they are not.</p>
 <p><strong>▶ Type this yourself:</strong></p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ---- 5 Estimated marginal means and post-hoc -------------</span></span>
 <span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>spp_emm <span class="ot">&lt;-</span> <span class="fu">emmeans</span>(pb_model, <span class="sc">~</span> spp)</span>
@@ -677,9 +708,16 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>cld_df</span>
 <span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a><span class="fu">emmip</span>(pb_model, sex <span class="sc">~</span> spp, <span class="at">CIs =</span> <span class="cn">TRUE</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><code>emmip()</code> is the one-line version of the interaction plot the lecture built by hand with <code>ggplot()</code>. Use it here to <em>look</em>; you will build the polished one in section 9.</p>
+<p><strong>▶ Type this yourself</strong> — the simple effects:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="fu">joint_tests</span>(pb_model)</span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a><span class="fu">joint_tests</span>(pb_model, <span class="at">by =</span> <span class="st">"sex"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><code>joint_tests()</code> gives you an F-test per term — the same rows as <code>Anova()</code>. With <code>by = "sex"</code> it instead gives the <strong>simple effect</strong> of species <em>within</em> each sex. That is the test you report once the interaction is significant, instead of the species main effect.</p>
 <p>✏️ <strong>Q13:</strong> In a compact letter display, cells sharing a letter are <strong>not</strong> distinguishable. Which cells share a letter?</p>
 <p>✏️ <strong>Q14:</strong> <code>emmip()</code> draws one line per sex across the three species. If there were <strong>no</strong> interaction, what would those two lines look like? Do yours look like that?</p>
 <p>✏️ <strong>Q15:</strong> Does the interaction plot tell you the same thing as the <code>spp:sex</code> <em>p</em>-value from Q7? Say how.</p>
+<p>✏️ <strong>Q15b:</strong> Compare <code>joint_tests(pb_model)</code> to <code>Anova(pb_model, type = 3)</code>. Same numbers? Now compare <code>joint_tests(pb_model, by = "sex")</code> to the single <code>spp</code> row — why are there <em>two</em> species tests instead of one, and which one would you report?</p>
 <hr>
 </section>
 <section id="section-6-the-three-sums-of-squares-types-balanced" class="level1">
@@ -694,21 +732,22 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <p>🔮 <strong>Predict first:</strong> on this <strong>balanced</strong> dataset, will the three types give the same <em>F</em>-values, or different ones?</p>
 </blockquote>
 <p><strong>▶ Type this yourself:</strong></p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ---- 6 The three sums-of-squares types, balanced ---------</span></span>
-<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a><span class="fu">anova</span>(pb_model)            <span class="co"># Type I</span></span>
-<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a><span class="fu">Anova</span>(pb_model, <span class="at">type =</span> <span class="dv">2</span>)  <span class="co"># Type II</span></span>
-<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a><span class="fu">Anova</span>(pb_model, <span class="at">type =</span> <span class="dv">3</span>)  <span class="co"># Type III</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb13"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ---- 6 The three sums-of-squares types, balanced ---------</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a><span class="fu">anova</span>(pb_model)            <span class="co"># Type I</span></span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a><span class="fu">Anova</span>(pb_model, <span class="at">type =</span> <span class="dv">2</span>)  <span class="co"># Type II</span></span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a><span class="fu">Anova</span>(pb_model, <span class="at">type =</span> <span class="dv">3</span>)  <span class="co"># Type III</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>✏️ <strong>Q16:</strong> Write down the <em>F</em>-value for <code>spp</code> under all three types. What do you notice? Was your prediction right?</p>
 <p>✏️ <strong>Q17:</strong> Explain <em>why</em> they come out that way. (What is it about equal cell sizes that makes “order of entry” stop mattering?)</p>
 <blockquote class="blockquote">
-<p>💡 <strong>Key idea:</strong> on a perfectly balanced design the three SS types are the same number, so the choice is irrelevant and nobody has to defend it. Everything written about Type I vs.&nbsp;II vs.&nbsp;III is about what happens when that stops being true — which is section 7.</p>
+<p>💡 <strong>Key idea:</strong> this is the slide where the lecture computed <span class="math inline">\(SS_A\)</span>, <span class="math inline">\(SS_B\)</span>, <span class="math inline">\(SS_{AB}\)</span> and <span class="math inline">\(SS_{res}\)</span> by hand and they added up to <span class="math inline">\(SS_{total}\)</span> exactly. That addition is what “the three types agree” <em>means</em>. On a perfectly balanced design the three SS types are the same number, so the choice is irrelevant and nobody has to defend it. Everything written about Type I vs.&nbsp;II vs.&nbsp;III is about what happens when that stops being true — which is section 7.</p>
 </blockquote>
 <hr>
 <blockquote class="blockquote">
 <h2 id="block-4-the-payoff-after-lecture-parts-810" class="anchored" data-anchor-id="section-6-the-three-sums-of-squares-types-balanced">🧩 Block 4 — The payoff <em>(after lecture Parts 8–10)</em></h2>
 <p>Section 7: the same analysis, unbalanced. This is the one you do on your own.</p>
+<p>The lecture warned you the penguin imbalance is <strong>mild</strong> — five of six cells are exactly even. So the three SS types will separate, but only a little, and no conclusion will change. Your job is to find <em>where</em> they separate and say <em>why</em>, not to find a dramatic result.</p>
 </blockquote>
 </section>
 <section id="section-7-the-same-model-unbalanced-you-write-this-one" class="level1">
@@ -719,35 +758,35 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <p>🔮 <strong>Predict first:</strong> with just one slightly-uneven cell out of six, will the three SS types still agree? Will the EMMs still match the raw means?</p>
 </blockquote>
 <p><strong>▶ Type this yourself:</strong></p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb13"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ---- 7 The same model, unbalanced ------------------------</span></span>
-<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>pu_model <span class="ot">&lt;-</span> <span class="fu">lm</span>(mass_g <span class="sc">~</span> spp <span class="sc">*</span> sex, <span class="at">data =</span> p_df)</span>
-<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(pu_model)</span>
-<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a><span class="fu">Anova</span>(pu_model, <span class="at">type =</span> <span class="dv">3</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb14"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ---- 7 The same model, unbalanced ------------------------</span></span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>pu_model <span class="ot">&lt;-</span> <span class="fu">lm</span>(mass_g <span class="sc">~</span> spp <span class="sc">*</span> sex, <span class="at">data =</span> p_df)</span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(pu_model)</span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a><span class="fu">Anova</span>(pu_model, <span class="at">type =</span> <span class="dv">3</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p><strong>▶ Type this yourself</strong> — the three SS types, as in section 6:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb14"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="fu">anova</span>(pu_model)            <span class="co"># Type I</span></span>
-<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a><span class="fu">Anova</span>(pu_model, <span class="at">type =</span> <span class="dv">2</span>)  <span class="co"># Type II</span></span>
-<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a><span class="fu">Anova</span>(pu_model, <span class="at">type =</span> <span class="dv">3</span>)  <span class="co"># Type III</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>▶ Type this yourself</strong> — the EMMs against the raw means, as in section 5:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb15"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>pu_cell_emm <span class="ot">&lt;-</span> <span class="fu">emmeans</span>(pu_model, <span class="sc">~</span> spp <span class="sc">*</span> sex)</span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb15"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="fu">anova</span>(pu_model)            <span class="co"># Type I</span></span>
 <span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a><span class="fu">as.data.frame</span>(pu_cell_emm) <span class="sc">%&gt;%</span></span>
-<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(spp, sex, emmean) <span class="sc">%&gt;%</span></span>
-<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_wider</span>(<span class="at">names_from =</span> sex, <span class="at">values_from =</span> emmean)</span>
-<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a>p_df <span class="sc">%&gt;%</span></span>
-<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(spp, sex) <span class="sc">%&gt;%</span></span>
-<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">raw_mean =</span> <span class="fu">mean</span>(mass_g), <span class="at">.groups =</span> <span class="st">"drop"</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb15-10"><a href="#cb15-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_wider</span>(<span class="at">names_from =</span> sex, <span class="at">values_from =</span> raw_mean)</span>
-<span id="cb15-11"><a href="#cb15-11" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-12"><a href="#cb15-12" aria-hidden="true" tabindex="-1"></a><span class="fu">emmeans</span>(pu_model, <span class="sc">~</span> spp)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>▶ Type this yourself</strong> — the assumption checks:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb16"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="fu">shapiro.test</span>(<span class="fu">residuals</span>(pu_model))</span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a><span class="fu">Anova</span>(pu_model, <span class="at">type =</span> <span class="dv">2</span>)  <span class="co"># Type II</span></span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a><span class="fu">Anova</span>(pu_model, <span class="at">type =</span> <span class="dv">3</span>)  <span class="co"># Type III</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>▶ Type this yourself</strong> — the EMMs against the raw means, as in section 5:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb16"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a>pu_cell_emm <span class="ot">&lt;-</span> <span class="fu">emmeans</span>(pu_model, <span class="sc">~</span> spp <span class="sc">*</span> sex)</span>
 <span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a><span class="fu">leveneTest</span>(mass_g <span class="sc">~</span> spp <span class="sc">*</span> sex, <span class="at">data =</span> p_df)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a><span class="fu">as.data.frame</span>(pu_cell_emm) <span class="sc">%&gt;%</span></span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(spp, sex, emmean) <span class="sc">%&gt;%</span></span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_wider</span>(<span class="at">names_from =</span> sex, <span class="at">values_from =</span> emmean)</span>
+<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a>p_df <span class="sc">%&gt;%</span></span>
+<span id="cb16-8"><a href="#cb16-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(spp, sex) <span class="sc">%&gt;%</span></span>
+<span id="cb16-9"><a href="#cb16-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">raw_mean =</span> <span class="fu">mean</span>(mass_g), <span class="at">.groups =</span> <span class="st">"drop"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb16-10"><a href="#cb16-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_wider</span>(<span class="at">names_from =</span> sex, <span class="at">values_from =</span> raw_mean)</span>
+<span id="cb16-11"><a href="#cb16-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-12"><a href="#cb16-12" aria-hidden="true" tabindex="-1"></a><span class="fu">emmeans</span>(pu_model, <span class="sc">~</span> spp)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>▶ Type this yourself</strong> — the assumption checks:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb17"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="fu">shapiro.test</span>(<span class="fu">residuals</span>(pu_model))</span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a><span class="fu">leveneTest</span>(mass_g <span class="sc">~</span> spp <span class="sc">*</span> sex, <span class="at">data =</span> p_df)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>✏️ <strong>Q18:</strong> Fill in the <em>F</em>-values and compare the two runs:</p>
 <pre><code>                 balanced          unbalanced
             I     II    III     I     II    III
@@ -788,11 +827,11 @@ spp:sex</code></pre>
 <section id="section-9-the-final-figure" class="level2">
 <h2 class="anchored" data-anchor-id="section-9-the-final-figure">Section 9 · The final figure</h2>
 <p>One publication-quality interaction plot: body mass by species, with sex as separate lines or colors, error bars from the EMMs. Proper axis labels, a real theme, readable sizing — this one is graded on presentation. Build it from <code>pu_cell_emm</code>, not from the raw means, and export it with <code>ggsave()</code>.</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb19"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ---- 9 The final figure ----------------------------------</span></span>
-<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>pub_df <span class="ot">&lt;-</span> <span class="fu">as.data.frame</span>(pu_cell_emm)</span>
-<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a><span class="co"># ... your plot here, then:</span></span>
-<span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a><span class="co"># ggsave("figures/13_penguin_interaction.pdf", width = 7, height = 5)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb20"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ---- 9 The final figure ----------------------------------</span></span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a>pub_df <span class="ot">&lt;-</span> <span class="fu">as.data.frame</span>(pu_cell_emm)</span>
+<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a><span class="co"># ... your plot here, then:</span></span>
+<span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a><span class="co"># ggsave("figures/13_penguin_interaction.pdf", width = 7, height = 5)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>✏️ <strong>Q26:</strong> Your figure shows the interaction term as a picture. Are the lines parallel? Say how the figure and the <code>spp:sex</code> <em>p</em>-value agree.</p>
 <hr>
 </section>
@@ -808,6 +847,7 @@ spp:sex</code></pre>
 <li><label><input type="checkbox">Compute estimated marginal means, and explain why they equal raw means only when the design is balanced</label></li>
 <li><label><input type="checkbox">Explain Type I, II, and III sums of squares, and say when they agree and when they do not</label></li>
 <li><label><input type="checkbox">Choose and defend an SS type for an unbalanced design</label></li>
+<li><label><input type="checkbox">Follow a significant interaction with simple effects (<code>emmeans(m, ~ a | b)</code>, <code>joint_tests(m, by = "b")</code>) rather than reporting a main effect</label></li>
 <li><label><input type="checkbox">Show an interaction as a figure, and match it to the <em>p</em>-value</label></li>
 </ul>
 <p>Run your whole script top to bottom with <strong>Ctrl/Cmd + Shift + Enter</strong>. It must run clean.</p>

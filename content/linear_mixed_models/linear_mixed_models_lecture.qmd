@@ -3,7 +3,7 @@ metadata-files:
   - ../../_templates/_lectures.yml
 title: "Lecture: Linear Mixed Models"
 subtitle: "Random effects for nested and hierarchical data"
-description: "The modern mixed-model (lmer) alternative to a traditional nested ANOVA: afex for unbalanced designs, random-effects notation, F vs. Chi-square tests, diagnostics, post-hoc comparisons, and a by-hand F-ratio calculation for comparison — on the sea urchin grazing / algae cover dataset."
+description: "The modern mixed-model (lmer) alternative to a traditional nested ANOVA: how REML estimates variance components instead of partitioning sums of squares, F vs. Chi-square denominator df, the ICC and partial pooling, diagnostics and post-hoc comparisons — on the sea urchin grazing / algae cover dataset."
 categories: [ANOVA, Mixed Models]
 order: 16
 week: 11
@@ -44,64 +44,80 @@ library(lme4)
 library(lmerTest)
 library(emmeans)
 library(afex)
+library(performance)
 library(patchwork)
 library(janitor)
 library(tidyverse)
 
 options(contrasts = c("contr.sum", "contr.poly"))
 options(scipen = 999)  # no sci notation
+
+u_df <- read_csv("data/andrew.csv", show_col_types = FALSE) %>%
+  clean_names() %>%
+  # Map to Quinn & Keough's Table 9.1 densities. NOTE the file's dens_33 /
+  # dens_66 labels are the reverse of the book's percentages -- verified by
+  # matching patch means: dens_33 is the book's 66% group, dens_66 its 33%.
+  mutate(treat = case_when(
+           treat == "removal" ~ "0%",     # book   0% density, mean algae 39.2
+           treat == "dens_66" ~ "33%",    # book  33% density, mean algae 19.0
+           treat == "dens_33" ~ "66%",    # book  66% density, mean algae 21.6
+           treat == "control" ~ "100%"),  # book 100% density, mean algae  1.3
+         treat = factor(treat, levels = c("0%", "33%", "66%", "100%")),
+         patch = as_factor(patch))
+
+u_summary <- u_df %>%
+  group_by(treat) %>%
+  summarise(n = n(), mean = mean(algae), sd = sd(algae),
+            se = sd / sqrt(n), min = min(algae), max = max(algae))
 ```
 
 ## Where We Left Off
 
 :::::: columns
-:::: {.column width="60%"}
-Covered last time — generalized linear models:
+:::: {.column width="58%"}
+Covered last time — **generalized** linear models:
 
 - The three elements of a GLM — distribution, predictors, link
 - Poisson and negative binomial for counts; overdispersion
 - Logistic regression and the odds ratio
 
-Covered in week 9 — nested ANOVA, the traditional way:
+Covered in week 9 — **nested ANOVA**, the traditional way:
 
 - Factorial vs. nested designs, and variance partitioning
 - Fixed vs. random effects — B nested in A
 - The naive (wrong) factorial model vs. `aov(..., Error(...))`
+::::
 
+::: {.column width="42%"}
 ::: callout-note
 **✅ Key idea we are building on**
 
-`patch` nested in `treat` needs the right error term — `MS_{patch(treat)}`,
-not `MS_{resid}` — or the F-test for treatment is wrong. Today: the modern
-alternative to specifying that error term by hand.
+`patch` nested in `treat` needs the right error term — MS~patch(treat)~,
+not MS~resid~ — or the *F*-test for treatment is wrong.
 
-Last week changed the *distribution*; this week changes the *error
-structure*. Put both together and you get `glmer()`.
+Last week changed the **distribution**; this week changes the **error
+structure**. Put both together and you get `glmer()`.
 :::
-::::
 
-::: {.column width="40%"}
 ::: callout-tip
 **🖐 Notice**
 
-Same sea urchin grazing / algae cover dataset as week 9 — same
-question, same data, a different (and more flexible) way to fit the
-model.
+Same sea urchin dataset as week 9 — same question, same data, a
+different and far more flexible way to fit the model.
 :::
 :::
 ::::::
 
-## Part 1 · Setup — The Sea Urchin Data, Again {.divider}
+## Part 1 · The Sea Urchin Data, Again {.divider}
 
-## Data Overview
+## Data Overview {.tight-code}
 
 ::::: columns
 ::: {.column width="50%"}
-Same dataset as the nested ANOVA lecture: `patch` (random patches 1–16
-where treatments were applied), `treat` (urchin density treatment),
-`quad` (replicate quadrats within each treatment-patch combination),
-`algae` (percentage cover of filamentous algae — the response
-variable).
+`treat` — urchin density treatment (0 / 33 / 66 / 100%)
+`patch` — **four patches nested inside each treatment, 16 in all**
+`quad` — 5 replicate quadrats within every patch
+`algae` — % cover of filamentous algae, the response
 
 ```{r linear-mixed-models-02}
 #| echo: false
@@ -109,27 +125,7 @@ variable).
 #| warning: false
 #| paged-print: false
 #| collapse: true
-u_df <- read_csv("data/andrew.csv") %>% clean_names()
-
-u_df <- u_df %>%
-  # Map to Quinn & Keough's Table 9.1 densities. NOTE the file's dens_33 /
-  # dens_66 labels are the reverse of the book's percentages -- verified by
-  # matching patch means: dens_33 is the book's 66% group, dens_66 its 33%.
-  mutate(treat = case_when(
-         treat == "removal" ~ "0%",     # book  0% density, mean algae 39.2
-         treat == "dens_66" ~ "33%",    # book 33% density, mean algae 19.0
-         treat == "dens_33" ~ "66%",    # book 66% density, mean algae 21.6
-         treat == "control" ~ "100%",   # book 100% density, mean algae 1.3
-         TRUE ~ "other")) %>%
-  mutate(treat = factor(treat,
-                        levels = c("0%", "33%", "66%", "100%"),
-                        labels = c("0%", "33%", "66%", "100%")),
-         patch = as_factor(patch))
-
-cat("Data\n\n")
-head(u_df)
-cat("\n\nTreatment levels:\n\n")
-levels(u_df$treat)
+head(u_df, 4)
 ```
 :::
 
@@ -140,56 +136,31 @@ levels(u_df$treat)
 #| warning: false
 #| paged-print: false
 #| collapse: true
-u_summary <- u_df %>%
-  group_by(treat) %>%
-  summarise(
-    n = n(),
-    mean = mean(algae),
-    sd = sd(algae),
-    se = sd / sqrt(n),
-    min = min(algae),
-    max = max(algae)
-  )
-cat("Summary statistics by treatment:\n\n")
-u_summary
+u_summary %>%
+  dplyr::select(treat, n, mean, sd) %>%
+  mutate(across(where(is.numeric), \(x) round(x, 2)))
 ```
+
+::: callout-note
+**📖 The gradient is not monotonic**
+
+39.2 → 19.0 → 21.6 → 1.3. The 33% and 66% means sit within noise of
+each other. That is the data, not an error — and it is part of why the
+treatment effect comes out non-significant.
+:::
 :::
 :::::
 
-## Part 2 · Modern Approaches — afex and Mixed Models {.divider}
-
-## What to Do If It's an Unbalanced Design
-
-::::: columns
-::: {.column width="50%"}
-The `afex` package is specifically designed for ANOVA with Type III SS,
-and handles nested designs well — even when unbalanced.
-:::
-
-::: {.column width="50%"}
-```{r linear-mixed-models-04}
-#| echo: true
-#| message: false
-#| warning: false
-#| paged-print: false
-#| collapse: true
-options(contrasts = c("contr.sum", "contr.poly"))
-
-u_afex_model <- aov_car(algae ~ treat + Error(patch),
-                     data = u_df,
-                     fun_aggregate = mean)
-cat("AFEX nested ANOVA results:\n\n")
-summary(u_afex_model)
-```
-:::
-:::::
+## Part 2 · Fixed, Random, and the Mixed Model {.divider}
 
 ## What Makes an Effect "Random"?
 
 ::::::: columns
-:::: {.column width="60%"}
-Ask one question: **do I care about these specific levels, or are they a sample of levels I could have had?**
+:::: {.column width="58%"}
+Ask one question: **do I care about these specific levels, or are they a
+sample of levels I could have had?**
 
+::: {.compact-table}
 | | `treat` | `patch` |
 |------------------|------------------|------------------|
 | The levels are | 0/33/66/100% density | patches 1–16 |
@@ -197,65 +168,84 @@ Ask one question: **do I care about these specific levels, or are they a sample 
 | Would a repeat study use the same ones? | **yes** | no — different patches |
 | I want to estimate | **each level's mean** | **how much they vary** |
 | So it is | **fixed** | **random** |
+:::
 
 ::: callout-important
 **The key consequence**
 
-A fixed factor with 16 levels costs you **15 parameters**. A random factor with 16 levels costs you **one** — a single variance, σ²_patch.
+A fixed factor with 16 levels costs you **15 parameters**. A random
+factor with 16 levels costs you **one** — a single variance,
+σ²~patch~.
 
-That is why mixed models cope with designs that `aov()` chokes on: they are estimating far less.
+That is why mixed models cope with designs `aov()` chokes on: they are
+estimating far less.
 :::
 ::::
 
-:::: {.column width="40%"}
+:::: {.column width="42%"}
 ::: callout-note
 **📖 A useful test**
 
-If you can write a sentence a reader would care about that names a specific level — *"the 100% density treatment reduced algae"* — it is **fixed**.
+If you can write a sentence a reader would care about that names a
+specific level — *"the 100% density treatment reduced algae"* — it is
+**fixed**.
 
-If the sentence would be *"patch 7 happened to be lush"* — nobody cares about patch 7 in particular. **Random.**
+If the sentence would be *"patch 7 happened to be lush"* — nobody cares
+about patch 7 in particular. **Random.**
 :::
 
 ::: callout-warning
-**⚠️ Rule of thumb: you need enough levels**
+**⚠️ You need enough levels**
 
-Estimating a variance from **fewer than ~5 levels** is unreliable. With 2 or 3 groups, fit them as fixed effects instead.
+Estimating a variance from **fewer than ~5 levels** is unreliable. With
+2 or 3 groups, fit them as fixed effects instead.
 
 We have 16 patches — comfortably enough.
 :::
 ::::
 :::::::
 
-## The Modern Way — Mixed-Model ANOVA
+## Reading the Random-Effects Formula
 
 ::::: columns
-::: {.column width="50%"}
-Fit the model with treatment as a fixed effect, and patch nested within
-treatment as a random effect:
-`lmer(algae ~ treat + (1|patch), ...)`.
+::: {.column width="52%"}
+Read every random term as
 
-**BOBYQA** (Bound Optimization BY Quadratic Approximation) is an
-optimization algorithm used in mixed-effects modeling to find the
-parameter values that maximize the likelihood function — useful for
-fitting complex nested models.
+$$(\ \text{what varies}\ \mid\ \text{across what}\ )$$
 
-**Reading the random-effects formula:**
+- **`(1|patch)`** — the `1` means the **intercept**. Each patch gets its
+  own baseline algae cover.
+- **`(1|treat:patch)`** — the same thing, just naming the group as the
+  treatment-patch combination. Still intercept-only.
+- **`(1 + depth|patch)`** — *this* is a random **slope**: each patch gets
+  its own intercept **and** its own slope for `depth`.
+:::
 
-`(` what varies `|` what it varies across `)`
-
-- **`(1|patch)`** — the `1` means the **intercept**. Each patch gets its own baseline algae cover.
-- **`(1|treat:patch)`** — the same thing, just naming the group as the *treatment-patch combination*. Still intercept-only.
-- **`(1 + depth|patch)`** — *this* is a random **slope**: each patch gets its own intercept **and** its own slope for `depth`.
-
+::: {.column width="48%"}
 ::: callout-warning
 **⚠️ `(1|treat:patch)` is not a random slope**
 
-Anything of the form `(1|...)` is **random intercepts only** — the `1` *is* the intercept. What changes between `(1|patch)` and `(1|treat:patch)` is the **grouping variable**, not what varies within it.
+Anything of the form `(1|...)` is **random intercepts only** — the `1`
+*is* the intercept. What changes between `(1|patch)` and
+`(1|treat:patch)` is the **grouping variable**, not what varies within
+it.
 
-Here they are the identical model, because patch IDs are already unique (1–16) and each patch sits in one treatment. We'll use `(1|patch)`.
+Here they are the identical model, because patch IDs are already unique
+(1–16) and each patch sits in one treatment. We will use `(1|patch)`.
+:::
+
+::: callout-tip
+**🖐 The rule**
+
+You only have a random slope when something **other than `1`** appears
+on the left of the `|`.
 :::
 :::
+:::::
 
+## Fitting It {.tight-code}
+
+::::: columns
 ::: {.column width="50%"}
 ```{r linear-mixed-models-05}
 #| echo: true
@@ -263,120 +253,41 @@ Here they are the identical model, because patch IDs are already unique (1–16)
 #| warning: false
 #| paged-print: false
 #| collapse: true
-u_lmer_model <- lmer(algae ~ treat + (1|patch), data = u_df,
-                    control = lmerControl(optimizer = "bobyqa",
-                                         optCtrl = list(maxfun = 2e5)))
-cat("Mixed model summary:\n\n")
-summary(u_lmer_model)
+u_lmer_model <- lmer(
+  algae ~ treat + (1 | patch),
+  data = u_df,
+  control = lmerControl(calc.derivs = FALSE))
+
+VarCorr(u_lmer_model)
+
+fixef(u_lmer_model)
 ```
+:::
+
+::: {.column width="50%"}
+The model in words:
+
+$$algae_{ijk} = \mu + \alpha_i + b_{j(i)} + \epsilon_{ijk}$$
+
+- $\mu$ — the overall mean
+- $\alpha_i$ — the **fixed** effect of treatment *i*
+- $b_{j(i)}$ — the **random** effect of patch *j* in treatment *i*,
+  $b \sim N(0,\ \sigma^2_{patch})$
+- $\epsilon_{ijk}$ — the residual for quadrat *k*,
+  $\epsilon \sim N(0,\ \sigma^2_{within})$
+
+::: callout-important
+Notice what the model estimates for `patch`: **not 16 numbers, one
+number** — the variance those 16 patches were drawn from.
+:::
 :::
 :::::
 
-## What the Random Effect Buys You: ICC
+## Part 3 · Testing the Fixed Effect {.divider}
 
-::::::: columns
-:::: {.column width="60%"}
-The model splits the leftover variation in two:
-
-```{r linear-mixed-models-04b}
-#| echo: true
-#| collapse: true
-vc <- as.data.frame(VarCorr(u_lmer_model))
-var_patch <- vc$vcov[vc$grp != "Residual"]
-var_resid <- vc$vcov[vc$grp == "Residual"]
-
-cat("among patches :", round(var_patch, 1), "\n")
-cat("within patches:", round(var_resid, 1), "\n")
-cat("ICC =", round(var_patch / (var_patch + var_resid), 3), "\n")
-```
-
-The **intraclass correlation** is the share of variance living *between* groups — equivalently, **how strongly two quadrats in the same patch resemble each other**.
-
-::: callout-important
-**ICC = 0.50 is the whole reason we are here**
-
-Two quadrats from the same patch are **half-correlated**. They are not two independent observations — they are closer to one and a half.
-
-An ICC near 0 would mean patches barely matter and ordinary ANOVA would have been fine. An ICC of 0.5 means ignoring patch would have been badly wrong — and week 9's naive model showed exactly how wrong (F = 16.1 instead of 2.7).
-:::
-::::
-
-:::: {.column width="40%"}
-::: callout-note
-**✅ Same number, three ways**
-
-You have now seen 294.3 arrive by three routes:
-
-1. By hand from mean squares, `(MS_patch − MS_within)/n`
-2. From `aov(Error(patch))`
-3. From `VarCorr()` on the mixed model
-
-They agree because **they are the same model**, written three ways.
-:::
-::::
-:::::::
-
-## Partial Pooling — What Actually Happens to Each Patch
-
-::::::: columns
-:::: {.column width="60%"}
-A random effect does not just adjust the p-value. It changes each patch's **estimate**.
-
-```{r linear-mixed-models-04c}
-#| echo: false
-#| fig-width: 3.6
-#| fig-height: 2.8
-#| message: false
-#| fig-alt: "Slope plot comparing each patch's raw observed mean algae cover to its shrunken mixed-model estimate, with grey lines joining the two; estimates move toward their treatment mean, and patches with more extreme raw means move furthest."
-raw_means <- u_df %>%
-  group_by(treat, patch) %>%
-  summarise(raw = mean(algae), .groups = "drop")
-
-raw_means$fitted <- predict(
-  u_lmer_model,
-  newdata = raw_means[, c("treat", "patch")])
-
-raw_means %>%
-  pivot_longer(c(raw, fitted),
-               names_to = "kind", values_to = "algae") %>%
-  mutate(kind = factor(kind, c("raw", "fitted"),
-                       c("raw patch mean", "model estimate"))) %>%
-  ggplot(aes(kind, algae, group = patch, color = treat)) +
-  geom_line(alpha = 0.6) +
-  geom_point(size = 2) +
-  labs(x = NULL, y = "Algae cover (%)", color = "Treatment") +
-  theme_minimal(base_size = 8)
-```
-::::
-
-:::: {.column width="40%"}
-::: callout-note
-**📖 New word: shrinkage**
-
-Every patch estimate is pulled **toward its treatment mean**. The model treats an extreme patch average as partly real signal and partly luck, and splits the difference.
-
-Patches with fewer quadrats, or more internal scatter, get pulled further.
-:::
-
-::: callout-tip
-**🖐 Why this is a feature**
-
-A patch whose 5 quadrats happened to land high is probably *not* that extreme — the next 5 would come back closer to average. Shrinkage builds that expectation in, instead of taking every noisy group mean at face value.
-
-This is called **partial pooling**: somewhere between treating every patch as unrelated and pretending they are all identical.
-:::
-::::
-:::::::
-
-## Mixed-Model ANOVA — Method 1: F-Distribution
+## Two Tests, Two Answers {.tight-code}
 
 ::::: columns
-::: {.column width="50%"}
-- Accounts for the uncertainty in variance-component estimation
-- More conservative (higher p-values)
-- Better for small samples
-:::
-
 ::: {.column width="50%"}
 ```{r linear-mixed-models-06}
 #| echo: true
@@ -384,106 +295,610 @@ This is called **partial pooling**: somewhere between treating every patch as un
 #| warning: false
 #| paged-print: false
 #| collapse: true
-# car::Anova uses Kenward-Roger denominator df for test.statistic = "F"
-# (that is what the printed header says -- there is no ddf argument here)
-u_anova_result <- Anova(u_lmer_model, type = 3, test.statistic = "F")
-cat("Type III ANOVA with F test:\n\n")
-u_anova_result
+Anova(u_lmer_model, type = 3,
+      test.statistic = "F")
 ```
-:::
-:::::
 
-## Mixed-Model ANOVA — Method 2: Chi-Square
-
-::::: columns
-::: {.column width="50%"}
-- Assumes variance components are known (not estimated)
-- More liberal (lower p-values)
-- Assumes large samples
-
-**Why different results?** Chi-square = F × numerator df. The F-test
-accounts for the denominator df (12, here — reflecting sample size);
-Chi-square assumes infinite denominator df (i.e., a large sample).
-
-**Rule of thumb:** under 100 observations or \< 20 random-effect levels,
-use the F-test. Over 500 observations and \> 50 random-effect levels,
-Chi-square is okay. In between, the F-test is safer.
-:::
-
-::: {.column width="50%"}
 ```{r linear-mixed-models-07}
 #| echo: true
 #| message: false
 #| warning: false
 #| paged-print: false
 #| collapse: true
-u_anova_chisq <- Anova(u_lmer_model, type = 3, test.statistic = "Chisq")
-cat("Type III ANOVA with Chi-square test:\n\n")
-u_anova_chisq
+Anova(u_lmer_model, type = 3,
+      test.statistic = "Chisq")
 ```
+:::
+
+::: {.column width="50%"}
+**The *F*-test** (Kenward-Roger denominator df)
+
+- Accounts for the uncertainty in the estimated variance components
+- More conservative, better at small *n*
+- Here: *F*~3,12~ = 2.72, ***p* = 0.091**
+
+**The Wald χ²**
+
+- Assumes the variance components are **known**, not estimated
+- Assumes **infinite** denominator df, i.e. a large sample
+- Here: χ²~3~ = 8.15, ***p* = 0.043**
+
+χ² = *F* × numerator df = 2.717 × 3 = 8.15. The only difference is what
+goes on the bottom.
 :::
 :::::
 
-## The Nested Model, Restated
+## Same Model, Same Data, Opposite Conclusions
 
 ::::: columns
-::: {.column width="50%"}
-$$algae_{ijk} = \mu + \alpha_i + \beta_{j(i)} + \epsilon_{ijk}$$
-
-- $\mu$ is the overall mean
-- $\alpha_i$ is the fixed effect of treatment i
-- $\beta_{j(i)}$ is the random effect of patch j nested within treatment
-  i
-- $\epsilon_{ijk}$ is the residual error for quadrat k in patch j within
-  treatment i
+::: {.column width="55%"}
+::: {.compact-table}
+| Test | Statistic | *p* | Verdict at α = 0.05 |
+|-----------|-----------|-----------|-----------|
+| *F*, Kenward-Roger df | *F*~3,12~ = 2.72 | **0.091** | not significant |
+| *F*, Satterthwaite df | *F*~3,12~ = 2.72 | **0.091** | not significant |
+| Wald χ² | χ²~3~ = 8.15 | **0.043** | significant |
 :::
 
-::: {.column width="50%"}
-```{r linear-mixed-models-08}
+**Rule of thumb.** Under ~100 observations or fewer than ~20
+random-effect levels, use the *F*-test. Over ~500 observations and more
+than ~50 levels, χ² is fine. In between, the *F*-test is safer.
+
+We have **80 observations and 16 patches**. The rule picks the *F*-test.
+:::
+
+::: {.column width="45%"}
+::: callout-important
+**⚠️ Report the *F*-test — and say which df you used**
+
+The χ² is being over-confident. It pretends it knows σ²~patch~ and
+σ²~within~ exactly, when they were estimated from 16 patches.
+
+The *F*-test agrees with week 9's `aov(Error(patch))` to four decimal
+places, **because it is the same test**.
+:::
+
+::: callout-warning
+**🖐 The uncomfortable part**
+
+Run only the χ² and you report a significant effect and never know.
+When two defensible analyses straddle α = 0.05, say so and justify the
+choice — do not pick one and delete the other.
+:::
+:::
+:::::
+
+## Part 4 · How the Variance Actually Gets Estimated {.divider}
+
+## The Question This Part Answers
+
+For three weeks, **every** answer came from one move: take the total
+sum of squares, cut it into pieces by source, divide each piece by its
+df to get a mean square, and form a ratio.
+
+$$SS_{total} = SS_{treat} + SS_{patch(treat)} + SS_{within}$$
+
+`lmer()` printed σ²~patch~ = 294.3 and never showed you a sum of
+squares anywhere.
+
+::: callout-important
+**So where did that number come from, and why is it not an SS table?**
+
+The rest of this part is the answer. It is the single biggest
+conceptual change between week 9 and today — bigger than the notation,
+bigger than the *p*-value.
+:::
+
+## The Old Route — Sums of Squares and Expected Mean Squares {.tight-code}
+
+::::: columns
+::: {.column width="52%"}
+Week 9's table, one more time:
+
+```{r lmm-ems-01}
+#| echo: true
+#| message: false
+#| warning: false
+#| collapse: true
+a_tab <- summary(aov(algae ~ treat + treat:patch,
+                     data = u_df))[[1]]
+round(a_tab[, c("Df", "Sum Sq", "Mean Sq")], 1)
+```
+
+Statistical theory tells you what each mean square estimates **on
+average** — its *expected* mean square:
+
+$$E[MS_{within}] = \sigma^2_{within}$$
+$$E[MS_{patch}] = \sigma^2_{within} + n\,\sigma^2_{patch}$$
+:::
+
+::: {.column width="48%"}
+Now **set the observed equal to the expected and solve.** That is all
+the old method is — two equations, two unknowns, no statistics at all
+past this point:
+
+$$\hat\sigma^2_{within} = MS_{within}$$
+$$\hat\sigma^2_{patch} = \frac{MS_{patch} - MS_{within}}{n}$$
+
+```{r lmm-ems-02}
+#| echo: true
+#| message: false
+#| warning: false
+#| collapse: true
+MS_patch  <- a_tab[2, "Mean Sq"]
+MS_within <- a_tab[3, "Mean Sq"]
+n <- 5                      # quadrats per patch
+
+c(within = MS_within,
+  patch  = (MS_patch - MS_within) / n)
+```
+
+This is the **method of moments**. It is arithmetic on a table.
+:::
+:::::
+
+## The New Route — Write Down the Variance and Search for It
+
+::::: columns
+::: {.column width="52%"}
+A mixed model never builds that table. It writes the variance of the
+**whole response vector** in one matrix:
+
+$$\mathbf{V} = \sigma^2_{patch}\,\mathbf{ZZ}^\top + \sigma^2_{within}\,\mathbf{I}$$
+
+- $\mathbf{Z}$ says which patch each quadrat belongs to
+- $\mathbf{ZZ}^\top$ is 1 for any two quadrats **in the same patch**,
+  0 otherwise
+- So $\mathbf{V}$ states, directly, that two quadrats in a patch are
+  correlated and two in different patches are not
+
+Then it asks a completely different question:
+
+> **Which pair of numbers (σ²~patch~, σ²~within~) makes the data I
+> actually observed most likely?**
+:::
+
+::: {.column width="48%"}
+::: callout-important
+**That is the whole switch.**
+
+**Old:** partition a quantity you computed (SS), then solve an algebraic
+identity for the variances.
+
+**New:** propose a pair of variances, ask how probable the data are
+under them, and keep searching until that probability stops improving.
+
+No decomposition. No table. **A search over a likelihood surface.**
+:::
+
+The *F*-ratio idea does not disappear — it comes back at the end, when
+you test the fixed effect. But it is no longer how the variances are
+obtained.
+:::
+:::::
+
+## The Restricted Likelihood, Written Out {.tight-code}
+
+::::: columns
+::: {.column width="55%"}
+Eight lines, no `lme4`. This is literally what the optimizer is doing:
+
+```{r lmm-reml-01}
+#| echo: true
+#| message: false
+#| warning: false
+#| collapse: true
+y <- u_df$algae
+X <- model.matrix(~ treat, u_df)   # fixed effects
+Z <- model.matrix(~ 0 + patch, u_df)   # grouping
+ZZt <- Z %*% t(Z)
+
+reml_ll <- function(v_patch, v_within) {
+  V  <- v_patch * ZZt + v_within * diag(nrow(X))
+  Vi <- solve(V)
+  A  <- t(X) %*% Vi %*% X
+  b  <- solve(A, t(X) %*% Vi %*% y)     # GLS fixed effects
+  r  <- y - X %*% b
+  -0.5 * as.numeric(determinant(V, log = TRUE)$modulus +
+                    determinant(A, log = TRUE)$modulus +
+                    t(r) %*% Vi %*% r)
+}
+```
+:::
+
+::: {.column width="45%"}
+Three pieces, each doing one job:
+
+- $\log|\mathbf{V}|$ — penalises making the variances big, since a
+  bigger variance spreads probability thinner
+- $\mathbf{r}^\top\mathbf{V}^{-1}\mathbf{r}$ — penalises leaving big
+  residuals, which pushes the variances **up**
+- $\log|\mathbf{X}^\top\mathbf{V}^{-1}\mathbf{X}|$ — the
+  **restricted** part, the correction for having estimated the fixed
+  effects
+
+The answer is the pair where those forces balance.
+:::
+:::::
+
+## The Surface the Optimizer Climbs
+
+::::: columns
+::: {.column width="55%"}
+```{r lmm-reml-02}
 #| echo: false
 #| message: false
 #| warning: false
-#| paged-print: false
-#| collapse: true
-cat("Final ANOVA results:\n\n")
-u_anova_result
+#| fig-height: 3.4
+#| fig-width: 4.6
+#| fig-alt: "Curve of the restricted log-likelihood against sigma-squared patch, rising steeply from a low value at zero, peaking near 294, and then declining very gradually. A dashed vertical line marks the maximum."
+
+prof <- tibble(v = seq(0, 1200, length.out = 180)) %>%
+  rowwise() %>%
+  mutate(ll = reml_ll(v, 298.6)) %>%
+  ungroup()
+
+best <- prof$v[which.max(prof$ll)]
+
+ggplot(prof, aes(v, ll)) +
+  geom_line(linewidth = 1.1, color = "steelblue") +
+  geom_vline(xintercept = 294.31, linetype = "dashed", color = "firebrick") +
+  annotate("text", x = 294.31, y = min(prof$ll), hjust = -0.08,
+           label = "REML peak\n294.3", size = 2.9, color = "firebrick") +
+  labs(x = expression(sigma[patch]^2),
+       y = "Restricted log-likelihood") +
+  theme_minimal(base_size = 10)
 ```
+:::
+
+::: {.column width="45%"}
+Slice the surface at σ²~within~ = 298.6 and you can see the whole
+method: the optimizer walks uphill until the slope is flat.
+
+::: callout-warning
+**⚠️ Look how flat that peak is**
+
+Everything from roughly 150 to 600 sits within about **one
+log-likelihood unit** of the peak. **Variance components are badly
+determined with only 16 groups** — and that uncertainty is exactly what
+the Kenward-Roger *F*-test accounts for and the Wald χ² ignores.
+
+This plot is the reason those two tests disagreed.
+:::
 :::
 :::::
 
-## Part 3 · Post-Hoc and Interpretation {.divider}
+## Both Routes, One Number {.tight-code}
 
-## Interpreting the Variance Components
+::::: columns
+::: {.column width="50%"}
+```{r lmm-reml-03}
+#| echo: true
+#| message: false
+#| warning: false
+#| collapse: true
+# route 1: moments, from the SS table
+moments <- (MS_patch - MS_within) / n
+
+# route 2: maximise the restricted likelihood
+fit <- optim(c(200, 300),
+             \(p) -reml_ll(p[1], p[2]),
+             method = "L-BFGS-B",
+             lower = c(0, 1e-6))
+
+# route 3: what lmer() reports
+lmer_vc <- as.data.frame(
+  VarCorr(u_lmer_model))$vcov[1]
+
+round(c(moments = moments,
+        likelihood = fit$par[1],
+        lmer = lmer_vc), 3)
+```
+:::
+
+::: {.column width="50%"}
+::: callout-important
+**294.31, three ways.**
+
+They agree to within **0.001** — and the first two have **nothing in
+common** methodologically. One is algebra on a table of sums of
+squares; the other is a numerical search over a likelihood surface.
+
+On a **balanced** design the restricted maximum-likelihood solution has
+a closed form, and that closed form *is* the moment estimator.
+:::
+
+So week 9 was never wrong. It was a special case that happens to have a
+shortcut — and you have been using the shortcut without being told it
+was one.
+
+**Next slide: what happens when the shortcut stops existing.**
+:::
+:::::
+
+## Where the Two Routes Part Company {.tight-code}
+
+::::: columns
+::: {.column width="52%"}
+**1. The moment estimator can return a negative variance.**
+
+$MS_{patch} < MS_{within}$ is perfectly possible by chance, and then
+$(MS_{patch}-MS_{within})/n$ is **below zero** — an impossible value for
+a variance.
+
+```{r lmm-reml-04}
+#| echo: false
+#| message: false
+#| warning: false
+#| collapse: true
+set.seed(11)
+fake <- expand_grid(treat = factor(1:4), p_in = 1:4, quad = 1:5) %>%
+  mutate(patch = factor(paste0(treat, "_", p_in)),
+         y = rnorm(n(), 10, 5))          # patches truly identical
+
+ft <- summary(aov(y ~ treat + treat:patch, fake))[[1]]
+fm <- lmer(y ~ treat + (1 | patch), fake,
+           control = lmerControl(calc.derivs = FALSE))
+
+round(c(moments = (ft[2, "Mean Sq"] - ft[3, "Mean Sq"]) / 5,
+        REML    = as.data.frame(VarCorr(fm))$vcov[1]), 3)
+```
+
+REML cannot go below zero — the likelihood is only defined for
+non-negative variances — so it stops at the boundary and warns
+**"boundary (singular) fit"**.
+:::
+
+::: {.column width="48%"}
+**2. Unbalanced data has no single *n* to divide by.**
+
+Thin four patches to one quadrat each, as a storm would:
+
+```{r lmm-reml-05}
+#| echo: false
+#| message: false
+#| warning: false
+#| collapse: true
+thin <- u_df %>% filter(!(patch %in% c(2, 6, 10, 14) & quad > 1))
+tt <- summary(aov(algae ~ treat + treat:patch, thin))[[1]]
+tm <- lmer(algae ~ treat + (1 | patch), thin,
+           control = lmerControl(calc.derivs = FALSE))
+
+MSp <- tt[2, "Mean Sq"]; MSw <- tt[3, "Mean Sq"]
+round(c(`moments, n = 5`    = (MSp - MSw) / 5,
+        `moments, n0 = 3.95` = (MSp - MSw) / 3.95,
+        REML                 = as.data.frame(VarCorr(tm))$vcov[1]), 1)
+```
 
 ::: callout-important
-**⚠️ Two tests, two answers — and you must pick one *before* you look**
+Three answers, and the moment estimator needs you to **choose** an
+effective *n* before it will give one at all. REML never asks — the
+likelihood already knows how many quadrats each patch has.
 
-| Test | Statistic | p | Verdict at α = 0.05 |
-|-----------|-----------|-----------|-----------|
-| F (Kenward-Roger df) | F₃,₁₂ = 2.72 | **0.091** | not significant |
-| Wald χ² | χ² = 8.15 | **0.043** | significant |
+**This is why mixed models replaced `Error()`.**
+:::
+:::
+:::::
 
-Same model. Same data. **Opposite conclusions.**
+## Why REML and Not Plain ML {.tight-code}
 
-The χ² test assumes it knows the variance components exactly and that the sample is large. We have **16 patches**. It is being over-confident, exactly as the rule of thumb two slides back predicted.
+::::: columns
+::: {.column width="50%"}
+```{r lmm-reml-06}
+#| echo: true
+#| message: false
+#| warning: false
+#| collapse: true
+ml_fit <- lmer(algae ~ treat + (1 | patch),
+               data = u_df, REML = FALSE,
+               control = lmerControl(calc.derivs = FALSE))
 
-**Report the F-test.** It agrees with last week's `aov(Error(patch))` result to four decimal places — because it is the same test.
+round(c(
+  REML = as.data.frame(VarCorr(u_lmer_model))$vcov[1],
+  ML   = as.data.frame(VarCorr(ml_fit))$vcov[1]), 1)
+```
+
+Plain maximum likelihood estimates σ²~patch~ as **205.8**. REML gets
+**294.3**. ML is biased **30% low**.
+:::
+
+::: {.column width="50%"}
+You have met this bias before, in week 2.
+
+$$s^2 = \frac{\sum(y-\bar y)^2}{n-\mathbf{1}} \quad\text{not}\quad \frac{\sum(y-\bar y)^2}{n}$$
+
+Dividing by *n* under-estimates the variance because you spent one df
+estimating $\bar y$. **ML makes exactly that mistake**, at scale: it
+estimates the four treatment means and then behaves as though they were
+known all along.
+
+::: callout-important
+**REML = "restricted"**: it maximises the likelihood of the data
+*after* the fixed effects have been projected out — the
+$\log|\mathbf{X}^\top\mathbf{V}^{-1}\mathbf{X}|$ term three slides back.
+That term **is** the $n-1$ correction, generalised.
+:::
+
+**Use REML for variance components. Switch to ML only to compare models
+with different fixed effects.**
+:::
+:::::
+
+## Part 4 — The Short Version
+
+::: {.compact-table}
+| | **Nested ANOVA (week 9)** | **Mixed model (today)** |
+|------------------|---------------------------|---------------------------|
+| Starts from | the total sum of squares | the variance matrix $\mathbf{V}$ |
+| Core move | **partition** SS by source | **search** for the most likely variances |
+| Variance components from | solving $E[MS]$ equations | maximising the restricted likelihood |
+| Needs balance? | **yes**, for exact tests | no |
+| Negative variance | can happen, is meaningless | impossible — stops at 0 |
+| Unbalanced *n* | you must pick an effective *n* | handled automatically |
+| On this dataset | σ²~patch~ = 294.31 | σ²~patch~ = 294.31 |
 :::
 
 ::: callout-note
-**How to report this result**
+**✅ The one sentence**
 
-"Algal cover did not differ significantly among urchin density treatments (linear mixed model with patch as a random effect, **F₃,₁₂ = 2.72, p = 0.091**, Kenward-Roger denominator df). Among-patch variance was substantial (**σ²_patch = 294.3** vs **σ²_residual = 298.6**, ICC = 0.50), indicating strong spatial heterogeneity in algal cover."
+Sums of squares *divide up* variation that has already been computed;
+likelihood *proposes* variances and asks how well they explain the data.
+On a balanced design the two land on the same number — everywhere else,
+only the second one still works.
 :::
 
-## Post-Hoc Comparisons
+## Part 5 · What the Random Effect Buys You {.divider}
+
+## The Intraclass Correlation {.tight-code}
+
+::::::: columns
+:::: {.column width="55%"}
+```{r linear-mixed-models-04b}
+#| echo: true
+#| message: false
+#| warning: false
+#| collapse: true
+vc <- as.data.frame(VarCorr(u_lmer_model))
+v_patch <- vc$vcov[vc$grp != "Residual"]
+v_resid <- vc$vcov[vc$grp == "Residual"]
+
+round(c(among_patches  = v_patch,
+        within_patches = v_resid,
+        ICC = v_patch / (v_patch + v_resid)), 3)
+```
+
+The **ICC** is the share of variance living *between* groups —
+equivalently, **how strongly two quadrats in the same patch resemble
+each other**.
+::::
+
+:::: {.column width="45%"}
+::: callout-important
+**ICC = 0.50 is the whole reason we are here**
+
+Two quadrats from the same patch are **half-correlated**. They are not
+two independent observations.
+
+An ICC near 0 would mean patches barely matter and ordinary ANOVA would
+have been fine. An ICC of 0.50 means ignoring patch would have been
+badly wrong — and week 9's naive model showed exactly how wrong
+(*F* = 16.1 instead of 2.7).
+:::
+
+::: callout-tip
+**🖐 Use it to design the next study**
+
+With ICC = 0.50, a sixth quadrat in an existing patch buys you almost
+nothing. A **new patch** buys you a lot. The *p*-value could never have
+told you that.
+:::
+::::
+:::::::
+
+## Partial Pooling — What Happens to Each Patch
+
+::::::: columns
+:::: {.column width="58%"}
+A random effect does not just adjust the *p*-value. It changes each
+patch's **estimate**.
+
+```{r linear-mixed-models-04c}
+#| echo: false
+#| fig-width: 4.2
+#| fig-height: 3.0
+#| message: false
+#| warning: false
+#| fig-alt: "Slope plot comparing each patch's raw observed mean algae cover to its shrunken mixed-model estimate, with lines joining the two; estimates move toward their treatment mean, and patches with more extreme raw means move furthest."
+raw_means <- u_df %>%
+  group_by(treat, patch) %>%
+  summarise(raw = mean(algae), .groups = "drop")
+
+raw_means$fitted <- predict(u_lmer_model,
+                            newdata = raw_means[, c("treat", "patch")])
+
+raw_means %>%
+  pivot_longer(c(raw, fitted), names_to = "kind", values_to = "algae") %>%
+  mutate(kind = factor(kind, c("raw", "fitted"),
+                       c("raw patch mean", "model estimate"))) %>%
+  ggplot(aes(kind, algae, group = patch, color = treat)) +
+  geom_line(alpha = 0.7) +
+  geom_point(size = 2) +
+  labs(x = NULL, y = "Algae cover (%)", color = "Treatment") +
+  theme_minimal(base_size = 9)
+```
+::::
+
+:::: {.column width="42%"}
+::: callout-note
+**📖 New word: shrinkage**
+
+Every patch estimate is pulled **toward its treatment mean**. The model
+treats an extreme patch average as partly real signal and partly luck,
+and splits the difference.
+
+Patches with fewer quadrats, or more internal scatter, get pulled
+further.
+:::
+
+::: callout-tip
+**🖐 Why this is a feature**
+
+A patch whose 5 quadrats happened to land high is probably *not* that
+extreme — the next 5 would come back closer to average.
+
+This is **partial pooling**: between treating every patch as unrelated
+and pretending they are all identical.
+:::
+::::
+:::::::
+
+## Reporting the Variance Components
 
 ::::: columns
-::: {.column width="60%"}
-Although the main effect of treatment was marginally significant (p =
-0.04306), we can examine mean differences between treatments to
-understand patterns in the data.
+::: {.column width="52%"}
+::: callout-note
+**How to report this result**
 
+"Algal cover did not differ significantly among urchin density
+treatments (linear mixed model with patch as a random effect,
+***F*~3,12~ = 2.72, *p* = 0.091**, Kenward-Roger denominator df).
+Among-patch variance was substantial (**σ²~patch~ = 294.3** vs
+**σ²~within~ = 298.6**, ICC = 0.50), indicating strong spatial
+heterogeneity in algal cover."
+:::
+
+Both halves belong in the sentence. The fixed effect answers *did the
+treatment do anything*; the variance component answers *how noisy is
+this reef*, which is what the next person planning a study needs.
+:::
+
+::: {.column width="48%"}
+::: callout-important
+**⚠️ "Not significant" is not "no effect"**
+
+With σ²~patch~ ≈ σ²~within~, patch-to-patch variation is as large as
+quadrat-to-quadrat variation. Four patches per treatment simply cannot
+resolve a treatment effect against that much background noise.
+
+The honest conclusion is **"this design could not detect it"**, not
+"urchins do not affect algae."
+:::
+
+::: callout-tip
+**🖐 Where 294.3 came from**
+
+By hand from mean squares, from `aov(Error(patch))`, and from
+`VarCorr()` — three notations, one model. See Part 4.
+:::
+:::
+:::::
+
+## Part 6 · Post-Hoc, Assumptions, and Reporting {.divider}
+
+## Estimated Marginal Means {.tight-code}
+
+::::: columns
+::: {.column width="55%"}
 ```{r linear-mixed-models-09}
 #| echo: true
 #| message: false
@@ -491,299 +906,249 @@ understand patterns in the data.
 #| paged-print: false
 #| collapse: true
 u_emm <- emmeans(u_lmer_model, ~ treat)
-cat("Estimated marginal means:\n\n")
 u_emm
 ```
 :::
 
-::: {.column width="40%"}
-```{r linear-mixed-models-10}
-u_pairs <- pairs(u_emm, adjust = "sidak")
-cat("Pairwise comparisons (Sidak adjusted):\n\n")
-u_pairs
-```
+::: {.column width="45%"}
+Every standard error is **9.41** — identical across treatments, because
+the design is balanced and the SE comes from the **patch** stratum
+(4 patches per treatment), not from the 20 quadrats.
+
+::: callout-warning
+**⚠️ Two of these intervals go below zero**
+
+Algae cover is a percentage. It cannot be negative.
+
+The mixed model fixed the **error structure** and left the
+**distribution** alone — it still assumes normal, unbounded response.
+Last week you fixed the distribution and left the error structure alone.
+Real data often needs both: that is `glmer()`.
+:::
 :::
 :::::
 
-## Compact Letter Display
+## Post-Hoc Comparisons {.tight-code}
 
-:::::: columns
-::: {.column width="60%"}
+::::: columns
+::: {.column width="55%"}
 ```{r linear-mixed-models-11}
-u_cld <- multcomp::cld(u_emm, alpha = 0.05, Letters = letters)
-cat("Compact letter display:\n\n")
-u_cld
+#| echo: false
+#| message: false
+#| warning: false
+#| paged-print: false
+#| collapse: true
+multcomp::cld(u_emm, alpha = 0.05, Letters = letters)
 ```
 :::
 
-:::: {.column width="40%"}
+::: {.column width="45%"}
 ::: callout-important
-**Interpreting treatment comparisons**
+**Every treatment shares the letter `a`.**
 
-Mean algae cover shows a pattern with increasing urchin density:
-None/Removed (39.20%) \> Medium/33% Density (19.00%) \> High/66% Density
-(21.55%) \> Low/Control (1.30%). This suggests an inverse relationship
-between urchin density and algae cover. The high variability among
-patches within treatments contributed to the marginal statistical
-significance for the treatment effect.
-:::
-::::
-::::::
+No pair is distinguishable. That is the correct and expected result —
+the omnibus *F*-test was already non-significant (*p* = 0.091), so there
+was nothing for a post-hoc to find.
 
-## Part 4 · Assumptions and Visualization {.divider}
-
-## ANOVA Assumptions Testing — Base R
-
-:::::: columns
-::: {.column width="60%"}
-For valid inference from ANOVA, several assumptions must be met. We test
-these below with a base R approach — note that it doesn't work all that
-well for a mixed model.
+Running post-hocs after a non-significant omnibus test is **exploratory
+only**. Report it as such, or not at all.
 :::
 
-:::: {.column width="40%"}
-::: callout-tip
-**🖐 Notice**
+::: callout-note
+**📖 Read the pattern, not a ranking**
 
-`plot(mixed_model)` and friends were built for `lm()` objects — they
-mostly work for `lmer()`, but purpose-built tools like `DHARMa` do a
-better job (see the Nested ANOVA activity).
+The means run 39.2 → 19.0 → 21.6 → 1.3. The two middle treatments are
+effectively tied, so this is **not** a clean monotonic gradient. Resist
+the temptation to write one.
 :::
-::::
-::::::
+:::
+:::::
 
-## Diagnostic Plots
+## Diagnostics
 
+::::: columns
+::: {.column width="62%"}
 ```{r linear-mixed-models-12}
 #| echo: false
 #| message: false
 #| warning: false
 #| paged-print: false
-#| fig-width: 3.8
-#| fig-height: 2.6
-#| fig-alt: "Three diagnostic plots of the mixed-model residuals side by side: a normal Q-Q plot, a histogram of residuals, and a residuals-versus-fitted-values plot with a dashed reference line at zero."
+#| fig-width: 5.4
+#| fig-height: 3.4
+#| fig-alt: "Three diagnostic plots of the mixed-model residuals side by side: a normal Q-Q plot, a histogram of residuals, and a residuals-versus-fitted-values plot with a dashed reference line at zero showing a funnel of increasing spread."
 u_fitted <- fitted(u_lmer_model)
 u_residuals <- residuals(u_lmer_model)
 
-u_qq_plot <- ggplot(data.frame(residuals = u_residuals), aes(sample = residuals)) +
-  stat_qq() +
-  stat_qq_line() +
-  labs(title = "Normal Q-Q", x = "Theoretical Quantiles", y = "Sample Quantiles") +
-  theme_minimal(base_size = 7)
+p_qq <- ggplot(data.frame(r = u_residuals), aes(sample = r)) +
+  stat_qq() + stat_qq_line() +
+  labs(title = "Normal Q-Q", x = "Theoretical", y = "Sample") +
+  theme_minimal(base_size = 8)
 
-u_hist_plot <- ggplot(data.frame(residuals = u_residuals), aes(x = residuals)) +
+p_hist <- ggplot(data.frame(r = u_residuals), aes(x = r)) +
   geom_histogram(bins = 15, fill = "lightblue", color = "black") +
-  labs(title = "Histogram", x = "Residuals", y = "Frequency") +
-  theme_minimal(base_size = 7)
+  labs(title = "Histogram", x = "Residuals", y = "Count") +
+  theme_minimal(base_size = 8)
 
-u_resid_plot <- ggplot(data.frame(fitted = u_fitted, residuals = u_residuals),
-                    aes(x = fitted, y = residuals)) +
-  geom_point() +
+p_rf <- ggplot(data.frame(f = u_fitted, r = u_residuals), aes(f, r)) +
+  geom_point(alpha = 0.6) +
   geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
-  labs(title = "Residuals vs. Fitted", x = "Fitted Values", y = "Residuals") +
-  theme_minimal(base_size = 7)
+  labs(title = "Residuals vs. Fitted", x = "Fitted", y = "Residuals") +
+  theme_minimal(base_size = 8)
 
-u_qq_plot + u_hist_plot + u_resid_plot
+(p_qq + p_hist) / p_rf
 ```
+:::
 
-## Levene's Test for Homogeneity of Variance
+::: {.column width="38%"}
+::: callout-warning
+**⚠️ The spread is not constant**
 
-:::::: columns
-::: {.column width="50%"}
+It is tightest at the lowest fitted values and widens from there — the
+same heteroscedasticity the raw data showed. A mixed model fixes *correlation*, not *unequal
+variance*.
+:::
+
+::: callout-tip
+**🖐 Use the right tool**
+
+`plot()` and `qqnorm()` were built for `lm()` objects. They mostly work
+on an `lmer()` fit, but **DHARMa** simulates from the fitted model and
+is the purpose-built check — that is what the activity uses.
+:::
+
+A mixed model also assumes the **random effects** are normal. With 16
+patches you cannot check that honestly. Say so.
+:::
+:::::
+
+## Heterogeneity of Variance {.tight-code}
+
+::::: columns
+::: {.column width="48%"}
 ```{r linear-mixed-models-13}
-u_levene <- leveneTest(algae ~ treat, data = u_df)
-cat("Levene's test for homogeneity of variance:\n\n")
-u_levene
+#| echo: true
+#| message: false
+#| warning: false
+#| collapse: true
+leveneTest(algae ~ treat, data = u_df)
 ```
 :::
 
-:::: {.column width="50%"}
-::: callout-important
-**Interpreting the assumption tests**
+::: {.column width="52%"}
+::: callout-warning
+**⚠️ This test ignores `patch`**
 
-The Q-Q plot shows some deviation from normality, particularly in the
-tails, and Levene's test indicates significant heterogeneity of
-variances across treatments (p = 0.00008785). Quinn & Keough (2002)
-noted "large differences in within-cell variances" in this dataset, and
-transformations (including arcsin) did not improve variance homogeneity.
-However, ANOVA is generally robust to heteroscedasticity with balanced
-designs, which is why they analyzed untransformed data. The Residuals
-vs. fitted plot also shows a pattern of increasing variance with
-increasing fitted values, confirming the heteroscedasticity.
+`leveneTest()` has no idea the quadrats are grouped. It is testing the
+80 raw values as if they were independent — the very assumption this
+whole lecture exists to fix. Read it as a **description** of the raw
+spread, not as a test of the mixed model.
+
+The model's own diagnostic is the residuals-vs-fitted plot, and DHARMa.
 :::
-::::
-::::::
 
-## Visualization — Boxplot
+Variances really are unequal (the 100% treatment has SD 3.2, the 0%
+treatment 28.7). Quinn & Keough noted the same thing, tried
+transformations including arcsine, and found none that fixed it — so
+they analysed the untransformed data and said so. A balanced ANOVA is
+reasonably robust to this. **Say it out loud in the methods rather than
+hoping nobody checks.**
+:::
+:::::
 
+## Visualization
+
+::::: columns
+::: {.column width="50%"}
 ```{r linear-mixed-models-14}
 #| echo: false
 #| message: false
 #| warning: false
 #| paged-print: false
-#| fig-width: 3.6
-#| fig-height: 3
-#| fig-alt: "Boxplot of algae cover percentage by urchin density treatment, with jittered individual quadrat points overlaid, showing algae cover highest at 'none' treatment and lowest at 'low' treatment."
-u_boxplot <- ggplot(u_df, aes(x = treat, y = algae, fill = treat)) +
+#| fig-width: 4.0
+#| fig-height: 3.1
+#| fig-alt: "Boxplot of algae cover by urchin density treatment with jittered quadrat points overlaid, showing high cover and wide spread in the 0% treatment and near-zero cover in the 100% treatment."
+ggplot(u_df, aes(x = treat, y = algae, fill = treat)) +
   geom_boxplot(alpha = 0.7, outlier.shape = NA) +
   geom_jitter(width = 0.2, alpha = 0.4, size = 1) +
   scale_fill_viridis_d(option = "D", end = 0.85) +
-  labs(title = "Algae Cover by Urchin Density Treatment",
-       x = "Treatment", y = "Algae Cover (%)") +
+  labs(x = "Urchin density treatment", y = "Algae cover (%)") +
   theme_minimal(base_size = 9) +
   theme(legend.position = "none")
-u_boxplot
 ```
+:::
 
-## Visualization — Means Plot
-
+::: {.column width="50%"}
 ```{r linear-mixed-models-15}
 #| echo: false
 #| message: false
 #| warning: false
 #| paged-print: false
-#| fig-width: 3.4
-#| fig-height: 2.8
-#| fig-alt: "Mean algae cover by treatment plotted as points with standard error error bars, connected to show the pattern across urchin density treatments."
-u_means_plot <- ggplot(u_summary, aes(x = treat, y = mean, group = 1)) +
-  geom_point(size = 3, shape = 21, fill = "white") +
-  geom_errorbar(aes(ymin = mean - se, ymax = mean + se), width = 0.2) +
-  labs(title = "Mean Algae Cover by Treatment",
-       x = "Treatment", y = "Mean Algae Cover (%)") +
-  theme_minimal(base_size = 8)
-u_means_plot
+#| fig-width: 4.0
+#| fig-height: 3.1
+#| fig-alt: "Model estimated marginal means with 95% confidence intervals by treatment, with the sixteen individual patch means plotted behind them, showing the patch means scatter widely within every treatment."
+ggplot() +
+  geom_jitter(data = raw_means, aes(treat, raw),
+              width = 0.12, alpha = 0.55, size = 2, color = "grey40") +
+  geom_pointrange(data = as.data.frame(u_emm),
+                  aes(treat, emmean, ymin = lower.CL, ymax = upper.CL),
+                  color = "firebrick", linewidth = 0.8, size = 0.5) +
+  geom_hline(yintercept = 0, linetype = "dotted") +
+  labs(x = "Urchin density treatment", y = "Algae cover (%)") +
+  theme_minimal(base_size = 9)
 ```
 
-## Part 5 · Discussion and Manual Calculation {.divider}
-
-## Scientific Interpretation
-
-::: callout-important
-Our mixed-model analysis revealed substantial spatial heterogeneity in
-algae cover, with significant variation among patches within each
-treatment. The effect of urchin density treatments on filamentous algae
-cover was marginally significant at the α = 0.05 level (p = 0.043).
-Descriptive statistics show algae cover increasing as urchin density
-decreases, with None/Removed showing the highest cover (39.20%),
-followed by Medium/33% Density (19.00%), High/66% Density (21.55%), and
-Low/Control showing minimal algae cover (1.30%). The variance component
-for patches nested within treatments (294.31, \~39.5% of total variance)
-shows that spatial heterogeneity is a major structuring force in these
-algal communities, and needs to be accounted for when designing and
-analyzing ecological field experiments.
-:::
-
-## We Can Do This Manually — but Ugh
-
-::::: columns
-::: {.column width="50%"}
-Nobody would ever do this by hand in practice — but seeing it once makes
-the "which MS goes on the bottom of the F-ratio" logic concrete, and
-shows how the traditional nested-ANOVA F-ratio (last lecture) connects
-to the mixed-model result above.
-
-```{r linear-mixed-models-16}
-#| echo: true
-#| message: false
-#| warning: false
-#| paged-print: false
-u_man_model <- aov(algae ~ treat + treat:patch, data = u_df)
-u_anova_summary <- summary(u_man_model)[[1]]
-cat("Standard ANOVA table:\n\n")
-u_anova_summary
-```
-
-```{r linear-mixed-models-17}
-#| echo: true
-#| message: false
-#| warning: false
-#| paged-print: false
-u_MS_treat <- u_anova_summary[1, "Mean Sq"]
-u_MS_patch <- u_anova_summary[2, "Mean Sq"]
-u_MS_residual <- u_anova_summary[3, "Mean Sq"]
-
-u_df_treat <- u_anova_summary[1, "Df"]
-u_df_patch <- u_anova_summary[2, "Df"]
-u_df_residual <- u_anova_summary[3, "Df"]
-
-cat("MS Treatment:", u_MS_treat, "\n")
-cat("MS Patch(Treatment):", u_MS_patch, "\n")
-cat("MS Residual:", u_MS_residual, "\n\n")
-```
-:::
-
-::: {.column width="50%"}
-```{r linear-mixed-models-18}
-#| echo: true
-#| message: false
-#| warning: false
-#| paged-print: false
-u_F_treat_correct <- u_MS_treat / u_MS_patch        # Treatment tested against patches
-u_F_patch <- u_MS_patch / u_MS_residual             # Patches tested against residual
-
-cat("F Treatment:", u_F_treat_correct, "\n")
-cat("F Patch(Treatment):", u_F_patch, "\n\n")
-```
-
-```{r linear-mixed-models-19}
-#| echo: true
-#| message: false
-#| warning: false
-#| paged-print: false
-u_p_treat_correct <- pf(u_F_treat_correct, u_df_treat, u_df_patch, lower.tail = FALSE)
-u_p_patch <- pf(u_F_patch, u_df_patch, u_df_residual, lower.tail = FALSE)
-
-u_corrected_table <- data.frame(
-  Source = c("Treatment", "Patches(Treatment)", "Residual"),
-  Df = c(u_df_treat, u_df_patch, u_df_residual),
-  MS = round(c(u_MS_treat, u_MS_patch, u_MS_residual), 1),
-  F = c(round(u_F_treat_correct, 2), round(u_F_patch, 2), NA),
-  p = c(ifelse(u_p_treat_correct < 0.001, "<0.001", round(u_p_treat_correct, 3)),
-        ifelse(u_p_patch < 0.001, "<0.001", round(u_p_patch, 3)),
-        NA)
-)
-cat("Corrected ANOVA table:\n\n")
-u_corrected_table
-```
+**Grey** — the 16 patch means. **Red** — the model's treatment means and
+95% intervals. The grey scatter *within* each treatment is σ²~patch~;
+it is why the red intervals are so wide.
 :::
 :::::
+
+## Part 7 · Wrap-Up {.divider}
 
 ## The `lmer` Formula Cheat-Sheet
 
 ::::::: columns
-:::: {.column width="60%"}
+:::: {.column width="58%"}
 Read every random term as **`( what varies | across what )`**.
 
+::: {.compact-table}
 | Formula | Meaning |
 |------------------|------------------------------------|
-| `y ~ x + (1|g)` | random **intercept** per group — each group has its own baseline |
-| `y ~ x + (1 + x|g)` | random intercept **and slope** — each group has its own baseline *and* its own response to x |
+| `y ~ x + (1|g)` | random **intercept** per group |
+| `y ~ x + (1 + x|g)` | random intercept **and slope** |
 | `y ~ x + (0 + x|g)` | random slope only, shared intercept |
 | `y ~ x + (1|a) + (1|b)` | two **crossed** random factors |
 | `y ~ x + (1|a/b)` | b **nested** in a — shorthand for `(1|a) + (1|a:b)` |
+:::
 
 ::: callout-important
 **⚠️ The confusion to avoid**
 
-`(1|patch)` and `(1|treat:patch)` are **both random-intercept** models. The `1` is the intercept; what differs is only the **grouping**.
-
-You only have a random slope when something other than `1` appears on the left of the `|`.
+`(1|patch)` and `(1|treat:patch)` are **both random-intercept** models.
+The `1` is the intercept; what differs is only the **grouping**.
 :::
 ::::
 
-:::: {.column width="40%"}
+:::: {.column width="42%"}
 ::: callout-tip
 **🖐 Do I need `a/b` here?**
 
-Only if the inner IDs **restart** inside each outer level (patch 1,2,3,4 in *every* treatment). Then R cannot tell nesting from crossing and you must write `(1|treat/patch)`.
+Only if the inner IDs **restart** inside each outer level (patch 1,2,3,4
+in *every* treatment). Then R cannot tell nesting from crossing and you
+must write `(1|treat/patch)`.
 
-Our patches are numbered 1–16 across the whole study, so `(1|patch)` already says it.
+Our patches are numbered 1–16 across the whole study, so `(1|patch)`
+already says it.
 :::
 
 ::: callout-warning
 **⚠️ "boundary (singular) fit"**
 
-Means a variance was estimated as ~0 — the grouping factor explains nothing, or you asked for more random structure than the data can support. Simplify the random effects; do not ignore it.
+A variance was estimated as **exactly 0** — the likelihood hit the edge
+of what a variance is allowed to be. It is the REML version of the
+moment estimator going negative (Part 4).
+
+Simplify the random effects; do not ignore it.
 :::
 ::::
 :::::::
@@ -791,36 +1156,50 @@ Means a variance was estimated as ~0 — the grouping factor explains nothing, o
 ## Wrap-up
 
 ::::::: columns
-:::: {.column width="60%"}
+:::: {.column width="58%"}
 Today you:
 
-- Decided **fixed vs random** by asking whether you care about *these* levels or about *how much they vary*
-- Learned that a random factor costs **one parameter** (a variance) where a fixed one costs *k* − 1
-- Read `(1|group)` correctly, and saw that it is **not** a random slope
-- Got the **ICC = 0.50** — two quadrats in a patch are half-correlated, which is exactly why this design needed a mixed model
-- Saw **partial pooling** move each patch estimate toward its treatment mean
-- Chose between the **F-test (p = 0.091)** and the **Wald χ² (p = 0.043)** — and learned why the F-test is the right one at n = 16 groups
-
-::: callout-important
-**⚠️ Report the F-test, and say so**
-
-With few random-effect levels the χ² is anti-conservative — it assumes it knows the variance components exactly. Always state which approximation you used and what the denominator df were.
-:::
+- Decided **fixed vs random** by asking whether you care about *these*
+  levels or about *how much they vary*
+- Learned a random factor costs **one parameter** where a fixed one
+  costs *k* − 1
+- Read `(1|group)` correctly, and saw it is **not** a random slope
+- Chose between the ***F*-test (*p* = 0.091)** and the **Wald χ²
+  (*p* = 0.043)** — and learned why the *F*-test is right at 16 groups
+- Saw **where the variance components come from**: a search over a
+  restricted likelihood, not a partition of sums of squares
+- Got **ICC = 0.50**, and saw **partial pooling** shrink each patch
+  estimate toward its treatment mean
 ::::
 
-:::: {.column width="40%"}
-::: callout-note
+:::: {.column width="42%"}
+::: callout-important
 **✅ The one idea to keep**
 
-A mixed model does not "remove" the patch effect — it **estimates** it, and then tests the treatment against the right amount of noise.
+A mixed model does not "remove" the patch effect — it **estimates** it,
+and tests the treatment against the right amount of noise.
 
-**σ²_patch = 294.3 arrived three ways:** by hand from mean squares, from `aov(Error(patch))`, and from `VarCorr()`. Same model, three notations. If you understood the nested ANOVA, you already understood mixed models — this is just a better way to write and fit them.
+The old way *partitioned* variation that was already computed. The new
+way *proposes* variances and keeps the ones that make the data most
+likely. On a balanced design they agree exactly; everywhere else only
+the second still works.
 :::
 
-::: callout-tip
-**🖐 Before next class**
+::: callout-note
+**📖 Up next**
 
-Take the pine needle data, **collapsed to one value per team per side** (the two-stage summary from Week 3):
+`glmer()` — a non-normal response **and** a random effect. You now have
+both halves.
+:::
+::::
+:::::::
+
+## Before Next Class
+
+::::: columns
+::: {.column width="55%"}
+Take the pine needle data, **collapsed to one value per team per side**
+(the two-stage summary from Week 3):
 
 ``` r
 p_df <- pine_df |>
@@ -831,9 +1210,52 @@ p_df <- pine_df |>
 anova(lmer(needle_length_mm ~ side + (1|team), data = p_df))
 ```
 
-Compare `F` to the **square of** the paired-t statistic from Week 4 (t = −2.72). You should get **F = 7.41, df 1 and 3, p = 0.072** — the paired t-test *is* this mixed model.
+Compare *F* to the **square of** the paired-*t* statistic from Week 4
+(*t* = −2.72). You should get ***F* = 7.41, df 1 and 3, *p* = 0.072** —
+the paired *t*-test **is** this mixed model.
+:::
 
-**🚀 If you finish early:** run the same formula on the raw 64 needles instead. You get p = 0.057 and **59** denominator df, not 3. What changed? (Hint: check `VarCorr()` — one variance is estimated as exactly zero, and R warns "singular fit".)
+::: {.column width="45%"}
+::: callout-tip
+**🚀 If you finish early**
+
+Run the same formula on the raw 64 needles instead. You get *p* = 0.057
+and **59** denominator df, not 3.
+
+What changed? Check `VarCorr()` — one variance is estimated as exactly
+zero and R warns **"singular fit"**.
+
+You now know what that means: the likelihood walked to the edge of the
+parameter space, exactly as the moment estimator would have gone
+negative.
+:::
+:::
+:::::
+
+## Readings
+
+::::::: columns
+:::: {.column width="55%"}
+- **Gotelli & Ellison**, Ch. 10 — The Analysis of Variance, for the random-effects and variance-component material this lecture rebuilds.
+- **Quinn & Keough** (2002), *Experimental Design and Data Analysis for Biologists*, Ch. 9 §9.1 — nested designs and expected mean squares. This is the source of today's worked example.
+- Zuur, A. F., Ieno, E. N., Walker, N. J., Saveliev, A. A., & Smith, G. M. (2009). *Mixed Effects Models and Extensions in Ecology with R*. Springer. Ch. 5 is the standard ecological treatment of REML.
+- Bates, D., Mächler, M., Bolker, B., & Walker, S. (2015). Fitting linear mixed-effects models using lme4. *Journal of Statistical Software*, 67(1), 1–48.
+::::
+
+:::: {.column width="45%"}
+::: callout-note
+**📖 On the dataset**
+
+The sea urchin grazing data are Andrew & Underwood's, as analysed in
+Quinn & Keough Ch. 9 — the same file as week 9. The textbook PDFs are
+on Canvas.
+:::
+
+::: callout-tip
+**🖐 Why no Whitlock & Schluter**
+
+W&S does not cover mixed models or random effects. For this topic,
+Gotelli, Quinn & Keough, and Zuur are the references.
 :::
 ::::
 :::::::

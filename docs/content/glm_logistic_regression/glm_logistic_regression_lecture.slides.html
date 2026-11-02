@@ -196,8 +196,6 @@
       margin-right: 0; 
     }
   </style>
-  <link href="../../site_libs/tabwid-1.1.3/tabwid.css" rel="stylesheet">
-  <script src="../../site_libs/tabwid-1.1.3/tabwid.js"></script>
 <meta property="og:title" content="Lecture: GLM &amp; Logistic Regression – UMD Biostatistics">
 <meta property="og:description" content="Generalized Linear Models (GLMs) for non-normal response data — Gaussian, Poisson, and negative binomial GLMs for count data, logistic regression for binary responses, odds ratios, model diagnostics, and the connection back to ANOVA.">
 <meta property="og:site_name" content="UMD Biostatistics">
@@ -219,158 +217,273 @@ Bill Perry
 </div>
 
 </section>
-<section id="part-1-from-anova-to-the-glm-framework" class="slide level2 divider">
-<h2>Part 1 · From ANOVA to the GLM Framework</h2>
+<section id="part-1-why-the-linear-model-runs-out" class="slide level2 divider">
+<h2>Part 1 · Why the Linear Model Runs Out</h2>
 </section>
-<section id="review-of-anovas" class="slide level2">
-<h2>Review of ANOVAs</h2>
-<h3 id="review">Review</h3>
+<section id="where-we-left-off" class="slide level2">
+<h2>Where We Left Off</h2>
+<div class="columns">
+<div class="column" style="width:55%;">
+<p>Three weeks of <strong>linear models</strong>:</p>
 <ul>
-<li>ANOVA</li>
+<li>One-way ANOVA</li>
 <li>Factorial ANOVA</li>
 <li>Nested ANOVA</li>
-<li>ASSUMPTIONS OF ALL
-<ul>
-<li><p>Homogeneity of variance - Levenes or Bartletts Test</p></li>
-<li><p>Normality of Residuals</p></li>
-<li><p>Independence</p></li>
-</ul></li>
 </ul>
-</section>
-<section id="glm-overview" class="slide level2">
-<h2>GLM Overview</h2>
-<h3 id="overview">Overview</h3>
+<p>Every one of them assumed:</p>
 <ul>
-<li>General Linear Models GLM</li>
-<li>Essentially the same as before while using defined distributions
-<ul>
-<li>Normal</li>
-<li>Lognormal</li>
-<li>Binomial</li>
-<li>Poisson</li>
-<li>Gamma</li>
-<li>Negative binomial</li>
-</ul></li>
-<li>Logistic Regression
-<ul>
-<li>when the outcome is yes or no or categorical</li>
-</ul></li>
+<li><strong>Normality</strong> of the residuals</li>
+<li><strong>Homogeneity of variance</strong> — Levene’s or Bartlett’s</li>
+<li><strong>Independence</strong> of observations</li>
 </ul>
-</section>
-<section id="overview-of-generalized-linear-models-glms" class="slide level2">
-<h2>Overview of Generalized Linear Models (GLMs)</h2>
-<div class="columns">
-<div class="column" style="width:60%;">
-<p>General linear models assume normal distribution of response variables and residuals. However, many types of biological data don’t meet this assumption.</p>
-<p>Generalized Linear Models (GLMs) allow for a wider range of probability distributions for the response variable.</p>
-<p>GLMs allow all types of “exponential family” distributions:</p>
-<ul>
-<li>Normal</li>
-<li>Lognormal</li>
-<li>Binomial</li>
-<li>Poisson</li>
-<li>Gamma</li>
-<li>Negative binomial</li>
-</ul>
-<p>GLMs can be used for binary (yes/no), discrete (count), and categorical/multinomial response variables, using maximum likelihood (ML) rather than ordinary least squares (OLS) for estimation.</p>
-<p><strong>Note:</strong> GLMs extend linear models to non-normal data distributions.</p>
-<div class="callout callout-note callout-titled callout-style-default">
+</div><div class="column" style="width:45%;">
+<div class="callout callout-important callout-titled callout-style-default">
 <div class="callout-body">
 <div class="callout-title">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
-<p><strong>Note</strong></p>
+<p><strong>Important</strong></p>
 </div>
 <div class="callout-content">
-<p>Gotelli &amp; Ellison, <em>A Primer of Ecological Statistics</em>, Ch. 9 — Regression, on extending the linear model beyond ordinary least squares.</p>
+<p><strong>Those assumptions are about the residuals, not the raw data</strong> — but when the response is a <em>count</em> or a <em>yes/no</em>, they fail in a way no transformation fully repairs.</p>
+<p>Today: keep the linear part, change the distribution.</p>
 </div>
 </div>
 </div>
-</div><div class="column" style="width:40%;">
+</div></div>
+</section>
+<section id="the-data-galápagos-island-biogeography" class="slide level2">
+<h2>The Data: Galápagos Island Biogeography</h2>
+<div class="columns">
+<div class="column" style="width:55%;">
+<p>The <code>gala</code> data — 29 Galápagos islands, MacArthur &amp; Wilson’s island biogeography.</p>
+<table class="caption-top">
+<thead>
+<tr class="header">
+<th>Column</th>
+<th>What it is</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>spp</code></td>
+<td>number of plant species — <strong>a count</strong></td>
+</tr>
+<tr class="even">
+<td><code>endemics</code></td>
+<td>number of endemic species — <strong>a count</strong></td>
+</tr>
+<tr class="odd">
+<td><code>area</code></td>
+<td>island area, km²</td>
+</tr>
+<tr class="even">
+<td><code>elevation</code></td>
+<td>maximum elevation, m</td>
+</tr>
+</tbody>
+</table>
+<p>We bin <code>area</code> into <code>size_cat</code> so the predictor is <strong>categorical</strong> — the same shape of question as week 9.</p>
+<p>Isabela is dropped: at ~4600 km² it is 20× anything else and flattens every plot.</p>
+</div><div class="column" style="width:45%;">
 <div class="cell">
 <div class="cell-output-display">
-<div class="quarto-figure quarto-figure-center">
+<div>
 <figure>
-<p><img data-src="glm_logistic_regression_lecture_files/figure-revealjs/glm-distributions-1.png" alt="Three example distributions from the exponential family: a normal density curve on top, and a Poisson (lambda = 3) and a binomial (n = 10, p = 0.3) bar distribution side by side below." width="345"></p>
-<figcaption>Examples of distributions in the exponential family</figcaption>
+<p><img data-src="glm_logistic_regression_lecture_files/figure-revealjs/glm-01-1.png" alt="Histogram of plant species counts across the Galapagos islands, strongly right-skewed with most islands under 50 species and a long tail out past 400." width="345"></p>
+</figure>
+</div>
+</div>
+</div>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a aria-label="1"></a><span class="fu">count</span>(g_df, size_cat)</span>
+<span id="cb1-2"><a aria-label="2"></a><span class="do">##   size_cat  n</span></span>
+<span id="cb1-3"><a aria-label="3"></a><span class="do">## 1    small 11</span></span>
+<span id="cb1-4"><a aria-label="4"></a><span class="do">## 2   medium 12</span></span>
+<span id="cb1-5"><a aria-label="5"></a><span class="do">## 3    large  6</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</div></div>
+</section>
+<section id="a-count-is-not-a-normal-variable" class="slide level2 tight-code scrollable">
+<h2>A Count Is Not a Normal Variable</h2>
+<div class="columns">
+<div class="column" style="width:50%;">
+<p>A count has three properties a normal distribution does not:</p>
+<ol type="1">
+<li>It is a <strong>whole number</strong></li>
+<li>It <strong>cannot go below zero</strong></li>
+<li>Its <strong>variance grows with its mean</strong></li>
+</ol>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a aria-label="1"></a>g_df <span class="sc">%&gt;%</span></span>
+<span id="cb2-2"><a aria-label="2"></a>  <span class="fu">summarise</span>(<span class="at">mean_spp =</span> <span class="fu">mean</span>(spp),</span>
+<span id="cb2-3"><a aria-label="3"></a>            <span class="at">var_spp  =</span> <span class="fu">var</span>(spp),</span>
+<span id="cb2-4"><a aria-label="4"></a>            <span class="at">ratio    =</span> var_spp <span class="sc">/</span> mean_spp)</span>
+<span id="cb2-5"><a aria-label="5"></a><span class="do">##   mean_spp  var_spp    ratio</span></span>
+<span id="cb2-6"><a aria-label="6"></a><span class="do">## 1  76.2069 11078.46 145.3734</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>The variance is <strong>145×</strong> the mean. A normal distribution is free to have any variance it likes, so that ratio is not itself a violation — but look at what it does to the <em>groups</em>.</p>
+</div><div class="column" style="width:50%;">
+<div class="cell">
+<div class="cell-output-display">
+<div>
+<figure>
+<p><img data-src="glm_logistic_regression_lecture_files/figure-revealjs/glm-04-1.png" alt="Boxplot of plant species counts by island size category, showing the spread of the large-island group is many times wider than the small-island group." width="345"></p>
+</figure>
+</div>
+</div>
+</div>
+<div class="callout callout-warning callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Warning</strong></p>
+</div>
+<div class="callout-content">
+<p><strong>The spread grows with the mean.</strong> That is the equal-variance assumption breaking, and it is the signature of count data.</p>
+</div>
+</div>
+</div>
+</div></div>
+</section>
+<section id="fit-last-weeks-model-anyway-and-watch-it-fail" class="slide level2 tight-code">
+<h2>Fit Last Week’s Model Anyway — and Watch It Fail</h2>
+<div class="columns">
+<div class="column" style="width:50%;">
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a aria-label="1"></a>lm_model <span class="ot">&lt;-</span> <span class="fu">lm</span>(spp <span class="sc">~</span> size_cat, <span class="at">data =</span> g_df)</span>
+<span id="cb3-2"><a aria-label="2"></a></span>
+<span id="cb3-3"><a aria-label="3"></a><span class="fu">Anova</span>(lm_model, <span class="at">type =</span> <span class="dv">3</span>)</span>
+<span id="cb3-4"><a aria-label="4"></a><span class="do">## Anova Table (Type III tests)</span></span>
+<span id="cb3-5"><a aria-label="5"></a><span class="do">## </span></span>
+<span id="cb3-6"><a aria-label="6"></a><span class="do">## Response: spp</span></span>
+<span id="cb3-7"><a aria-label="7"></a><span class="do">##             Sum Sq Df F value     Pr(&gt;F)    </span></span>
+<span id="cb3-8"><a aria-label="8"></a><span class="do">## (Intercept)   2298  1  0.5069     0.4828    </span></span>
+<span id="cb3-9"><a aria-label="9"></a><span class="do">## size_cat    192308  2 21.2064 0.00000345 ***</span></span>
+<span id="cb3-10"><a aria-label="10"></a><span class="do">## Residuals   117889 26                       </span></span>
+<span id="cb3-11"><a aria-label="11"></a><span class="do">## ---</span></span>
+<span id="cb3-12"><a aria-label="12"></a><span class="do">## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb4"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a aria-label="1"></a><span class="fu">shapiro.test</span>(<span class="fu">residuals</span>(lm_model))<span class="sc">$</span>p.value</span>
+<span id="cb4-2"><a aria-label="2"></a><span class="do">## [1] 0.000240339</span></span>
+<span id="cb4-3"><a aria-label="3"></a><span class="fu">leveneTest</span>(spp <span class="sc">~</span> size_cat, <span class="at">data =</span> g_df)<span class="sc">$</span><span class="st">`</span><span class="at">Pr(&gt;F)</span><span class="st">`</span>[<span class="dv">1</span>]</span>
+<span id="cb4-4"><a aria-label="4"></a><span class="do">## [1] 0.0005878942</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</div><div class="column" style="width:50%;">
+<div class="callout callout-important callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Important</strong></p>
+</div>
+<div class="callout-content">
+<p><strong>The <em>p</em>-value is 0.0000035. The model did not earn it.</strong></p>
+<ul>
+<li>Normality of residuals: <strong>p &lt; 0.001</strong></li>
+<li>Equal variance: <strong>p &lt; 0.001</strong></li>
+</ul>
+<p>Both assumptions fail, and they fail badly — not marginally.</p>
+</div>
+</div>
+</div>
+<p>The question is not wrong. Island size almost certainly does drive species richness. The <em>model being used to answer it</em> is making promises the data does not keep.</p>
+<p><strong>A normal 95% interval on the small islands predicts negative species counts.</strong></p>
+</div></div>
+</section>
+<section id="what-a-glm-changes" class="slide level2">
+<h2>What a GLM Changes</h2>
+<div class="columns">
+<div class="column" style="width:55%;">
+<p>A <strong>generalized linear model</strong> keeps the linear part — <span class="math inline">\(\beta_0 +
+\beta_1 X_1 + \dots\)</span> — and swaps out two things.</p>
+<table class="caption-top">
+<thead>
+<tr class="header">
+<th>Component</th>
+<th>What it is</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>Random</strong></td>
+<td>the response’s distribution</td>
+<td>Poisson for counts</td>
+</tr>
+<tr class="even">
+<td><strong>Systematic</strong></td>
+<td>the predictors</td>
+<td><code>size_cat</code>, <code>area</code></td>
+</tr>
+<tr class="odd">
+<td><strong>Link</strong></td>
+<td>connects the mean to the predictors</td>
+<td><code>log</code> for counts</td>
+</tr>
+</tbody>
+</table>
+<p><span class="math display">\[g(\mu) = \beta_0 + \beta_1X_1 + \beta_2X_2 \dots\]</span></p>
+<p>GLMs are fitted by <strong>maximum likelihood</strong> (ML), not ordinary least squares (OLS) — which is why their output talks about <em>deviance</em> rather than sums of squares.</p>
+</div><div class="column" style="width:45%;">
+<div class="cell">
+<div class="cell-output-display">
+<div>
+<figure>
+<p><img data-src="glm_logistic_regression_lecture_files/figure-revealjs/glm-07-1.png" alt="Three example distributions from the exponential family: a normal density curve on top, and a Poisson (lambda = 3) and a binomial (n = 10, p = 0.3) bar distribution side by side below." width="326"></p>
 </figure>
 </div>
 </div>
 </div>
 </div></div>
 </section>
-<section id="example-comparison-of-logged-response-variable-and-glm" class="slide level2">
-<h2>Example comparison of logged response variable and GLM</h2>
+<section id="choosing-the-family-and-the-link" class="slide level2">
+<h2>Choosing the Family and the Link</h2>
 <div class="columns">
-<div class="column" style="width:50%;">
-<div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a aria-label="1"></a><span class="co"># Simulate data that students might log-transform</span></span>
-<span id="cb1-2"><a aria-label="2"></a><span class="fu">set.seed</span>(<span class="dv">123</span>)</span>
-<span id="cb1-3"><a aria-label="3"></a>treatment_data <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
-<span id="cb1-4"><a aria-label="4"></a>  <span class="at">treatment =</span> <span class="fu">rep</span>(<span class="fu">c</span>(<span class="st">"Control"</span>, <span class="st">"Low"</span>, <span class="st">"High"</span>), <span class="at">each =</span> <span class="dv">20</span>),</span>
-<span id="cb1-5"><a aria-label="5"></a>  <span class="at">biomass =</span> <span class="fu">c</span>(<span class="fu">rlnorm</span>(<span class="dv">20</span>, <span class="at">meanlog =</span> <span class="dv">2</span>, <span class="at">sdlog =</span> <span class="fl">0.5</span>),</span>
-<span id="cb1-6"><a aria-label="6"></a>              <span class="fu">rlnorm</span>(<span class="dv">20</span>, <span class="at">meanlog =</span> <span class="fl">2.5</span>, <span class="at">sdlog =</span> <span class="fl">0.5</span>),</span>
-<span id="cb1-7"><a aria-label="7"></a>              <span class="fu">rlnorm</span>(<span class="dv">20</span>, <span class="at">meanlog =</span> <span class="dv">3</span>, <span class="at">sdlog =</span> <span class="fl">0.5</span>)))</span>
-<span id="cb1-8"><a aria-label="8"></a><span class="co"># Approach 1: Log transformation + ANOVA</span></span>
-<span id="cb1-9"><a aria-label="9"></a>model_log <span class="ot">&lt;-</span> <span class="fu">lm</span>(<span class="fu">log</span>(biomass) <span class="sc">~</span> treatment, <span class="at">data =</span> treatment_data)</span>
-<span id="cb1-10"><a aria-label="10"></a></span>
-<span id="cb1-11"><a aria-label="11"></a><span class="co"># Approach 2: Gamma GLM with log link</span></span>
-<span id="cb1-12"><a aria-label="12"></a>model_glm <span class="ot">&lt;-</span> <span class="fu">glm</span>(biomass <span class="sc">~</span> treatment, </span>
-<span id="cb1-13"><a aria-label="13"></a>                 <span class="at">family =</span> <span class="fu">Gamma</span>(<span class="at">link =</span> <span class="st">"log"</span>), </span>
-<span id="cb1-14"><a aria-label="14"></a>                 <span class="at">data =</span> treatment_data)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-</div>
-</div><div class="column" style="width:50%;">
-<p>Here is the difference</p>
-<div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a aria-label="1"></a><span class="co"># Compare predictions on original scale</span></span>
-<span id="cb2-2"><a aria-label="2"></a><span class="fu">cat</span>(<span class="st">"logged response variable</span><span class="sc">\n\n</span><span class="st">"</span>)</span>
-<span id="cb2-3"><a aria-label="3"></a><span class="do">## logged response variable</span></span>
-<span id="cb2-4"><a aria-label="4"></a><span class="fu">emmeans</span>(model_log, <span class="sc">~</span>treatment, <span class="at">type =</span> <span class="st">"response"</span>)  <span class="co"># Geometric means</span></span>
-<span id="cb2-5"><a aria-label="5"></a><span class="do">##  treatment response    SE df lower.CL upper.CL</span></span>
-<span id="cb2-6"><a aria-label="6"></a><span class="do">##  Control       7.93 0.818 57     6.45     9.75</span></span>
-<span id="cb2-7"><a aria-label="7"></a><span class="do">##  High         21.18 2.180 57    17.23    26.04</span></span>
-<span id="cb2-8"><a aria-label="8"></a><span class="do">##  Low          11.87 1.220 57     9.66    14.60</span></span>
-<span id="cb2-9"><a aria-label="9"></a><span class="do">## </span></span>
-<span id="cb2-10"><a aria-label="10"></a><span class="do">## Confidence level used: 0.95 </span></span>
-<span id="cb2-11"><a aria-label="11"></a><span class="do">## Intervals are back-transformed from the log scale</span></span>
-<span id="cb2-12"><a aria-label="12"></a><span class="fu">cat</span>(<span class="st">"</span><span class="sc">\n\n</span><span class="st">"</span>)</span>
-<span id="cb2-13"><a aria-label="13"></a><span class="fu">cat</span>(<span class="st">"using glm opn original scale</span><span class="sc">\n\n</span><span class="st">"</span>)</span>
-<span id="cb2-14"><a aria-label="14"></a><span class="do">## using glm opn original scale</span></span>
-<span id="cb2-15"><a aria-label="15"></a><span class="fu">emmeans</span>(model_glm, <span class="sc">~</span>treatment, <span class="at">type =</span> <span class="st">"response"</span>)  <span class="co"># Arithmetic means</span></span>
-<span id="cb2-16"><a aria-label="16"></a><span class="do">##  treatment response    SE df lower.CL upper.CL</span></span>
-<span id="cb2-17"><a aria-label="17"></a><span class="do">##  Control       8.86 0.939 57     7.16     11.0</span></span>
-<span id="cb2-18"><a aria-label="18"></a><span class="do">##  High         23.73 2.520 57    19.19     29.3</span></span>
-<span id="cb2-19"><a aria-label="19"></a><span class="do">##  Low          12.84 1.360 57    10.39     15.9</span></span>
-<span id="cb2-20"><a aria-label="20"></a><span class="do">## </span></span>
-<span id="cb2-21"><a aria-label="21"></a><span class="do">## Confidence level used: 0.95 </span></span>
-<span id="cb2-22"><a aria-label="22"></a><span class="do">## Intervals are back-transformed from the log scale</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-</div>
-</div></div>
-</section>
-<section id="the-three-elements-of-a-glm" class="slide level2 scrollable">
-<h2>The Three Elements of a GLM</h2>
-<h3 id="glms-consist-of-three-components">GLMs consist of three components:</h3>
-<ol type="1">
-<li><strong>Response component</strong>: The response variable and its probability distribution (from exponential family: normal, binomial, Poisson)</li>
-<li><strong>Systematic component</strong>: The predictor variable(s) in the model, which can be continuous or categorical</li>
-<li><strong>Link function</strong>: Connects expected value of Y to predictor variables</li>
-</ol>
-<p><span class="math display">\[g(\mu) = \beta_0 + \beta_1X_1 + \beta_2X_2...\]</span></p>
-<div class="callout callout-important callout-titled callout-style-simple">
-<div class="callout-body">
-<div class="callout-title">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<p><strong>Link Functions and Distributions</strong></p>
-</div>
-<div class="callout-content">
+<div class="column" style="width:52%;">
+<h3 id="what-the-response-looks-like">What the response looks like</h3>
+<table class="caption-top">
+<thead>
+<tr class="header">
+<th>Response</th>
+<th>Family</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>continuous, symmetric</td>
+<td><code>gaussian</code> — this is <code>lm()</code></td>
+</tr>
+<tr class="even">
+<td>counts</td>
+<td><code>poisson</code></td>
+</tr>
+<tr class="odd">
+<td>counts, variance &gt; mean</td>
+<td>negative binomial (<code>glm.nb</code>)</td>
+</tr>
+<tr class="even">
+<td>binary — present/absent</td>
+<td><code>binomial(link = "logit")</code></td>
+</tr>
+<tr class="odd">
+<td>positive, continuous, skewed</td>
+<td><code>Gamma</code></td>
+</tr>
+</tbody>
+</table>
+</div><div class="column" style="width:48%;">
+<h3 id="the-link-function">The link function</h3>
 <table class="caption-top">
 <thead>
 <tr class="header">
 <th>Distribution</th>
-<th>Common Link Function</th>
+<th>Link</th>
 <th>Formula</th>
 </tr>
 </thead>
@@ -390,500 +503,469 @@ Bill Perry
 <td>Logit</td>
 <td><span class="math inline">\(g(\mu) = \log[\mu/(1-\mu)]\)</span></td>
 </tr>
+<tr class="even">
+<td>Gamma</td>
+<td>Log</td>
+<td><span class="math inline">\(g(\mu) = \log(\mu)\)</span></td>
+</tr>
 </tbody>
 </table>
+<div class="callout callout-tip callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
 </div>
+<p><strong>Tip</strong></p>
 </div>
-</div>
-</section>
-<section id="part-2-gaussian-glms" class="slide level2 divider">
-<h2>Part 2 · Gaussian GLMs</h2>
-</section>
-<section id="gaussian-glm-the-galápagos-island-data" class="slide level2">
-<h2>Gaussian GLM — The Galápagos Island Data</h2>
-<div class="columns">
-<div class="column" style="width:60%;">
-<p>The simplest form of GLM uses a normal (Gaussian) distribution with an identity link function. This is equivalent to standard ANOVA</p>
-<ul>
-<li><p>Let’s compare a standard linear model and a Gaussian GLM</p></li>
-<li><p>Island Biogeography Data</p></li>
-<li><p>The <code>gala</code> dataset from the <code>faraway</code> package contains data on 30 Galapagos islands, testing MacArthur-Wilson’s theory of island biogeography.</p></li>
-<li><p><strong>Variables in the dataset:</strong></p>
-<ul>
-<li><p><code>Species</code>- Number of plant species (count data)</p></li>
-<li><p><code>Endemics</code>- Number of endemic species (count data)</p></li>
-<li><p><code>Area</code>- Island area (km²)</p></li>
-<li><p><code>Elevation</code>- Maximum elevation (m)</p></li>
-</ul>
-<div class="cell">
-<pre><code>##           Species Endemics  Area Elevation Nearest size_category
-## Baltra         58       23 25.09       346     0.6        Medium
-## Bartolome      31       21  1.24       109     0.6        Medium
-## Caldwell        3        3  0.21       114     2.8         Small</code></pre>
-</div></li>
-</ul>
-</div><div class="column" style="width:40%;">
-<p>Let’s look at the summary of our Gaussian GLM:</p>
-<div class="cell">
-<div class="cell-output-display">
-<div>
-<figure>
-<p><img data-src="glm_logistic_regression_lecture_files/figure-revealjs/summary-gaussian_2-1.png" alt="Histogram of the number of endemic plant species across the 30 Galapagos islands, showing a right-skewed count distribution." width="384"></p>
-</figure>
+<div class="callout-content">
+<p><strong>The link is what keeps predictions possible.</strong> A <code>log</code> link cannot predict a negative count. A <code>logit</code> link cannot predict a probability above 1.</p>
 </div>
 </div>
 </div>
 </div></div>
 </section>
-<section id="gaussian-glm-building-the-size-categories" class="slide level2">
-<h2>Gaussian GLM — Building the Size Categories</h2>
+<section id="part-2-gaussian-glms-the-sanity-check" class="slide level2 divider">
+<h2>Part 2 · Gaussian GLMs — the Sanity Check</h2>
+</section>
+<section id="before-trusting-glm-check-it-against-what-you-know" class="slide level2">
+<h2>Before Trusting <code>glm()</code>, Check It Against What You Know</h2>
+<p>Before handing <code>glm()</code> an unfamiliar distribution, confirm it reproduces the model you already trust.</p>
+<p>A <strong>Gaussian</strong> family with an <strong>identity</strong> link <em>is</em> a linear model — same estimates, same standard errors, same <em>p</em>-values. If that does not come out identical, you have mis-specified something.</p>
+<div class="callout callout-note callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Note</strong></p>
+</div>
+<div class="callout-content">
+<p><strong>You are not learning a new model.</strong> You are learning two arguments on the one you already have: <code>family =</code> and <code>link =</code>. Everything that follows today changes exactly those two.</p>
+</div>
+</div>
+</div>
+</section>
+<section id="gaussian-glm-same-model-two-function-calls" class="slide level2 tight-code">
+<h2>Gaussian GLM — Same Model, Two Function Calls</h2>
 <div class="columns">
-<div class="column" style="width:60%;">
-<p>The simplest form of GLM uses a normal (Gaussian) distribution with an identity link function. This is equivalent to standard linear regression.</p>
-<p>Let’s compare a standard linear model and a Gaussian GLM using the Galapagos dataset, modeling endemic Endemics richness by island size category.</p>
+<div class="column" style="width:50%;">
 <div class="cell">
-<div class="cell-output-display">
-<script src="https://cdn.jsdelivr.net/gh/vincentarelbundock/tinytable@main/inst/tinytable.js"></script>
-
-    <script>
-      // Create table-specific functions using external factory
-      const tableFns_caym2hmrf9crhfgea9it = TinyTable.createTableFunctions("tinytable_caym2hmrf9crhfgea9it");
-      // tinytable span after
-      window.addEventListener('load', function () {
-          var cellsToStyle = [
-            // tinytable style arrays after
-          { positions: [ { i: '8', j: 1 }, { i: '8', j: 2 }, { i: '8', j: 3 }, { i: '8', j: 4 } ], css_id: 'tinytable_css_7yi7frhnrplj6jgzn3h7',}, 
-          { positions: [ { i: '0', j: 1 }, { i: '0', j: 2 }, { i: '0', j: 3 }, { i: '0', j: 4 } ], css_id: 'tinytable_css_yy29k8zmqoyl2eel9qv6',}, 
-          ];
-
-          // Loop over the arrays to style the cells
-          cellsToStyle.forEach(function (group) {
-              group.positions.forEach(function (cell) {
-                  tableFns_caym2hmrf9crhfgea9it.styleCell(cell.i, cell.j, group.css_id);
-              });
-          });
-      });
-    </script>
-
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/vincentarelbundock/tinytable@main/inst/tinytable.css">
-    <style>
-    /* tinytable css entries after */
-    #tinytable_caym2hmrf9crhfgea9it td.tinytable_css_7yi7frhnrplj6jgzn3h7, #tinytable_caym2hmrf9crhfgea9it th.tinytable_css_7yi7frhnrplj6jgzn3h7 {  position: relative; --border-bottom: 1; --border-left: 0; --border-right: 0; --border-top: 0; --line-color-bottom: var(--tt-line-color); --line-color-left: var(--tt-line-color); --line-color-right: var(--tt-line-color); --line-color-top: var(--tt-line-color); --line-width-bottom: 0.08em; --line-width-left: 0.1em; --line-width-right: 0.1em; --line-width-top: 0.1em; --line-type-bottom: solid; --line-type-left: solid; --line-type-right: solid; --line-type-top: solid; --trim-bottom-left: 0%; --trim-bottom-right: 0%; --trim-left-bottom: 0%; --trim-left-top: 0%; --trim-right-bottom: 0%; --trim-right-top: 0%; --trim-top-left: 0%; --trim-top-right: 0%;  }
-    #tinytable_caym2hmrf9crhfgea9it td.tinytable_css_yy29k8zmqoyl2eel9qv6, #tinytable_caym2hmrf9crhfgea9it th.tinytable_css_yy29k8zmqoyl2eel9qv6 {  position: relative; --border-bottom: 1; --border-left: 0; --border-right: 0; --border-top: 1; --line-color-bottom: var(--tt-line-color); --line-color-left: var(--tt-line-color); --line-color-right: var(--tt-line-color); --line-color-top: var(--tt-line-color); --line-width-bottom: 0.05em; --line-width-left: 0.1em; --line-width-right: 0.1em; --line-width-top: 0.08em; --line-type-bottom: solid; --line-type-left: solid; --line-type-right: solid; --line-type-top: solid; --trim-bottom-left: 0%; --trim-bottom-right: 0%; --trim-left-bottom: 0%; --trim-left-top: 0%; --trim-right-bottom: 0%; --trim-right-top: 0%; --trim-top-left: 0%; --trim-top-right: 0%;  }
-    </style>
-    <div class="container">
-      <table class="tinytable" id="tinytable_caym2hmrf9crhfgea9it" style="width: auto; margin-left: auto; margin-right: auto;" data-quarto-disable-processing="true">
-        
-        <thead>
-              <tr>
-                <th scope="col" data-row="0" data-col="1">Endemics</th>
-                <th scope="col" data-row="0" data-col="2">Area</th>
-                <th scope="col" data-row="0" data-col="3">size_category</th>
-                <th scope="col" data-row="0" data-col="4">Elevation</th>
-              </tr>
-        </thead>
-        
-        <tbody>
-                <tr>
-                  <td data-row="1" data-col="1">89</td>
-                  <td data-row="1" data-col="2">4669.32</td>
-                  <td data-row="1" data-col="3">Large</td>
-                  <td data-row="1" data-col="4">1707</td>
-                </tr>
-                <tr>
-                  <td data-row="2" data-col="1">95</td>
-                  <td data-row="2" data-col="2">903.82</td>
-                  <td data-row="2" data-col="3">Large</td>
-                  <td data-row="2" data-col="4">864</td>
-                </tr>
-                <tr>
-                  <td data-row="3" data-col="1">35</td>
-                  <td data-row="3" data-col="2">634.49</td>
-                  <td data-row="3" data-col="3">Large</td>
-                  <td data-row="3" data-col="4">1494</td>
-                </tr>
-                <tr>
-                  <td data-row="4" data-col="1">81</td>
-                  <td data-row="4" data-col="2">572.33</td>
-                  <td data-row="4" data-col="3">Large</td>
-                  <td data-row="4" data-col="4">906</td>
-                </tr>
-                <tr>
-                  <td data-row="5" data-col="1">65</td>
-                  <td data-row="5" data-col="2">551.62</td>
-                  <td data-row="5" data-col="3">Large</td>
-                  <td data-row="5" data-col="4">716</td>
-                </tr>
-                <tr>
-                  <td data-row="6" data-col="1">73</td>
-                  <td data-row="6" data-col="2">170.92</td>
-                  <td data-row="6" data-col="3">Large</td>
-                  <td data-row="6" data-col="4">640</td>
-                </tr>
-                <tr>
-                  <td data-row="7" data-col="1">23</td>
-                  <td data-row="7" data-col="2">129.49</td>
-                  <td data-row="7" data-col="3">Large</td>
-                  <td data-row="7" data-col="4">343</td>
-                </tr>
-                <tr>
-                  <td data-row="8" data-col="1">37</td>
-                  <td data-row="8" data-col="2">59.56</td>
-                  <td data-row="8" data-col="3">Medium</td>
-                  <td data-row="8" data-col="4">777</td>
-                </tr>
-        </tbody>
-      </table>
-    </div>
-<!-- hack to avoid NA insertion in last line -->
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a aria-label="1"></a>gauss_model <span class="ot">&lt;-</span> <span class="fu">glm</span>(spp <span class="sc">~</span> size_cat,</span>
+<span id="cb5-2"><a aria-label="2"></a>                   <span class="at">data =</span> g_df,</span>
+<span id="cb5-3"><a aria-label="3"></a>                   <span class="at">family =</span> <span class="fu">gaussian</span>(<span class="at">link =</span> <span class="st">"identity"</span>))</span>
+<span id="cb5-4"><a aria-label="4"></a></span>
+<span id="cb5-5"><a aria-label="5"></a><span class="fu">round</span>(<span class="fu">cbind</span>(<span class="at">lm  =</span> <span class="fu">coef</span>(lm_model),</span>
+<span id="cb5-6"><a aria-label="6"></a>            <span class="at">glm =</span> <span class="fu">coef</span>(gauss_model)), <span class="dv">6</span>)</span>
+<span id="cb5-7"><a aria-label="7"></a><span class="do">##                       lm       glm</span></span>
+<span id="cb5-8"><a aria-label="8"></a><span class="do">## (Intercept)     14.45454  14.45454</span></span>
+<span id="cb5-9"><a aria-label="9"></a><span class="do">## size_catmedium  40.62879  40.62879</span></span>
+<span id="cb5-10"><a aria-label="10"></a><span class="do">## size_catlarge  217.21212 217.21212</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
-</div>
-</div><div class="column" style="width:40%;">
-<p>Let’s visualize endemic Endemics by island size:</p>
 <div class="cell">
-<div class="cell-output-display">
-<div>
-<figure>
-<p><img data-src="glm_logistic_regression_lecture_files/figure-revealjs/summarygaussian_2a-1.png" alt="Boxplot of number of endemic species by island size category (Small, Medium, Large), filled by category, showing endemic richness increasing with island size." width="384"></p>
-</figure>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a aria-label="1"></a><span class="fu">all.equal</span>(<span class="fu">coef</span>(lm_model), <span class="fu">coef</span>(gauss_model))</span>
+<span id="cb6-2"><a aria-label="2"></a><span class="do">## [1] TRUE</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</div><div class="column" style="width:50%;">
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a aria-label="1"></a><span class="fu">Anova</span>(gauss_model, <span class="at">type =</span> <span class="st">"III"</span>, <span class="at">test =</span> <span class="st">"F"</span>)</span>
+<span id="cb7-2"><a aria-label="2"></a><span class="do">## Analysis of Deviance Table (Type III tests)</span></span>
+<span id="cb7-3"><a aria-label="3"></a><span class="do">## </span></span>
+<span id="cb7-4"><a aria-label="4"></a><span class="do">## Response: spp</span></span>
+<span id="cb7-5"><a aria-label="5"></a><span class="do">## Error estimate based on Pearson residuals </span></span>
+<span id="cb7-6"><a aria-label="6"></a><span class="do">## </span></span>
+<span id="cb7-7"><a aria-label="7"></a><span class="do">##           Sum Sq Df F values     Pr(&gt;F)    </span></span>
+<span id="cb7-8"><a aria-label="8"></a><span class="do">## size_cat  192308  2   21.206 0.00000345 ***</span></span>
+<span id="cb7-9"><a aria-label="9"></a><span class="do">## Residuals 117889 26                        </span></span>
+<span id="cb7-10"><a aria-label="10"></a><span class="do">## ---</span></span>
+<span id="cb7-11"><a aria-label="11"></a><span class="do">## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>Identical to the <code>Anova()</code> on <code>lm_model</code> from Part 1 — <em>F</em> = 21.21, <em>p</em> = 0.0000035, and identical for the same reason: it <strong>is</strong> that model.</p>
+</div></div>
+</section>
+<section id="gaussian-glm-reading-the-new-vocabulary" class="slide level2 tight-code">
+<h2>Gaussian GLM — Reading the New Vocabulary</h2>
+<div class="columns">
+<div class="column" style="width:48%;">
+<div class="cell">
+<pre><code>##       GLM summary says    value       ANOVA calls it
+## 1 Dispersion parameter   4534.2 Residual mean square
+## 2        Null deviance 310196.8             SS total
+## 3    Residual deviance 117889.0          SS residual
+## 4      null - residual 192307.8          SS size_cat</code></pre>
+</div>
+</div><div class="column" style="width:52%;">
+<p>A GLM summary renames three things you already know:</p>
+<ul>
+<li><p><strong>Dispersion parameter</strong> — for a Gaussian GLM this is the <strong>residual variance</strong>, <span class="math inline">\(\sigma^2\)</span>. It is the ANOVA table’s residual mean square.</p></li>
+<li><p><strong>Null deviance</strong> — the error left when you predict every island with the <strong>grand mean</strong> alone. For a Gaussian GLM this is <strong>SS<sub>total</sub></strong>.</p></li>
+<li><p><strong>Residual deviance</strong> — the error left <strong>after</strong> fitting <code>size_cat</code>. For a Gaussian GLM this is <strong>SS<sub>residual</sub></strong>.</p></li>
+</ul>
+<div class="callout callout-important callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Important</strong></p>
+</div>
+<div class="callout-content">
+<p>Null deviance − residual deviance = the <strong>model</strong> sum of squares. The residual deviance is the part your predictor did <em>not</em> explain.</p>
 </div>
 </div>
 </div>
 </div></div>
-</section>
-<section id="gaussian-glm-fitting-lm-and-glm-side-by-side" class="slide level2">
-<h2>Gaussian GLM — Fitting <code>lm()</code> and <code>glm()</code> Side by Side</h2>
-<div class="columns">
-<div class="column scrollable" style="width:50%;">
-<p>The simplest form of GLM uses a normal (Gaussian) distribution with an identity link function. This is equivalent to standard linear regression.</p>
-<ul>
-<li>Let’s compare a standard linear model and a Gaussian GLM using the Galapagos dataset, modeling endemic species richness by island size category.
-<ul>
-<li>Fit a standard linear model - model_lm &lt;- lm(Endemics ~ size_category,<br>
-data = gala)</li>
-<li>Fit a Gaussian GLM</li>
-<li>model_gaussian &lt;- glm(Endemics ~ size_category, data = gala,<br>
-family = gaussian(link = “identity”)) <strong>Residual Standard Error</strong>. This is the standard deviation of the residuals (<span class="math inline">\(\sigma\)</span>)</li>
-</ul></li>
-</ul>
-</div><div class="column scrollable" style="width:50%;">
-<ul>
-<li>Let’s look at the summary of our Gaussian GLM:</li>
-</ul>
-<div class="cell">
-<pre><code>## 
-## Call:
-## lm(formula = Endemics ~ size_category, data = gala)
-## 
-## Residuals:
-##     Min      1Q  Median      3Q     Max 
-## -42.857  -4.386  -0.762   6.940  29.143 
-## 
-## Coefficients:
-##                     Estimate Std. Error t value Pr(&gt;|t|)    
-## (Intercept)            5.636      4.402    1.28   0.2113    
-## size_categoryMedium   16.030      6.095    2.63   0.0139 *  
-## size_categoryLarge    60.221      7.059    8.53 3.82e-09 ***
-## ---
-## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
-## 
-## Residual standard error: 14.6 on 27 degrees of freedom
-## Multiple R-squared:  0.7343, Adjusted R-squared:  0.7146 
-## F-statistic: 37.31 on 2 and 27 DF,  p-value: 1.697e-08</code></pre>
-</div>
-</div></div>
-</section>
-<section id="gaussian-glm-reading-the-output-deviance-and-dispersion" class="slide level2">
-<h2>Gaussian GLM — Reading the Output: Deviance and Dispersion</h2>
-<div class="columns">
-<div class="column" style="width:60%;">
-<ul>
-<li>Let’s look at the summary of our Gaussian GLM:
-<ul>
-<li>Dispersion parameter
-<ul>
-<li><strong>variance of the residuals</strong> (<span class="math inline">\(\sigma^2\)</span>)</li>
-</ul></li>
-<li>Null deviance
-<ul>
-<li><p>This is the error (deviance) of the “Null” or “Intercept-Only” model</p></li>
-<li><p>how much error you have when you try to predict the number of endemics using <em>only</em> the overall average, without any predictors. It’s your baseline, or the total amount of variation in the data to be explained</p></li>
-</ul></li>
-<li>Residual deviance
-<ul>
-<li><p>conceptually the same as the “Model Sum of Squares” in an ANOVA</p></li>
-<li><p>Null Deviance tells you your <code>size_category</code> predictor is <em>very</em> useful for explaining the number of endemics.</p></li>
-</ul></li>
-</ul></li>
-</ul>
-</div><div class="column" style="width:40%;">
-<div class="cell">
-<pre><code>## 
-## Call:
-## glm(formula = Endemics ~ size_category, family = gaussian(link = "identity"), 
-##     data = gala)
-## 
-## Coefficients:
-##                     Estimate Std. Error t value Pr(&gt;|t|)    
-## (Intercept)            5.636      4.402    1.28   0.2113    
-## size_categoryMedium   16.030      6.095    2.63   0.0139 *  
-## size_categoryLarge    60.221      7.059    8.53 3.82e-09 ***
-## ---
-## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
-## 
-## (Dispersion parameter for gaussian family taken to be 213.1878)
-## 
-##     Null deviance: 21662.7  on 29  degrees of freedom
-## Residual deviance:  5756.1  on 27  degrees of freedom
-## AIC: 250.84
-## 
-## Number of Fisher Scoring iterations: 2</code></pre>
-</div>
-</div></div>
-</section>
-<section id="glm-with-gaussian-distribution-analysis" class="slide level2">
-<h2>GLM with Gaussian Distribution: Analysis</h2>
-<div class="columns">
-<div class="column" style="width:60%;">
-<ul>
-<li>Now let’s perform an ANOVA on LM and GLM model using <code>car</code>:
-<ul>
-<li><p><strong>Residual Standard Error</strong>. This is the standard deviation of the residuals (<span class="math inline">\(\sigma\)</span>)</p></li>
-<li><p><strong>Residual Deviance/df</strong>: 5756.1 / 27 = 213.1878</p></li>
-<li><p>In this context, “Sum Sq” (Sum of Squares) and “Deviance” are the same thing.</p></li>
-<li><p><strong>“Pearson residuals” are essentially the same as the regular residuals</strong></p></li>
-</ul></li>
-</ul>
-<div class="cell">
-<pre><code>## Anova Table (Type III tests)
-## 
-## Response: Endemics
-##                Sum Sq Df F value    Pr(&gt;F)    
-## (Intercept)     349.5  1  1.6392    0.2113    
-## size_category 15906.6  2 37.3066 1.697e-08 ***
-## Residuals      5756.1 27                      
-## ---
-## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
-## Analysis of Deviance Table (Type III tests)
-## 
-## Response: Endemics
-## Error estimate based on Pearson residuals 
-## 
-##                Sum Sq Df F values    Pr(&gt;F)    
-## size_category 15906.6  2   37.307 1.697e-08 ***
-## Residuals      5756.1 27                       
-## ---
-## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</code></pre>
-</div>
-</div><div class="column" style="width:40%;">
-<p>Visualizing the results:</p>
-<div class="cell">
-<div class="cell-output-display">
-<div>
-<figure>
-<p><img data-src="glm_logistic_regression_lecture_files/figure-revealjs/gaussian-plot-1.png" alt="Jittered scatterplot of raw endemic species counts by island size category, with the Gaussian GLM's estimated mean and 95% confidence interval error bar overlaid in red for each category." width="384"></p>
-</figure>
-</div>
-</div>
-</div>
-</div></div>
-</section>
-<section id="equivalence-of-linear-models-and-gaussian-glms" class="slide level2">
-<h2>Equivalence of Linear Models and Gaussian GLMs</h2>
-<h3 id="equivalence-of-linear-models-and-gaussian-glms-1">Equivalence of Linear Models and Gaussian GLMs</h3>
-<p>When we use a <strong>Gaussian distribution</strong> with an <strong>identity link</strong>, GLM gives identical results to standard linear regression. This can be seen in the coefficient values and overall model statistics.</p>
-<p>The key difference is that GLMs provide a framework that extends to non-normal distributions.</p>
-<p><u><strong>Note when we look at Heteroscedascidity (SP) cone of despair - this is why a Poisson model works</strong></u></p>
 </section>
 <section id="part-3-poisson-glms-for-count-data" class="slide level2 divider">
 <h2>Part 3 · Poisson GLMs for Count Data</h2>
 </section>
-<section id="poisson-glm-why-counts-need-a-different-distribution" class="slide level2">
-<h2>Poisson GLM — Why Counts Need a Different Distribution</h2>
-<ul>
-<li><strong>Poisson GLMs</strong> Poisson model used when response variable is <strong>count data</strong>:
+<section id="the-poisson-distribution-and-its-one-strong-claim" class="slide level2">
+<h2>The Poisson Distribution and Its One Strong Claim</h2>
+<div class="columns">
+<div class="column" style="width:55%;">
+<p><strong>Poisson</strong> is <em>the</em> distribution for counts:</p>
 <ul>
 <li>Number of species on an island</li>
 <li>Number of parasites in a host</li>
-<li>Number of bird nests in a plot</li>
-<li>Number of seeds produced by a plant</li>
-</ul></li>
-<li>The Poisson distribution assumes:
-<ul>
-<li>Counts are non-negative integers (0, 1, 2, 3, …)</li>
-<li>The mean equals the variance</li>
-<li>Events occur independently</li>
-</ul></li>
-<li><strong>Key consideration:</strong> If variance &gt; mean (overdispersion), consider negative binomial regression instead.</li>
-<li>Now let’s fit a Poisson GLM to model the relationship between the rounded quarter-mile time and the number of cylinders:</li>
+<li>Number of nests in a plot</li>
 </ul>
-</section>
-<section id="fit-poisson-glm-with-size_category-as-predictor" class="slide level2">
-<h2>Fit Poisson GLM with size_category as predictor</h2>
-<div class="columns">
-<div class="column" style="width:50%;">
+<p>It assumes:</p>
 <ul>
-<li>model is predicting the natural logarithm (log) of the expected species count</li>
-<li>exponentiate them (i.e., calculate <span class="math inline">\(e^{\text{coefficient}}\)</span> or exp(coefficient).</li>
-<li>converts the additive log-counts back into a multiplicative effect on the actual species count</li>
-<li>exp(2.67101) = 14.45 species on a “Small” island</li>
-<li>exp(1.33784) = 3.81
-<ul>
-<li>“Medium” predicted to have 3.81x more spp than “Small” island</li>
-</ul></li>
-<li>exp(2.84300) = 17.17
-<ul>
-<li>“Large” island is predicted to have 17.17 times more species than a “Small” island, on average</li>
-</ul></li>
-<li>Dispersion - Divide the deviance by its df: <span class="math inline">\(939.74 / 27 \approx\)</span> 34.8</li>
+<li>Counts are non-negative integers</li>
+<li>Events occur <strong>independently</strong></li>
+<li><strong>The mean equals the variance</strong></li>
 </ul>
-</div><div class="column" style="width:50%;">
-<div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a aria-label="1"></a>model_poisson_gala <span class="ot">&lt;-</span> <span class="fu">glm</span>(Endemics <span class="sc">~</span> size_category, </span>
-<span id="cb7-2"><a aria-label="2"></a>                          <span class="at">data =</span> gala,</span>
-<span id="cb7-3"><a aria-label="3"></a>                          <span class="at">family =</span> <span class="fu">poisson</span>(<span class="at">link =</span> <span class="st">"log"</span>))</span>
-<span id="cb7-4"><a aria-label="4"></a><span class="fu">summary</span>(model_poisson_gala)</span>
-<span id="cb7-5"><a aria-label="5"></a><span class="do">## </span></span>
-<span id="cb7-6"><a aria-label="6"></a><span class="do">## Call:</span></span>
-<span id="cb7-7"><a aria-label="7"></a><span class="do">## glm(formula = Endemics ~ size_category, family = poisson(link = "log"), </span></span>
-<span id="cb7-8"><a aria-label="8"></a><span class="do">##     data = gala)</span></span>
-<span id="cb7-9"><a aria-label="9"></a><span class="do">## </span></span>
-<span id="cb7-10"><a aria-label="10"></a><span class="do">## Coefficients:</span></span>
-<span id="cb7-11"><a aria-label="11"></a><span class="do">##                     Estimate Std. Error z value Pr(&gt;|z|)    </span></span>
-<span id="cb7-12"><a aria-label="12"></a><span class="do">## (Intercept)           1.7292     0.1270  13.616   &lt;2e-16 ***</span></span>
-<span id="cb7-13"><a aria-label="13"></a><span class="do">## size_categoryMedium   1.3465     0.1413   9.527   &lt;2e-16 ***</span></span>
-<span id="cb7-14"><a aria-label="14"></a><span class="do">## size_categoryLarge    2.4582     0.1353  18.173   &lt;2e-16 ***</span></span>
-<span id="cb7-15"><a aria-label="15"></a><span class="do">## ---</span></span>
-<span id="cb7-16"><a aria-label="16"></a><span class="do">## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</span></span>
-<span id="cb7-17"><a aria-label="17"></a><span class="do">## </span></span>
-<span id="cb7-18"><a aria-label="18"></a><span class="do">## (Dispersion parameter for poisson family taken to be 1)</span></span>
-<span id="cb7-19"><a aria-label="19"></a><span class="do">## </span></span>
-<span id="cb7-20"><a aria-label="20"></a><span class="do">##     Null deviance: 743.55  on 29  degrees of freedom</span></span>
-<span id="cb7-21"><a aria-label="21"></a><span class="do">## Residual deviance: 177.05  on 27  degrees of freedom</span></span>
-<span id="cb7-22"><a aria-label="22"></a><span class="do">## AIC: 316</span></span>
-<span id="cb7-23"><a aria-label="23"></a><span class="do">## </span></span>
-<span id="cb7-24"><a aria-label="24"></a><span class="do">## Number of Fisher Scoring iterations: 5</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>That third one is not a convenience. Poisson has only <strong>one</strong> parameter, λ, which is simultaneously its mean and its variance. You do not get to set them separately.</p>
+</div><div class="column" style="width:45%;">
+<div class="callout callout-warning callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Warning</strong></p>
+</div>
+<div class="callout-content">
+<p><strong>Remember the ratio.</strong> The variance of <code>spp</code> is <strong>145×</strong> its mean.</p>
+<p>Poisson insists that ratio is <strong>1</strong>.</p>
+<p>Fit it anyway — the failure is the content.</p>
+</div>
+</div>
+</div>
+<div class="callout callout-tip callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Tip</strong></p>
+</div>
+<div class="callout-content">
+<p><strong>Why <code>log</code> is the link.</strong> <span class="math inline">\(\log(\mu)\)</span> runs from −∞ to +∞, so the linear predictor can be any number at all and <span class="math inline">\(\mu = e^{\eta}\)</span> is still positive. Counts can never come out negative.</p>
+</div>
+</div>
 </div>
 </div></div>
 </section>
-<section id="poisson-glm-fitting-the-model" class="slide level2">
-<h2>Poisson GLM — Fitting the Model</h2>
+<section id="fitting-the-poisson-glm" class="slide level2 tight-code">
+<h2>Fitting the Poisson GLM</h2>
 <div class="columns">
 <div class="column" style="width:50%;">
-<p>Does island size category, as a whole, have a statistically significant effect on the number of plant species?</p>
-<ul>
-<li><code>test = "LR"</code>: important part!
-<ul>
-<li>normal ANOVA (with a Gaussian/normal distribution) test is an F-test.</li>
-<li>GLM (like Poisson) can’t use F-test in the same way
-<ul>
-<li>use a Likelihood Ratio (LR) test</li>
-<li>LR test statistically compares fit of full model (the one with size_category) to simpler null model (one without size_category)</li>
-<li>LR test tells us if it is significant</li>
-</ul></li>
-</ul></li>
-</ul>
-</div><div class="column" style="width:50%;">
-<p>Test overall effect of size_category</p>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a aria-label="1"></a><span class="fu">Anova</span>(model_poisson_gala, <span class="at">type =</span> <span class="st">"III"</span>, <span class="at">test =</span> <span class="st">"LR"</span>)</span>
-<span id="cb8-2"><a aria-label="2"></a><span class="do">## Analysis of Deviance Table (Type III tests)</span></span>
-<span id="cb8-3"><a aria-label="3"></a><span class="do">## </span></span>
-<span id="cb8-4"><a aria-label="4"></a><span class="do">## Response: Endemics</span></span>
-<span id="cb8-5"><a aria-label="5"></a><span class="do">##               LR Chisq Df Pr(&gt;Chisq)    </span></span>
-<span id="cb8-6"><a aria-label="6"></a><span class="do">## size_category    566.5  2  &lt; 2.2e-16 ***</span></span>
-<span id="cb8-7"><a aria-label="7"></a><span class="do">## ---</span></span>
-<span id="cb8-8"><a aria-label="8"></a><span class="do">## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb9"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a aria-label="1"></a>poiss_model <span class="ot">&lt;-</span> <span class="fu">glm</span>(spp <span class="sc">~</span> size_cat,</span>
+<span id="cb9-2"><a aria-label="2"></a>                   <span class="at">data =</span> g_df,</span>
+<span id="cb9-3"><a aria-label="3"></a>                   <span class="at">family =</span> <span class="fu">poisson</span>(<span class="at">link =</span> <span class="st">"log"</span>))</span>
+<span id="cb9-4"><a aria-label="4"></a></span>
+<span id="cb9-5"><a aria-label="5"></a><span class="fu">round</span>(<span class="fu">summary</span>(poiss_model)<span class="sc">$</span>coefficients, <span class="dv">4</span>)</span>
+<span id="cb9-6"><a aria-label="6"></a><span class="do">##                Estimate Std. Error z value Pr(&gt;|z|)</span></span>
+<span id="cb9-7"><a aria-label="7"></a><span class="do">## (Intercept)      2.6710     0.0793 33.6804        0</span></span>
+<span id="cb9-8"><a aria-label="8"></a><span class="do">## size_catmedium   1.3378     0.0883 15.1460        0</span></span>
+<span id="cb9-9"><a aria-label="9"></a><span class="do">## size_catlarge    2.7743     0.0837 33.1387        0</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</div><div class="column" style="width:50%;">
+<p>The model predicts the <strong>natural log</strong> of the expected count, so exponentiate to read it:</p>
+<ul>
+<li><span class="math inline">\(e^{2.671} = 14.5\)</span> species on a <strong>small</strong> island</li>
+<li><span class="math inline">\(e^{1.338} = 3.81\)</span> — a <strong>medium</strong> island has 3.8× the species of a small one</li>
+<li><span class="math inline">\(e^{2.774} = 16.0\)</span> — a <strong>large</strong> island has 16× the species of a small one</li>
+</ul>
+<div class="callout callout-important callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Important</strong></p>
+</div>
+<div class="callout-content">
+<p>With a log link, coefficients are <strong>multiplicative</strong>, not additive. A coefficient of β multiplies the mean by <span class="math inline">\(e^{\beta}\)</span>.</p>
+</div>
+</div>
 </div>
 </div></div>
 </section>
-<section id="poisson-glm-checking-dispersion" class="slide level2">
-<h2>Poisson GLM — Checking Dispersion</h2>
+<section id="testing-the-effect-why-lr-and-not-f" class="slide level2 tight-code">
+<h2>Testing the Effect — Why LR and Not <em>F</em></h2>
 <div class="columns">
 <div class="column" style="width:50%;">
-<p><strong>Poisson GLMs</strong> appropriate for <strong>count data</strong> and assumes variance equals mean - use the Gala Data and endemics - With natural log link, coefficients = <strong>multiplicative effects</strong>: - A coefficient of β means: for each 1-unit increase in X, the response is multiplied by exp(β) - For small β, exp(β) ≈ 1 + β, so β × 100% =app. %change</p>
 <div class="cell">
-<pre><code>## 
-## Call:
-## glm(formula = Endemics ~ size_category, family = poisson(link = "log"), 
-##     data = gala)
-## 
-## Coefficients:
-##                     Estimate Std. Error z value Pr(&gt;|z|)    
-## (Intercept)           1.7292     0.1270  13.616   &lt;2e-16 ***
-## size_categoryMedium   1.3465     0.1413   9.527   &lt;2e-16 ***
-## size_categoryLarge    2.4582     0.1353  18.173   &lt;2e-16 ***
-## ---
-## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
-## 
-## (Dispersion parameter for poisson family taken to be 1)
-## 
-##     Null deviance: 743.55  on 29  degrees of freedom
-## Residual deviance: 177.05  on 27  degrees of freedom
-## AIC: 316
-## 
-## Number of Fisher Scoring iterations: 5</code></pre>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb10"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a aria-label="1"></a><span class="fu">Anova</span>(poiss_model, <span class="at">type =</span> <span class="st">"III"</span>, <span class="at">test =</span> <span class="st">"LR"</span>)</span>
+<span id="cb10-2"><a aria-label="2"></a><span class="do">## Analysis of Deviance Table (Type III tests)</span></span>
+<span id="cb10-3"><a aria-label="3"></a><span class="do">## </span></span>
+<span id="cb10-4"><a aria-label="4"></a><span class="do">## Response: spp</span></span>
+<span id="cb10-5"><a aria-label="5"></a><span class="do">##          LR Chisq Df            Pr(&gt;Chisq)    </span></span>
+<span id="cb10-6"><a aria-label="6"></a><span class="do">## size_cat   2133.2  2 &lt; 0.00000000000000022 ***</span></span>
+<span id="cb10-7"><a aria-label="7"></a><span class="do">## ---</span></span>
+<span id="cb10-8"><a aria-label="8"></a><span class="do">## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 </div><div class="column" style="width:50%;">
 <ul>
-<li>check overdispersion- common in count data:</li>
-<li>Should be close to 1 for well-fitting Poisson model</li>
-<li>If &gt; 1.5, may indicate overdispersion</li>
-<li>Dispersion parameter measures obs var / expected var:</li>
-<li><strong>Dispersion ≈ 1</strong>: Good fit (var = mean)</li>
-<li><strong>Dispersion &gt; 1</strong>: Overdispersion (var &gt; mean)</li>
-<li><strong>Dispersion &lt; 1</strong>: <strong>Underdispersion</strong> (var &lt; mean)</li>
-<li>use Negative Binomial model</li>
+<li><p>An ANOVA <em>F</em>-test is a <strong>ratio of variances</strong>, and its denominator is the residual mean square — an estimate of <span class="math inline">\(\sigma^2\)</span>.</p></li>
+<li><p>A Poisson GLM <strong>never estimates a <span class="math inline">\(\sigma^2\)</span></strong>. The variance is not a free parameter; it is pinned to the mean. There is nothing to put in the denominator.</p></li>
+<li><p>So we use a <strong>likelihood ratio (LR)</strong> test instead: fit the model with <code>size_cat</code> and the model without it, and compare how much better the full model explains the data.</p></li>
+</ul>
+<p><span class="math display">\[\text{LR } \chi^2 = 2(\log L_{full} - \log L_{reduced})\]</span></p>
+<p><strong>Hold on to that 2133.2.</strong> It is about to shrink by a factor of 43.</p>
+</div></div>
+</section>
+<section id="three-ways-to-say-log-and-why-they-differ" class="slide level2">
+<h2>Three Ways to Say “Log” — and Why They Differ</h2>
+<div class="compact-table">
+<table class="caption-top">
+<colgroup>
+<col style="width: 19%">
+<col style="width: 33%">
+<col style="width: 46%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Model</th>
+<th>R code</th>
+<th>Interpretation of β₁</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>GLM, log link</strong></td>
+<td><code>glm(Y ~ X, family = poisson)</code></td>
+<td>A 1-unit change in X multiplies the <strong>mean</strong> of Y by <span class="math inline">\(e^{\beta_1}\)</span></td>
+</tr>
+<tr class="even">
+<td><strong>lm on logged Y</strong></td>
+<td><code>lm(log(Y) ~ X)</code></td>
+<td>A 1-unit change in X multiplies the <strong>median</strong> of Y by <span class="math inline">\(e^{\beta_1}\)</span></td>
+</tr>
+<tr class="odd">
+<td><strong>log-log</strong></td>
+<td><code>lm(log(Y) ~ log(X))</code></td>
+<td>A 1% change in X gives a β₁% change in Y</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="callout callout-important callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Important</strong></p>
+</div>
+<div class="callout-content">
+<p><strong>These are not the same model.</strong> A GLM with a log link models the log of the mean, <span class="math inline">\(\log(E[Y])\)</span>. Logging the response models the mean of the log, <span class="math inline">\(E[\log(Y)]\)</span> — which back-transforms to a <strong>geometric</strong> mean, not an arithmetic one. The GLM also never has to decide what to do with a zero count.</p>
+</div>
+</div>
+</div>
+</section>
+<section id="part-4-overdispersion-and-the-negative-binomial" class="slide level2 divider">
+<h2>Part 4 · Overdispersion and the Negative Binomial</h2>
+</section>
+<section id="checking-dispersion-the-test-that-matters" class="slide level2 tight-code">
+<h2>Checking Dispersion — the Test That Matters</h2>
+<div class="columns">
+<div class="column" style="width:50%;">
+<p>The <strong>dispersion parameter</strong> is observed variance over expected variance:</p>
+<p><span class="math display">\[\hat\phi = \frac{\sum \text{(Pearson residual)}^2}{\text{residual df}}\]</span></p>
+<ul>
+<li><strong>≈ 1</strong> — good fit, variance = mean</li>
+<li><strong>&gt; 1</strong> — <strong>overdispersion</strong>, variance &gt; mean</li>
+<li><strong>&lt; 1</strong> — underdispersion</li>
 </ul>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb10"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a aria-label="1"></a><span class="co"># Calculate the dispersion parameter</span></span>
-<span id="cb10-2"><a aria-label="2"></a><span class="co"># (Pearson's Chi-Squared statistic / residual degrees of freedom)</span></span>
-<span id="cb10-3"><a aria-label="3"></a>dispersion_gala <span class="ot">&lt;-</span> <span class="fu">sum</span>(<span class="fu">residuals</span>(model_poisson_gala, <span class="at">type =</span> <span class="st">"pearson"</span>)<span class="sc">^</span><span class="dv">2</span>) <span class="sc">/</span> </span>
-<span id="cb10-4"><a aria-label="4"></a>                   model_poisson_gala<span class="sc">$</span>df.residual</span>
-<span id="cb10-5"><a aria-label="5"></a></span>
-<span id="cb10-6"><a aria-label="6"></a><span class="co"># Print dispersion parameter</span></span>
-<span id="cb10-7"><a aria-label="7"></a><span class="fu">cat</span>(<span class="st">"Dispersion parameter:"</span>, <span class="fu">round</span>(dispersion_gala, <span class="dv">2</span>), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span>
-<span id="cb10-8"><a aria-label="8"></a><span class="do">## Dispersion parameter: 6.05</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb11"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a aria-label="1"></a><span class="fu">check_overdispersion</span>(poiss_model)</span>
+<span id="cb11-2"><a aria-label="2"></a><span class="do">## # Overdispersion test</span></span>
+<span id="cb11-3"><a aria-label="3"></a><span class="do">## </span></span>
+<span id="cb11-4"><a aria-label="4"></a><span class="do">##        dispersion ratio =  33.525</span></span>
+<span id="cb11-5"><a aria-label="5"></a><span class="do">##   Pearson's Chi-Squared = 871.642</span></span>
+<span id="cb11-6"><a aria-label="6"></a><span class="do">##                 p-value = &lt; 0.001</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</div><div class="column" style="width:50%;">
+<div class="callout callout-warning callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Warning</strong></p>
+</div>
+<div class="callout-content">
+<p><strong>Dispersion ratio 33.5, not 1.</strong></p>
+<p>The model is claiming the variance of a large island’s species count is about 232 — because Poisson forces variance = mean. The data say it is <strong>20,400</strong>.</p>
+</div>
+</div>
+</div>
+<blockquote>
+<p>⚠️ <code>shapiro.test(residuals(poiss_model))</code> will <strong>run</strong>, and give you a number. The number is meaningless — normality of raw residuals is not a Poisson assumption.</p>
+<p><strong>R will not stop you running a test that does not apply.</strong> Check the diagnostic that matches the model, not the one you remember.</p>
+</blockquote>
+</div></div>
+</section>
+<section id="the-dharma-residual-check" class="slide level2">
+<h2>The DHARMa Residual Check</h2>
+<div class="panel" data-column="screen">
+<div class="cell">
+<div class="cell-output-display">
+<div>
+<figure>
+<p><img data-src="glm_logistic_regression_lecture_files/figure-revealjs/glm-15-1.png" alt="DHARMa diagnostic plots for the Poisson GLM: a QQ-plot of scaled residuals showing severe departure with significant KS, dispersion and outlier tests, and a scaled-residuals-versus-predicted plot with significant quantile deviations." width="864"></p>
+</figure>
+</div>
+</div>
+</div>
+</div>
+<p>Ordinary GLM residuals are hard to read. <strong>DHARMa</strong> simulates from the fitted model and asks where each observation falls in its own predicted distribution — if the model is right, those are uniform. Here they are not, and the problem is not subtle.</p>
+</section>
+<section id="the-negative-binomial-a-second-parameter" class="slide level2 tight-code">
+<h2>The Negative Binomial — a Second Parameter</h2>
+<div class="columns">
+<div class="column" style="width:50%;">
+<p>The negative binomial adds <strong>theta</strong> (θ), which lets the variance exceed the mean by as much as it needs to:</p>
+<p><span class="math display">\[\operatorname{Var}(Y) = \mu + \frac{\mu^2}{\theta}\]</span></p>
+<p>As θ → ∞ this collapses back to the Poisson. A <strong>small</strong> θ means a lot of extra spread.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb12"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a aria-label="1"></a>nb_model <span class="ot">&lt;-</span> <span class="fu">glm.nb</span>(spp <span class="sc">~</span> size_cat, <span class="at">data =</span> g_df)</span>
+<span id="cb12-2"><a aria-label="2"></a></span>
+<span id="cb12-3"><a aria-label="3"></a><span class="fu">c</span>(<span class="at">theta =</span> nb_model<span class="sc">$</span>theta)</span>
+<span id="cb12-4"><a aria-label="4"></a><span class="do">##    theta </span></span>
+<span id="cb12-5"><a aria-label="5"></a><span class="do">## 1.660219</span></span>
+<span id="cb12-6"><a aria-label="6"></a></span>
+<span id="cb12-7"><a aria-label="7"></a><span class="fu">check_overdispersion</span>(nb_model)</span>
+<span id="cb12-8"><a aria-label="8"></a><span class="do">## # Overdispersion test (using simulated residuals)</span></span>
+<span id="cb12-9"><a aria-label="9"></a><span class="do">## </span></span>
+<span id="cb12-10"><a aria-label="10"></a><span class="do">##  dispersion ratio = 0.586</span></span>
+<span id="cb12-11"><a aria-label="11"></a><span class="do">##           p-value = 0.632</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</div><div class="column" style="width:50%;">
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb13"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a aria-label="1"></a><span class="fu">Anova</span>(nb_model, <span class="at">type =</span> <span class="st">"III"</span>, <span class="at">test =</span> <span class="st">"LR"</span>)</span>
+<span id="cb13-2"><a aria-label="2"></a><span class="do">## Analysis of Deviance Table (Type III tests)</span></span>
+<span id="cb13-3"><a aria-label="3"></a><span class="do">## </span></span>
+<span id="cb13-4"><a aria-label="4"></a><span class="do">## Response: spp</span></span>
+<span id="cb13-5"><a aria-label="5"></a><span class="do">##          LR Chisq Df       Pr(&gt;Chisq)    </span></span>
+<span id="cb13-6"><a aria-label="6"></a><span class="do">## size_cat   49.858  2 0.00000000001491 ***</span></span>
+<span id="cb13-7"><a aria-label="7"></a><span class="do">## ---</span></span>
+<span id="cb13-8"><a aria-label="8"></a><span class="do">## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</span></span>
+<span id="cb13-9"><a aria-label="9"></a></span>
+<span id="cb13-10"><a aria-label="10"></a><span class="fu">AIC</span>(poiss_model, nb_model)</span>
+<span id="cb13-11"><a aria-label="11"></a><span class="do">##             df       AIC</span></span>
+<span id="cb13-12"><a aria-label="12"></a><span class="do">## poiss_model  3 1057.1686</span></span>
+<span id="cb13-13"><a aria-label="13"></a><span class="do">## nb_model     4  283.9725</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div class="callout callout-note callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Note</strong></p>
+</div>
+<div class="callout-content">
+<p>The dispersion is gone, and the AIC drops by <strong>773</strong>. Same data, same predictor, same link — the only thing added was permission for the variance to be larger than the mean.</p>
+</div>
+</div>
 </div>
 </div></div>
 </section>
-<section id="poisson-glm-estimated-marginal-means-on-the-count-scale" class="slide level2">
-<h2>Poisson GLM — Estimated Marginal Means on the Count Scale</h2>
+<section id="what-overdispersion-did-to-your-p-value" class="slide level2 tight-code">
+<h2>What Overdispersion Did to Your <em>p</em>-Value</h2>
 <div class="columns">
-<div class="column" style="width:60%;">
-<ul>
-<li><strong>Poisson GLMs</strong> are appropriate for <strong>count data</strong></li>
-<li>assumes that the variance equals the mean.</li>
-</ul>
+<div class="column" style="width:52%;">
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb11"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a aria-label="1"></a><span class="co"># 1. Calculate Estimated Marginal Means (EMMs)</span></span>
-<span id="cb11-2"><a aria-label="2"></a><span class="co"># type = "response" converts the log-means back to the "Endemics count" scale</span></span>
-<span id="cb11-3"><a aria-label="3"></a>emm_gala <span class="ot">&lt;-</span> <span class="fu">emmeans</span>(model_poisson_gala, </span>
-<span id="cb11-4"><a aria-label="4"></a>                    <span class="at">specs =</span> <span class="sc">~</span> size_category,</span>
-<span id="cb11-5"><a aria-label="5"></a>                    <span class="at">type =</span> <span class="st">"response"</span>)</span>
-<span id="cb11-6"><a aria-label="6"></a><span class="fu">print</span>(emm_gala)</span>
-<span id="cb11-7"><a aria-label="7"></a><span class="do">##  size_category  rate    SE  df asymp.LCL asymp.UCL</span></span>
-<span id="cb11-8"><a aria-label="8"></a><span class="do">##  Small          5.64 0.716 Inf      4.39      7.23</span></span>
-<span id="cb11-9"><a aria-label="9"></a><span class="do">##  Medium        21.67 1.340 Inf     19.19     24.47</span></span>
-<span id="cb11-10"><a aria-label="10"></a><span class="do">##  Large         65.86 3.070 Inf     60.11     72.15</span></span>
-<span id="cb11-11"><a aria-label="11"></a><span class="do">## </span></span>
-<span id="cb11-12"><a aria-label="12"></a><span class="do">## Confidence level used: 0.95 </span></span>
-<span id="cb11-13"><a aria-label="13"></a><span class="do">## Intervals are back-transformed from the log scale</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<pre><code>##                estimate SE_poisson SE_negbin
+## (Intercept)      2.6710      0.079     0.247
+## size_catmedium   1.3378      0.088     0.336
+## size_catlarge    2.7743      0.084     0.403</code></pre>
 </div>
-</div><div class="column" style="width:40%;">
-<p>Let’s check the emmeans and pairwise comparisons</p>
+<div class="compact-table">
+<table class="caption-top">
+<thead>
+<tr class="header">
+<th></th>
+<th>Poisson</th>
+<th>Negative binomial</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>size_cat</code> LR χ²</td>
+<td><strong>2133.2</strong></td>
+<td><strong>49.9</strong></td>
+</tr>
+<tr class="even">
+<td>dispersion ratio</td>
+<td>33.5</td>
+<td>0.59</td>
+</tr>
+<tr class="odd">
+<td>AIC</td>
+<td>1057.2</td>
+<td>284.0</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div><div class="column" style="width:48%;">
+<div class="callout callout-important callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Important</strong></p>
+</div>
+<div class="callout-content">
+<p><strong>Every coefficient is identical to four decimal places.</strong></p>
+<p>The two models put the means in exactly the same place. What changed is the <strong>standard errors</strong> — the Poisson’s are 3× to 5× too small, and the LR χ² is inflated <strong>43-fold</strong>.</p>
+</div>
+</div>
+</div>
+<p>Overdispersion does not move your estimate. It makes you <strong>far more confident in it than you are entitled to be</strong> — smaller SEs, bigger test statistics, narrower intervals, smaller <em>p</em>-values.</p>
+<p>Both models here say <em>p</em> &lt; 0.001. The conclusion did not change. Only the <strong>honesty</strong> of it did — and that is still worth getting right, because the next dataset will be the one where it flips.</p>
+</div></div>
+</section>
+<section id="estimated-marginal-means-on-the-count-scale" class="slide level2 tight-code">
+<h2>Estimated Marginal Means on the Count Scale</h2>
+<div class="columns">
+<div class="column" style="width:52%;">
 <div class="cell">
-<pre><code>##  contrast        ratio     SE  df null z.ratio p.value
-##  Small / Medium 0.2601 0.0368 Inf    1  -9.527 &lt;0.0001
-##  Small / Large  0.0856 0.0116 Inf    1 -18.173 &lt;0.0001
-##  Medium / Large 0.3290 0.0255 Inf    1 -14.334 &lt;0.0001
-## 
-## P value adjustment: tukey method for comparing a family of 3 estimates 
-## Tests are performed on the log scale
-##  size_category  rate    SE  df asymp.LCL asymp.UCL .group
-##  Small          5.64 0.716 Inf      4.39      7.23  a    
-##  Medium        21.67 1.340 Inf     19.19     24.47   b   
-##  Large         65.86 3.070 Inf     60.11     72.15    c  
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb15"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb15-1"><a aria-label="1"></a>nb_emm <span class="ot">&lt;-</span> <span class="fu">emmeans</span>(nb_model, <span class="sc">~</span> size_cat,</span>
+<span id="cb15-2"><a aria-label="2"></a>                  <span class="at">type =</span> <span class="st">"response"</span>)</span>
+<span id="cb15-3"><a aria-label="3"></a>nb_emm</span>
+<span id="cb15-4"><a aria-label="4"></a><span class="do">##  size_cat response    SE  df asymp.LCL asymp.UCL</span></span>
+<span id="cb15-5"><a aria-label="5"></a><span class="do">##  small        14.5  3.57 Inf      8.91      23.5</span></span>
+<span id="cb15-6"><a aria-label="6"></a><span class="do">##  medium       55.1 12.50 Inf     35.27      86.0</span></span>
+<span id="cb15-7"><a aria-label="7"></a><span class="do">##  large       231.7 73.70 Inf    124.22     432.0</span></span>
+<span id="cb15-8"><a aria-label="8"></a><span class="do">## </span></span>
+<span id="cb15-9"><a aria-label="9"></a><span class="do">## Confidence level used: 0.95 </span></span>
+<span id="cb15-10"><a aria-label="10"></a><span class="do">## Intervals are back-transformed from the log scale</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p><code>type = "response"</code> back-transforms from the log scale, which is why the confidence limits are <strong>not symmetric</strong> around each mean — the interval was symmetric on the log scale, and exponentiating stretches the upper half.</p>
+</div><div class="column" style="width:48%;">
+<div class="cell">
+<pre><code>##  size_cat response    SE  df asymp.LCL asymp.UCL .group
+##  small        14.5  3.57 Inf      8.91      23.5  a    
+##  medium       55.1 12.50 Inf     35.27      86.0   b   
+##  large       231.7 73.70 Inf    124.22     432.0    c  
 ## 
 ## Confidence level used: 0.95 
 ## Intervals are back-transformed from the log scale 
@@ -896,176 +978,55 @@ family = gaussian(link = “identity”)) <strong>Residual Standard Error</stron
 </div>
 </div></div>
 </section>
-<section id="poisson-glm-visualization-and-interpretation" class="slide level2">
-<h2>Poisson GLM: Visualization and Interpretation</h2>
+<section id="poisson-vs.-negative-binomial-drawn" class="slide level2">
+<h2>Poisson vs.&nbsp;Negative Binomial, Drawn</h2>
 <div class="columns">
-<div class="column" style="width:60%;">
-<ul>
-<li><p>Plot raw data and our emmeans results</p>
-<ul>
-<li>shows the model’s predictions on top of the real data</li>
-</ul>
+<div class="column" style="width:58%;">
 <div class="cell">
 <div class="cell-output-display">
 <div>
 <figure>
-<p><img data-src="glm_logistic_regression_lecture_files/figure-revealjs/poisson-plot-1.png" alt="Jittered scatterplot of raw endemic species counts by island size category, with the Poisson GLM's estimated mean rate and confidence interval error bar overlaid in blue for each category." width="384"></p>
-</figure>
-</div>
-</div>
-</div></li>
-</ul>
-</div><div class="column" style="width:40%;">
-<h3 id="interpreting-poisson-glm-coefficients">Interpreting Poisson GLM Coefficients</h3>
-<ul>
-<li>In a Poisson GLM with a log link function:
-<ul>
-<li>Coefficientschanges in the <strong>log</strong> of the expected count</li>
-<li>When exponentiated (<code>exp(coef)</code>)= multiplicative effects</li>
-<li><code>exp(coef)</code> = 0.90 = the expected count is 90% of reference</li>
-</ul></li>
-</ul>
-</div></div>
-</section>
-<section id="comparison-of-interpretation" class="slide level2">
-<h2>Comparison of interpretation</h2>
-<ul>
-<li>Interpretation of β₁ GLM (Log-Link) glm(Y~X, family = poisson)
-<ul>
-<li>1-unit change in X multiplies the mean of Y by exp(β₁)</li>
-</ul></li>
-<li>lm (Log-Response) lm(log(Y) ~ X)
-<ul>
-<li>1-unit change in X multiplies median Y by exp(β₁).</li>
-</ul></li>
-<li>lm (Log-Log) lm(log(Y) ~ log(X))
-<ul>
-<li>A 1% change in x is a beta percent change in y…</li>
-</ul></li>
-</ul>
-<table class="caption-top">
-<colgroup>
-<col style="width: 33%">
-<col style="width: 33%">
-<col style="width: 33%">
-</colgroup>
-<thead>
-<tr class="header">
-<th>Model Type</th>
-<th>R Code (Example)</th>
-<th>Interpretation of β₁</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td>GLM (Log-Link)</td>
-<td><code>glm(Y ~ X, family = poisson)</code></td>
-<td>A 1-unit change in X multiplies the mean of Y by exp(β₁).</td>
-</tr>
-<tr class="even">
-<td>lm (Log-Response)</td>
-<td><code>lm(log(Y) ~ X)</code></td>
-<td>A 1-unit change in X multiplies the median of Y by exp(β₁).</td>
-</tr>
-<tr class="odd">
-<td>lm (Log-Log)</td>
-<td><code>lm(log(Y) ~ log(X))</code></td>
-<td>A 1% change in X is associated with a β₁% change in Y.</td>
-</tr>
-</tbody>
-</table>
-</section>
-<section id="checking-model-assumptions-with-dharma" class="slide level2">
-<h2>Checking Model Assumptions with DHARMa</h2>
-<div class="panel" data-column="screen">
-<div class="cell">
-<div class="cell-output-display">
-<div>
-<figure>
-<p><img data-src="glm_logistic_regression_lecture_files/figure-revealjs/gala-poisson-diagnostics-1.png" alt="DHARMa diagnostic plots for the Poisson GLM: a QQ-plot of scaled residuals with a KS-test result, and a scaled-residuals-versus-predicted plot, used to check the model's distributional assumptions." width="345"></p>
+<p><img data-src="glm_logistic_regression_lecture_files/figure-revealjs/glm-21-1.png" alt="Jittered raw species counts by island size category on a log scale, with Poisson estimated means and intervals in red and negative binomial estimated means and intervals in blue. The two sets of means sit on top of each other while the negative binomial intervals are several times wider." width="441"></p>
 </figure>
 </div>
 </div>
 </div>
+</div><div class="column" style="width:42%;">
+<p>The <strong>means land on top of each other.</strong> Only the intervals differ.</p>
+<p>For the large islands:</p>
+<ul>
+<li>Poisson: 232 (220 – 244)</li>
+<li>Negative binomial: 232 (124 – 432)</li>
+</ul>
+<p>The Poisson interval is 24 species wide and excludes most of the observed data. The negative binomial interval is 308 species wide and actually contains it.</p>
+<div class="callout callout-tip callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
 </div>
-</section>
-<section id="dealing-with-overdispersion-in-count-data" class="slide level2">
-<h2>Dealing with Overdispersion in Count Data</h2>
-<div class="columns">
-<div class="column" style="width:60%;">
-<p>When overdispersion (variance &gt; mean) - use negative binomial model <code>model_nb &lt;- glm.nb(Endemics ~ area_cat, data = gala)</code></p>
-<ul>
-<li><p>negative binomial model includes a dispersion parameter (theta)</p>
-<ul>
-<li>allows variance to be larger than mean</li>
-<li><strong>standard errors bigger because NB model accounts for high variability (overdispersion)</strong></li>
-<li>estimates dispersion parameter ‘Theta’ (or 1/theta)</li>
-</ul>
-<div class="cell">
-<pre><code>## 
-## Call:
-## glm.nb(formula = Endemics ~ size_category, data = gala, init.theta = 3.855017567, 
-##     link = log)
-## 
-## Coefficients:
-##                     Estimate Std. Error z value Pr(&gt;|z|)    
-## (Intercept)           1.7292     0.1993   8.678  &lt; 2e-16 ***
-## size_categoryMedium   1.3465     0.2553   5.274 1.33e-07 ***
-## size_categoryLarge    2.4582     0.2810   8.750  &lt; 2e-16 ***
-## ---
-## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
-## 
-## (Dispersion parameter for Negative Binomial(3.855) family taken to be 1)
-## 
-##     Null deviance: 115.697  on 29  degrees of freedom
-## Residual deviance:  35.481  on 27  degrees of freedom
-## AIC: 227.27
-## 
-## Number of Fisher Scoring iterations: 1
-## 
-## 
-##               Theta:  3.86 
-##           Std. Err.:  1.39 
-## 
-##  2 x log-likelihood:  -219.269</code></pre>
-</div></li>
-</ul>
-</div><div class="column" style="width:40%;">
-<p>Let’s compare the predictions from both models:</p>
-<div class="cell">
-<div class="cell-output-display">
-<div>
-<figure>
-<p><img data-src="glm_logistic_regression_lecture_files/figure-revealjs/gala-compare-models-1.png" alt="Scatterplot comparing predicted endemic-species counts from the Poisson GLM (x-axis) to the negative binomial GLM (y-axis), colored by island size category, with a dashed 1-to-1 reference line showing the two models give nearly identical point predictions." width="384"></p>
-</figure>
+<p><strong>Tip</strong></p>
+</div>
+<div class="callout-content">
+<p><strong>Report the one whose diagnostics pass</strong>, not the one with the smaller <em>p</em>-value.</p>
 </div>
 </div>
 </div>
 </div></div>
 </section>
-<section id="part-4-logistic-regression" class="slide level2 divider">
-<h2>Part 4 · Logistic Regression</h2>
+<section id="part-5-logistic-regression" class="slide level2 divider">
+<h2>Part 5 · Logistic Regression</h2>
 </section>
-<section id="logistic-regression---introduction" class="slide level2">
-<h2>Logistic Regression - Introduction</h2>
+<section id="a-binary-response-is-the-other-kind-of-non-normal" class="slide level2">
+<h2>A Binary Response Is the Other Kind of Non-Normal</h2>
 <div class="columns">
-<div class="column" style="width:60%;">
-<p>Logistic regression is a GLM used when the response variable is binary (e.g., dead/alive, present/absent). It models the probability of the response being “1” (success) given predictor values.</p>
-<ul>
-<li>Logistic regression model:
-<ul>
-<li><span class="math inline">\(\pi(x) = \frac{e^{\beta_0 + \beta_1 x}}{1 + e^{\beta_0 + \beta_1 x}}\)</span></li>
-<li>Where:</li>
-<li><span class="math inline">\(\pi(x)\)</span> is the probability that Y = 1 given X = x</li>
-<li><span class="math inline">\(\beta_0\)</span> is the intercept</li>
-<li><span class="math inline">\(\beta_1\)</span> is the slope (rate of change in <span class="math inline">\(\pi(x)\)</span> for a unit change in X)</li>
-</ul></li>
-<li>To linearize this relationship, we use the logit link function:
-<ul>
-<li><span class="math inline">\(g(x) = \log\left(\frac{\pi(x)}{1-\pi(x)}\right) = \beta_0 + \beta_1 x\)</span></li>
-</ul></li>
-<li>transforms probability (bounded between 0 and 1) to linear fx ranges from -∞ to +∞.</li>
-</ul>
+<div class="column" style="width:58%;">
+<p>A count was one kind of non-normal response. A <strong>yes/no</strong> is another — dead/alive, present/absent, infected/healthy.</p>
+<p>Logistic regression models the <strong>probability</strong> that Y = 1:</p>
+<p><span class="math display">\[\pi(x) = \frac{e^{\beta_0 + \beta_1 x}}{1 + e^{\beta_0 + \beta_1 x}}\]</span></p>
+<p>The <strong>logit</strong> link stretches probability — stuck between 0 and 1 — onto a scale that runs from −∞ to +∞:</p>
+<p><span class="math display">\[g(x) = \log\left(\frac{\pi(x)}{1-\pi(x)}\right) = \beta_0 + \beta_1 x\]</span></p>
+<p>The thing inside the log, <span class="math inline">\(\pi/(1-\pi)\)</span>, is the <strong>odds</strong>. So the linear model is a model of <strong>log-odds</strong>.</p>
 <div class="callout callout-note callout-titled callout-style-default">
 <div class="callout-body">
 <div class="callout-title">
@@ -1079,324 +1040,442 @@ family = gaussian(link = “identity”)) <strong>Residual Standard Error</stron
 </div>
 </div>
 </div>
-</div><div class="column" style="width:40%;">
+</div><div class="column" style="width:42%;">
 <div class="cell">
 <div class="cell-output-display">
 <div>
 <figure>
-<p><img data-src="glm_logistic_regression_lecture_files/figure-revealjs/logistic-curve-1.png" alt="S-shaped logistic (sigmoid) curve mapping the linear predictor to probability, with dashed reference lines at probability 0, 0.5, and 1 and at a linear predictor of 0, illustrating the logit link function." width="384"></p>
+<p><img data-src="glm_logistic_regression_lecture_files/figure-revealjs/glm-22-1.png" alt="S-shaped logistic curve mapping the linear predictor to probability, with dashed reference lines at probability 0, 0.5 and 1 and at a linear predictor of 0." width="326"></p>
 </figure>
 </div>
 </div>
 </div>
 </div></div>
 </section>
-<section id="logistic-regression-the-lizard-island-data" class="slide level2">
-<h2>Logistic Regression — The Lizard Island Data</h2>
-<p>Based on the example from Polis et al.&nbsp;(1998) - presence/absence of lizards (<em>Uta</em>) on islands in Gulf of California based on perimeter/area ratio.</p>
-<div class="panel" data-column="screen">
-<div class="cell">
-<div class="cell-output-display">
-<div>
-<figure>
-<p><img data-src="glm_logistic_regression_lecture_files/figure-revealjs/lizard-data-1.png" alt="Scatterplot of lizard presence (0/1) versus perimeter-to-area ratio for 30 islands, showing presence at low ratios and absence at high ratios with mixed outcomes in between." width="384"></p>
-</figure>
-</div>
-</div>
-</div>
-</div>
-</section>
-<section id="logistic-regression-fitting-the-model" class="slide level2">
-<h2>Logistic Regression — Fitting the Model</h2>
-<p>Based on the example from Polis et al.&nbsp;(1998) - presence/absence of lizards (<em>Uta</em>) on islands in Gulf of California based on perimeter/area ratio.</p>
-<div class="panel" data-column="screen">
-<div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb14"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a aria-label="1"></a><span class="co"># Fit the logistic regression model</span></span>
-<span id="cb14-2"><a aria-label="2"></a>lizard_model <span class="ot">&lt;-</span> <span class="fu">glm</span>(uta_present <span class="sc">~</span> pa_ratio, </span>
-<span id="cb14-3"><a aria-label="3"></a>                    <span class="at">data =</span> island_data, </span>
-<span id="cb14-4"><a aria-label="4"></a>                    <span class="at">family =</span> <span class="fu">binomial</span>(<span class="at">link =</span> <span class="st">"logit"</span>))</span>
-<span id="cb14-5"><a aria-label="5"></a></span>
-<span id="cb14-6"><a aria-label="6"></a><span class="co"># Model summary</span></span>
-<span id="cb14-7"><a aria-label="7"></a><span class="fu">summary</span>(lizard_model)</span>
-<span id="cb14-8"><a aria-label="8"></a><span class="do">## </span></span>
-<span id="cb14-9"><a aria-label="9"></a><span class="do">## Call:</span></span>
-<span id="cb14-10"><a aria-label="10"></a><span class="do">## glm(formula = uta_present ~ pa_ratio, family = binomial(link = "logit"), </span></span>
-<span id="cb14-11"><a aria-label="11"></a><span class="do">##     data = island_data)</span></span>
-<span id="cb14-12"><a aria-label="12"></a><span class="do">## </span></span>
-<span id="cb14-13"><a aria-label="13"></a><span class="do">## Coefficients:</span></span>
-<span id="cb14-14"><a aria-label="14"></a><span class="do">##             Estimate Std. Error z value Pr(&gt;|z|)   </span></span>
-<span id="cb14-15"><a aria-label="15"></a><span class="do">## (Intercept)   5.9374     2.1297   2.788  0.00530 **</span></span>
-<span id="cb14-16"><a aria-label="16"></a><span class="do">## pa_ratio     -0.1493     0.0517  -2.887  0.00388 **</span></span>
-<span id="cb14-17"><a aria-label="17"></a><span class="do">## ---</span></span>
-<span id="cb14-18"><a aria-label="18"></a><span class="do">## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</span></span>
-<span id="cb14-19"><a aria-label="19"></a><span class="do">## </span></span>
-<span id="cb14-20"><a aria-label="20"></a><span class="do">## (Dispersion parameter for binomial family taken to be 1)</span></span>
-<span id="cb14-21"><a aria-label="21"></a><span class="do">## </span></span>
-<span id="cb14-22"><a aria-label="22"></a><span class="do">##     Null deviance: 41.455  on 29  degrees of freedom</span></span>
-<span id="cb14-23"><a aria-label="23"></a><span class="do">## Residual deviance: 19.090  on 28  degrees of freedom</span></span>
-<span id="cb14-24"><a aria-label="24"></a><span class="do">## AIC: 23.09</span></span>
-<span id="cb14-25"><a aria-label="25"></a><span class="do">## </span></span>
-<span id="cb14-26"><a aria-label="26"></a><span class="do">## Number of Fisher Scoring iterations: 6</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-</div>
-</div>
-</section>
-<section id="lizard-example-visualization-and-testing" class="slide level2 scrollable">
-<h2>Lizard Example: Visualization and Testing</h2>
+<section id="the-polis-lizard-data" class="slide level2 tight-code">
+<h2>The Polis Lizard Data</h2>
 <div class="columns">
-<div class="column" style="width:60%;">
-<p>Let’s visualize the data and the fitted model:</p>
+<div class="column" style="width:50%;">
+<p>Polis et al.&nbsp;(1998) recorded whether the lizard <em>Uta</em> was present on <strong>19 islands</strong> in the Gulf of California, against each island’s <strong>perimeter-to-area ratio</strong> — a measure of how exposed its shoreline is.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb17"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb17-1"><a aria-label="1"></a>polis_df <span class="sc">%&gt;%</span></span>
+<span id="cb17-2"><a aria-label="2"></a>  dplyr<span class="sc">::</span><span class="fu">select</span>(island, paratio, uta, pa) <span class="sc">%&gt;%</span></span>
+<span id="cb17-3"><a aria-label="3"></a>  <span class="fu">head</span>(<span class="dv">5</span>)</span>
+<span id="cb17-4"><a aria-label="4"></a><span class="do">## # A tibble: 5 × 4</span></span>
+<span id="cb17-5"><a aria-label="5"></a><span class="do">##   island     paratio uta      pa</span></span>
+<span id="cb17-6"><a aria-label="6"></a><span class="do">##   &lt;chr&gt;        &lt;dbl&gt; &lt;chr&gt; &lt;dbl&gt;</span></span>
+<span id="cb17-7"><a aria-label="7"></a><span class="do">## 1 Bota         15.4  P         1</span></span>
+<span id="cb17-8"><a aria-label="8"></a><span class="do">## 2 Cabeza        5.63 P         1</span></span>
+<span id="cb17-9"><a aria-label="9"></a><span class="do">## 3 Cerraja      25.9  P         1</span></span>
+<span id="cb17-10"><a aria-label="10"></a><span class="do">## 4 Coronadito   15.2  A         0</span></span>
+<span id="cb17-11"><a aria-label="11"></a><span class="do">## 5 Flecha       13.0  P         1</span></span>
+<span id="cb17-12"><a aria-label="12"></a></span>
+<span id="cb17-13"><a aria-label="13"></a><span class="fu">count</span>(polis_df, uta)</span>
+<span id="cb17-14"><a aria-label="14"></a><span class="do">## # A tibble: 2 × 2</span></span>
+<span id="cb17-15"><a aria-label="15"></a><span class="do">##   uta       n</span></span>
+<span id="cb17-16"><a aria-label="16"></a><span class="do">##   &lt;chr&gt; &lt;int&gt;</span></span>
+<span id="cb17-17"><a aria-label="17"></a><span class="do">## 1 A         9</span></span>
+<span id="cb17-18"><a aria-label="18"></a><span class="do">## 2 P        10</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</div><div class="column" style="width:50%;">
 <div class="cell">
 <div class="cell-output-display">
 <div>
 <figure>
-<p><img data-src="glm_logistic_regression_lecture_files/figure-revealjs/lizard-plot-1.png" alt="Scatterplot of observed lizard presence/absence versus perimeter-to-area ratio, with the fitted logistic regression probability curve overlaid in blue, declining from near 1 at low ratios to near 0 at high ratios." width="384"></p>
+<p><img data-src="glm_logistic_regression_lecture_files/figure-revealjs/glm-24-1.png" alt="Scatterplot of Uta lizard presence coded 0 or 1 against each island's perimeter-to-area ratio, with presence concentrated at low ratios and absence at high ratios." width="345"></p>
 </figure>
 </div>
 </div>
 </div>
-</div><div class="column" style="width:40%;">
-<ul>
-<li>Test null hypothesis that β₁ = 0
-<ul>
-<li>no relationship between P/A ratio and lizard presence</li>
-</ul></li>
-<li>There are two common ways to test this hypothesis:</li>
-</ul>
-<ol type="1">
-<li><strong>Wald test</strong>: Tests if the parameter estimate divided by its standard error differs significantly from zero</li>
-<li><strong>Likelihood ratio test</strong>: Compares the fit of the full model to a reduced model without the predictor variable</li>
-</ol>
-<div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb15"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb15-1"><a aria-label="1"></a>reduced_model <span class="ot">&lt;-</span> <span class="fu">glm</span>(uta_present <span class="sc">~</span> <span class="dv">1</span>, </span>
-<span id="cb15-2"><a aria-label="2"></a>                     <span class="at">data =</span> island_data, </span>
-<span id="cb15-3"><a aria-label="3"></a>                     <span class="at">family =</span> <span class="fu">binomial</span>(<span class="at">link =</span> <span class="st">"logit"</span>))</span>
-<span id="cb15-4"><a aria-label="4"></a><span class="fu">anova</span>(reduced_model, lizard_model, <span class="at">test =</span> <span class="st">"Chisq"</span>)</span>
-<span id="cb15-5"><a aria-label="5"></a><span class="do">## Analysis of Deviance Table</span></span>
-<span id="cb15-6"><a aria-label="6"></a><span class="do">## </span></span>
-<span id="cb15-7"><a aria-label="7"></a><span class="do">## Model 1: uta_present ~ 1</span></span>
-<span id="cb15-8"><a aria-label="8"></a><span class="do">## Model 2: uta_present ~ pa_ratio</span></span>
-<span id="cb15-9"><a aria-label="9"></a><span class="do">##   Resid. Df Resid. Dev Df Deviance  Pr(&gt;Chi)    </span></span>
-<span id="cb15-10"><a aria-label="10"></a><span class="do">## 1        29     41.455                          </span></span>
-<span id="cb15-11"><a aria-label="11"></a><span class="do">## 2        28     19.090  1   22.365 2.254e-06 ***</span></span>
-<span id="cb15-12"><a aria-label="12"></a><span class="do">## ---</span></span>
-<span id="cb15-13"><a aria-label="13"></a><span class="do">## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="callout callout-note callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Note</strong></p>
+</div>
+<div class="callout-content">
+<p>These are the data from the paper, as reproduced in <strong>Quinn &amp; Keough Box 13-1</strong> — the same file the activity uses.</p>
+</div>
+</div>
 </div>
 </div></div>
 </section>
-<section id="interpreting-the-odds-ratio" class="slide level2">
+<section id="fitting-the-logistic-model" class="slide level2 tight-code scrollable">
+<h2>Fitting the Logistic Model</h2>
+<div class="columns">
+<div class="column" style="width:50%;">
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb18"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb18-1"><a aria-label="1"></a>lizard_model <span class="ot">&lt;-</span> <span class="fu">glm</span>(pa <span class="sc">~</span> paratio,</span>
+<span id="cb18-2"><a aria-label="2"></a>                    <span class="at">data =</span> polis_df,</span>
+<span id="cb18-3"><a aria-label="3"></a>                    <span class="at">family =</span> <span class="fu">binomial</span>(<span class="at">link =</span> <span class="st">"logit"</span>))</span>
+<span id="cb18-4"><a aria-label="4"></a></span>
+<span id="cb18-5"><a aria-label="5"></a><span class="fu">round</span>(<span class="fu">summary</span>(lizard_model)<span class="sc">$</span>coefficients, <span class="dv">4</span>)</span>
+<span id="cb18-6"><a aria-label="6"></a><span class="do">##             Estimate Std. Error z value Pr(&gt;|z|)</span></span>
+<span id="cb18-7"><a aria-label="7"></a><span class="do">## (Intercept)   3.6061     1.6953  2.1272   0.0334</span></span>
+<span id="cb18-8"><a aria-label="8"></a><span class="do">## paratio      -0.2196     0.1005 -2.1842   0.0289</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>Two ways to test <span class="math inline">\(H_0: \beta_1 = 0\)</span>:</p>
+<ol type="1">
+<li><strong>Wald test</strong> — estimate / SE, the <code>z</code> column above</li>
+<li><strong>Likelihood ratio test</strong> — compare the full model to one with no predictor</li>
+</ol>
+</div><div class="column" style="width:50%;">
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb19"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb19-1"><a aria-label="1"></a>null_model <span class="ot">&lt;-</span> <span class="fu">glm</span>(pa <span class="sc">~</span> <span class="dv">1</span>, <span class="at">data =</span> polis_df,</span>
+<span id="cb19-2"><a aria-label="2"></a>                  <span class="at">family =</span> <span class="fu">binomial</span>(<span class="at">link =</span> <span class="st">"logit"</span>))</span>
+<span id="cb19-3"><a aria-label="3"></a></span>
+<span id="cb19-4"><a aria-label="4"></a><span class="fu">anova</span>(null_model, lizard_model, <span class="at">test =</span> <span class="st">"Chisq"</span>)</span>
+<span id="cb19-5"><a aria-label="5"></a><span class="do">## Analysis of Deviance Table</span></span>
+<span id="cb19-6"><a aria-label="6"></a><span class="do">## </span></span>
+<span id="cb19-7"><a aria-label="7"></a><span class="do">## Model 1: pa ~ 1</span></span>
+<span id="cb19-8"><a aria-label="8"></a><span class="do">## Model 2: pa ~ paratio</span></span>
+<span id="cb19-9"><a aria-label="9"></a><span class="do">##   Resid. Df Resid. Dev Df Deviance  Pr(&gt;Chi)    </span></span>
+<span id="cb19-10"><a aria-label="10"></a><span class="do">## 1        18     26.287                          </span></span>
+<span id="cb19-11"><a aria-label="11"></a><span class="do">## 2        17     14.221  1   12.066 0.0005134 ***</span></span>
+<span id="cb19-12"><a aria-label="12"></a><span class="do">## ---</span></span>
+<span id="cb19-13"><a aria-label="13"></a><span class="do">## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>The LR test is the one to report — it is better behaved at small <em>n</em>, and 19 islands is small.</p>
+</div></div>
+</section>
+<section id="the-fitted-probability-curve" class="slide level2">
+<h2>The Fitted Probability Curve</h2>
+<div class="columns">
+<div class="column" style="width:55%;">
+<div class="cell">
+<div class="cell-output-display">
+<div>
+<figure>
+<p><img data-src="glm_logistic_regression_lecture_files/figure-revealjs/glm-27-1.png" alt="Observed Uta presence and absence plotted against perimeter-to-area ratio with the fitted logistic probability curve and its confidence band overlaid, falling from near 1 at low ratios to near 0 above a ratio of about 25." width="422"></p>
+</figure>
+</div>
+</div>
+</div>
+</div><div class="column" style="width:45%;">
+<p>The curve crosses <strong>p = 0.5</strong> at a perimeter-to-area ratio of</p>
+<p><span class="math display">\[-\frac{\beta_0}{\beta_1} = -\frac{3.606}{-0.2196} = 16.4\]</span></p>
+<p>Below that, <em>Uta</em> is more likely present than absent; above it, more likely absent.</p>
+<div class="callout callout-tip callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Tip</strong></p>
+</div>
+<div class="callout-content">
+<p><strong>The curve is the link doing its job.</strong> A straight line would have crossed below zero on the right of this plot and predicted a negative probability.</p>
+</div>
+</div>
+</div>
+</div></div>
+</section>
+<section id="interpreting-the-odds-ratio" class="slide level2 tight-code">
 <h2>Interpreting the Odds Ratio</h2>
-<h3 id="working-with-odds-ratios">Working with Odds Ratios</h3>
-<p>Odds ratio represents how odds of event (e.g., lizard presence) change with unit increase in predictor</p>
+<div class="columns">
+<div class="column" style="width:48%;">
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb20"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb20-1"><a aria-label="1"></a><span class="fu">exp</span>(<span class="fu">coef</span>(lizard_model))</span>
+<span id="cb20-2"><a aria-label="2"></a><span class="do">## (Intercept)     paratio </span></span>
+<span id="cb20-3"><a aria-label="3"></a><span class="do">##  36.8210344   0.8028734</span></span>
+<span id="cb20-4"><a aria-label="4"></a></span>
+<span id="cb20-5"><a aria-label="5"></a><span class="fu">exp</span>(<span class="fu">confint</span>(lizard_model, <span class="st">"paratio"</span>))</span>
+<span id="cb20-6"><a aria-label="6"></a><span class="do">##     2.5 %    97.5 % </span></span>
+<span id="cb20-7"><a aria-label="7"></a><span class="do">## 0.6157322 0.9356727</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</div><div class="column" style="width:52%;">
+<p><strong>Odds ratio = <span class="math inline">\(e^{\beta_1}\)</span></strong></p>
 <ul>
-<li><strong>Odds ratio = exp(β₁)</strong></li>
-<li>&gt; 1: Increasing predictor increases odds of event</li>
-<li>&lt; 1: Increasing predictor decreases odds of event</li>
-<li>= 1: No effect of predictor on odds of event</li>
-<li>one-unit increase in island’s Perimeter/Area Ratio - odds of finding lizard present multiplied by 0.898</li>
-<li>odds decrease by 10.2% (1-0.898) for every one-unit increase P/A</li>
-<li>entire interval is below 1.0, relationship is negative: more P/A ratio means lower odds of lizards</li>
+<li><strong>&gt; 1</strong> — raising the predictor raises the odds</li>
+<li><strong>&lt; 1</strong> — raising the predictor lowers the odds</li>
+<li><strong>= 1</strong> — no effect</li>
 </ul>
-<div class="panel" data-column="screen">
-<div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb16"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb16-1"><a aria-label="1"></a>coef_lizard <span class="ot">&lt;-</span> <span class="fu">coef</span>(lizard_model)[<span class="dv">2</span>]  <span class="co"># Extract slope coefficient</span></span>
-<span id="cb16-2"><a aria-label="2"></a>odds_ratio <span class="ot">&lt;-</span> <span class="fu">exp</span>(coef_lizard)</span>
-<span id="cb16-3"><a aria-label="3"></a>ci <span class="ot">&lt;-</span> <span class="fu">exp</span>(<span class="fu">confint</span>(lizard_model, <span class="st">"pa_ratio"</span>))</span>
-<span id="cb16-4"><a aria-label="4"></a><span class="fu">cat</span>(<span class="st">"Odds Ratio:"</span>, <span class="fu">round</span>(odds_ratio, <span class="dv">3</span>), <span class="st">"</span><span class="sc">\n\n</span><span class="st">"</span>,</span>
-<span id="cb16-5"><a aria-label="5"></a><span class="st">"95% CI:"</span>, <span class="fu">round</span>(ci[<span class="dv">1</span>], <span class="dv">3</span>), <span class="st">"to"</span>, <span class="fu">round</span>(ci[<span class="dv">2</span>], <span class="dv">3</span>), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span>
-<span id="cb16-6"><a aria-label="6"></a><span class="do">## Odds Ratio: 0.861 </span></span>
-<span id="cb16-7"><a aria-label="7"></a><span class="do">## </span></span>
-<span id="cb16-8"><a aria-label="8"></a><span class="do">##  95% CI: 0.753 to 0.932</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>Here the odds ratio is <strong>0.803</strong>:</p>
+<ul>
+<li>One extra unit of perimeter-to-area ratio multiplies the odds of finding <em>Uta</em> by <strong>0.80</strong></li>
+<li>That is a <strong>19.7%</strong> drop in the odds per unit (1 − 0.803)</li>
+<li>The CI is <strong>0.616 to 0.936</strong> — entirely below 1, so the relationship is negative</li>
+</ul>
+<div class="callout callout-important callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Important</strong></p>
+</div>
+<div class="callout-content">
+<p>For an odds ratio the null value is <strong>1, not 0</strong> — it lives on a multiplicative scale. A CI that excludes 1 is the significant one.</p>
 </div>
 </div>
+</div>
+</div></div>
 </section>
-<section id="assessing-model-fit" class="slide level2">
+<section id="assessing-model-fit" class="slide level2 tight-code">
 <h2>Assessing Model Fit</h2>
-<p>There are several ways to assess the goodness-of-fit for logistic regression models:</p>
-<div class="panel" data-column="screen">
-<div class="cell">
-<pre><code>## 
-## 
-## Pearson χ²: 18.58 on 28 df, p = 0.911
-## 
-## 
-## Deviance G²: 19.09 on 28 df, p = 0.895
-## 
-## 
-## McFadden's R²: 0.54
-## # R2 for Logistic Regression
-##   Tjur's R2: 0.588
-## fitting null model for pseudo-r2
-##         llh     llhNull          G2    McFadden        r2ML        r2CU 
-##  -9.5450726 -20.7276993  22.3652534   0.5395016   0.5255070   0.7017187
-## # A tibble: 1 × 8
-##   null.deviance df.null logLik   AIC   BIC deviance df.residual  nobs
-##           &lt;dbl&gt;   &lt;int&gt;  &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt;    &lt;dbl&gt;       &lt;int&gt; &lt;int&gt;
-## 1          41.5      29  -9.55  23.1  25.9     19.1          28    30
-## 
-##  Hosmer and Lemeshow goodness of fit (GOF) test
-## 
-## data:  lizard_model$y, fitted(lizard_model)
-## X-squared = 2.4032, df = 8, p-value = 0.9661</code></pre>
-</div>
-</div>
-</section>
-<section id="part-5-multiple-logistic-regression" class="slide level2 divider">
-<h2>Part 5 · Multiple Logistic Regression</h2>
-</section>
-<section id="multiple-logistic-regression-setup" class="slide level2">
-<h2>Multiple Logistic Regression: Setup</h2>
 <div class="columns">
 <div class="column" style="width:50%;">
-<p>Logistic regression can be extended to include multiple predictors. The model becomes:</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb21"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb21-1"><a aria-label="1"></a><span class="co"># McFadden's, by hand</span></span>
+<span id="cb21-2"><a aria-label="2"></a><span class="dv">1</span> <span class="sc">-</span> lizard_model<span class="sc">$</span>deviance <span class="sc">/</span></span>
+<span id="cb21-3"><a aria-label="3"></a>      lizard_model<span class="sc">$</span>null.deviance</span>
+<span id="cb21-4"><a aria-label="4"></a><span class="do">## [1] 0.4590197</span></span>
+<span id="cb21-5"><a aria-label="5"></a></span>
+<span id="cb21-6"><a aria-label="6"></a><span class="fu">r2</span>(lizard_model)   <span class="co"># performance's default</span></span>
+<span id="cb21-7"><a aria-label="7"></a><span class="do">## # R2 for Logistic Regression</span></span>
+<span id="cb21-8"><a aria-label="8"></a><span class="do">##   Tjur's R2: 0.521</span></span>
+<span id="cb21-9"><a aria-label="9"></a></span>
+<span id="cb21-10"><a aria-label="10"></a><span class="fu">hoslem.test</span>(lizard_model<span class="sc">$</span>y,</span>
+<span id="cb21-11"><a aria-label="11"></a>            <span class="fu">fitted</span>(lizard_model), <span class="at">g =</span> <span class="dv">10</span>)</span>
+<span id="cb21-12"><a aria-label="12"></a><span class="do">## </span></span>
+<span id="cb21-13"><a aria-label="13"></a><span class="do">##  Hosmer and Lemeshow goodness of fit (GOF) test</span></span>
+<span id="cb21-14"><a aria-label="14"></a><span class="do">## </span></span>
+<span id="cb21-15"><a aria-label="15"></a><span class="do">## data:  lizard_model$y, fitted(lizard_model)</span></span>
+<span id="cb21-16"><a aria-label="16"></a><span class="do">## X-squared = 7.898, df = 8, p-value = 0.4435</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</div><div class="column" style="width:50%;">
+<p><strong>McFadden’s pseudo-R²</strong> = <span class="math inline">\(1 - \dfrac{D_{resid}}{D_{null}}\)</span> = <strong>0.459</strong>. <code>performance::r2()</code> instead reports <strong>Tjur’s R² = 0.521</strong>.</p>
+<p>Both are “pseudo” because there is no residual variance to partition — the response is 0 or 1, so “proportion of variance explained” has nothing to be a proportion <em>of</em>. They are different quantities, so <strong>say which one you report</strong>. For McFadden’s, treat 0.2–0.4 as a strong model, not the 0.7 you would want from a regression.</p>
+<div class="callout callout-warning callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Warning</strong></p>
+</div>
+<div class="callout-content">
+<p><strong>Hosmer–Lemeshow runs backwards.</strong> Its null hypothesis is that the model fits. You <strong>want</strong> <em>p</em> large. Here <em>p</em> = 0.44, so there is no evidence of poor fit.</p>
+<p>That is the opposite of every test you have run this semester — and it is why a “non-significant” result is not always bad news.</p>
+</div>
+</div>
+</div>
+</div></div>
+</section>
+<section id="part-6-multiple-logistic-regression" class="slide level2 divider">
+<h2>Part 6 · Multiple Logistic Regression</h2>
+</section>
+<section id="the-bolger-canyon-fragment-data" class="slide level2 tight-code">
+<h2>The Bolger Canyon Fragment Data</h2>
+<div class="columns">
+<div class="column" style="width:50%;">
+<p>Logistic regression extends to several predictors exactly as regression does:</p>
 <p><span class="math display">\[g(x) = \beta_0 + \beta_1 x_1 + \beta_2 x_2 + \ldots + \beta_p x_p\]</span></p>
-<p>Where g(x) is the logit link function, and x₁, x₂, …, xₚ are the predictor variables.</p>
-<p>Let’s create a simulated dataset based on the Bolger et al.&nbsp;(1997) study of the presence/absence of native rodents in canyon fragments.</p>
-<div class="cell">
-<pre><code>## 
-## Call:
-## glm(formula = rodent_present ~ distance + age + shrub_cover, 
-##     family = binomial(link = "logit"), data = fragment_data)
-## 
-## Coefficients:
-##               Estimate Std. Error z value Pr(&gt;|z|)  
-## (Intercept) -12.278261   7.911491  -1.552   0.1207  
-## distance      0.002062   0.001716   1.202   0.2294  
-## age           0.068744   0.059665   1.152   0.2493  
-## shrub_cover   0.193001   0.116035   1.663   0.0963 .
-## ---
-## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
-## 
-## (Dispersion parameter for binomial family taken to be 1)
-## 
-##     Null deviance: 27.5540  on 24  degrees of freedom
-## Residual deviance:  9.2737  on 21  degrees of freedom
-## AIC: 17.274
-## 
-## Number of Fisher Scoring iterations: 8</code></pre>
+<p>Bolger et al.&nbsp;(1997) recorded whether <strong>native rodents</strong> were present in <strong>25 canyon fragments</strong> in coastal southern California, against three predictors.</p>
+<div class="compact-table">
+<table class="caption-top">
+<thead>
+<tr class="header">
+<th>Column</th>
+<th>What it is</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>rodentsp</code></td>
+<td>1 = rodents present, 0 = absent</td>
+</tr>
+<tr class="even">
+<td><code>pershrub</code></td>
+<td>% shrub cover</td>
+</tr>
+<tr class="odd">
+<td><code>distx</code></td>
+<td>distance to source canyon, m</td>
+</tr>
+<tr class="even">
+<td><code>age</code></td>
+<td>years since isolation</td>
+</tr>
+</tbody>
+</table>
 </div>
 </div><div class="column" style="width:50%;">
-<p>To test the significance of individual predictors, we can use likelihood ratio tests comparing nested models:</p>
 <div class="cell">
-<pre><code>## Analysis of Deviance Table
-## 
-## Model 1: rodent_present ~ age + shrub_cover
-## Model 2: rodent_present ~ distance + age + shrub_cover
-##   Resid. Df Resid. Dev Df Deviance Pr(&gt;Chi)
-## 1        22    11.3831                     
-## 2        21     9.2737  1   2.1094   0.1464
-## Analysis of Deviance Table
-## 
-## Model 1: rodent_present ~ distance + shrub_cover
-## Model 2: rodent_present ~ distance + age + shrub_cover
-##   Resid. Df Resid. Dev Df Deviance Pr(&gt;Chi)
-## 1        22    11.0533                     
-## 2        21     9.2737  1   1.7796   0.1822
-## Analysis of Deviance Table
-## 
-## Model 1: rodent_present ~ distance + age
-## Model 2: rodent_present ~ distance + age + shrub_cover
-##   Resid. Df Resid. Dev Df Deviance  Pr(&gt;Chi)    
-## 1        22    26.7315                          
-## 2        21     9.2737  1   17.458 2.938e-05 ***
-## ---
-## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</code></pre>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb22"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb22-1"><a aria-label="1"></a>rodent_model <span class="ot">&lt;-</span> <span class="fu">glm</span>(</span>
+<span id="cb22-2"><a aria-label="2"></a>  rodentsp <span class="sc">~</span> distx <span class="sc">+</span> age <span class="sc">+</span> pershrub,</span>
+<span id="cb22-3"><a aria-label="3"></a>  <span class="at">data =</span> bolger_df,</span>
+<span id="cb22-4"><a aria-label="4"></a>  <span class="at">family =</span> <span class="fu">binomial</span>(<span class="at">link =</span> <span class="st">"logit"</span>))</span>
+<span id="cb22-5"><a aria-label="5"></a></span>
+<span id="cb22-6"><a aria-label="6"></a><span class="fu">round</span>(<span class="fu">summary</span>(rodent_model)<span class="sc">$</span>coefficients, <span class="dv">4</span>)</span>
+<span id="cb22-7"><a aria-label="7"></a><span class="do">##             Estimate Std. Error z value Pr(&gt;|z|)</span></span>
+<span id="cb22-8"><a aria-label="8"></a><span class="do">## (Intercept)  -5.9099     3.1125 -1.8987   0.0576</span></span>
+<span id="cb22-9"><a aria-label="9"></a><span class="do">## distx         0.0003     0.0008  0.3988   0.6900</span></span>
+<span id="cb22-10"><a aria-label="10"></a><span class="do">## age           0.0250     0.0377  0.6640   0.5067</span></span>
+<span id="cb22-11"><a aria-label="11"></a><span class="do">## pershrub      0.0959     0.0406  2.3606   0.0182</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div class="callout callout-note callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Note</strong></p>
+</div>
+<div class="callout-content">
+<p>Quinn &amp; Keough <strong>Box 13-2</strong>. Two predictors measure <strong>isolation</strong> (<code>distx</code>, <code>age</code>); one measures <strong>habitat quality</strong> (<code>pershrub</code>).</p>
+</div>
+</div>
 </div>
 </div></div>
 </section>
-<section id="multiple-logistic-regression-odds-ratios" class="slide level2">
-<h2>Multiple Logistic Regression: Odds Ratios</h2>
-<p>Let’s calculate odds ratios and confidence intervals for all predictors.</p>
-<div class="panel" data-column="screen">
-<div class="cell">
-<pre><code>##               Predictor OddsRatio               CI
-## distance       distance    1.0021 (0.9994, 1.0069)
-## age                 age    1.0712 (0.9721, 1.2577)
-## shrub_cover shrub_cover    1.2129 (1.0645, 1.7909)</code></pre>
-</div>
-</div>
-</section>
-<section id="visualizing-multiple-logistic-regression" class="slide level2">
-<h2>Visualizing Multiple Logistic Regression</h2>
-<div class="panel" data-column="screen">
-<p>For multiple predictors, we can visualize the effect of each predictor while holding others constant at their mean or median values.</p>
-<p>This visualization shows the effect of each predictor on the probability of rodent presence, while holding the other predictors constant at their mean values.</p>
-<div class="cell">
-<div class="cell-output-display">
-<div>
-<figure>
-<p><img data-src="glm_logistic_regression_lecture_files/figure-revealjs/visualize-effects-1.png" alt="Three stacked line plots of predicted probability of rodent presence versus distance to source, years since isolation, and shrub cover, each with a rug plot of observed 0/1 outcomes along the bottom, showing shrub cover has the clearest positive relationship." width="345"></p>
-</figure>
-</div>
-</div>
-</div>
-</div>
-</section>
-<section id="assumptions-and-diagnostics-of-logistic-regression" class="slide level2 scrollable">
-<h2>Assumptions and Diagnostics of Logistic Regression</h2>
+<section id="testing-each-predictor" class="slide level2 tight-code">
+<h2>Testing Each Predictor</h2>
 <div class="columns">
 <div class="column" style="width:50%;">
-<p>Logistic regression has several key assumptions:</p>
-<ol type="1">
-<li>Independence of observations</li>
-<li>Linear relationship between predictors and log odds</li>
-<li>No extreme outliers</li>
-<li>No multicollinearity (when multiple predictors are used)</li>
-</ol>
-<p>diagnostics for our multiple logistic regression model:</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb23"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb23-1"><a aria-label="1"></a><span class="fu">Anova</span>(rodent_model, <span class="at">type =</span> <span class="st">"II"</span>, <span class="at">test =</span> <span class="st">"LR"</span>)</span>
+<span id="cb23-2"><a aria-label="2"></a><span class="do">## Analysis of Deviance Table (Type II tests)</span></span>
+<span id="cb23-3"><a aria-label="3"></a><span class="do">## </span></span>
+<span id="cb23-4"><a aria-label="4"></a><span class="do">## Response: rodentsp</span></span>
+<span id="cb23-5"><a aria-label="5"></a><span class="do">##          LR Chisq Df Pr(&gt;Chisq)   </span></span>
+<span id="cb23-6"><a aria-label="6"></a><span class="do">## distx      0.1559  1   0.692943   </span></span>
+<span id="cb23-7"><a aria-label="7"></a><span class="do">## age        0.4446  1   0.504906   </span></span>
+<span id="cb23-8"><a aria-label="8"></a><span class="do">## pershrub   9.5577  1   0.001991 **</span></span>
+<span id="cb23-9"><a aria-label="9"></a><span class="do">## ---</span></span>
+<span id="cb23-10"><a aria-label="10"></a><span class="do">## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>Each row drops <strong>one</strong> predictor and compares the two models by likelihood ratio — the multi-predictor version of what we did to the lizard model.</p>
 </div><div class="column" style="width:50%;">
 <div class="cell">
-<div class="cell-output-display">
-<div>
-<figure>
-<p><img data-src="glm_logistic_regression_lecture_files/figure-revealjs/diagnostics-1.png" alt="Three stacked scatterplots of binned log-odds of rodent presence against distance, age, and shrub cover, each with a linear fit line, used to check the linearity assumption for each predictor." width="345"></p>
-</figure>
+<pre><code>##              OR  2.5 % 97.5 %
+## distx    1.0003 0.9986 1.0019
+## age      1.0253 0.9495 1.1123
+## pershrub 1.1006 1.0311 1.2249</code></pre>
+</div>
+<div class="callout callout-important callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Important</strong></p>
+</div>
+<div class="callout-content">
+<p><strong>Shrub cover is the only one that matters.</strong> Each extra percentage point of shrub cover multiplies the odds of rodent presence by <strong>1.10</strong> (CI 1.03–1.22).</p>
+<p>Neither isolation measure comes close — and both of their CIs bracket 1.</p>
 </div>
 </div>
 </div>
 </div></div>
 </section>
-<section id="model-comparison-and-selection" class="slide level2">
+<section id="visualizing-each-effect" class="slide level2">
+<h2>Visualizing Each Effect</h2>
+<div class="panel" data-column="screen">
+<div class="cell">
+<div class="cell-output-display">
+<div>
+<figure>
+<p><img data-src="glm_logistic_regression_lecture_files/figure-revealjs/glm-33-1.png" alt="Three side-by-side plots of the predicted probability of rodent presence against distance to source, years since isolation, and percent shrub cover, each holding the other two predictors at their means, with observed outcomes as a rug along the bottom. Only shrub cover shows a steep rise." width="912"></p>
+</figure>
+</div>
+</div>
+</div>
+</div>
+<p>Each panel moves <strong>one</strong> predictor across its observed range and holds the other two at their means. Only shrub cover takes the probability from near 0 to near 1.</p>
+</section>
+<section id="model-comparison-and-selection" class="slide level2 tight-code">
 <h2>Model Comparison and Selection</h2>
 <div class="columns">
-<div class="column" style="width:60%;">
-<p>When working with multiple predictors, want to find most parsimonious model. use: - Likelihood ratio tests for nested models - Information criteria (AIC, BIC) for non-nested models - Classification metrics like accuracy, sensitivity, and specificity</p>
-<p>Compare models and AIC values:</p>
+<div class="column" style="width:50%;">
 <div class="cell">
-<pre><code>##                         Model Parameters   AIC   BIC Deviance
-## No Age                 No Age          3 17.05 20.71    11.05
-## Full                     Full          4 17.27 22.15     9.27
-## No Distance       No Distance          3 17.38 21.04    11.38
-## Intercept Only Intercept Only          1 29.55 30.77    27.55
-## No Shrub             No Shrub          3 32.73 36.39    26.73</code></pre>
+<pre><code>##            Model k   AIC Deviance
+## 1     Shrub only 2 24.05    20.05
+## 2    No distance 3 25.51    19.51
+## 3         No age 3 25.80    19.80
+## 4           Full 4 27.36    19.36
+## 5       No shrub 3 34.92    28.92
+## 6 Intercept only 1 36.62    34.62</code></pre>
 </div>
-</div><div class="column" style="width:40%;">
-<p>Evaluate predictive performance of our model:</p>
+</div><div class="column" style="width:50%;">
+<ul>
+<li><strong>Likelihood ratio tests</strong> compare <em>nested</em> models — one must be a special case of the other</li>
+<li><strong>AIC / BIC</strong> compare any models fitted to the same data, nested or not</li>
+<li>AIC rewards fit and penalises parameters: <span class="math inline">\(AIC = -2\log L + 2k\)</span></li>
+</ul>
+<div class="callout callout-note callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Note</strong></p>
+</div>
+<div class="callout-content">
+<p>Dropping <code>distx</code> or <code>age</code> <strong>improves</strong> the AIC — they were costing a parameter each and buying almost nothing. Dropping <code>pershrub</code> makes it far worse.</p>
+</div>
+</div>
+</div>
+</div></div>
+</section>
+<section id="how-well-does-it-classify" class="slide level2 tight-code">
+<h2>How Well Does It Classify?</h2>
+<div class="columns">
+<div class="column" style="width:50%;">
 <div class="cell">
-<pre><code>##          Actual
-## Predicted Absent Present
-##   Absent       5       2
-##   Present      1      17
-## 
-## Accuracy: 0.88
-## Sensitivity: 0.895
-## Specificity: 0.833</code></pre>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb26"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb26-1"><a aria-label="1"></a>pred_prob  <span class="ot">&lt;-</span> <span class="fu">predict</span>(rodent_model, <span class="at">type =</span> <span class="st">"response"</span>)</span>
+<span id="cb26-2"><a aria-label="2"></a>pred_class <span class="ot">&lt;-</span> <span class="fu">ifelse</span>(pred_prob <span class="sc">&gt;</span> <span class="fl">0.5</span>, <span class="dv">1</span>, <span class="dv">0</span>)</span>
+<span id="cb26-3"><a aria-label="3"></a></span>
+<span id="cb26-4"><a aria-label="4"></a>cm <span class="ot">&lt;-</span> <span class="fu">table</span>(<span class="at">Predicted =</span> pred_class,</span>
+<span id="cb26-5"><a aria-label="5"></a>            <span class="at">Actual =</span> bolger_df<span class="sc">$</span>rodentsp)</span>
+<span id="cb26-6"><a aria-label="6"></a>cm</span>
+<span id="cb26-7"><a aria-label="7"></a><span class="do">##          Actual</span></span>
+<span id="cb26-8"><a aria-label="8"></a><span class="do">## Predicted  0  1</span></span>
+<span id="cb26-9"><a aria-label="9"></a><span class="do">##         0 11  3</span></span>
+<span id="cb26-10"><a aria-label="10"></a><span class="do">##         1  2  9</span></span>
+<span id="cb26-11"><a aria-label="11"></a></span>
+<span id="cb26-12"><a aria-label="12"></a><span class="fu">round</span>(<span class="fu">c</span>(<span class="at">accuracy    =</span> <span class="fu">sum</span>(<span class="fu">diag</span>(cm)) <span class="sc">/</span> <span class="fu">sum</span>(cm),</span>
+<span id="cb26-13"><a aria-label="13"></a>        <span class="at">sensitivity =</span> cm[<span class="st">"1"</span>,<span class="st">"1"</span>] <span class="sc">/</span> <span class="fu">sum</span>(cm[, <span class="st">"1"</span>]),</span>
+<span id="cb26-14"><a aria-label="14"></a>        <span class="at">specificity =</span> cm[<span class="st">"0"</span>,<span class="st">"0"</span>] <span class="sc">/</span> <span class="fu">sum</span>(cm[, <span class="st">"0"</span>])), <span class="dv">3</span>)</span>
+<span id="cb26-15"><a aria-label="15"></a><span class="do">##    accuracy sensitivity specificity </span></span>
+<span id="cb26-16"><a aria-label="16"></a><span class="do">##       0.800       0.750       0.846</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</div><div class="column" style="width:50%;">
+<ul>
+<li><strong>Accuracy</strong> — fraction of fragments called correctly</li>
+<li><strong>Sensitivity</strong> — of the fragments that <em>had</em> rodents, how many did we catch?</li>
+<li><strong>Specificity</strong> — of the fragments that did <em>not</em>, how many did we correctly rule out?</li>
+</ul>
+<div class="callout callout-warning callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Warning</strong></p>
+</div>
+<div class="callout-content">
+<p><strong>The 0.5 cut-off is a choice, not a result.</strong> Move it and sensitivity and specificity trade against each other. Classification accuracy is also optimistic here — we are scoring the model on the same 25 fragments we fitted it to.</p>
+</div>
+</div>
 </div>
 </div></div>
 </section>
 <section id="publication-quality-figure" class="slide level2">
 <h2>Publication-Quality Figure</h2>
-<p>Let’s create a publication-quality figure for our multiple logistic regression model and show how we would write up the results for a scientific publication.</p>
-<div class="panel" data-column="screen">
+<div class="columns">
+<div class="column" style="width:55%;">
 <div class="cell">
 <div class="cell-output-display">
 <div>
 <figure>
-<p><img data-src="glm_logistic_regression_lecture_files/figure-revealjs/publication-figure-1.png" alt="Publication-quality plot of the probability of native rodent presence versus percentage shrub cover, with jittered raw 0/1 data points, a fitted probability curve, and a shaded 95% confidence band, showing probability of presence rising with shrub cover." width="384"></p>
+<p><img data-src="glm_logistic_regression_lecture_files/figure-revealjs/glm-36-1.png" alt="Publication-quality plot of the probability of native rodent presence against percent shrub cover, with jittered observed outcomes, a fitted logistic curve, and a shaded 95% confidence band rising from near zero below 20% cover to near one above 70%." width="441"></p>
 </figure>
 </div>
 </div>
 </div>
-</div>
+</div><div class="column" style="width:45%;">
+<p>What makes this publishable rather than exploratory:</p>
+<ul>
+<li>The <strong>raw data</strong> are visible under the fit, jittered just enough to separate ties</li>
+<li>The <strong>confidence band</strong> is on the probability scale, computed on the link scale and back-transformed — so it can never leave [0, 1]</li>
+<li>Axis labels name the <strong>units</strong>, not the column names</li>
+<li>The other two predictors are held at their means, and the caption must say so</li>
+</ul>
+<p>This is the shape of the graded figure in section 10 of the activity.</p>
+</div></div>
 </section>
 <section id="scientific-write-up-results" class="slide level2">
 <h2>Scientific Write-Up — Results</h2>
@@ -1409,10 +1488,9 @@ family = gaussian(link = “identity”)) <strong>Residual Standard Error</stron
 <p><strong>Results</strong></p>
 </div>
 <div class="callout-content">
-<p><strong>Results</strong></p>
-<p>The presence of native rodents in 25 canyon fragments was modeled using multiple logistic regression with three predictors: distance to nearest source canyon, years since isolation, and percentage of shrub cover. Taken together the three predictors improved on the null model (likelihood-ratio χ² = 18.28, df = 3, p &lt; 0.001; McFadden’s R² = 0.66).</p>
-<p><strong>No individual predictor reached significance at α = 0.05.</strong> Shrub cover showed the strongest effect (β = 0.193, SE = 0.116, p = 0.096; odds ratio 1.21, 95% CI 1.06–1.79), suggesting that each additional percentage point of shrub cover multiplies the odds of rodent presence by roughly 1.2 — but the confidence interval is wide and the coefficient is not distinguishable from zero at conventional levels. Neither distance to source canyon (β = 0.0021, p = 0.229) nor years since isolation (β = 0.069, p = 0.249) approached significance.</p>
-<p>The model correctly classified 88% of the fragments (sensitivity 0.90, specificity 0.83), and showed no evidence of poor fit (Hosmer-Lemeshow χ² = 0.95, df = 6, p = 0.99).</p>
+<p>The presence of native rodents in 25 canyon fragments was modelled by multiple logistic regression with three predictors: distance to the nearest source canyon, years since isolation, and percentage shrub cover. The three predictors together improved substantially on the null model (likelihood-ratio χ² = 15.26, df = 3, <em>p</em> = 0.002; McFadden’s R² = 0.44).</p>
+<p><strong>Shrub cover was the only predictor with a detectable effect</strong> (β = 0.096, SE = 0.041, LR χ² = 9.56, df = 1, <em>p</em> = 0.002). Each additional percentage point of shrub cover multiplied the odds of rodent presence by 1.10 (95% CI 1.03–1.22). Neither distance to the source canyon (LR χ² = 0.16, <em>p</em> = 0.69) nor years since isolation (LR χ² = 0.44, <em>p</em> = 0.50) was distinguishable from zero.</p>
+<p>The model classified 80% of fragments correctly (sensitivity 0.75, specificity 0.85) and showed no evidence of lack of fit (Hosmer–Lemeshow χ² = 6.04, df = 8, <em>p</em> = 0.64).</p>
 </div>
 </div>
 </div>
@@ -1428,85 +1506,155 @@ family = gaussian(link = “identity”)) <strong>Residual Standard Error</stron
 <p><strong>Discussion</strong></p>
 </div>
 <div class="callout-content">
-<p><strong>Discussion</strong></p>
-<p>Our findings are <em>suggestive</em> that vegetation structure, as measured by shrub cover, is associated with native rodent presence in canyon fragments — the effect is in the expected direction and is the largest of the three — but with only 25 fragments the estimate is too imprecise to call significant (p = 0.096). The positive direction is consistent with vegetation providing food, shelter from predators, and suitable microhabitat. Isolation metrics (distance to source canyon and years since isolation) showed no detectable relationship, though the same sample-size caveat applies: <strong>failing to detect an effect is not the same as showing there is none.</strong> A larger set of fragments would be needed to separate these possibilities.</p>
+<p>Vegetation structure, not isolation, predicted whether native rodents persisted in these canyon fragments. Shrub cover is plausibly acting as both food and cover from predators, and the effect is large enough to matter on the ground: holding distance and age at their means, a fragment at 70% shrub cover has an 88% chance of retaining its rodents, against 6% for one at 20%.</p>
+<p>The two isolation measures showed no detectable relationship. With 25 fragments, <strong>failing to detect an effect is not the same as showing there is none</strong> — but the AIC comparison points the same way, since dropping either one improved the model. The practical reading is that within this range of fragment ages and distances, habitat quality dominates.</p>
 </div>
 </div>
 </div>
 </section>
-<section id="part-6-glms-anova-and-wrap-up" class="slide level2 divider">
-<h2>Part 6 · GLMs, ANOVA, and Wrap-Up</h2>
+<section id="part-7-diagnostics-and-assumptions" class="slide level2 divider">
+<h2>Part 7 · Diagnostics and Assumptions</h2>
 </section>
-<section id="relationship-between-glms-and-anovas" class="slide level2 scrollable">
-<h2>Relationship Between GLMs and ANOVAs</h2>
-<h3 id="glms-and-anovas-the-connection">GLMs and ANOVAs: The Connection</h3>
-<p>General linear models (including ANOVAs and standard regression) are special cases of Generalized Linear Models where:</p>
-<ol type="1">
-<li>The response variable follows a normal distribution</li>
-<li>The link function is the identity function</li>
-</ol>
-<ul>
-<li>Therefore, a one-way ANOVA is equivalent to:
-<ul>
-<li><p>A linear regression with a categorical predictor</p></li>
-<li><p>A Gaussian GLM with an identity link and a categorical predictor</p></li>
-</ul></li>
-</ul>
-</section>
-<section id="demonstrating-anova-glm-equivalence" class="slide level2">
-<h2>Demonstrating ANOVA-GLM Equivalence</h2>
-<p>Let’s demonstrate this equivalence:</p>
-<div class="panel" data-column="screen">
-<div class="cell">
-<div class="cell-output-display">
-<div class="tabwid"><style>.cl-d8bad469{}.cl-21b8b309{font-family:'Helvetica';font-size:11pt;font-weight:normal;font-style:normal;text-decoration:none;color:rgba(0, 0, 0, 1.00);background-color:transparent;}.cl-6477613b{margin:0;text-align:left;border-bottom: 0 solid rgba(0, 0, 0, 1.00);border-top: 0 solid rgba(0, 0, 0, 1.00);border-left: 0 solid rgba(0, 0, 0, 1.00);border-right: 0 solid rgba(0, 0, 0, 1.00);padding-bottom:5pt;padding-top:5pt;padding-left:5pt;padding-right:5pt;line-height: 1;background-color:transparent;}.cl-a1958ec5{margin:0;text-align:right;border-bottom: 0 solid rgba(0, 0, 0, 1.00);border-top: 0 solid rgba(0, 0, 0, 1.00);border-left: 0 solid rgba(0, 0, 0, 1.00);border-right: 0 solid rgba(0, 0, 0, 1.00);padding-bottom:5pt;padding-top:5pt;padding-left:5pt;padding-right:5pt;line-height: 1;background-color:transparent;}.cl-150da73b{width:0.75in;background-color:transparent;vertical-align: middle;border-bottom: 1.5pt solid rgba(102, 102, 102, 1.00);border-top: 1.5pt solid rgba(102, 102, 102, 1.00);border-left: 0 solid rgba(0, 0, 0, 1.00);border-right: 0 solid rgba(0, 0, 0, 1.00);margin-bottom:0;margin-top:0;margin-left:0;margin-right:0;}.cl-8e0ee45a{width:0.75in;background-color:transparent;vertical-align: middle;border-bottom: 1.5pt solid rgba(102, 102, 102, 1.00);border-top: 1.5pt solid rgba(102, 102, 102, 1.00);border-left: 0 solid rgba(0, 0, 0, 1.00);border-right: 0 solid rgba(0, 0, 0, 1.00);margin-bottom:0;margin-top:0;margin-left:0;margin-right:0;}.cl-1c23095b{width:0.75in;background-color:transparent;vertical-align: middle;border-bottom: 0 solid rgba(0, 0, 0, 1.00);border-top: 0 solid rgba(0, 0, 0, 1.00);border-left: 0 solid rgba(0, 0, 0, 1.00);border-right: 0 solid rgba(0, 0, 0, 1.00);margin-bottom:0;margin-top:0;margin-left:0;margin-right:0;}.cl-a18b2e34{width:0.75in;background-color:transparent;vertical-align: middle;border-bottom: 0 solid rgba(0, 0, 0, 1.00);border-top: 0 solid rgba(0, 0, 0, 1.00);border-left: 0 solid rgba(0, 0, 0, 1.00);border-right: 0 solid rgba(0, 0, 0, 1.00);margin-bottom:0;margin-top:0;margin-left:0;margin-right:0;}.cl-45102fc2{width:0.75in;background-color:transparent;vertical-align: middle;border-bottom: 1.5pt solid rgba(102, 102, 102, 1.00);border-top: 0 solid rgba(0, 0, 0, 1.00);border-left: 0 solid rgba(0, 0, 0, 1.00);border-right: 0 solid rgba(0, 0, 0, 1.00);margin-bottom:0;margin-top:0;margin-left:0;margin-right:0;}.cl-c9ec629b{width:0.75in;background-color:transparent;vertical-align: middle;border-bottom: 1.5pt solid rgba(102, 102, 102, 1.00);border-top: 0 solid rgba(0, 0, 0, 1.00);border-left: 0 solid rgba(0, 0, 0, 1.00);border-right: 0 solid rgba(0, 0, 0, 1.00);margin-bottom:0;margin-top:0;margin-left:0;margin-right:0;}</style><table data-quarto-disable-processing="true" class="cl-d8bad469"><thead><tr style="overflow-wrap:break-word;"><th class="cl-150da73b"><p class="cl-6477613b"><span class="cl-21b8b309">Term</span></p></th><th class="cl-8e0ee45a"><p class="cl-a1958ec5"><span class="cl-21b8b309">Linear.Regression</span></p></th><th class="cl-8e0ee45a"><p class="cl-a1958ec5"><span class="cl-21b8b309">Gaussian.GLM</span></p></th></tr></thead><tbody><tr style="overflow-wrap:break-word;"><td class="cl-1c23095b"><p class="cl-6477613b"><span class="cl-21b8b309">(Intercept)</span></p></td><td class="cl-a18b2e34"><p class="cl-a1958ec5"><span class="cl-21b8b309">37.885</span></p></td><td class="cl-a18b2e34"><p class="cl-a1958ec5"><span class="cl-21b8b309">37.885</span></p></td></tr><tr style="overflow-wrap:break-word;"><td class="cl-45102fc2"><p class="cl-6477613b"><span class="cl-21b8b309">cyl</span></p></td><td class="cl-c9ec629b"><p class="cl-a1958ec5"><span class="cl-21b8b309">-2.876</span></p></td><td class="cl-c9ec629b"><p class="cl-a1958ec5"><span class="cl-21b8b309">-2.876</span></p></td></tr></tbody></table></div>
-</div>
-<div class="cell-output-display">
-<div>
-<figure>
-<p><img data-src="glm_logistic_regression_lecture_files/figure-revealjs/anova-glm-comparison-1.png" alt="Boxplot with jittered points of mpg by number of cylinders from mtcars, overlaid with red triangles (linear regression estimated means) and blue squares (Gaussian GLM estimated means) that land on identical values, illustrating the equivalence of ANOVA, linear regression, and a Gaussian GLM." width="345"></p>
-</figure>
-</div>
-</div>
-</div>
-</div>
-</section>
-<section id="assumptions-and-diagnostics-summary" class="slide level2">
-<h2>Assumptions and Diagnostics Summary</h2>
+<section id="assumptions-of-logistic-regression" class="slide level2 tight-code scrollable">
+<h2>Assumptions of Logistic Regression</h2>
 <div class="columns">
-<div class="column" style="width:60%;">
-<ul>
-<li>Generalized Linear Models- assumptions depend on distribution+link function used:</li>
-<li><strong>All GLMs:</strong>
-<ul>
-<li>Independence of observations, No outliers, No Multicolinearity</li>
-<li>Correct specification of the link function /variance structure</li>
-</ul></li>
-<li><strong>Gaussian GLMs (including linear regression):</strong>
-<ul>
-<li>Normality of residuals</li>
-<li>Homogeneity of variance</li>
-</ul></li>
-<li><strong>Poisson GLMs:</strong>
-<ul>
-<li>Count data (non-negative integers)</li>
-<li>Mean equals variance - overdispersed = negative binomial)</li>
-</ul></li>
-<li><strong>Logistic GLMs:</strong>
-<ul>
-<li>Binary response variable</li>
-<li>Linear relationship between predictors and log odds</li>
-<li>Adequate sample size relative to number of parameters</li>
-</ul></li>
-</ul>
-</div><div class="column" style="width:40%;">
-<p>R code checks common diagnostics for logistic model:</p>
+<div class="column" style="width:45%;">
+<ol type="1">
+<li><strong>Independence</strong> of observations</li>
+<li><strong>Linearity</strong> between each predictor and the <strong>log odds</strong> — not the probability</li>
+<li>No extreme outliers or high-leverage points</li>
+<li>No multicollinearity among predictors</li>
+<li>Enough data per parameter — a rough rule is <strong>10 events per predictor</strong></li>
+</ol>
+<div class="callout callout-warning callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Warning</strong></p>
+</div>
+<div class="callout-content">
+<p>Assumption 2 is the one people forget. Logistic regression does <strong>not</strong> assume a linear relationship with the probability — the curve is S-shaped by construction. It assumes linearity on the <strong>logit</strong> scale.</p>
+</div>
+</div>
+</div>
+</div><div class="column" style="width:55%;">
 <div class="cell">
 <div class="cell-output-display">
 <div>
 <figure>
-<p><img data-src="glm_logistic_regression_lecture_files/figure-revealjs/diagnostic-summary-1.png" alt="Four diagnostic plots for the multiple logistic regression rodent model: Pearson residuals versus fitted values, residuals versus leverage, Cook's distance for each observation, and observed outcomes versus predicted probabilities with a 1-to-1 reference line." width="345"></p>
+<p><img data-src="glm_logistic_regression_lecture_files/figure-revealjs/glm-37-1.png" alt="Three small panels of binned empirical log-odds of rodent presence against distance, age and shrub cover, each with a straight-line fit, used to check the linearity-on-the-logit-scale assumption." width="480"></p>
 </figure>
+</div>
+</div>
+</div>
+<p>Bin each predictor, compute the empirical log-odds in each bin, and look for a straight line. Shrub cover is close to one; with 25 fragments these are rough.</p>
+</div></div>
+</section>
+<section id="which-diagnostic-for-which-family" class="slide level2">
+<h2>Which Diagnostic for Which Family</h2>
+<div class="compact-table">
+<table class="caption-top">
+<colgroup>
+<col style="width: 17%">
+<col style="width: 42%">
+<col style="width: 39%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Family</th>
+<th>What it assumes</th>
+<th>What to check</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>All GLMs</strong></td>
+<td>Independence; correct link; no extreme leverage</td>
+<td>DHARMa residuals, Cook’s distance, VIF</td>
+</tr>
+<tr class="even">
+<td><strong>Gaussian</strong></td>
+<td>Normal residuals, equal variance</td>
+<td><code>shapiro.test()</code>, Levene’s, residual plots</td>
+</tr>
+<tr class="odd">
+<td><strong>Poisson</strong></td>
+<td>Counts; <strong>variance = mean</strong></td>
+<td><code>check_overdispersion()</code>, <code>testDispersion()</code></td>
+</tr>
+<tr class="even">
+<td><strong>Negative binomial</strong></td>
+<td>Counts; variance = <span class="math inline">\(\mu + \mu^2/\theta\)</span></td>
+<td><code>check_overdispersion()</code>, DHARMa</td>
+</tr>
+<tr class="odd">
+<td><strong>Binomial / logistic</strong></td>
+<td>Binary response; linear on the <strong>logit</strong> scale; enough events</td>
+<td>Binned log-odds plot, Hosmer–Lemeshow, separation warnings</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="callout callout-important callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Important</strong></p>
+</div>
+<div class="callout-content">
+<p><strong>Check the diagnostic that matches the model you fitted</strong>, not the one you learned first. <code>shapiro.test()</code> on Poisson residuals will give you a number, and the number will mean nothing.</p>
+</div>
+</div>
+</div>
+</section>
+<section id="part-8-glms-anova-and-wrap-up" class="slide level2 divider">
+<h2>Part 8 · GLMs, ANOVA, and Wrap-Up</h2>
+</section>
+<section id="one-way-anova-is-a-gaussian-glm" class="slide level2 tight-code scrollable">
+<h2>One-Way ANOVA Is a Gaussian GLM</h2>
+<div class="columns">
+<div class="column" style="width:50%;">
+<p>Every linear model you have fitted this semester is the special case of a GLM where:</p>
+<ol type="1">
+<li>The response is <strong>normal</strong></li>
+<li>The link is the <strong>identity</strong></li>
+</ol>
+<p>So a one-way ANOVA, a linear regression on a categorical predictor, and a Gaussian GLM are <strong>three names for one fit</strong>.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb27"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb27-1"><a aria-label="1"></a>aov_fit  <span class="ot">&lt;-</span> <span class="fu">aov</span>(spp <span class="sc">~</span> size_cat, <span class="at">data =</span> g_df)</span>
+<span id="cb27-2"><a aria-label="2"></a>lm_fit   <span class="ot">&lt;-</span> <span class="fu">lm</span>(spp <span class="sc">~</span> size_cat, <span class="at">data =</span> g_df)</span>
+<span id="cb27-3"><a aria-label="3"></a>glm_fit  <span class="ot">&lt;-</span> <span class="fu">glm</span>(spp <span class="sc">~</span> size_cat, <span class="at">data =</span> g_df,</span>
+<span id="cb27-4"><a aria-label="4"></a>                <span class="at">family =</span> <span class="fu">gaussian</span>(<span class="at">link =</span> <span class="st">"identity"</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</div><div class="column" style="width:50%;">
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb28"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb28-1"><a aria-label="1"></a><span class="fu">round</span>(<span class="fu">cbind</span>(<span class="at">aov =</span> <span class="fu">coef</span>(aov_fit),</span>
+<span id="cb28-2"><a aria-label="2"></a>            <span class="at">lm  =</span> <span class="fu">coef</span>(lm_fit),</span>
+<span id="cb28-3"><a aria-label="3"></a>            <span class="at">glm =</span> <span class="fu">coef</span>(glm_fit)), <span class="dv">4</span>)</span>
+<span id="cb28-4"><a aria-label="4"></a><span class="do">##                     aov       lm      glm</span></span>
+<span id="cb28-5"><a aria-label="5"></a><span class="do">## (Intercept)     14.4545  14.4545  14.4545</span></span>
+<span id="cb28-6"><a aria-label="6"></a><span class="do">## size_catmedium  40.6288  40.6288  40.6288</span></span>
+<span id="cb28-7"><a aria-label="7"></a><span class="do">## size_catlarge  217.2121 217.2121 217.2121</span></span>
+<span id="cb28-8"><a aria-label="8"></a></span>
+<span id="cb28-9"><a aria-label="9"></a><span class="fu">c</span>(<span class="at">aov =</span> <span class="fu">summary</span>(aov_fit)[[<span class="dv">1</span>]][<span class="dv">1</span>, <span class="st">"F value"</span>],</span>
+<span id="cb28-10"><a aria-label="10"></a>  <span class="at">lm  =</span> <span class="fu">anova</span>(lm_fit)[<span class="dv">1</span>, <span class="st">"F value"</span>])</span>
+<span id="cb28-11"><a aria-label="11"></a><span class="do">##     aov      lm </span></span>
+<span id="cb28-12"><a aria-label="12"></a><span class="do">## 21.2064 21.2064</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div class="callout callout-note callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Note</strong></p>
+</div>
+<div class="callout-content">
+<p>Identical coefficients, identical <em>F</em>. GLMs did not replace the ANOVA — they contain it.</p>
 </div>
 </div>
 </div>
@@ -1514,41 +1662,111 @@ family = gaussian(link = “identity”)) <strong>Residual Standard Error</stron
 </section>
 <section id="summary-what-a-glm-gives-you" class="slide level2 scrollable">
 <h2>Summary — What a GLM Gives You</h2>
-<p>Generalized Linear Models (GLMs) provide a powerful and flexible framework for analyzing a wide range of data types in biology:</p>
+<div class="columns">
+<div class="column" style="width:55%;">
 <ol type="1">
-<li><p><strong>Gaussian GLMs</strong> identity link function = linear model ANOVAs</p></li>
-<li><p><strong>Poisson GLMs</strong> log link function appropriate for count data, cautious of overdispersion.</p></li>
-<li><p><strong>Negative Binomial</strong> works with overdispersed data</p></li>
-<li><p><strong>Logistic GLMs</strong> with logit link function useful for binary responses</p>
-<ul>
-<li>probability of success or presence.</li>
-</ul></li>
+<li><strong>Gaussian</strong> + identity link = the linear model and ANOVA you already know</li>
+<li><strong>Poisson</strong> + log link = counts — and always check the dispersion</li>
+<li><strong>Negative binomial</strong> = counts whose variance exceeds the mean, which in ecology is most of them</li>
+<li><strong>Binomial</strong> + logit link = binary responses, read as odds ratios</li>
 </ol>
-<ul>
-<li>Key advantages of GLMs include:
-<ul>
-<li>Handle various response variables beyond normal distributions</li>
-<li>Unified framework for linear modeling</li>
-<li>Flexibility in specifying the link function to match the data structure</li>
-<li>Interpretable parameters, though interpretation differs by model type</li>
-</ul></li>
-</ul>
+<p>What they share: the linear predictor is unchanged. You are still fitting a straight line — just on a scale where a straight line cannot predict something impossible.</p>
+</div><div class="column" style="width:45%;">
+<div class="callout callout-important callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Important</strong></p>
+</div>
+<div class="callout-content">
+<p><strong>The method, not the models</strong></p>
+<p>Fit it → check the diagnostic that matches the model → change one assumption → refit.</p>
+<p>Today that chain ran three times on one question and gave three different <em>p</em>-values, all of them tiny. The number was never the problem. What changed was whether you were entitled to it.</p>
+</div>
+</div>
+</div>
+<div class="callout callout-note callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Note</strong></p>
+</div>
+<div class="callout-content">
+<p><strong>Up next — Linear Mixed Models</strong></p>
+<p>The thing you change next week is not the distribution but the <strong>error structure</strong>: random effects, and the nested designs from week 9 done properly.</p>
+</div>
+</div>
+</div>
+</div></div>
 </section>
 <section id="summary-choosing-a-distribution-and-link" class="slide level2 scrollable">
 <h2>Summary — Choosing a Distribution and Link</h2>
-<p>When working with GLMs:</p>
 <ol type="1">
-<li>Choose the appropriate distribution family based on your response variable</li>
-<li>Verify model assumptions through diagnostic plots</li>
-<li>Watch for overdispersion in count data</li>
-<li>Use odds ratios to interpret logistic regression results</li>
-<li>Compare competing models using likelihood ratio tests and information criteria</li>
+<li>Look at the <strong>response</strong> first — is it continuous, a count, or a yes/no? That picks the family.</li>
+<li>Let the family pick the <strong>link</strong> unless you have a reason not to.</li>
+<li>Fit it, then run the diagnostic that belongs to <strong>that</strong> family.</li>
+<li>For counts, check overdispersion <strong>every time</strong>. It inflates significance and never warns you.</li>
+<li>Compare candidate families with <strong>AIC</strong> and with DHARMa residuals, not with whichever gives the smaller <em>p</em>.</li>
+<li>Report on the <strong>response scale</strong> — counts and probabilities, not log and logit — using <code>emmeans(type = "response")</code> or an odds ratio.</li>
 </ol>
-<p>This framework allows biologists to appropriately model many types of data encountered in ecological, behavioral, and physiological research.</p>
+</section>
+<section id="readings" class="slide level2">
+<h2>Readings</h2>
+<div class="columns">
+<div class="column" style="width:55%;">
+<ul>
+<li><strong>Gotelli &amp; Ellison</strong>, Ch. 9 — Regression, for extending the linear model beyond ordinary least squares.</li>
+<li><strong>Gotelli &amp; Ellison</strong>, Ch. 11 — The Analysis of Categorical Data, for logistic regression and binomial GLMs.</li>
+<li><strong>Whitlock &amp; Schluter</strong>, Ch. 17 — Regression, §“Logistic regression”, for the binary-response case.</li>
+<li><strong>Quinn &amp; Keough</strong> (2002), <em>Experimental Design and Data Analysis for Biologists</em>, Ch. 13 — Generalized Linear Models and Logistic Regression. This is the source of both worked examples today.</li>
+</ul>
+</div><div class="column" style="width:45%;">
+<div class="callout callout-note callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Note</strong></p>
+</div>
+<div class="callout-content">
+<p><strong>📖 On the datasets</strong></p>
+<p>The <em>Uta</em> lizard data are Polis et al.’s, reproduced in Quinn &amp; Keough <strong>Box 13-1</strong>. The canyon rodent data are Bolger et al.’s, reproduced in <strong>Box 13-2</strong>. The Galápagos data ship with the <code>faraway</code> package.</p>
+<p>The textbook PDFs are on Canvas.</p>
+</div>
+</div>
+</div>
+<div class="callout callout-tip callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Tip</strong></p>
+</div>
+<div class="callout-content">
+<p><strong>🖐 Beyond the books</strong></p>
+<p>Zuur et al.&nbsp;(2009), <em>Mixed Effects Models and Extensions in Ecology with R</em>, Ch. 9, is the standard ecological reference for overdispersion and the negative binomial.</p>
+</div>
+</div>
+</div>
+</div></div>
 </section>
 <section id="references" class="slide level2">
 <h2>References</h2>
-<p>-Agresti, A. (1996). An Introduction to Categorical Data Analysis. Wiley, New York. Bolger, D. T., Alberts, A. C., Sauvajot, R. M., Potenza, P., McCalvin, C., Tran, D., Mazzoni, S., &amp; Soulé, M. E. (1997). Response of rodents to habitat fragmentation in coastal southern California. Ecological Applications, 7(2), 552-563. -Christensen, R. (1997). Log-linear Models and Logistic Regression. Springer, New York. -Hosmer, D. W., &amp; Lemeshow, S. (1989). Applied Logistic Regression. Wiley, New York. -McCullagh, P., &amp; Nelder, J. A. (1989). Generalized Linear Models. Chapman and Hall, London. -Polis, G. A., Hurd, S. D., Jackson, C. T., &amp; Piñero, F. S. (1998). Multifactor analysis of ecosystem patterns on islands in the Gulf of California. Ecological Monographs, 68, 490-502.</p>
+<div class="compact-table">
+<ul>
+<li>Bolger, D. T., Alberts, A. C., Sauvajot, R. M., Potenza, P., McCalvin, C., Tran, D., Mazzoni, S., &amp; Soulé, M. E. (1997). Response of rodents to habitat fragmentation in coastal southern California. <em>Ecological Applications</em>, 7(2), 552–563.</li>
+<li>Hosmer, D. W., &amp; Lemeshow, S. (2000). <em>Applied Logistic Regression</em> (2nd ed.). Wiley, New York.</li>
+<li>McCullagh, P., &amp; Nelder, J. A. (1989). <em>Generalized Linear Models</em> (2nd ed.). Chapman and Hall, London.</li>
+<li>Polis, G. A., Hurd, S. D., Jackson, C. T., &amp; Piñero, F. S. (1998). Multifactor analysis of ecosystem patterns on islands in the Gulf of California. <em>Ecological Monographs</em>, 68, 490–502.</li>
+<li>Quinn, G. P., &amp; Keough, M. J. (2002). <em>Experimental Design and Data Analysis for Biologists</em>. Cambridge University Press.</li>
+</ul>
+</div>
 
 
 </section>

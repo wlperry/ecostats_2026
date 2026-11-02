@@ -2,8 +2,8 @@
 metadata-files:
   - ../../_templates/_lectures.yml
 title: "Lecture: Principal Component Analysis"
-subtitle: "Ordination"
-description: "Principal Component Analysis (PCA) for multivariate data — eigenvalues, eigenvectors, standardization, scree plots, loadings, and biplots, worked through step-by-step on the classic iris flower dataset."
+subtitle: "Ordination by eigen-decomposition"
+description: "Principal Component Analysis (PCA) in full — what prcomp() is actually solving, eigenvalues and eigenvectors, axis rotation, standardization, scree plots and component-retention rules, loadings, the arbitrary sign of a component, scores and biplots, worked step-by-step on the classic iris flower dataset."
 categories: [Multivariate, PCA]
 order: 19
 week: 14
@@ -33,9 +33,10 @@ execute:
 #| include: false
 #| message: false
 #| warning: false
-library(webshot2)
 library(vegan)
+library(FactoMineR)
 library(factoextra)
+library(ggfortify)
 library(corrplot)
 library(GGally)
 library(knitr)
@@ -43,1039 +44,1040 @@ library(patchwork)
 library(janitor)
 library(plotly)
 library(tidyverse)
+
+theme_set(theme_minimal(base_size = 9))
+
+iris_df <- iris %>%
+  clean_names() %>%
+  mutate(ind = row_number())
+
+# the four measurements only -- this is what PCA sees
+iris_data <- iris_df %>% dplyr::select(sepal_length, sepal_width,
+                                       petal_length, petal_width)
+
+iris_long_df <- iris_df %>%
+  pivot_longer(cols = -c(species, ind), names_to = "variable",
+               values_to = "values")
 ```
 
-## Part 1 · Review: Eigenvectors, Eigenvalues, Components {.divider}
+## Part 1 · Where We Left Off {.divider}
 
-## Review: Multivariate Statistics Overview
+## Last Week: The Multivariate Toolkit
 
 ::::: columns
-::: {.column width="60%"}
-## Review
+::: {.column width="55%"}
+### Three steps, in order
 
--   Multivariate data
--   Multivariate statistics in ecology: overview
--   Eigenvectors, eigenvalues, components
--   Distance and dissimilarity in MV space
--   Data standardization
--   Graphics
--   Screening MV data
--   MANOVA
+1.  **Standardize** — because units are not biology.
+2.  **Choose a distance** — Euclidean for continuous traits,
+    Bray–Curtis for species counts, Jaccard for presence–absence. This
+    is the modelling decision.
+3.  **Ordinate** — draw the resemblances on a readable 2-D map.
+
+### Where PCA sits
+
+-   PCA is the **eigen-decomposition** branch of that map: it works on
+    a correlation or covariance matrix, implies **Euclidean** distance,
+    and assumes **linear** relationships.
+-   In exchange it gives you ordered axes, % variance explained, and
+    **loadings** — which NMDS cannot.
 :::
 
-::: {.column width="40%"}
-![Example NMDS ordination plot from a published lake-ecology study ('Summer'), with lake samples plotted as colored points (by lake) and shapes (by geographic location) and environmental-variable vectors (dissolved P and N, mixed-layer depth, temperature) overlaid as arrows with their R² and p-values, illustrating a real multivariate ordination used to summarize many variables at once.](images/clipboard-2539526410.png){width="3.96in"}
+::: {.column width="45%"}
+![Example NMDS ordination plot from a published lake-ecology study ('Summer'), with lake samples plotted as colored points (by lake) and shapes (by geographic location) and environmental-variable vectors (dissolved P and N, mixed-layer depth, temperature) overlaid as arrows with their R² and p-values, illustrating a real multivariate ordination used to summarize many variables at once.](images/clipboard-2539526410.png){width="3.40in"}
+
+An ordination of the kind we are building toward.
 :::
 :::::
 
-## Review: Eigenvectors and Components
-
-Eigenvectors, eigenvalues and components
-
--   Common goal of MV analysis is variable reduction: can we derive new
-    variables (based on linear combinations of "original" variables)
-    that explain variation in data?
-
--   For data set with i= 1 to n objects and j = 1 to p original
-    variables we seek new variables (principal components) using the
-    equation:
-
-### $$z_{ik} = c_1y_{i1} + c_2y_{i2} + \cdots c_jy_{ij} + \cdots + c_py_{ip}$$
-
-## Review: Component Interpretation
-
--   zik is value of new variable k for object I
--   yi1- yip are values of original variables for object i
--   c1-cp are coefficients that show importance of the original
-    variables to new derived variable
-
-### $$z_{ik} = c_1y_{i1} + c_2y_{i2} + \cdots c_jy_{ij} + \cdots + c_py_{ip}$$
-
-## Review: Component Properties
+## Today's Question
 
 ::::: columns
-::: {.column width="60%"}
-Eigenvectors, eigenvalues and components
+::: {.column width="55%"}
+### Open the box
 
-Derived variables are found so that:
-
--   First derived variable explains most of the variation in the data
--   Second most of the remaining variation
--   And so on…
--   As many derived variables as original variables (p)
--   Derived variables are uncorrelated with each other
-:::
-
-::: {.column width="40%"}
-![Two example figures stacked: a pairs-plot matrix of the iris sepal/petal variables showing scatterplots and correlation coefficients (up to 0.96 for petal length vs. width), and a scree plot below it showing the percentage of variance explained dropping sharply after the first component, illustrating that highly correlated variables let a few components capture most of the variation.](images/clipboard-2044711521.png){width="3.96in"}
-:::
-:::::
-
-## Review: Eigenvalues and Eigenvectors
-
-Eigenvectors, eigenvalues and components
-
--   Eigenvalues (latent roots) represent amount of variation in data
-    explained by the new k= 1 to p derived variables (λ1, λ2 …λp).
--   Eigenvalues are population parameters and are estimated using ML to
-    get sample statistics (l1, l2…lp)
--   Eigenvectors are lists of coefficients (c) that show contribution of
-    original variables to new, derived variables
--   Each new variable has an eigenvalue and an eigenvector
--   New variables (components) are derived from a p x p covariance or
-    correlation matrix of original variables
-
-## Part 2 · PCA Goals and Introduction {.divider}
-
-## PCA Goals and Introduction
-
--   Common goals of MV data analysis are variable reduction (finding
-    derived variables that summarize data) and exploration of patterns
-    in data (scaling/ordination)
--   Can use association (correlation/ covariance) matrices (PCA) or
-    dissimilarity measures (MDS)
--   In PCA: take p old variables and transform them into p "new/derived"
-    uncorrelated variables (principal components)
+-   Last week we ran `prcomp()` and read the answer. Today we ask
+    **what it actually solved**.
+-   By the end you will be able to say, precisely:
+    -   what an **eigenvalue** is and why it equals a variance
+    -   what an **eigenvector** is and why its entries are the loadings
+    -   why there are exactly *p* components for *p* variables
+    -   why component **signs** are arbitrary, and what to do about it
+    -   how to decide **how many** components to keep
 
 ::: callout-note
-Gotelli & Ellison, *A Primer of Ecological Statistics*, Ch. 12 — The Analysis of Multivariate Data, is the core reference for PCA.
+Gotelli & Ellison, *A Primer of Ecological Statistics*, **Ch. 12** —
+The Analysis of Multivariate Data — is the core reference.
+:::
 :::
 
-## Data for PCA Analysis
+::: {.column width="45%"}
+### The core equation
 
-```{r load_data}
-#| include: true
-#| message: false
-#| warning: false
+For object *i* and component *k*:
 
-# Load the iris dataset
-iris_df <- iris %>% clean_names() %>% mutate(ind = row_number()) %>% 
-  mutate(species_ind = paste(species, ind, sep="_"))
+$$z_{ik} = c_{k1}y_{i1} + c_{k2}y_{i2} + \cdots + c_{kp}y_{ip}$$
 
-# get values only
-iris_data <- iris_df  %>% select(-species, -ind, -species_ind)
+-   $y_{i1} \ldots y_{ip}$ — the **original** values for object *i*
+-   $c_{k1} \ldots c_{kp}$ — the **loadings**: coefficients saying how
+    much each original variable matters to component *k*
+-   $z_{ik}$ — the **score**: object *i*'s position on component *k*
+-   PCA's whole job is to **find the** $c$**'s**.
+:::
+:::::
 
-# Keep species for later visualization
-iris_species <- iris_df  %>% select(species, ind, species_ind)
-
-# pivot to long formt for viewing
-iris_long_df <- iris_df %>%
-  pivot_longer(
-    cols = -c(species, ind, species_ind),
-    names_to = "variable",
-    values_to = "values")
- 
-iris_df 
-```
-
-## Step 1: Explore the Iris Dataset
+## Today's Data: Iris
 
 ::::: columns
-::: {.column width="60%"}
-As in every case you should be looking at the data first - every time...
+::: {.column width="48%"}
+### Four measurements, three species
 
-Right is the data on iris from a long dataframe
+-   `r nrow(iris_df)` flowers, `r ncol(iris_data)` measurements (cm),
+    50 from each of three species.
+-   Small enough to follow every number by hand, correlated enough for
+    PCA to have something to do.
+-   **The test we will apply**: PCA is never told which species a flower
+    belongs to. Does it recover them anyway?
+
+```{r load_data}
+#| echo: true
+iris_df <- iris %>% clean_names()
+
+iris_data <- iris_df %>%
+  dplyr::select(-species)
+```
 :::
 
-::: {.column width="40%"}
+::: {.column width="52%"}
 ```{r l17-01}
+#| echo: false
+#| fig-width: 3.8
+#| fig-height: 3.2
 #| fig-alt: "Faceted boxplots of the four iris measurements (sepal length, sepal width, petal length, petal width) split by species, one panel per variable, each with a free y-axis scale."
-overview_plot <- iris_long_df %>%
-  ggplot(aes(species, values, color=species)) + 
-  geom_boxplot() +
-  facet_wrap(~variable, scales = "free")
-overview_plot
+iris_long_df %>%
+  ggplot(aes(species, values, fill = species)) +
+  geom_boxplot(linewidth = 0.3, outlier.size = 0.5) +
+  facet_wrap(~variable, scales = "free_y") +
+  labs(x = NULL, y = NULL) +
+  theme_minimal(base_size = 7) +
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = 30, hjust = 1))
 ```
 :::
 :::::
 
-## What is PCA? Goals and Overview
+## The Problem PCA Solves
 
 ::::: columns
-::: {.column width="40%"}
-## Principal Component Analysis Goals:
+::: {.column width="42%"}
+### Four dimensions is already too many
 
--   **Variable Reduction**: Transform many correlated variables into
-    fewer uncorrelated components
--   **Data Exploration**: Visualize patterns and relationships in
-    high-dimensional data
--   **Noise Reduction**: Focus on the most important sources of
-    variation
--   **Dimension Reduction**: Make complex datasets easier to analyze and
-    interpret
-
-**Today's Example**: Iris flower measurements - can we reduce 4
-measurements to 2-3 components that capture most variation?
+-   With 4 variables there are **6** pairwise scatterplots. With 10
+    there are 45. With 27 there are 351.
+-   No set of 2-D plots shows you how all the variables move
+    *together*.
+-   **PCA's offer**: a small number of new axes, built from the old
+    ones, that carry most of the information.
+-   And it will do it **without being told about species**.
 :::
 
-::: {.column width="60%"}
+::: {.column width="58%"}
 ```{r pca-01}
 #| echo: false
 #| message: false
 #| warning: false
+#| fig-width: 4.4
+#| fig-height: 3.4
 #| fig-alt: "Pairs plot matrix of the four iris measurements, colored by species, showing scatterplots below the diagonal, correlation coefficients above the diagonal, and density curves on the diagonal, illustrating the challenge of visualizing four correlated dimensions at once."
-# Create pairs plot colored by species to show the challenge
-pairs_plot <- iris_df %>%
-  select(sepal_length, sepal_width, petal_length, petal_width, species) %>%
-  ggpairs(columns = 1:4, 
-          aes(color = species, alpha = 0.7),
-          title = "The Challenge: 4 Dimensions of Iris Data",
-          upper = list(continuous = wrap("cor", size = 3)),
-          lower = list(continuous = wrap("points", alpha = 0.7, size = 0.8)),
-          diag = list(continuous = wrap("densityDiag", alpha = 0.7))) +
-  theme_minimal(base_size = 9) +
-  theme(
-    plot.title = element_text(size = 14, hjust = 0.5),
-    strip.text = element_text(size = 8),
-    axis.text = element_text(size = 6)
-  ) +
-  scale_color_manual(values = c("setosa" = "#00AFBB", 
-                               "versicolor" = "#E7B800", 
-                               "virginica" = "#FC4E07")) +
-  scale_fill_manual(values = c("setosa" = "#00AFBB", 
-                              "versicolor" = "#E7B800", 
-                              "virginica" = "#FC4E07"))
-
-pairs_plot
+ggpairs(iris_df, columns = 1:4,
+        aes(color = species, alpha = 0.7),
+        upper = list(continuous = wrap("cor", size = 2)),
+        lower = list(continuous = wrap("points", alpha = 0.6, size = 0.5)),
+        diag  = list(continuous = wrap("densityDiag", alpha = 0.6))) +
+  scale_color_manual(values = c(setosa = "#00AFBB", versicolor = "#E7B800",
+                                virginica = "#FC4E07")) +
+  scale_fill_manual(values = c(setosa = "#00AFBB", versicolor = "#E7B800",
+                               virginica = "#FC4E07")) +
+  theme_minimal(base_size = 6) +
+  theme(strip.text = element_text(size = 6), axis.text = element_text(size = 4))
 ```
 :::
 :::::
 
-## High-Dimensional Data Visualization
+## Part 2 · Eigenvalues, Eigenvectors, and Rotation {.divider}
+
+## PCA Is a Rotation
 
 ::::: columns
-::: {.column width="40%"}
-## Principal Component Analysis Goals:
+::: {.column width="52%"}
+### The 2-variable picture
 
--   **Variable Reduction**: Transform many correlated variables into
-    fewer uncorrelated components
--   **Data Exploration**: Visualize patterns and relationships in
-    high-dimensional data
--   **Noise Reduction**: Focus on the most important sources of
-    variation
--   **Dimension Reduction**: Make complex datasets easier to analyze and
-    interpret
-
-**Today's Example**: Iris flower measurements - can we reduce 4
-measurements to fewer components that capture most variation?
+-   Start with two correlated variables — crab burrows and crab
+    biomass. The cloud of points runs diagonally.
+-   The original axes are a **bad description**: both of them carry some
+    of the same information.
+-   PCA keeps the points exactly where they are and **turns the axes**
+    until the first one lies along the direction of greatest spread.
+-   Nothing is lost in a rotation. The distances between points are
+    identical before and after.
 :::
 
-::: {.column width="60%"}
-```{r hypercube}
-#| echo: false
-#| message: false
-#| warning: false
-#| paged-print: false
-#| eval: !expr knitr::is_html_output()
-#| fig-alt: "Interactive 3D scatterplot of iris flowers projected from four dimensions down to three using a rotation matrix, points colored by species, illustrating the challenge of visualizing high-dimensional data."
-# Method: Create a 4D hypercube projection
-# Project 4D data onto 3D using a rotation matrix
-rotation_4d_to_3d <- matrix(c(
-  1, 0, 0, 0,
-  0, 1, 0, 0,
-  0.5, 0.5, 0.7, 0.5
-), nrow = 3, byrow = TRUE)
+::: {.column width="48%"}
+![Scatterplot of number of crab burrows versus total crab biomass, with the original centered axes drawn as a horizontal/vertical cross through the data cloud and two diagonal lines labeled PC1 and PC2 showing the rotated principal-component axes, where PC1 runs along the direction of greatest spread in the data.](images/clipboard-1945433117.png){width="3.30in"}
+:::
+:::::
 
-data_4d <- as.matrix(iris_df[, c("sepal_length", "sepal_width", "petal_length", "petal_width")])
-data_3d <- data_4d %*% t(rotation_4d_to_3d)
+## The Same Data, New Axes
 
-iris_df2 <- iris_df
-iris_df2$x_proj <- data_3d[, 1]
-iris_df2$y_proj <- data_3d[, 2]
-iris_df2$z_proj <- data_3d[, 3]
+::::: columns
+::: {.column width="48%"}
+![The same crab burrow and biomass data redrawn after axis rotation, with PC1 and PC2 now shown as the new horizontal and vertical axes and the original burrow-number and biomass axes appearing as diagonal reference lines, illustrating that PCA is literally a rotation of the coordinate system around the data's center.](images/clipboard-369995082.png){width="3.30in"}
+:::
 
-plot_hypercube <- plot_ly(iris_df2, 
-                         x = ~x_proj, 
-                         y = ~y_proj, 
-                         z = ~z_proj,
-                         color = ~species,
-                         colors = c('#E41A1C', '#377EB8', '#4DAF4A'),
-                         type = 'scatter3d',
-                         mode = 'markers',
-                         marker = list(size = 5, opacity = 0.8),
-                         text = ~paste('Sepal Length:', sepal_length, '<br>',
-                                      'Sepal Width:', sepal_width, '<br>',
-                                      'Petal Length:', petal_length, '<br>',
-                                      'Petal Width:', petal_width),
-                         hoverinfo = 'text')
+::: {.column width="52%"}
+### After the rotation
 
-plot_hypercube <- plot_hypercube %>% layout(
-  scene = list(
-    xaxis = list(title = "", showgrid = FALSE, showline = FALSE, 
-                 showticklabels = FALSE, zeroline = FALSE, showspikes = FALSE),
-    yaxis = list(title = "", showgrid = FALSE, showline = FALSE, 
-                 showticklabels = FALSE, zeroline = FALSE, showspikes = FALSE),
-    zaxis = list(title = "", showgrid = FALSE, showline = FALSE, 
-                 showticklabels = FALSE, zeroline = FALSE, showspikes = FALSE),
-    bgcolor = "white",
-    camera = list(eye = list(x = 1.5, y = 1.5, z = 1.5))
-  ),
-  paper_bgcolor = "white",
-  showlegend = TRUE
-)
+-   PC1 is now horizontal and carries most of the spread; PC2 is
+    vertical and carries what is left.
+-   The two new axes are **orthogonal**, which is the geometric way of
+    saying the two components are **uncorrelated**.
+-   The old variables are still in there — they are now the diagonal
+    reference lines, and the angle each one makes with PC1 is exactly
+    what its **loading** records.
+-   **The rotation is chosen to maximize the variance on PC1.** That one
+    sentence is the whole of PCA.
+:::
+:::::
 
-plot_hypercube
-```
+## Beyond Two Dimensions
+
+::::: columns
+::: {.column width="52%"}
+### Same idea, more axes
+
+-   In 3-D the rotation finds a first axis through the long direction of
+    the cloud, a second at right angles to it through the longest
+    remaining direction, and a third fixed by the first two.
+-   With *p* variables you get **exactly *p* components** — the rotation
+    uses up every dimension.
+-   You do not do this by eye. The components are **extracted from the
+    *p* × *p* covariance or correlation matrix** of the original
+    variables, and the extraction is an eigen-decomposition.
+:::
+
+::: {.column width="48%"}
+![3D scatterplot of a point cloud within a cube, with three colored arrows (red '1st', blue '2nd', green '3rd') radiating from the cloud's center marking the first three principal-component axes, extending the rotation idea from 2D to 3D multivariate space.](images/clipboard-1512013712.png){width="3.30in"}
+:::
+:::::
+
+## Eigenvalues and Eigenvectors
+
+::::: columns
+::: {.column width="50%"}
+### Eigenvalue ($\lambda$)
+
+-   **How much variance** the component captures, in the units of the
+    input matrix.
+-   Run PCA on a **correlation** matrix and each original variable
+    contributes exactly 1 unit of variance, so:
+    -   the eigenvalues sum to ***p***
+    -   an eigenvalue of 1 means "this component is worth one average
+        variable"
+-   % variance for component *k*:
+    $\lambda_k / \sum_{j=1}^{p}\lambda_j$
+:::
+
+::: {.column width="50%"}
+### Eigenvector (**c**)
+
+-   The **list of coefficients** — one per original variable — that
+    builds the component. There are *p* entries in each eigenvector and
+    *p* eigenvectors.
+-   Each eigenvector has **length 1**: the loadings' squares sum to 1.
+-   Eigenvectors are **orthogonal** to one another: any two of them have
+    a dot product of 0. That is why the components are uncorrelated.
+-   Each component has one eigenvalue and one eigenvector: *how big*,
+    and *which way*.
+:::
+:::::
+
+## Correlation Matrix or Covariance Matrix?
+
+::::: columns
+::: {.column width="52%"}
+### The choice *is* the standardization choice
+
+-   **Covariance matrix** → variables keep their original variances, so
+    a variable measured in big numbers dominates.
+    -   Use it when all variables are in the **same units** and the
+        differences in spread are real biology.
+-   **Correlation matrix** → every variable is rescaled to variance 1
+    before decomposition, so every variable gets an **equal vote**.
+    -   Use it when the units differ — almost always, in ecology.
+-   `prcomp(x, scale. = TRUE)` *is* "use the correlation matrix".
+:::
+
+::: {.column width="48%"}
+### Why correlation matters so much
+
+-   PCA earns its keep by **collapsing redundancy**. If the original
+    variables are uncorrelated, there is no redundancy to collapse:
+    -   every eigenvalue comes out near 1
+    -   the "components" are just the original variables, reordered
+    -   nothing has been reduced
+-   **Correlated variables → fewer components carry more variance.**
+    Check the correlation matrix *before* you run anything.
 :::
 :::::
 
 ## Part 3 · Assumptions and Standardization {.divider}
 
-## PCA Assumptions - Critical to Check First!
+## What PCA Assumes
 
-## Key Assumptions:
+::::: columns
+::: {.column width="50%"}
+### Check these first
 
-1.  **Linear relationships** between variables
-2.  **No extreme outliers** (can distort results)
-3.  **Variables should be correlated** (if not, PCA won't reduce
-    dimensions)
-4.  **Adequate sample size** (generally n \> 50, preferably n \> 100)
-5.  **No missing data** (complete cases only)
-6.  **Consider standardization** when variables have different scales
+1.  **Linear relationships** between variables — PCA sees only straight
+    lines.
+2.  **No extreme outliers** — one wild object can define a whole
+    component.
+3.  **Variables are correlated** — otherwise there is nothing to
+    collapse.
+4.  **Adequate sample size** — at least 3× as many objects as
+    variables; *n* > 50 is comfortable. We have
+    `r nrow(iris_df)` flowers and `r ncol(iris_data)` variables.
+5.  **Complete cases** — `prcomp()` will not handle missing values for
+    you.
+:::
 
-**Important**: PCA works best when original variables are moderately to
-highly correlated!
-
-**Let's check these assumptions with our iris data...**
-
-## Step 2: Check PCA Assumptions - Correlations
+::: {.column width="50%"}
+### Are the iris variables correlated?
 
 ```{r check_correlations}
 #| echo: false
+#| fig-width: 3.4
+#| fig-height: 2.9
 #| fig-alt: "Correlation matrix heatmap of the four iris variables, with color and printed coefficients showing the strength and direction of each pairwise correlation, used to check whether variables are correlated enough for PCA to be useful."
-# Check correlations between variables
-cor_matrix <- cor(iris_data)
-print("Correlation Matrix:")
-round(cor_matrix, 3)
-
-# Visualize correlation matrix
-corrplot(cor_matrix, method = "color", type = "upper", 
-         addCoef.col = "grey75", tl.cex = 0.8, number.cex = 0.8,
-         title = "Correlation Matrix of Iris Variables")
+corrplot(cor(iris_data), method = "color", type = "upper",
+         addCoef.col = "grey25", tl.cex = 0.7, number.cex = 0.8,
+         mar = c(0, 0, 0, 0))
 ```
 
-## Step 2: Check PCA Assumptions - Linearity
+-   Petal length and petal width correlate at
+    **`r round(cor(iris_data$petal_length, iris_data$petal_width), 2)`**.
+    Plenty of redundancy to collapse.
+:::
+:::::
 
+## Checking Linearity and Outliers
+
+::::: columns
+::: {.column width="50%"}
 ```{r check_linearity}
 #| echo: false
 #| message: false
 #| warning: false
-#| paged-print: false
+#| fig-width: 3.6
+#| fig-height: 3.0
 #| fig-alt: "Pairs plot matrix of the four iris variables with correlation coefficients above the diagonal and smoothed scatterplots below the diagonal, used to check that relationships between variables are approximately linear."
-# Check for linear relationships using pairs plot
 ggpairs(iris_data,
-        title = "Pairwise Relationships in Iris Data",
-        upper = list(continuous = "cor"),
-        lower = list(continuous = "smooth")) +
-  theme_minimal(base_size = 9)
+        upper = list(continuous = wrap("cor", size = 2.5)),
+        lower = list(continuous = wrap("smooth", size = 0.4))) +
+  theme_minimal(base_size = 6)
 ```
 
-## Step 2: Check PCA Assumptions - Outliers
+Relationships are close to straight lines — the setosa cluster makes
+some panels look bent, but within species they are linear.
+:::
 
+::: {.column width="50%"}
 ```{r check_outliers}
 #| echo: false
+#| fig-width: 3.4
+#| fig-height: 2.8
 #| fig-alt: "Boxplots of each of the four iris variables side by side, used to visually check for extreme outlier values before running PCA."
-# Check for outliers using boxplots
-iris_data %>% 
-  pivot_longer(everything(), names_to = "variable", values_to = "value") %>% 
+iris_data %>%
+  pivot_longer(everything(), names_to = "variable", values_to = "value") %>%
   ggplot(aes(x = variable, y = value)) +
-  geom_boxplot() +
-  labs(title = "Check for Outliers in Iris Variables",
-       x = "Variable", y = "Value") +
-  theme_minimal(base_size = 9) +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  geom_boxplot(linewidth = 0.3, outlier.size = 0.6) +
+  labs(x = NULL, y = "Value (cm)") +
+  theme_minimal(base_size = 7) +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1))
 ```
 
-## Step 3: Standardize the Data
+A handful of mild sepal-width outliers, nothing extreme. Note how much
+wider **petal length** spreads than **sepal width** — that is the
+standardization problem in one picture.
+:::
+:::::
 
-## STANDARDIZATION: Making all variables comparable
+## Standardization
 
 ::::: columns
-::: {.column width="60%"}
-Why standardize?
+::: {.column width="52%"}
+### Why it is needed here
 
-Our measurements have different units and scales:
+```{r sds}
+#| echo: false
+round(apply(iris_data, 2, sd), 3)
+```
 
--   Sepal length: ranges from \~4-8 cm
--   Sepal width: ranges from \~2-4 cm
--   Petal length: ranges from \~1-7 cm
--   Petal width: ranges from \~0.1-2.5 cm
-
-Without standardization, PCA would be dominated by variables with larger
-numbers (like petal length) simply because they have bigger values, not
-because they're more important biologically
-
-What does standardization do?
-
--   Converts each variable to have:
-    -   Mean = 0 (centered at zero)
-    -   Standard deviation = 1 (same spread)
-    -   This gives all variables equal weight in the analysis
-
-How to interpret standardized values: Example: A sepal length of 5.1 cm
-might become -0.9 after standardization, meaning it's 0.9 standard
-deviations below the average sepal length
+-   Petal length varies about **4×** as much as sepal width does.
+    On a covariance matrix it would dominate PC1 for no better reason
+    than that.
+-   **Z-score**: $Z = (Y_i - \bar{Y})/s$, giving mean 0 and SD 1.
+-   A sepal length of 5.1 cm becomes
+    **`r round((5.1 - mean(iris_data$sepal_length)) / sd(iris_data$sepal_length), 2)`**
+    — just under one SD below average.
 :::
 
-::: {.column width="40%"}
+::: {.column width="48%"}
 ```{r standardize_data}
-#| echo: false
-# Standardize the data (mean = 0, sd = 1)
-# This is important when variables have different scales
+#| echo: true
 iris_scaled <- scale(iris_data)
 
-# Convert back to data frame for easier handling
-iris_scaled_df <- as.data.frame(iris_scaled)
-
-# Check standardization worked
-print("Means after standardization (should be ~0):")
-round(colMeans(iris_scaled_df), 3)
-
-print("Standard deviations after standardization (should be 1):")
-round(apply(iris_scaled_df, 2, sd), 3)
+# check it worked
+round(colMeans(iris_scaled), 3)
+round(apply(iris_scaled, 2, sd), 3)
 ```
+
+::: callout-note
+`scale()` here, then `prcomp(..., scale. = FALSE)`, is exactly
+equivalent to handing the raw data to `prcomp(..., scale. = TRUE)`.
+We do it in two steps so the standardized values are visible.
+:::
 :::
 :::::
 
-## Part 4 · Running PCA and Eigen-decomposition {.divider}
+## Part 4 · Running PCA and Reading the Output {.divider}
 
-## Step 4: Perform PCA - The Mathematics
+## Running the Analysis
 
 ::::: columns
-::: {.column width="60%"}
-## What is PCA doing?
+::: {.column width="48%"}
+### The call
 
-Principal Component Analysis finds new variables (called components)
-that capture the most variation in your data. Think of it as finding the
-"best viewing angles" to see differences between flowers.
+```{r perform_pca}
+#| echo: true
+iris_pca <- prcomp(iris_scaled,
+                   center = FALSE,
+                   scale. = FALSE)
+```
 
-## The mathematics (simplified):
-
--   PCA rotates your data to find the direction with maximum spread
-    (PC1)
--   Then finds the next direction with maximum spread perpendicular to
-    PC1 (PC2)
--   Continues until it has as many components as original variables (4
-    in our case)
-
-## Why center = FALSE and scale = FALSE?
-
-We already standardized our data in Step 3, so we tell R not to do it
-again: - center = FALSE: Don't subtract the mean (we already did) -
-scale = FALSE: Don't divide by standard deviation (we already did)
-
-## What the summary shows:
-
--   **Standard deviation**: How much variation each component captures
--   **Proportion of Variance**: Percentage of total variation explained
-    by each component
--   **Cumulative Proportion**: Running total of variance explained
+-   `center = FALSE`, `scale. = FALSE` because `scale()` already did
+    both. Doing it twice is harmless but confusing.
+-   `vegan::rda(iris_scaled)` gives the identical decomposition under a
+    different name — PCA is PCA.
 :::
 
-::: {.column width="40%"}
-```{r perform_pca}
-# Perform PCA on standardized data
-iris_pca <- prcomp(iris_scaled, center = FALSE, scale. = FALSE)
-# Note: center and scale are FALSE because we already standardized
+::: {.column width="52%"}
+### What is inside the result
 
-# Alternative using vegan package
-iris_pca_vegan <- rda(iris_scaled)
+::: {.compact-table}
+| Element | What it holds |
+|----|----|
+| `sdev` | $\sqrt{\lambda}$ — SD of each component |
+| `rotation` | the **eigenvectors**: loadings, variables × components |
+| `x` | the **scores**: objects × components |
+| `center`, `scale` | what was subtracted and divided |
+:::
 
-# Summary of PCA results
+-   `sdev^2` gives the eigenvalues. Everything else in this lecture is
+    read off `rotation` and `x`.
+:::
+:::::
+
+## The Summary Table
+
+```{r pca_summary}
+#| echo: true
 summary(iris_pca)
 ```
-:::
-:::::
 
-## Deriving Components: 2D Visualization
-
-::::: columns
-::: {.column width="60%"}
-How are new uncorrelated components derived? One way to think it is in
-terms of axis rotation Consider a 2-variable dataset:
-:::
-
-::: {.column width="40%"}
-![Scatterplot of number of crab burrows versus total crab biomass, with the original centered axes drawn as a horizontal/vertical cross through the data cloud and two diagonal lines labeled PC1 and PC2 showing the rotated principal-component axes, where PC1 runs along the direction of greatest spread in the data.](images/clipboard-1945433117.png){width="3.96in"}
-:::
-:::::
-
-## Component Derivation: Axis Rotation
-
-::::: columns
-::: {.column width="60%"}
-Goal is to "rotate the axes" around center of the data "cloud" in such a
-way that most of the variation lies along the first axis Then find
-second axis that explains the second-most variation AND is orthogonal to
-first axis
-:::
-
-::: {.column width="40%"}
-![The same crab burrow and biomass data redrawn after axis rotation, with PC1 and PC2 now shown as the new horizontal and vertical axes and the original burrow-number and biomass axes appearing as diagonal reference lines, illustrating that PCA is literally a rotation of the coordinate system around the data's center.](images/clipboard-369995082.png){width="3.96in"}
-:::
-:::::
-
-## Component Derivation: Multivariate Extension
-
-::::: columns
-::: {.column width="60%"}
-Easy to picture in 2D (or even 3D), but harder in multivariate space
-Practically, components are "extracted" from a covariance of correlation
-matrix among original variables Will extract as many principal
-components as original variables
-:::
-
-::: {.column width="40%"}
-![3D scatterplot of a point cloud within a cube, with three colored arrows (red '1st', blue '2nd', green '3rd') radiating from the cloud's center marking the first three principal-component axes, extending the rotation idea from 2D to 3D multivariate space.](images/clipboard-1512013712.png){width="3.96in"}
-:::
-:::::
-
-## Component Information: Eigenvalues and Eigenvectors
-
--   Get two important pieces of information from PCA: eigenvectors and
-    eigenvalues
--   Eigenvalues (latent roots)- how much of the variation is explained
-    by each component?
--   Eigenvectors- list of coefficients for original variables. There are
-    p coefficients in an eigenvector and p eigenvectors
--   Correlation bw original variables will result in fewer components
-    explaining more variance; variable reduction will fail if original
-    variables are not correlated
-
-## Step 4: Understanding Eigenvalues and Variance
-
-::::: columns
-::: {.column width="60%"}
-## Understanding Eigenvalues and Variance
-
-### What are eigenvalues?
-
--   Eigenvalues tell us how much variation each principal component
-    captures.
--   Larger eigenvalues = more important components.
-
-### Key terms explained:
-
--   **Eigenvalue**: The amount of variance captured by each component
-    (always positive)
--   **Proportion of Variance**: What percentage of total variation this
-    component explains
--   **Cumulative Variance**: Running total - helps us decide how many
-    components we need
-
-### How to read the results:
-
--   If PC1 has eigenvalue = 2.9, it captures 2.9 "units" of variance
--   If Prop_Variance = 0.728, PC1 explains 72.8% of all variation in the
-    data
--   If Cumsum_Variance = 0.959 at PC2, the first 2 components together
-    explain 95.9% of variation
-
-### Why this matters:
-
-This table helps us decide how many components to keep.
-
--   If 2 components explain 95% of variance, we've successfully reduced
-    4 variables to 2
--   We only lose 5% of information without including the other
-    variables!
-:::
-
-::: {.column width="40%"}
-```{r pca_eigenvalues}
-#| paged-print: false
-# Extract eigenvalues (variance explained by each component)
-eigenvalues <- iris_pca$sdev^2
-prop_variance <- eigenvalues / sum(eigenvalues)
+```{r eig_objects}
+#| include: false
+eigenvalues     <- iris_pca$sdev^2
+prop_variance   <- eigenvalues / sum(eigenvalues)
 cumsum_variance <- cumsum(prop_variance)
+```
 
-# Create a summary table
-pca_summary <- data.frame(
-  Component = paste0("PC", 1:length(eigenvalues)),
-  Eigenvalue = eigenvalues,
-  Prop_Variance = prop_variance,
-  Cumsum_Variance = cumsum_variance
-)
+-   **Standard deviation** is $\sqrt{\lambda}$, not the eigenvalue
+    itself — square it to get the variance.
+-   PC1 explains **`r round(prop_variance[1] * 100, 1)`%**, PC2
+    **`r round(prop_variance[2] * 100, 1)`%**; together
+    **`r round(cumsum_variance[2] * 100, 1)`%** of all the variation in
+    four variables.
+-   The four eigenvalues sum to **`r round(sum(eigenvalues), 1)`** —
+    one unit per standardized variable, as promised.
 
-print("PCA Summary:")
-kable(pca_summary, digits = 3)
+## Eigenvalues in a Table
+
+::::: columns
+::: {.column width="52%"}
+```{r pca_eigenvalues}
+#| echo: true
+tibble(
+  Component  = paste0("PC", 1:4),
+  Eigenvalue = round(eigenvalues, 3),
+  Percent    = round(prop_variance * 100, 2),
+  Cumulative = round(cumsum_variance * 100, 2))
 ```
 :::
+
+::: {.column width="48%"}
+### Reading it
+
+-   PC1's eigenvalue is
+    **`r round(eigenvalues[1], 2)`**: it is worth about
+    `r round(eigenvalues[1], 1)` of the original variables all by
+    itself.
+-   PC3 and PC4 together carry
+    **`r round(sum(prop_variance[3:4]) * 100, 1)`%** — essentially
+    measurement noise.
+-   We have reduced 4 variables to 2 numbers and kept
+    **`r round(cumsum_variance[2] * 100, 1)`%** of the information. That
+    is dimension reduction working.
+:::
 :::::
 
-## Part 5 · Choosing How Many Components {.divider}
+## Part 5 · How Many Components Do You Keep? {.divider}
 
-## Step 5: Determine Number of Components - Scree Plot
+## The Scree Plot
 
 ::::: columns
-::: {.column width="60%"}
-## What is a Scree Plot?
+::: {.column width="52%"}
+### What it is
 
-A scree plot shows how much variance each component explains, helping us
-decide how many components we need. The name comes from the geological
-term "scree" - loose rocks at the base of a cliff - because the plot
-often looks like a steep cliff followed by rubble.
-
-## How to read a Scree Plot:
-
--   **Y-axis**: Percentage of variance explained by each component
--   **X-axis**: Component number (PC1, PC2, etc.)
--   **The pattern**: Usually shows a steep drop followed by a leveling
-    off
-
-## The "Elbow Method":
-
-Look for where the line "bends" or forms an elbow:
-
--   Components before the elbow = important (steep slope)
--   Components after the elbow = less important (gentle slope)
--   Keep components up to and including the elbow
-
-## What to look for in our plot:
-
--   If PC1 explains 70% and PC2 explains 20%, but PC3 only explains 5%,
-    the elbow is at PC2
--   This suggests keeping the first 2 components
--   The dramatic drop from PC1 to PC2, then gentle decline after,
-    confirms our dimension reduction worked well
+-   "Scree" is the geological term for the loose rubble at the base of a
+    cliff. The plot usually shows a **cliff** then **rubble**.
+-   **Y-axis**: % variance explained. **X-axis**: component number.
+-   **The elbow method**: find where the line stops dropping steeply and
+    flattens out. Keep the components *before* the flattening.
+-   Here the cliff runs PC1 → PC2 and the rubble starts at PC3. The
+    elbow says **keep two**.
 :::
 
-::: {.column width="40%"}
+::: {.column width="48%"}
 ```{r scree_plot}
 #| echo: false
-#| eval: !expr knitr::is_html_output()
+#| fig-width: 3.6
+#| fig-height: 3.0
 #| fig-alt: "Scree plot of percent variance explained by each of the four principal components, with labeled bars, showing a steep drop after PC1 and PC2 and an 'elbow' suggesting the first two components capture most of the variation."
-# Scree plot - look for the "elbow"
-fviz_eig(iris_pca, addlabels = TRUE, ylim = c(0, 80)) +
-  labs(title = "Scree Plot - Variance Explained by Each Component",
-       x = "Principal Component", y = "% of Variance Explained") +
-  theme_minimal(base_size = 9)
+fviz_eig(iris_pca, addlabels = TRUE, ylim = c(0, 85),
+         barfill = "darkblue", barcolor = "darkblue", alpha = 0.7) +
+  labs(title = NULL, x = "Principal component",
+       y = "% of variance explained") +
+  theme_minimal(base_size = 8)
 ```
 :::
 :::::
 
-## Step 5: Component Selection Rules
+## Three Rules, and What To Do When They Disagree
 
+::::: columns
+::: {.column width="48%"}
 ```{r eigenvalue_rule}
-# Eigenvalue > 1 rule (Kaiser criterion)
-components_to_keep <- sum(eigenvalues > 1)
-print(paste("Components with eigenvalue > 1:", components_to_keep))
+#| echo: true
+# Kaiser criterion: eigenvalue > 1
+sum(eigenvalues > 1)
 
-# Components explaining at least 80% of variance
-components_80_percent <- which(cumsum_variance >= 0.80)[1]
-print(paste("Components needed for 80% variance:", components_80_percent))
+# first PC reaching 80% cumulative
+which(cumsum_variance >= 0.80)[1]
 ```
+
+-   **Kaiser** ($\lambda > 1$) says keep **1**.
+-   **80% cumulative** says keep **2**.
+-   **The elbow** says keep **2**.
+:::
+
+::: {.column width="52%"}
+### Resolving it
+
+-   The rules are **guidelines, not tests**, and they routinely
+    disagree. Kaiser is known to be strict with few variables — with
+    only 4 variables a second component has to be very strong to clear
+    an eigenvalue of 1, and PC2's is
+    **`r round(eigenvalues[2], 2)`**.
+-   **Two more criteria settle it in practice:**
+    1.  Does the component have an **interpretable** biological
+        meaning? PC2 does — see Part 6.
+    2.  Does keeping it change what you can **see**? It does: PC2 is
+        what separates the species that PC1 alone confuses.
+-   **We keep two.** Say which rule you used and why.
+:::
+:::::
 
 ## Part 6 · Loadings and Interpretation {.divider}
 
-## Step 6: Interpret the Components - Loadings
+## What Loadings Are
 
 ::::: columns
-::: {.column width="60%"}
-## What are Component Loadings
+::: {.column width="50%"}
+### Recipes for the components
 
-Loadings tell us how much each original variable contributes to each
-principal component. Think of them as "recipes" that show how to mix
-your original measurements to create the new components.
-
-## How to read the loadings table
-
--   **Values range from -1 to +1** (like correlations)
--   **Large positive values** (e.g., 0.8): This variable contributes
-    strongly in the positive direction
--   **Large negative values** (e.g., -0.8): This variable contributes
-    strongly in the negative direction
--   **Values near 0**: This variable doesn't contribute much to this
-    component
-
-## Interpreting the patterns:
-
--   **If all loadings have similar signs**: Component represents overall
-    size (all measurements increase/decrease together)
--   **If loadings have mixed signs**: Component represents shape or
-    proportions (some measurements increase while others decrease)
--   **Dominant variables**: Variables with the largest absolute loadings
-    drive that component's meaning
-
-## Example interpretation:
-
-If PC1 has all negative loadings around -0.5, it means:
-
--   Flowers with high PC1 scores have small values for ALL measurements
--   This component captures "overall flower size"
--   The negative sign just indicates direction (could flip signs and
-    interpretation)
+-   A loading is one coefficient $c_{kj}$ — how much original variable
+    *j* goes into component *k*.
+-   **Values run from −1 to +1**, like correlations.
+-   **|loading| > 0.5** → dominates the component.
+    **|loading| ≈ 0** → irrelevant to it.
+-   **Signs within a component** are what carry the meaning:
+    -   all the same sign → a **size** axis, everything moving together
+    -   mixed signs → a **shape** axis, a trade-off
 :::
 
-::: {.column width="40%"}
+::: {.column width="50%"}
 ```{r component_loadings}
-#| paged-print: false
-# Component loadings (how much each original variable contributes)
-loadings_df <- data.frame(
-  Variable = rownames(iris_pca$rotation),
-  PC1 = iris_pca$rotation[, 1],
-  PC2 = iris_pca$rotation[, 2],
-  PC3 = iris_pca$rotation[, 3],
-  PC4 = iris_pca$rotation[, 4]
-)
-
-print("Component Loadings:")
-loadings_df
+#| echo: true
+round(iris_pca$rotation, 3)
 ```
+
+-   Each column is one **eigenvector**. Square a column and the entries
+    sum to 1.
 :::
 :::::
 
-## Step 6: Eigenvector Properties
-
-### Key properties of eigenvectors/loadings:
-
--   **Unit length**: Each eigenvector has length 1 (sum of squares = 1)
--   **Orthogonal**: Eigenvectors are perpendicular to each other (dot
-    product = 0)
--   **Ordered by importance**: First eigenvector (PC1) explains most
-    variance
-
-### The complete picture:
-
--   **Eigenvectors** = The directions (loadings)
--   **Eigenvalues** = The importance of each direction (variance
-    explained)
--   Together they fully describe the PCA transformation
-
-## Step 6b: Visualization of Component Loadings
+## Eigenvector Properties, Checked
 
 ::::: columns
-::: {.column width="60%"}
-What does this plot show?
+::: {.column width="50%"}
+### The three claims from Part 2
 
-This is a visual representation of the loadings table, showing how each
-original variable contributes to PC1 and PC2. It's like a map of how
-your original measurements relate to the new principal components.
+```{r eigen_props}
+#| echo: true
+# 1. unit length
+round(colSums(iris_pca$rotation^2), 3)
 
-How to read the plot:
+# 2. orthogonal: PC1 . PC2 = 0
+round(sum(iris_pca$rotation[, 1] *
+          iris_pca$rotation[, 2]), 10)
 
--   Arrows represent your original variables (sepal_length, sepal_width,
-    etc.)
--   Arrow direction shows which PC the variable contributes to
--   Arrow length indicates the strength of contribution (longer =
-    stronger)
--   Arrow color shows the overall contribution magnitude (red = highest,
-    blue = lowest)
--   The circle represents the maximum possible contribution
-
-Key interpretations from this plot:
-
--   PC1 (horizontal axis, 73% variance):
-    -   All arrows point roughly left (negative direction)
-    -   All variables contribute almost equally to PC1
-    -   This confirms PC1 represents "overall flower size"
-
-PC2 (vertical axis, 22.9% variance):
-
--   Sepal_width points down (negative)
--   Other variables point slightly up (positive)
--   This creates a contrast: sepal width vs. everything else
--   PC2 captures "flower shape" - wide sepals vs. long petals
+# 3. scores are uncorrelated
+round(cor(iris_pca$x[, 1],
+          iris_pca$x[, 2]), 10)
+```
 :::
 
-::: {.column width="40%"}
+::: {.column width="50%"}
+### Why this matters practically
+
+-   **Unit length** is why loadings can be compared across variables
+    within a component — they are competing for a fixed budget of 1.
+-   **Orthogonality** is why you can drop PC scores straight into an
+    ANOVA or a regression with **no multicollinearity**. That is one of
+    PCA's most useful side effects.
+-   It is also why PC2 can only describe what PC1 left behind: it is
+    constrained to be at right angles to it.
+:::
+:::::
+
+## ⚠️ The Sign of a Component Is Arbitrary
+
+::::: columns
+::: {.column width="55%"}
+### Expect this, do not fight it
+
+-   An eigenvector defines a **line**, and a line has no preferred end.
+    Multiply a component's loadings **and** its scores by −1 and you
+    have an equally valid answer:
+    -   same eigenvalue, same % variance
+    -   same distances between points
+    -   same biology
+-   Different software, different R versions, or dropping one flower can
+    all flip a sign. **Nothing is wrong when that happens.**
+-   The real error is to flip the loadings and not the scores, or to
+    write "higher PC1" without saying what higher *means*.
+:::
+
+::: {.column width="45%"}
+```{r sign_demo}
+#| echo: true
+# flip PC2 entirely
+flip_load <- -iris_pca$rotation[, 2]
+flip_score <- -iris_pca$x[, 2]
+
+round(c(
+  var_original = var(iris_pca$x[, 2]),
+  var_flipped  = var(flip_score)), 4)
+```
+
+**The rule**: before you write a sentence about a component, translate
+the sign into biology. Say "*larger flowers*", not "*higher PC1*".
+:::
+:::::
+
+## PC1: Overall Flower Size
+
+::::: columns
+::: {.column width="50%"}
+```{r pc1_table}
+#| echo: false
+round(iris_pca$rotation[, 1], 3)
+```
+
+### The pattern
+
+-   Three variables load together and strongly:
+    sepal length **`r round(iris_pca$rotation["sepal_length", 1], 2)`**,
+    petal length **`r round(iris_pca$rotation["petal_length", 1], 2)`**,
+    petal width **`r round(iris_pca$rotation["petal_width", 1], 2)`**.
+-   Sepal width opposes them at
+    **`r round(iris_pca$rotation["sepal_width", 1], 2)`** — moderate,
+    and in the other direction.
+:::
+
+::: {.column width="50%"}
+### The interpretation
+
+-   **PC1 is an overall size axis, with a twist.** On this run a high
+    PC1 score means a flower with **long sepals, long petals and wide
+    petals, but relatively narrow sepals**.
+-   That is not a bookkeeping quirk — it is real iris biology. The big
+    *virginica* flowers are big in every dimension *except* that their
+    sepals are proportionally narrower than setosa's.
+-   So PC1 is better described as **"large, elongated flowers vs. small,
+    broad-sepalled flowers"** than as pure size.
+-   It carries **`r round(prop_variance[1] * 100, 1)`%** of all the
+    variation.
+:::
+:::::
+
+## PC2: Sepal Width
+
+::::: columns
+::: {.column width="50%"}
+```{r pc2_table}
+#| echo: false
+round(iris_pca$rotation[, 2], 3)
+```
+
+### The pattern
+
+-   **Sepal width dominates completely** at
+    **`r round(iris_pca$rotation["sepal_width", 2], 2)`**.
+-   Sepal length contributes moderately
+    (**`r round(iris_pca$rotation["sepal_length", 2], 2)`**).
+-   The two petal measurements are **effectively absent**
+    (`r round(iris_pca$rotation["petal_length", 2], 3)` and
+    `r round(iris_pca$rotation["petal_width", 2], 3)`).
+:::
+
+::: {.column width="50%"}
+### The interpretation
+
+-   PC2 is **not** a general shape contrast — it is very nearly
+    "sepal width, by itself", plus a little sepal length.
+-   Because the loading is **negative**, on this run:
+    -   **low PC2 → wide sepals**
+    -   **high PC2 → narrow sepals**
+-   This is PC1's leftovers: sepal width was the one variable PC1 could
+    not account for, so PC2 is built almost entirely out of it.
+-   **`r round(prop_variance[2] * 100, 1)`%** of the variation — the
+    sepal-width story is a real and separate axis of iris variation.
+:::
+:::::
+
+## The Loading Plot
+
+::::: columns
+::: {.column width="50%"}
 ```{r loading_visualization}
 #| echo: false
-#| eval: !expr knitr::is_html_output()
+#| fig-width: 3.6
+#| fig-height: 3.2
 #| fig-alt: "Variable loadings plot showing each of the four iris measurements as an arrow on the PC1-PC2 plane, arrow direction and length indicating how strongly each variable contributes to each component, colored by contribution magnitude."
-# Visualize loadings for first two components
 fviz_pca_var(iris_pca, col.var = "contrib",
              gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
-             repel = TRUE) +
-  labs(title = "Variable Contributions to PC1 and PC2") +
-  theme_minimal(base_size = 9)
+             repel = TRUE, labelsize = 3) +
+  labs(title = NULL) +
+  theme_minimal(base_size = 8)
 ```
+:::
+
+::: {.column width="50%"}
+### Reading the arrows
+
+-   **Direction** = which components the variable builds.
+    **Length** = how well this plane represents it. The circle is the
+    maximum possible.
+-   **Petal length, petal width and sepal length point right** —
+    they build positive PC1 together, and their small mutual angles say
+    they are strongly correlated.
+-   **Sepal width points down and slightly left** — nearly at right
+    angles to the petals, which is the plot's way of saying it carries
+    almost independent information.
+-   That near-90° angle is why sepal width got its own component.
 :::
 :::::
 
-## Loading Plot Interpretation
+## Part 7 · Scores, Biplots, and Species {.divider}
 
-What the arrow positions tell us:
-
--   Variables pointing in same direction = positively correlated
--   Variables at 90° angles = uncorrelated
--   Variables pointing opposite directions = negatively correlated
-
-The practical meaning:
-
--   Flowers with high PC1 scores have large values for all measurements
--   Flowers with high PC2 scores have narrow sepals but long/wide petals
--   The plot confirms our dimension reduction worked - we've captured
-    95.9% of variation in just 2 dimensions!
-
-## Part 7 · Biplots and Scores {.divider}
-
-## Step 7: PCA Biplot - The Main Result
+## Scores: Where Each Flower Lands
 
 ::::: columns
-::: {.column width="60%"}
-## Key insights from this biplot:
+::: {.column width="48%"}
+### From loadings to positions
 
-### Species separation:
+-   A **score** is an object's coordinate on a component — the result of
+    the recipe, applied to that object's standardized values.
+-   `iris_pca$x` holds them, 150 rows × 4 components.
 
--   **Setosa (blue)**: Clearly separated on the left (negative PC1)
--   **Versicolor (yellow)**: In the middle
--   **Virginica (red)**: On the right (positive PC1)
--   PCA successfully separates species without being told about them!
-
-### Understanding flower characteristics:
-
--   **Setosa flowers**: Small overall (negative PC1), relatively wide
-    sepals (positive PC2)
--   **Virginica flowers**: Large overall (positive PC1), especially long
-    petals
--   **Versicolor flowers**: Intermediate in most characteristics
-
-### Variable relationships:
-
--   Petal measurements point together → highly correlated
--   Sepal width points differently → captures different information
--   All arrows point right → all measurements increase from setosa to
-    virginica
+```{r scores_head}
+#| echo: false
+as_tibble(iris_pca$x) %>%
+  mutate(species = iris_df$species, .before = 1) %>%
+  slice(c(1:3, 51:53, 101:103)) %>%
+  mutate(across(PC1:PC4, \(z) round(z, 2)))
+```
 :::
 
-::: {.column width="40%"}
-```{r pca_biplot_species}
+::: {.column width="52%"}
+```{r pca_scores_plot}
 #| echo: false
-#| eval: !expr knitr::is_html_output()
-#| fig-alt: "PCA biplot of iris flowers on PC1 and PC2, points colored by species with confidence ellipses, and arrows showing the original variable loadings. Setosa separates on the left, virginica on the right, and versicolor is intermediate, showing PCA cleanly separating the three species."
-# Create PCA scores with species information
-pca_scores <- data.frame(
-  iris_pca$x,
-  species = iris_species$species
-)
-
-# Biplot with species coloring
-fviz_pca_biplot(iris_pca, 
-                geom.ind = "point",
-                col.ind = iris_species$species,  # Use just the species column
-                palette = c("#00AFBB", "#E7B800", "#FC4E07"),
-                addEllipses = TRUE,  # Add confidence ellipses
-                label = "var",
-                col.var = "black",
-                repel = TRUE) +
-  labs(title = "PCA Biplot - Iris Dataset",
-       subtitle = "Points = Individual flowers, Arrows = Original variables") +
-  theme_minimal(base_size = 9)
+#| fig-width: 3.8
+#| fig-height: 3.2
+#| fig-alt: "Scatterplot of iris flowers' PC1 and PC2 scores, colored by species with 68% confidence ellipses, showing the three species forming largely separate clusters."
+as_tibble(iris_pca$x) %>%
+  mutate(species = iris_df$species) %>%
+  ggplot(aes(PC1, PC2, color = species)) +
+  geom_point(size = 1.6, alpha = 0.8) +
+  stat_ellipse(level = 0.68, linetype = 2, linewidth = 0.4) +
+  scale_color_manual(values = c("#00AFBB", "#E7B800", "#FC4E07")) +
+  labs(x = paste0("PC1 (", round(prop_variance[1] * 100, 1), "%)"),
+       y = paste0("PC2 (", round(prop_variance[2] * 100, 1), "%)"),
+       color = NULL) +
+  theme_minimal(base_size = 8) +
+  theme(legend.position = "bottom")
 ```
 :::
 :::::
 
-## Step 7: PCA Scores Plot - Alternative Visualization
+## The Biplot
 
-```{r pca_scores_plot}
-#| eval: !expr knitr::is_html_output()
-#| fig-alt: "Scatterplot of iris flowers' PC1 and PC2 scores, colored by species with 68% confidence ellipses, showing the three species forming largely separate clusters."
-# Alternative scores plot
-ggplot(pca_scores, aes(x = PC1, y = PC2, color = species)) +
-  geom_point(size = 3, alpha = 0.7) +
-  stat_ellipse(level = 0.68, linetype = 2) +  # Add ellipses
-  labs(title = "PCA Scores Plot",
-       subtitle = paste0("PC1 explains ", round(prop_variance[1]*100, 1), 
-                        "% of variance, PC2 explains ", round(prop_variance[2]*100, 1), "%"),
-       x = paste0("PC1 (", round(prop_variance[1]*100, 1), "%)"),
-       y = paste0("PC2 (", round(prop_variance[2]*100, 1), "%)"),
-       color = "Species") +
-  theme_minimal(base_size = 9) +
-  scale_color_manual(values = c("#00AFBB", "#E7B800", "#FC4E07"))
+::::: columns
+::: {.column width="48%"}
+```{r pca_biplot_species}
+#| echo: false
+#| warning: false
+#| fig-width: 3.8
+#| fig-height: 3.4
+#| fig-alt: "PCA biplot of iris flowers on PC1 and PC2, points colored by species with confidence ellipses, and arrows showing the original variable loadings. Setosa separates on the left, virginica on the right, and versicolor is intermediate, showing PCA cleanly separating the three species."
+fviz_pca_biplot(iris_pca, geom.ind = "point",
+                col.ind = iris_df$species,
+                palette = c("#00AFBB", "#E7B800", "#FC4E07"),
+                addEllipses = TRUE, label = "var",
+                col.var = "black", repel = TRUE, labelsize = 2.5,
+                title = NULL) +
+  theme_minimal(base_size = 7) +
+  theme(legend.position = "bottom")
+```
+:::
+
+::: {.column width="52%"}
+### Points and arrows together
+
+-   **Points** = flowers (scores). **Arrows** = variables (loadings),
+    on the same plane.
+-   A flower lying out along an arrow is **high** in that variable.
+-   **Setosa sits far left** — low PC1, so short petals and sepals, but
+    (per PC1's negative sepal-width loading) **broad** sepals.
+-   **Virginica sits right** — long petals and sepals, narrower sepals.
+-   **Versicolor sits between**, overlapping virginica slightly.
+-   **PCA was never told about species.** It recovered them from
+    morphology alone.
+:::
+:::::
+
+## Did PCA Recover the Species?
+
+::::: columns
+::: {.column width="50%"}
+```{r species_means}
+#| echo: true
+as_tibble(iris_pca$x) %>%
+  mutate(species = iris_df$species) %>%
+  group_by(species) %>%
+  summarise(across(PC1:PC2,
+                   \(z) round(mean(z), 2)))
+```
+:::
+
+::: {.column width="50%"}
+### Reading it, sign resolved
+
+-   **PC1 orders the species cleanly**: setosa → versicolor →
+    virginica, smallest and broadest-sepalled to largest and
+    narrowest-sepalled.
+-   **PC2 does something different**: versicolor stands apart from
+    *both* others. Setosa and virginica have similar PC2 scores despite
+    sitting at opposite ends of PC1.
+-   That is exactly the job of a second component — it describes what
+    the first one could not. Dropping PC2 on Kaiser's advice would have
+    thrown away a real signal.
+:::
+:::::
+
+## Part 8 · Other Tools, Reporting, and Wrap-Up {.divider}
+
+## The Same PCA, Three Other Packages {.tight-code}
+
+::: {.panel-tabset}
+
+### FactoMineR
+
+```{r facto}
+#| echo: true
+#| fig-width: 5
+#| fig-height: 2.7
+#| fig-alt: "PCA biplot produced by FactoMineR and factoextra, with iris flowers colored by species, 95% confidence ellipses around each species, and variable loading arrows overlaid."
+pca_facto <- PCA(iris_data, graph = FALSE, scale.unit = TRUE)
+
+fviz_pca_biplot(pca_facto, col.ind = iris_df$species,
+                palette = "jco", addEllipses = TRUE,
+                ellipse.level = 0.95, repel = TRUE,
+                geom.ind = "point", labelsize = 3, title = NULL) +
+  theme_minimal(base_size = 8)
 ```
 
-## Part 8 · Interpreting PC1 and PC2, and Wrap-Up {.divider}
+### ggfortify
 
-## Step 8: Interpret PC1 Results
-
-### Understanding PC1 Loadings:
-
-The loadings show how each original variable contributes to PC1:
-
--   **Sepal length: 0.521** - Strong positive contribution
--   **Sepal width: -0.269** - Moderate negative contribution
--   **Petal length: 0.580** - Strong positive contribution
--   **Petal width: 0.565** - Strong positive contribution
-
-```{r interpretation_pc1}
-# What does PC1 represent?
-pc1_loadings <- iris_pca$rotation[, 1]
-print("PC1 Loadings (all variables contribute similarly):")
-round(pc1_loadings, 3)
-
-cat("\nPC1 Interpretation: Overall flower size")
-cat("\n- All variables have similar negative loadings")
-cat("\n- Higher PC1 values = smaller flowers overall")
-cat("\n- Lower PC1 values = larger flowers overall")
+```{r ggfort}
+#| echo: true
+#| fig-width: 5
+#| fig-height: 2.7
+#| fig-alt: "Quick PCA plot built with ggfortify's autoplot(): iris flowers plotted on PC1 and PC2, colored by species, with variable loading arrows and labels overlaid and normal-distribution frames around each species."
+autoplot(iris_pca, data = iris_df, colour = "species",
+         loadings = TRUE, loadings.label = TRUE,
+         frame = TRUE, frame.type = "norm") +
+  theme_minimal(base_size = 8)
 ```
 
-## PC1 Interpretation: Overall Flower Size
+### vegan
 
-### PC1 Interpretation: Overall flower size (with a twist)
+```{r vegan_rda}
+#| echo: true
+#| fig-width: 5
+#| fig-height: 2.7
+#| fig-alt: "Base-R vegan biplot of the iris PCA produced by rda(), showing sample points and variable arrows on the first two principal axes."
+iris_rda <- rda(iris_scaled)
 
-Note: The output says "all variables have similar negative loadings" but
-the actual values show mostly positive loadings. This is likely due to a
-sign flip - PCA signs can be arbitrary. Let's interpret based on the
-actual values shown:
-
--   **Three variables (sepal length, petal length, petal width) have
-    similar positive loadings** (\~0.52-0.58)
--   **Sepal width has a negative loading** (-0.269)
--   This means PC1 captures flowers where length and width measurements
-    (except sepal width) vary together
-
-### What PC1 scores mean:
-
--   **Higher PC1 values** = Longer petals, longer sepals, wider petals,
-    but narrower sepals
--   **Lower PC1 values** = Shorter petals, shorter sepals, narrower
-    petals, but wider sepals
--   PC1 essentially captures "overall flower size except sepal width
-    goes opposite"
-
-### Biological interpretation:
-
-PC1 distinguishes between:
-
--   Small flowers with relatively wide sepals (negative PC1) - typical
-    of setosa
--   Large flowers with relatively narrow sepals (positive PC1) - typical
-    of virginica
-
-## Step 8: Interpret PC2 Results
-
-### Understanding PC2 Loadings:
-
-The loadings show how each original variable contributes to PC2:
-
--   **Sepal length: -0.377** - Moderate negative contribution
--   **Sepal width: -0.923** - Very strong negative contribution
--   **Petal length: -0.024** - Almost no contribution
--   **Petal width: -0.067** - Very small negative contribution
-
-```{r interpretation_pc2}
-# What does PC2 represent?
-pc2_loadings <- iris_pca$rotation[, 2]
-print("PC2 Loadings:")
-round(pc2_loadings, 3)
-
-cat("\nPC2 Interpretation: Flower shape contrast")
-cat("\n- Positive loadings: sepal width")
-cat("\n- Negative loadings: petal length and width, sepal length")
-cat("\n- Higher PC2 = wider sepals relative to petal size")
-cat("\n- Lower PC2 = longer/wider petals relative to sepal width")
+biplot(iris_rda, scaling = 2)
 ```
 
-## PC2 Interpretation: Flower Shape Contrast
+:::
 
-### PC2 Interpretation: Correcting the output
+-   All four routes decompose the same matrix. **The numbers are
+    identical**; only the plotting defaults and the sign conventions
+    differ.
 
-Note: The output says "Positive loadings: sepal width" but the actual
-value is -0.923 (negative). All loadings are actually negative, with
-sepal width being the most strongly negative.
+## Reporting a PCA
 
-### What PC2 actually represents:
+::::: columns
+::: {.column width="52%"}
+### Methods
 
--   **All variables have negative loadings**, but sepal width is
-    dominant (-0.923)
--   **Petal measurements contribute very little** (-0.024 and -0.067)
--   **This component is primarily driven by sepal width**, with some
-    contribution from sepal length
+> "The four floral measurements were standardized to zero mean and unit
+> variance and subjected to principal component analysis on the
+> correlation matrix (`prcomp()`, R `r getRversion()`). Two components
+> were retained on the basis of the scree plot and cumulative variance
+> (> 80%)."
 
-### What PC2 scores mean:
+### Results
 
--   **Higher PC2 values** = Smaller measurements overall, especially
-    narrow sepals
--   **Lower PC2 values** = Larger measurements overall, especially wide
-    sepals
--   Since sepal width has the strongest loading, PC2 primarily captures
-    sepal width variation
+> "PC1 and PC2 together explained
+> `r round(cumsum_variance[2] * 100, 1)`% of the variation
+> (PC1 `r round(prop_variance[1] * 100, 1)`%,
+> PC2 `r round(prop_variance[2] * 100, 1)`%). PC1 loaded positively on
+> petal length (0.58), petal width (0.57) and sepal length (0.52), and
+> negatively on sepal width (−0.27)..."
+:::
 
-### Biological interpretation:
+::: {.column width="48%"}
+### Always include
 
-PC2 helps distinguish:
+1.  Whether you used the **correlation** or **covariance** matrix
+2.  **% variance** for every component you interpret
+3.  The **loadings** for retained components
+4.  How you decided **how many** to keep
+5.  The **biological reading** of each axis, with the sign resolved
 
--   Flowers with narrow sepals and smaller overall size (positive PC2)
--   Flowers with wide sepals and larger overall size (negative PC2)
--   This dimension helps separate species that have similar PC1 scores
-    but different sepal proportions
+### Never include
 
-## Step 9: How Well Does PCA Work?
+-   All *p* components when 2 are meaningful
+-   Loadings below |0.3|
+-   Raw eigenvalues instead of percentages
+-   Every individual score
+:::
+:::::
 
-```{r pca_effectiveness}
-#| paged-print: false
-#| eval: !expr knitr::is_html_output()
-#| fig-alt: "Bar and line chart of variance explained by each principal component: light blue bars show individual variance per component and a red line with points shows cumulative variance, illustrating that the first two components capture most of the total variance."
-# Calculate total variance explained by first 2 components
-variance_explained_2pc <- sum(prop_variance[1:2])
-caption_pca <- paste("Variance explained by first 2 components:", round(variance_explained_2pc * 100, 1), "%")
+## When PCA Is and Is Not the Tool
 
-# This means we reduced 4 variables to 2 components while retaining most information!
-
-# Create a summary plot showing dimension reduction success
-tibble(
-  Component = factor(paste0("PC", 1:4), levels = paste0("PC", 1:4)),
-  Variance = prop_variance * 100,
-  Cumulative = cumsum_variance * 100
-) %>% 
-  ggplot(aes(x = Component)) +
-  geom_col(aes(y = Variance), fill = "lightblue", alpha = 0.7) +
-  geom_line(aes(y = Cumulative, group = 1), color = "red", size = 1) +
-  geom_point(aes(y = Cumulative), color = "red", size = 3) +
-  labs(title = "PCA Dimension Reduction Success",
-       subtitle = "Blue bars = individual variance, Red line = cumulative variance",
-       caption = caption_pca,
-       x = "Principal Component", 
-       y = "Percentage of Variance Explained") +
-  theme_minimal(base_size = 9)
-```
-
-## Summary: What We Learned
-
-## Key Findings:
-
-1.  **Successful dimension reduction**: 4 variables → 2 components
-    explaining \~96% of variance
-
-2.  **PC1 (72.8% variance)**: Overall flower size
-
-    -   All measurements contribute similarly
-    -   Separates large from small flowers
-
-3.  **PC2 (23.1% variance)**: Shape contrast
-
-    -   Sepal width vs. petal dimensions
-    -   Separates flower shape types
-
-4.  **Species separation**: PCA naturally groups the three iris species
-    based on their morphological differences
-
-## PCA Success Criteria Met:
-
-✓ Variables were correlated\
-✓ Linear relationships\
-✓ No major outliers\
-✓ Adequate sample size\
-✓ Clear dimension reduction\
-✓ Interpretable components
-
-## When to Use PCA vs. Other Methods
-
-## Use PCA when:
+::::: columns
+::: {.column width="50%"}
+### Use PCA when
 
 -   Variables are **continuous and correlated**
--   Goal is **dimension reduction** or **data exploration**
--   Linear relationships between variables
--   Want to **remove redundancy** in measurements
+-   Relationships are **linear**
+-   Few zeros, and Euclidean distance is sensible
+-   The goal is **dimension reduction** or **exploration**
+-   You want **uncorrelated** variables for a downstream model
+:::
 
-## Consider alternatives when:
+::: {.column width="50%"}
+### Use something else when
 
--   Variables are categorical → use MCA (Multiple Correspondence
-    Analysis)
--   Focus on **species composition** → use ordination methods like NMDS
--   Want to **classify/predict** → use discriminant analysis or machine
-    learning
+-   **Species composition with many zeros** → NMDS or PCoA on
+    Bray–Curtis *(week 15)*
+-   **Categorical variables** → CA or MCA
+-   **You already have a dissimilarity matrix** → PCoA or NMDS
+-   **You want to classify or predict** → discriminant analysis
+-   **You want to test groups** → PERMANOVA *(week 15)*
+:::
+:::::
 
-**PCA is excellent for exploring patterns in biological measurements
-like morphology, physiology, or environmental variables!**
+## Summary
+
+::::: columns
+::: {.column width="50%"}
+### What PCA did
+
+-   Rotated 4 correlated axes into 4 uncorrelated ones, ordered by
+    variance.
+-   **PC1 (`r round(prop_variance[1] * 100, 1)`%)** — large elongated
+    flowers vs. small broad-sepalled ones.
+-   **PC2 (`r round(prop_variance[2] * 100, 1)`%)** — sepal width,
+    almost by itself.
+-   Together **`r round(cumsum_variance[2] * 100, 1)`%** of the
+    variation in **2** numbers instead of 4.
+-   And it separated three species it was never told about.
+:::
+
+::: {.column width="50%"}
+### What to carry forward
+
+-   **Eigenvalue = variance; eigenvector = loadings.** On a correlation
+    matrix the eigenvalues sum to *p*.
+-   **Standardize** unless the units are identical and the spreads are
+    biology.
+-   **Component signs are arbitrary** — translate to biology before
+    writing.
+-   Retention rules **disagree**; interpretability breaks the tie.
+-   **Next week**: when the data are counts and Euclidean distance
+    fails — NMDS, cluster analysis, PERMANOVA and ANOSIM.
+:::
+:::::
+
+## Readings
+
+-   **Gotelli & Ellison**, *A Primer of Ecological Statistics*,
+    **Ch. 12** — The Analysis of Multivariate Data
+-   **Quinn & Keough**, *Experimental Design and Data Analysis for
+    Biologists*, **Ch. 17** — Principal components and correspondence
+    analysis
+-   Whitlock & Schluter does not cover ordination.
+
+### Data source
+
+-   **Iris**: Anderson, E. (1935), *The irises of the Gaspé Peninsula*;
+    made famous by Fisher, R.A. (1936), *Annals of Eugenics* 7:179–188.
+    Shipped with base R as `iris`.

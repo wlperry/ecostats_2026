@@ -197,7 +197,7 @@
     }
   </style>
 <meta property="og:title" content="Lecture: Linear Mixed Models – UMD Biostatistics">
-<meta property="og:description" content="The modern mixed-model (lmer) alternative to a traditional nested ANOVA: afex for unbalanced designs, random-effects notation, F vs.&nbsp;Chi-square tests, diagnostics, post-hoc comparisons, and a by-hand F-ratio calculation for comparison — on the sea urchin grazing / algae cover dataset.">
+<meta property="og:description" content="The modern mixed-model (lmer) alternative to a traditional nested ANOVA: how REML estimates variance components instead of partitioning sums of squares, F vs.&nbsp;Chi-square denominator df, the ICC and partial pooling, diagnostics and post-hoc comparisons — on the sea urchin grazing / algae cover dataset.">
 <meta property="og:site_name" content="UMD Biostatistics">
 </head>
 <body class="quarto-light">
@@ -220,19 +220,20 @@ Bill Perry
 <section id="where-we-left-off" class="slide level2">
 <h2>Where We Left Off</h2>
 <div class="columns">
-<div class="column" style="width:60%;">
-<p>Covered last time — generalized linear models:</p>
+<div class="column" style="width:58%;">
+<p>Covered last time — <strong>generalized</strong> linear models:</p>
 <ul>
 <li>The three elements of a GLM — distribution, predictors, link</li>
 <li>Poisson and negative binomial for counts; overdispersion</li>
 <li>Logistic regression and the odds ratio</li>
 </ul>
-<p>Covered in week 9 — nested ANOVA, the traditional way:</p>
+<p>Covered in week 9 — <strong>nested ANOVA</strong>, the traditional way:</p>
 <ul>
 <li>Factorial vs.&nbsp;nested designs, and variance partitioning</li>
 <li>Fixed vs.&nbsp;random effects — B nested in A</li>
 <li>The naive (wrong) factorial model vs.&nbsp;<code>aov(..., Error(...))</code></li>
 </ul>
+</div><div class="column" style="width:42%;">
 <div class="callout callout-note callout-titled callout-style-default">
 <div class="callout-body">
 <div class="callout-title">
@@ -243,12 +244,11 @@ Bill Perry
 </div>
 <div class="callout-content">
 <p><strong>✅ Key idea we are building on</strong></p>
-<p><code>patch</code> nested in <code>treat</code> needs the right error term — <code>MS_{patch(treat)}</code>, not <code>MS_{resid}</code> — or the F-test for treatment is wrong. Today: the modern alternative to specifying that error term by hand.</p>
-<p>Last week changed the <em>distribution</em>; this week changes the <em>error structure</em>. Put both together and you get <code>glmer()</code>.</p>
+<p><code>patch</code> nested in <code>treat</code> needs the right error term — MS<sub>patch(treat)</sub>, not MS<sub>resid</sub> — or the <em>F</em>-test for treatment is wrong.</p>
+<p>Last week changed the <strong>distribution</strong>; this week changes the <strong>error structure</strong>. Put both together and you get <code>glmer()</code>.</p>
 </div>
 </div>
 </div>
-</div><div class="column" style="width:40%;">
 <div class="callout callout-tip callout-titled callout-style-default">
 <div class="callout-body">
 <div class="callout-title">
@@ -259,82 +259,64 @@ Bill Perry
 </div>
 <div class="callout-content">
 <p><strong>🖐 Notice</strong></p>
-<p>Same sea urchin grazing / algae cover dataset as week 9 — same question, same data, a different (and more flexible) way to fit the model.</p>
+<p>Same sea urchin dataset as week 9 — same question, same data, a different and far more flexible way to fit the model.</p>
 </div>
 </div>
 </div>
 </div></div>
 </section>
-<section id="part-1-setup-the-sea-urchin-data-again" class="slide level2 divider">
-<h2>Part 1 · Setup — The Sea Urchin Data, Again</h2>
+<section id="part-1-the-sea-urchin-data-again" class="slide level2 divider">
+<h2>Part 1 · The Sea Urchin Data, Again</h2>
 </section>
-<section id="data-overview" class="slide level2">
+<section id="data-overview" class="slide level2 tight-code">
 <h2>Data Overview</h2>
 <div class="columns">
 <div class="column" style="width:50%;">
-<p>Same dataset as the nested ANOVA lecture: <code>patch</code> (random patches 1–16 where treatments were applied), <code>treat</code> (urchin density treatment), <code>quad</code> (replicate quadrats within each treatment-patch combination), <code>algae</code> (percentage cover of filamentous algae — the response variable).</p>
+<p><code>treat</code> — urchin density treatment (0 / 33 / 66 / 100%) <code>patch</code> — <strong>four patches nested inside each treatment, 16 in all</strong> <code>quad</code> — 5 replicate quadrats within every patch <code>algae</code> — % cover of filamentous algae, the response</p>
 <div class="cell">
-<pre><code>## Data
-## # A tibble: 6 × 4
+<pre><code>## # A tibble: 4 × 4
 ##   treat patch  quad algae
 ##   &lt;fct&gt; &lt;fct&gt; &lt;dbl&gt; &lt;dbl&gt;
 ## 1 100%  1         1     0
 ## 2 100%  1         2     0
 ## 3 100%  1         3     0
-## 4 100%  1         4     6
-## 5 100%  1         5     2
-## 6 100%  2         1     0
-## 
-## 
-## Treatment levels:
-## [1] "0%"   "33%"  "66%"  "100%"</code></pre>
+## 4 100%  1         4     6</code></pre>
 </div>
 </div><div class="column" style="width:50%;">
 <div class="cell">
-<pre><code>## Summary statistics by treatment:
-## # A tibble: 4 × 7
-##   treat     n  mean    sd    se   min   max
-##   &lt;fct&gt; &lt;int&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt;
-## 1 0%       20  39.2 28.7  6.41      0    83
-## 2 33%      20  19   25.7  5.74      0    71
-## 3 66%      20  21.6 25.1  5.62      0    79
-## 4 100%     20   1.3  3.18 0.711     0    13</code></pre>
+<pre><code>## # A tibble: 4 × 4
+##   treat     n  mean    sd
+##   &lt;fct&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt;
+## 1 0%       20  39.2 28.7 
+## 2 33%      20  19   25.7 
+## 3 66%      20  21.6 25.1 
+## 4 100%     20   1.3  3.18</code></pre>
+</div>
+<div class="callout callout-note callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Note</strong></p>
+</div>
+<div class="callout-content">
+<p><strong>📖 The gradient is not monotonic</strong></p>
+<p>39.2 → 19.0 → 21.6 → 1.3. The 33% and 66% means sit within noise of each other. That is the data, not an error — and it is part of why the treatment effect comes out non-significant.</p>
+</div>
+</div>
 </div>
 </div></div>
 </section>
-<section id="part-2-modern-approaches-afex-and-mixed-models" class="slide level2 divider">
-<h2>Part 2 · Modern Approaches — afex and Mixed Models</h2>
-</section>
-<section id="what-to-do-if-its-an-unbalanced-design" class="slide level2">
-<h2>What to Do If It’s an Unbalanced Design</h2>
-<div class="columns">
-<div class="column" style="width:50%;">
-<p>The <code>afex</code> package is specifically designed for ANOVA with Type III SS, and handles nested designs well — even when unbalanced.</p>
-</div><div class="column" style="width:50%;">
-<div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a aria-label="1"></a><span class="fu">options</span>(<span class="at">contrasts =</span> <span class="fu">c</span>(<span class="st">"contr.sum"</span>, <span class="st">"contr.poly"</span>))</span>
-<span id="cb3-2"><a aria-label="2"></a></span>
-<span id="cb3-3"><a aria-label="3"></a>u_afex_model <span class="ot">&lt;-</span> <span class="fu">aov_car</span>(algae <span class="sc">~</span> treat <span class="sc">+</span> <span class="fu">Error</span>(patch),</span>
-<span id="cb3-4"><a aria-label="4"></a>                     <span class="at">data =</span> u_df,</span>
-<span id="cb3-5"><a aria-label="5"></a>                     <span class="at">fun_aggregate =</span> mean)</span>
-<span id="cb3-6"><a aria-label="6"></a><span class="fu">cat</span>(<span class="st">"AFEX nested ANOVA results:</span><span class="sc">\n\n</span><span class="st">"</span>)</span>
-<span id="cb3-7"><a aria-label="7"></a><span class="do">## AFEX nested ANOVA results:</span></span>
-<span id="cb3-8"><a aria-label="8"></a><span class="fu">summary</span>(u_afex_model)</span>
-<span id="cb3-9"><a aria-label="9"></a><span class="do">## Anova Table (Type 3 tests)</span></span>
-<span id="cb3-10"><a aria-label="10"></a><span class="do">## </span></span>
-<span id="cb3-11"><a aria-label="11"></a><span class="do">## Response: algae</span></span>
-<span id="cb3-12"><a aria-label="12"></a><span class="do">##       num Df den Df    MSE      F     ges  Pr(&gt;F)  </span></span>
-<span id="cb3-13"><a aria-label="13"></a><span class="do">## treat      3     12 354.03 2.7171 0.40451 0.09126 .</span></span>
-<span id="cb3-14"><a aria-label="14"></a><span class="do">## ---</span></span>
-<span id="cb3-15"><a aria-label="15"></a><span class="do">## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-</div>
-</div></div>
+<section id="part-2-fixed-random-and-the-mixed-model" class="slide level2 divider">
+<h2>Part 2 · Fixed, Random, and the Mixed Model</h2>
 </section>
 <section id="what-makes-an-effect-random" class="slide level2">
 <h2>What Makes an Effect “Random”?</h2>
 <div class="columns">
-<div class="column" style="width:60%;">
+<div class="column" style="width:58%;">
 <p>Ask one question: <strong>do I care about these specific levels, or are they a sample of levels I could have had?</strong></p>
+<div class="compact-table">
 <table class="caption-top">
 <colgroup>
 <col style="width: 33%">
@@ -376,6 +358,7 @@ Bill Perry
 </tr>
 </tbody>
 </table>
+</div>
 <div class="callout callout-important callout-titled callout-style-default">
 <div class="callout-body">
 <div class="callout-title">
@@ -386,12 +369,12 @@ Bill Perry
 </div>
 <div class="callout-content">
 <p><strong>The key consequence</strong></p>
-<p>A fixed factor with 16 levels costs you <strong>15 parameters</strong>. A random factor with 16 levels costs you <strong>one</strong> — a single variance, σ²_patch.</p>
-<p>That is why mixed models cope with designs that <code>aov()</code> chokes on: they are estimating far less.</p>
+<p>A fixed factor with 16 levels costs you <strong>15 parameters</strong>. A random factor with 16 levels costs you <strong>one</strong> — a single variance, σ²<sub>patch</sub>.</p>
+<p>That is why mixed models cope with designs <code>aov()</code> chokes on: they are estimating far less.</p>
 </div>
 </div>
 </div>
-</div><div class="column" style="width:40%;">
+</div><div class="column" style="width:42%;">
 <div class="callout callout-note callout-titled callout-style-default">
 <div class="callout-body">
 <div class="callout-title">
@@ -416,7 +399,7 @@ Bill Perry
 <p><strong>Warning</strong></p>
 </div>
 <div class="callout-content">
-<p><strong>⚠️ Rule of thumb: you need enough levels</strong></p>
+<p><strong>⚠️ You need enough levels</strong></p>
 <p>Estimating a variance from <strong>fewer than ~5 levels</strong> is unreliable. With 2 or 3 groups, fit them as fixed effects instead.</p>
 <p>We have 16 patches — comfortably enough.</p>
 </div>
@@ -424,19 +407,18 @@ Bill Perry
 </div>
 </div></div>
 </section>
-<section id="the-modern-way-mixed-model-anova" class="slide level2">
-<h2>The Modern Way — Mixed-Model ANOVA</h2>
+<section id="reading-the-random-effects-formula" class="slide level2">
+<h2>Reading the Random-Effects Formula</h2>
 <div class="columns">
-<div class="column" style="width:50%;">
-<p>Fit the model with treatment as a fixed effect, and patch nested within treatment as a random effect: <code>lmer(algae ~ treat + (1|patch), ...)</code>.</p>
-<p><strong>BOBYQA</strong> (Bound Optimization BY Quadratic Approximation) is an optimization algorithm used in mixed-effects modeling to find the parameter values that maximize the likelihood function — useful for fitting complex nested models.</p>
-<p><strong>Reading the random-effects formula:</strong></p>
-<p><code>(</code> what varies <code>|</code> what it varies across <code>)</code></p>
+<div class="column" style="width:52%;">
+<p>Read every random term as</p>
+<p><span class="math display">\[(\ \text{what varies}\ \mid\ \text{across what}\ )\]</span></p>
 <ul>
 <li><strong><code>(1|patch)</code></strong> — the <code>1</code> means the <strong>intercept</strong>. Each patch gets its own baseline algae cover.</li>
-<li><strong><code>(1|treat:patch)</code></strong> — the same thing, just naming the group as the <em>treatment-patch combination</em>. Still intercept-only.</li>
+<li><strong><code>(1|treat:patch)</code></strong> — the same thing, just naming the group as the treatment-patch combination. Still intercept-only.</li>
 <li><strong><code>(1 + depth|patch)</code></strong> — <em>this</em> is a random <strong>slope</strong>: each patch gets its own intercept <strong>and</strong> its own slope for <code>depth</code>.</li>
 </ul>
+</div><div class="column" style="width:48%;">
 <div class="callout callout-warning callout-titled callout-style-default">
 <div class="callout-body">
 <div class="callout-title">
@@ -448,71 +430,550 @@ Bill Perry
 <div class="callout-content">
 <p><strong>⚠️ <code>(1|treat:patch)</code> is not a random slope</strong></p>
 <p>Anything of the form <code>(1|...)</code> is <strong>random intercepts only</strong> — the <code>1</code> <em>is</em> the intercept. What changes between <code>(1|patch)</code> and <code>(1|treat:patch)</code> is the <strong>grouping variable</strong>, not what varies within it.</p>
-<p>Here they are the identical model, because patch IDs are already unique (1–16) and each patch sits in one treatment. We’ll use <code>(1|patch)</code>.</p>
+<p>Here they are the identical model, because patch IDs are already unique (1–16) and each patch sits in one treatment. We will use <code>(1|patch)</code>.</p>
 </div>
 </div>
 </div>
-</div><div class="column" style="width:50%;">
-<div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb4"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a aria-label="1"></a>u_lmer_model <span class="ot">&lt;-</span> <span class="fu">lmer</span>(algae <span class="sc">~</span> treat <span class="sc">+</span> (<span class="dv">1</span><span class="sc">|</span>patch), <span class="at">data =</span> u_df,</span>
-<span id="cb4-2"><a aria-label="2"></a>                    <span class="at">control =</span> <span class="fu">lmerControl</span>(<span class="at">optimizer =</span> <span class="st">"bobyqa"</span>,</span>
-<span id="cb4-3"><a aria-label="3"></a>                                         <span class="at">optCtrl =</span> <span class="fu">list</span>(<span class="at">maxfun =</span> <span class="fl">2e5</span>)))</span>
-<span id="cb4-4"><a aria-label="4"></a><span class="fu">cat</span>(<span class="st">"Mixed model summary:</span><span class="sc">\n\n</span><span class="st">"</span>)</span>
-<span id="cb4-5"><a aria-label="5"></a><span class="do">## Mixed model summary:</span></span>
-<span id="cb4-6"><a aria-label="6"></a><span class="fu">summary</span>(u_lmer_model)</span>
-<span id="cb4-7"><a aria-label="7"></a><span class="do">## Linear mixed model fit by REML. t-tests use Satterthwaite's method [</span></span>
-<span id="cb4-8"><a aria-label="8"></a><span class="do">## lmerModLmerTest]</span></span>
-<span id="cb4-9"><a aria-label="9"></a><span class="do">## Formula: algae ~ treat + (1 | patch)</span></span>
-<span id="cb4-10"><a aria-label="10"></a><span class="do">##    Data: u_df</span></span>
-<span id="cb4-11"><a aria-label="11"></a><span class="do">## Control: lmerControl(optimizer = "bobyqa", optCtrl = list(maxfun = 200000))</span></span>
-<span id="cb4-12"><a aria-label="12"></a><span class="do">## </span></span>
-<span id="cb4-13"><a aria-label="13"></a><span class="do">## REML criterion at convergence: 684.9</span></span>
-<span id="cb4-14"><a aria-label="14"></a><span class="do">## </span></span>
-<span id="cb4-15"><a aria-label="15"></a><span class="do">## Scaled residuals: </span></span>
-<span id="cb4-16"><a aria-label="16"></a><span class="do">##     Min      1Q  Median      3Q     Max </span></span>
-<span id="cb4-17"><a aria-label="17"></a><span class="do">## -1.9808 -0.3106 -0.1093  0.2831  2.5910 </span></span>
-<span id="cb4-18"><a aria-label="18"></a><span class="do">## </span></span>
-<span id="cb4-19"><a aria-label="19"></a><span class="do">## Random effects:</span></span>
-<span id="cb4-20"><a aria-label="20"></a><span class="do">##  Groups   Name        Variance Std.Dev.</span></span>
-<span id="cb4-21"><a aria-label="21"></a><span class="do">##  patch    (Intercept) 294.3    17.16   </span></span>
-<span id="cb4-22"><a aria-label="22"></a><span class="do">##  Residual             298.6    17.28   </span></span>
-<span id="cb4-23"><a aria-label="23"></a><span class="do">## Number of obs: 80, groups:  patch, 16</span></span>
-<span id="cb4-24"><a aria-label="24"></a><span class="do">## </span></span>
-<span id="cb4-25"><a aria-label="25"></a><span class="do">## Fixed effects:</span></span>
-<span id="cb4-26"><a aria-label="26"></a><span class="do">##             Estimate Std. Error     df t value Pr(&gt;|t|)   </span></span>
-<span id="cb4-27"><a aria-label="27"></a><span class="do">## (Intercept)   20.262      4.704 12.000   4.308  0.00102 **</span></span>
-<span id="cb4-28"><a aria-label="28"></a><span class="do">## treat1        18.938      8.147 12.000   2.324  0.03846 * </span></span>
-<span id="cb4-29"><a aria-label="29"></a><span class="do">## treat2        -1.263      8.147 12.000  -0.155  0.87943   </span></span>
-<span id="cb4-30"><a aria-label="30"></a><span class="do">## treat3         1.288      8.147 12.000   0.158  0.87707   </span></span>
-<span id="cb4-31"><a aria-label="31"></a><span class="do">## ---</span></span>
-<span id="cb4-32"><a aria-label="32"></a><span class="do">## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</span></span>
-<span id="cb4-33"><a aria-label="33"></a><span class="do">## </span></span>
-<span id="cb4-34"><a aria-label="34"></a><span class="do">## Correlation of Fixed Effects:</span></span>
-<span id="cb4-35"><a aria-label="35"></a><span class="do">##        (Intr) treat1 treat2</span></span>
-<span id="cb4-36"><a aria-label="36"></a><span class="do">## treat1  0.000              </span></span>
-<span id="cb4-37"><a aria-label="37"></a><span class="do">## treat2  0.000 -0.333       </span></span>
-<span id="cb4-38"><a aria-label="38"></a><span class="do">## treat3  0.000 -0.333 -0.333</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="callout callout-tip callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Tip</strong></p>
+</div>
+<div class="callout-content">
+<p><strong>🖐 The rule</strong></p>
+<p>You only have a random slope when something <strong>other than <code>1</code></strong> appears on the left of the <code>|</code>.</p>
+</div>
+</div>
 </div>
 </div></div>
 </section>
-<section id="what-the-random-effect-buys-you-icc" class="slide level2 scrollable">
-<h2>What the Random Effect Buys You: ICC</h2>
+<section id="fitting-it" class="slide level2 tight-code">
+<h2>Fitting It</h2>
 <div class="columns">
-<div class="column" style="width:60%;">
-<p>The model splits the leftover variation in two:</p>
+<div class="column" style="width:50%;">
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a aria-label="1"></a>vc <span class="ot">&lt;-</span> <span class="fu">as.data.frame</span>(<span class="fu">VarCorr</span>(u_lmer_model))</span>
-<span id="cb5-2"><a aria-label="2"></a>var_patch <span class="ot">&lt;-</span> vc<span class="sc">$</span>vcov[vc<span class="sc">$</span>grp <span class="sc">!=</span> <span class="st">"Residual"</span>]</span>
-<span id="cb5-3"><a aria-label="3"></a>var_resid <span class="ot">&lt;-</span> vc<span class="sc">$</span>vcov[vc<span class="sc">$</span>grp <span class="sc">==</span> <span class="st">"Residual"</span>]</span>
-<span id="cb5-4"><a aria-label="4"></a></span>
-<span id="cb5-5"><a aria-label="5"></a><span class="fu">cat</span>(<span class="st">"among patches :"</span>, <span class="fu">round</span>(var_patch, <span class="dv">1</span>), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span>
-<span id="cb5-6"><a aria-label="6"></a><span class="do">## among patches : 294.3</span></span>
-<span id="cb5-7"><a aria-label="7"></a><span class="fu">cat</span>(<span class="st">"within patches:"</span>, <span class="fu">round</span>(var_resid, <span class="dv">1</span>), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span>
-<span id="cb5-8"><a aria-label="8"></a><span class="do">## within patches: 298.6</span></span>
-<span id="cb5-9"><a aria-label="9"></a><span class="fu">cat</span>(<span class="st">"ICC ="</span>, <span class="fu">round</span>(var_patch <span class="sc">/</span> (var_patch <span class="sc">+</span> var_resid), <span class="dv">3</span>), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span>
-<span id="cb5-10"><a aria-label="10"></a><span class="do">## ICC = 0.496</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a aria-label="1"></a>u_lmer_model <span class="ot">&lt;-</span> <span class="fu">lmer</span>(</span>
+<span id="cb3-2"><a aria-label="2"></a>  algae <span class="sc">~</span> treat <span class="sc">+</span> (<span class="dv">1</span> <span class="sc">|</span> patch),</span>
+<span id="cb3-3"><a aria-label="3"></a>  <span class="at">data =</span> u_df,</span>
+<span id="cb3-4"><a aria-label="4"></a>  <span class="at">control =</span> <span class="fu">lmerControl</span>(<span class="at">calc.derivs =</span> <span class="cn">FALSE</span>))</span>
+<span id="cb3-5"><a aria-label="5"></a></span>
+<span id="cb3-6"><a aria-label="6"></a><span class="fu">VarCorr</span>(u_lmer_model)</span>
+<span id="cb3-7"><a aria-label="7"></a><span class="do">##  Groups   Name        Std.Dev.</span></span>
+<span id="cb3-8"><a aria-label="8"></a><span class="do">##  patch    (Intercept) 17.156  </span></span>
+<span id="cb3-9"><a aria-label="9"></a><span class="do">##  Residual             17.280</span></span>
+<span id="cb3-10"><a aria-label="10"></a></span>
+<span id="cb3-11"><a aria-label="11"></a><span class="fu">fixef</span>(u_lmer_model)</span>
+<span id="cb3-12"><a aria-label="12"></a><span class="do">## (Intercept)      treat1      treat2      treat3 </span></span>
+<span id="cb3-13"><a aria-label="13"></a><span class="do">##     20.2625     18.9375     -1.2625      1.2875</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
-<p>The <strong>intraclass correlation</strong> is the share of variance living <em>between</em> groups — equivalently, <strong>how strongly two quadrats in the same patch resemble each other</strong>.</p>
+</div><div class="column" style="width:50%;">
+<p>The model in words:</p>
+<p><span class="math display">\[algae_{ijk} = \mu + \alpha_i + b_{j(i)} + \epsilon_{ijk}\]</span></p>
+<ul>
+<li><span class="math inline">\(\mu\)</span> — the overall mean</li>
+<li><span class="math inline">\(\alpha_i\)</span> — the <strong>fixed</strong> effect of treatment <em>i</em></li>
+<li><span class="math inline">\(b_{j(i)}\)</span> — the <strong>random</strong> effect of patch <em>j</em> in treatment <em>i</em>, <span class="math inline">\(b \sim N(0,\ \sigma^2_{patch})\)</span></li>
+<li><span class="math inline">\(\epsilon_{ijk}\)</span> — the residual for quadrat <em>k</em>, <span class="math inline">\(\epsilon \sim N(0,\ \sigma^2_{within})\)</span></li>
+</ul>
+<div class="callout callout-important callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Important</strong></p>
+</div>
+<div class="callout-content">
+<p>Notice what the model estimates for <code>patch</code>: <strong>not 16 numbers, one number</strong> — the variance those 16 patches were drawn from.</p>
+</div>
+</div>
+</div>
+</div></div>
+</section>
+<section id="part-3-testing-the-fixed-effect" class="slide level2 divider">
+<h2>Part 3 · Testing the Fixed Effect</h2>
+</section>
+<section id="two-tests-two-answers" class="slide level2 tight-code">
+<h2>Two Tests, Two Answers</h2>
+<div class="columns">
+<div class="column" style="width:50%;">
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb4"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a aria-label="1"></a><span class="fu">Anova</span>(u_lmer_model, <span class="at">type =</span> <span class="dv">3</span>,</span>
+<span id="cb4-2"><a aria-label="2"></a>      <span class="at">test.statistic =</span> <span class="st">"F"</span>)</span>
+<span id="cb4-3"><a aria-label="3"></a><span class="do">## Analysis of Deviance Table (Type III Wald F tests with Kenward-Roger df)</span></span>
+<span id="cb4-4"><a aria-label="4"></a><span class="do">## </span></span>
+<span id="cb4-5"><a aria-label="5"></a><span class="do">## Response: algae</span></span>
+<span id="cb4-6"><a aria-label="6"></a><span class="do">##                   F Df Df.res   Pr(&gt;F)   </span></span>
+<span id="cb4-7"><a aria-label="7"></a><span class="do">## (Intercept) 18.5551  1     12 0.001018 **</span></span>
+<span id="cb4-8"><a aria-label="8"></a><span class="do">## treat        2.7171  3     12 0.091262 . </span></span>
+<span id="cb4-9"><a aria-label="9"></a><span class="do">## ---</span></span>
+<span id="cb4-10"><a aria-label="10"></a><span class="do">## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a aria-label="1"></a><span class="fu">Anova</span>(u_lmer_model, <span class="at">type =</span> <span class="dv">3</span>,</span>
+<span id="cb5-2"><a aria-label="2"></a>      <span class="at">test.statistic =</span> <span class="st">"Chisq"</span>)</span>
+<span id="cb5-3"><a aria-label="3"></a><span class="do">## Analysis of Deviance Table (Type III Wald chisquare tests)</span></span>
+<span id="cb5-4"><a aria-label="4"></a><span class="do">## </span></span>
+<span id="cb5-5"><a aria-label="5"></a><span class="do">## Response: algae</span></span>
+<span id="cb5-6"><a aria-label="6"></a><span class="do">##               Chisq Df Pr(&gt;Chisq)    </span></span>
+<span id="cb5-7"><a aria-label="7"></a><span class="do">## (Intercept) 18.5551  1 0.00001651 ***</span></span>
+<span id="cb5-8"><a aria-label="8"></a><span class="do">## treat        8.1513  3    0.04299 *  </span></span>
+<span id="cb5-9"><a aria-label="9"></a><span class="do">## ---</span></span>
+<span id="cb5-10"><a aria-label="10"></a><span class="do">## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</div><div class="column" style="width:50%;">
+<p><strong>The <em>F</em>-test</strong> (Kenward-Roger denominator df)</p>
+<ul>
+<li>Accounts for the uncertainty in the estimated variance components</li>
+<li>More conservative, better at small <em>n</em></li>
+<li>Here: <em>F</em><sub>3,12</sub> = 2.72, <strong><em>p</em> = 0.091</strong></li>
+</ul>
+<p><strong>The Wald χ²</strong></p>
+<ul>
+<li>Assumes the variance components are <strong>known</strong>, not estimated</li>
+<li>Assumes <strong>infinite</strong> denominator df, i.e.&nbsp;a large sample</li>
+<li>Here: χ²<sub>3</sub> = 8.15, <strong><em>p</em> = 0.043</strong></li>
+</ul>
+<p>χ² = <em>F</em> × numerator df = 2.717 × 3 = 8.15. The only difference is what goes on the bottom.</p>
+</div></div>
+</section>
+<section id="same-model-same-data-opposite-conclusions" class="slide level2">
+<h2>Same Model, Same Data, Opposite Conclusions</h2>
+<div class="columns">
+<div class="column" style="width:55%;">
+<div class="compact-table">
+<table class="caption-top">
+<colgroup>
+<col style="width: 25%">
+<col style="width: 25%">
+<col style="width: 25%">
+<col style="width: 25%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Test</th>
+<th>Statistic</th>
+<th><em>p</em></th>
+<th>Verdict at α = 0.05</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><em>F</em>, Kenward-Roger df</td>
+<td><em>F</em><sub>3,12</sub> = 2.72</td>
+<td><strong>0.091</strong></td>
+<td>not significant</td>
+</tr>
+<tr class="even">
+<td><em>F</em>, Satterthwaite df</td>
+<td><em>F</em><sub>3,12</sub> = 2.72</td>
+<td><strong>0.091</strong></td>
+<td>not significant</td>
+</tr>
+<tr class="odd">
+<td>Wald χ²</td>
+<td>χ²<sub>3</sub> = 8.15</td>
+<td><strong>0.043</strong></td>
+<td>significant</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p><strong>Rule of thumb.</strong> Under ~100 observations or fewer than ~20 random-effect levels, use the <em>F</em>-test. Over ~500 observations and more than ~50 levels, χ² is fine. In between, the <em>F</em>-test is safer.</p>
+<p>We have <strong>80 observations and 16 patches</strong>. The rule picks the <em>F</em>-test.</p>
+</div><div class="column" style="width:45%;">
+<div class="callout callout-important callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Important</strong></p>
+</div>
+<div class="callout-content">
+<p><strong>⚠️ Report the <em>F</em>-test — and say which df you used</strong></p>
+<p>The χ² is being over-confident. It pretends it knows σ²<sub>patch</sub> and σ²<sub>within</sub> exactly, when they were estimated from 16 patches.</p>
+<p>The <em>F</em>-test agrees with week 9’s <code>aov(Error(patch))</code> to four decimal places, <strong>because it is the same test</strong>.</p>
+</div>
+</div>
+</div>
+<div class="callout callout-warning callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Warning</strong></p>
+</div>
+<div class="callout-content">
+<p><strong>🖐 The uncomfortable part</strong></p>
+<p>Run only the χ² and you report a significant effect and never know. When two defensible analyses straddle α = 0.05, say so and justify the choice — do not pick one and delete the other.</p>
+</div>
+</div>
+</div>
+</div></div>
+</section>
+<section id="part-4-how-the-variance-actually-gets-estimated" class="slide level2 divider">
+<h2>Part 4 · How the Variance Actually Gets Estimated</h2>
+</section>
+<section id="the-question-this-part-answers" class="slide level2">
+<h2>The Question This Part Answers</h2>
+<p>For three weeks, <strong>every</strong> answer came from one move: take the total sum of squares, cut it into pieces by source, divide each piece by its df to get a mean square, and form a ratio.</p>
+<p><span class="math display">\[SS_{total} = SS_{treat} + SS_{patch(treat)} + SS_{within}\]</span></p>
+<p><code>lmer()</code> printed σ²<sub>patch</sub> = 294.3 and never showed you a sum of squares anywhere.</p>
+<div class="callout callout-important callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Important</strong></p>
+</div>
+<div class="callout-content">
+<p><strong>So where did that number come from, and why is it not an SS table?</strong></p>
+<p>The rest of this part is the answer. It is the single biggest conceptual change between week 9 and today — bigger than the notation, bigger than the <em>p</em>-value.</p>
+</div>
+</div>
+</div>
+</section>
+<section id="the-old-route-sums-of-squares-and-expected-mean-squares" class="slide level2 tight-code">
+<h2>The Old Route — Sums of Squares and Expected Mean Squares</h2>
+<div class="columns">
+<div class="column" style="width:52%;">
+<p>Week 9’s table, one more time:</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a aria-label="1"></a>a_tab <span class="ot">&lt;-</span> <span class="fu">summary</span>(<span class="fu">aov</span>(algae <span class="sc">~</span> treat <span class="sc">+</span> treat<span class="sc">:</span>patch,</span>
+<span id="cb6-2"><a aria-label="2"></a>                     <span class="at">data =</span> u_df))[[<span class="dv">1</span>]]</span>
+<span id="cb6-3"><a aria-label="3"></a><span class="fu">round</span>(a_tab[, <span class="fu">c</span>(<span class="st">"Df"</span>, <span class="st">"Sum Sq"</span>, <span class="st">"Mean Sq"</span>)], <span class="dv">1</span>)</span>
+<span id="cb6-4"><a aria-label="4"></a><span class="do">##             Df Sum Sq Mean Sq</span></span>
+<span id="cb6-5"><a aria-label="5"></a><span class="do">## treat        3  14429  4809.7</span></span>
+<span id="cb6-6"><a aria-label="6"></a><span class="do">## treat:patch 12  21242  1770.2</span></span>
+<span id="cb6-7"><a aria-label="7"></a><span class="do">## Residuals   64  19110   298.6</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>Statistical theory tells you what each mean square estimates <strong>on average</strong> — its <em>expected</em> mean square:</p>
+<p><span class="math display">\[E[MS_{within}] = \sigma^2_{within}\]</span> <span class="math display">\[E[MS_{patch}] = \sigma^2_{within} + n\,\sigma^2_{patch}\]</span></p>
+</div><div class="column" style="width:48%;">
+<p>Now <strong>set the observed equal to the expected and solve.</strong> That is all the old method is — two equations, two unknowns, no statistics at all past this point:</p>
+<p><span class="math display">\[\hat\sigma^2_{within} = MS_{within}\]</span> <span class="math display">\[\hat\sigma^2_{patch} = \frac{MS_{patch} - MS_{within}}{n}\]</span></p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a aria-label="1"></a>MS_patch  <span class="ot">&lt;-</span> a_tab[<span class="dv">2</span>, <span class="st">"Mean Sq"</span>]</span>
+<span id="cb7-2"><a aria-label="2"></a>MS_within <span class="ot">&lt;-</span> a_tab[<span class="dv">3</span>, <span class="st">"Mean Sq"</span>]</span>
+<span id="cb7-3"><a aria-label="3"></a>n <span class="ot">&lt;-</span> <span class="dv">5</span>                      <span class="co"># quadrats per patch</span></span>
+<span id="cb7-4"><a aria-label="4"></a></span>
+<span id="cb7-5"><a aria-label="5"></a><span class="fu">c</span>(<span class="at">within =</span> MS_within,</span>
+<span id="cb7-6"><a aria-label="6"></a>  <span class="at">patch  =</span> (MS_patch <span class="sc">-</span> MS_within) <span class="sc">/</span> n)</span>
+<span id="cb7-7"><a aria-label="7"></a><span class="do">##   within    patch </span></span>
+<span id="cb7-8"><a aria-label="8"></a><span class="do">## 298.6000 294.3125</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>This is the <strong>method of moments</strong>. It is arithmetic on a table.</p>
+</div></div>
+</section>
+<section id="the-new-route-write-down-the-variance-and-search-for-it" class="slide level2">
+<h2>The New Route — Write Down the Variance and Search for It</h2>
+<div class="columns">
+<div class="column" style="width:52%;">
+<p>A mixed model never builds that table. It writes the variance of the <strong>whole response vector</strong> in one matrix:</p>
+<p><span class="math display">\[\mathbf{V} = \sigma^2_{patch}\,\mathbf{ZZ}^\top + \sigma^2_{within}\,\mathbf{I}\]</span></p>
+<ul>
+<li><span class="math inline">\(\mathbf{Z}\)</span> says which patch each quadrat belongs to</li>
+<li><span class="math inline">\(\mathbf{ZZ}^\top\)</span> is 1 for any two quadrats <strong>in the same patch</strong>, 0 otherwise</li>
+<li>So <span class="math inline">\(\mathbf{V}\)</span> states, directly, that two quadrats in a patch are correlated and two in different patches are not</li>
+</ul>
+<p>Then it asks a completely different question:</p>
+<blockquote>
+<p><strong>Which pair of numbers (σ²<sub>patch</sub>, σ²<sub>within</sub>) makes the data I actually observed most likely?</strong></p>
+</blockquote>
+</div><div class="column" style="width:48%;">
+<div class="callout callout-important callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Important</strong></p>
+</div>
+<div class="callout-content">
+<p><strong>That is the whole switch.</strong></p>
+<p><strong>Old:</strong> partition a quantity you computed (SS), then solve an algebraic identity for the variances.</p>
+<p><strong>New:</strong> propose a pair of variances, ask how probable the data are under them, and keep searching until that probability stops improving.</p>
+<p>No decomposition. No table. <strong>A search over a likelihood surface.</strong></p>
+</div>
+</div>
+</div>
+<p>The <em>F</em>-ratio idea does not disappear — it comes back at the end, when you test the fixed effect. But it is no longer how the variances are obtained.</p>
+</div></div>
+</section>
+<section id="the-restricted-likelihood-written-out" class="slide level2 tight-code">
+<h2>The Restricted Likelihood, Written Out</h2>
+<div class="columns">
+<div class="column" style="width:55%;">
+<p>Eight lines, no <code>lme4</code>. This is literally what the optimizer is doing:</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a aria-label="1"></a>y <span class="ot">&lt;-</span> u_df<span class="sc">$</span>algae</span>
+<span id="cb8-2"><a aria-label="2"></a>X <span class="ot">&lt;-</span> <span class="fu">model.matrix</span>(<span class="sc">~</span> treat, u_df)   <span class="co"># fixed effects</span></span>
+<span id="cb8-3"><a aria-label="3"></a>Z <span class="ot">&lt;-</span> <span class="fu">model.matrix</span>(<span class="sc">~</span> <span class="dv">0</span> <span class="sc">+</span> patch, u_df)   <span class="co"># grouping</span></span>
+<span id="cb8-4"><a aria-label="4"></a>ZZt <span class="ot">&lt;-</span> Z <span class="sc">%*%</span> <span class="fu">t</span>(Z)</span>
+<span id="cb8-5"><a aria-label="5"></a></span>
+<span id="cb8-6"><a aria-label="6"></a>reml_ll <span class="ot">&lt;-</span> <span class="cf">function</span>(v_patch, v_within) {</span>
+<span id="cb8-7"><a aria-label="7"></a>  V  <span class="ot">&lt;-</span> v_patch <span class="sc">*</span> ZZt <span class="sc">+</span> v_within <span class="sc">*</span> <span class="fu">diag</span>(<span class="fu">nrow</span>(X))</span>
+<span id="cb8-8"><a aria-label="8"></a>  Vi <span class="ot">&lt;-</span> <span class="fu">solve</span>(V)</span>
+<span id="cb8-9"><a aria-label="9"></a>  A  <span class="ot">&lt;-</span> <span class="fu">t</span>(X) <span class="sc">%*%</span> Vi <span class="sc">%*%</span> X</span>
+<span id="cb8-10"><a aria-label="10"></a>  b  <span class="ot">&lt;-</span> <span class="fu">solve</span>(A, <span class="fu">t</span>(X) <span class="sc">%*%</span> Vi <span class="sc">%*%</span> y)     <span class="co"># GLS fixed effects</span></span>
+<span id="cb8-11"><a aria-label="11"></a>  r  <span class="ot">&lt;-</span> y <span class="sc">-</span> X <span class="sc">%*%</span> b</span>
+<span id="cb8-12"><a aria-label="12"></a>  <span class="sc">-</span><span class="fl">0.5</span> <span class="sc">*</span> <span class="fu">as.numeric</span>(<span class="fu">determinant</span>(V, <span class="at">log =</span> <span class="cn">TRUE</span>)<span class="sc">$</span>modulus <span class="sc">+</span></span>
+<span id="cb8-13"><a aria-label="13"></a>                    <span class="fu">determinant</span>(A, <span class="at">log =</span> <span class="cn">TRUE</span>)<span class="sc">$</span>modulus <span class="sc">+</span></span>
+<span id="cb8-14"><a aria-label="14"></a>                    <span class="fu">t</span>(r) <span class="sc">%*%</span> Vi <span class="sc">%*%</span> r)</span>
+<span id="cb8-15"><a aria-label="15"></a>}</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</div><div class="column" style="width:45%;">
+<p>Three pieces, each doing one job:</p>
+<ul>
+<li><span class="math inline">\(\log|\mathbf{V}|\)</span> — penalises making the variances big, since a bigger variance spreads probability thinner</li>
+<li><span class="math inline">\(\mathbf{r}^\top\mathbf{V}^{-1}\mathbf{r}\)</span> — penalises leaving big residuals, which pushes the variances <strong>up</strong></li>
+<li><span class="math inline">\(\log|\mathbf{X}^\top\mathbf{V}^{-1}\mathbf{X}|\)</span> — the <strong>restricted</strong> part, the correction for having estimated the fixed effects</li>
+</ul>
+<p>The answer is the pair where those forces balance.</p>
+</div></div>
+</section>
+<section id="the-surface-the-optimizer-climbs" class="slide level2">
+<h2>The Surface the Optimizer Climbs</h2>
+<div class="columns">
+<div class="column" style="width:55%;">
+<div class="cell">
+<div class="cell-output-display">
+<div>
+<figure>
+<p><img data-src="linear_mixed_models_lecture_files/figure-revealjs/lmm-reml-02-1.png" alt="Curve of the restricted log-likelihood against sigma-squared patch, rising steeply from a low value at zero, peaking near 294, and then declining very gradually. A dashed vertical line marks the maximum." width="441"></p>
+</figure>
+</div>
+</div>
+</div>
+</div><div class="column" style="width:45%;">
+<p>Slice the surface at σ²<sub>within</sub> = 298.6 and you can see the whole method: the optimizer walks uphill until the slope is flat.</p>
+<div class="callout callout-warning callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Warning</strong></p>
+</div>
+<div class="callout-content">
+<p><strong>⚠️ Look how flat that peak is</strong></p>
+<p>Everything from roughly 150 to 600 sits within about <strong>one log-likelihood unit</strong> of the peak. <strong>Variance components are badly determined with only 16 groups</strong> — and that uncertainty is exactly what the Kenward-Roger <em>F</em>-test accounts for and the Wald χ² ignores.</p>
+<p>This plot is the reason those two tests disagreed.</p>
+</div>
+</div>
+</div>
+</div></div>
+</section>
+<section id="both-routes-one-number" class="slide level2 tight-code">
+<h2>Both Routes, One Number</h2>
+<div class="columns">
+<div class="column" style="width:50%;">
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb9"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a aria-label="1"></a><span class="co"># route 1: moments, from the SS table</span></span>
+<span id="cb9-2"><a aria-label="2"></a>moments <span class="ot">&lt;-</span> (MS_patch <span class="sc">-</span> MS_within) <span class="sc">/</span> n</span>
+<span id="cb9-3"><a aria-label="3"></a></span>
+<span id="cb9-4"><a aria-label="4"></a><span class="co"># route 2: maximise the restricted likelihood</span></span>
+<span id="cb9-5"><a aria-label="5"></a>fit <span class="ot">&lt;-</span> <span class="fu">optim</span>(<span class="fu">c</span>(<span class="dv">200</span>, <span class="dv">300</span>),</span>
+<span id="cb9-6"><a aria-label="6"></a>             \(p) <span class="sc">-</span><span class="fu">reml_ll</span>(p[<span class="dv">1</span>], p[<span class="dv">2</span>]),</span>
+<span id="cb9-7"><a aria-label="7"></a>             <span class="at">method =</span> <span class="st">"L-BFGS-B"</span>,</span>
+<span id="cb9-8"><a aria-label="8"></a>             <span class="at">lower =</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="fl">1e-6</span>))</span>
+<span id="cb9-9"><a aria-label="9"></a></span>
+<span id="cb9-10"><a aria-label="10"></a><span class="co"># route 3: what lmer() reports</span></span>
+<span id="cb9-11"><a aria-label="11"></a>lmer_vc <span class="ot">&lt;-</span> <span class="fu">as.data.frame</span>(</span>
+<span id="cb9-12"><a aria-label="12"></a>  <span class="fu">VarCorr</span>(u_lmer_model))<span class="sc">$</span>vcov[<span class="dv">1</span>]</span>
+<span id="cb9-13"><a aria-label="13"></a></span>
+<span id="cb9-14"><a aria-label="14"></a><span class="fu">round</span>(<span class="fu">c</span>(<span class="at">moments =</span> moments,</span>
+<span id="cb9-15"><a aria-label="15"></a>        <span class="at">likelihood =</span> fit<span class="sc">$</span>par[<span class="dv">1</span>],</span>
+<span id="cb9-16"><a aria-label="16"></a>        <span class="at">lmer =</span> lmer_vc), <span class="dv">3</span>)</span>
+<span id="cb9-17"><a aria-label="17"></a><span class="do">##    moments likelihood       lmer </span></span>
+<span id="cb9-18"><a aria-label="18"></a><span class="do">##    294.313    294.312    294.313</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</div><div class="column" style="width:50%;">
+<div class="callout callout-important callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Important</strong></p>
+</div>
+<div class="callout-content">
+<p><strong>294.31, three ways.</strong></p>
+<p>They agree to within <strong>0.001</strong> — and the first two have <strong>nothing in common</strong> methodologically. One is algebra on a table of sums of squares; the other is a numerical search over a likelihood surface.</p>
+<p>On a <strong>balanced</strong> design the restricted maximum-likelihood solution has a closed form, and that closed form <em>is</em> the moment estimator.</p>
+</div>
+</div>
+</div>
+<p>So week 9 was never wrong. It was a special case that happens to have a shortcut — and you have been using the shortcut without being told it was one.</p>
+<p><strong>Next slide: what happens when the shortcut stops existing.</strong></p>
+</div></div>
+</section>
+<section id="where-the-two-routes-part-company" class="slide level2 tight-code">
+<h2>Where the Two Routes Part Company</h2>
+<div class="columns">
+<div class="column" style="width:52%;">
+<p><strong>1. The moment estimator can return a negative variance.</strong></p>
+<p><span class="math inline">\(MS_{patch} &lt; MS_{within}\)</span> is perfectly possible by chance, and then <span class="math inline">\((MS_{patch}-MS_{within})/n\)</span> is <strong>below zero</strong> — an impossible value for a variance.</p>
+<div class="cell">
+<pre><code>## moments    REML 
+##  -1.634   0.000</code></pre>
+</div>
+<p>REML cannot go below zero — the likelihood is only defined for non-negative variances — so it stops at the boundary and warns <strong>“boundary (singular) fit”</strong>.</p>
+</div><div class="column" style="width:48%;">
+<p><strong>2. Unbalanced data has no single <em>n</em> to divide by.</strong></p>
+<p>Thin four patches to one quadrat each, as a storm would:</p>
+<div class="cell">
+<pre><code>##     moments, n = 5 moments, n0 = 3.95               REML 
+##              198.2              250.9              256.7</code></pre>
+</div>
+<div class="callout callout-important callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Important</strong></p>
+</div>
+<div class="callout-content">
+<p>Three answers, and the moment estimator needs you to <strong>choose</strong> an effective <em>n</em> before it will give one at all. REML never asks — the likelihood already knows how many quadrats each patch has.</p>
+<p><strong>This is why mixed models replaced <code>Error()</code>.</strong></p>
+</div>
+</div>
+</div>
+</div></div>
+</section>
+<section id="why-reml-and-not-plain-ml" class="slide level2 tight-code">
+<h2>Why REML and Not Plain ML</h2>
+<div class="columns">
+<div class="column" style="width:50%;">
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb12"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a aria-label="1"></a>ml_fit <span class="ot">&lt;-</span> <span class="fu">lmer</span>(algae <span class="sc">~</span> treat <span class="sc">+</span> (<span class="dv">1</span> <span class="sc">|</span> patch),</span>
+<span id="cb12-2"><a aria-label="2"></a>               <span class="at">data =</span> u_df, <span class="at">REML =</span> <span class="cn">FALSE</span>,</span>
+<span id="cb12-3"><a aria-label="3"></a>               <span class="at">control =</span> <span class="fu">lmerControl</span>(<span class="at">calc.derivs =</span> <span class="cn">FALSE</span>))</span>
+<span id="cb12-4"><a aria-label="4"></a></span>
+<span id="cb12-5"><a aria-label="5"></a><span class="fu">round</span>(<span class="fu">c</span>(</span>
+<span id="cb12-6"><a aria-label="6"></a>  <span class="at">REML =</span> <span class="fu">as.data.frame</span>(<span class="fu">VarCorr</span>(u_lmer_model))<span class="sc">$</span>vcov[<span class="dv">1</span>],</span>
+<span id="cb12-7"><a aria-label="7"></a>  <span class="at">ML   =</span> <span class="fu">as.data.frame</span>(<span class="fu">VarCorr</span>(ml_fit))<span class="sc">$</span>vcov[<span class="dv">1</span>]), <span class="dv">1</span>)</span>
+<span id="cb12-8"><a aria-label="8"></a><span class="do">##  REML    ML </span></span>
+<span id="cb12-9"><a aria-label="9"></a><span class="do">## 294.3 205.8</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>Plain maximum likelihood estimates σ²<sub>patch</sub> as <strong>205.8</strong>. REML gets <strong>294.3</strong>. ML is biased <strong>30% low</strong>.</p>
+</div><div class="column" style="width:50%;">
+<p>You have met this bias before, in week 2.</p>
+<p><span class="math display">\[s^2 = \frac{\sum(y-\bar y)^2}{n-\mathbf{1}} \quad\text{not}\quad \frac{\sum(y-\bar y)^2}{n}\]</span></p>
+<p>Dividing by <em>n</em> under-estimates the variance because you spent one df estimating <span class="math inline">\(\bar y\)</span>. <strong>ML makes exactly that mistake</strong>, at scale: it estimates the four treatment means and then behaves as though they were known all along.</p>
+<div class="callout callout-important callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Important</strong></p>
+</div>
+<div class="callout-content">
+<p><strong>REML = “restricted”</strong>: it maximises the likelihood of the data <em>after</em> the fixed effects have been projected out — the <span class="math inline">\(\log|\mathbf{X}^\top\mathbf{V}^{-1}\mathbf{X}|\)</span> term three slides back. That term <strong>is</strong> the <span class="math inline">\(n-1\)</span> correction, generalised.</p>
+</div>
+</div>
+</div>
+<p><strong>Use REML for variance components. Switch to ML only to compare models with different fixed effects.</strong></p>
+</div></div>
+</section>
+<section id="part-4-the-short-version" class="slide level2">
+<h2>Part 4 — The Short Version</h2>
+<div class="compact-table">
+<table class="caption-top">
+<colgroup>
+<col style="width: 25%">
+<col style="width: 37%">
+<col style="width: 37%">
+</colgroup>
+<thead>
+<tr class="header">
+<th></th>
+<th><strong>Nested ANOVA (week 9)</strong></th>
+<th><strong>Mixed model (today)</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Starts from</td>
+<td>the total sum of squares</td>
+<td>the variance matrix <span class="math inline">\(\mathbf{V}\)</span></td>
+</tr>
+<tr class="even">
+<td>Core move</td>
+<td><strong>partition</strong> SS by source</td>
+<td><strong>search</strong> for the most likely variances</td>
+</tr>
+<tr class="odd">
+<td>Variance components from</td>
+<td>solving <span class="math inline">\(E[MS]\)</span> equations</td>
+<td>maximising the restricted likelihood</td>
+</tr>
+<tr class="even">
+<td>Needs balance?</td>
+<td><strong>yes</strong>, for exact tests</td>
+<td>no</td>
+</tr>
+<tr class="odd">
+<td>Negative variance</td>
+<td>can happen, is meaningless</td>
+<td>impossible — stops at 0</td>
+</tr>
+<tr class="even">
+<td>Unbalanced <em>n</em></td>
+<td>you must pick an effective <em>n</em></td>
+<td>handled automatically</td>
+</tr>
+<tr class="odd">
+<td>On this dataset</td>
+<td>σ²<sub>patch</sub> = 294.31</td>
+<td>σ²<sub>patch</sub> = 294.31</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="callout callout-note callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Note</strong></p>
+</div>
+<div class="callout-content">
+<p><strong>✅ The one sentence</strong></p>
+<p>Sums of squares <em>divide up</em> variation that has already been computed; likelihood <em>proposes</em> variances and asks how well they explain the data. On a balanced design the two land on the same number — everywhere else, only the second one still works.</p>
+</div>
+</div>
+</div>
+</section>
+<section id="part-5-what-the-random-effect-buys-you" class="slide level2 divider">
+<h2>Part 5 · What the Random Effect Buys You</h2>
+</section>
+<section id="the-intraclass-correlation" class="slide level2 tight-code">
+<h2>The Intraclass Correlation</h2>
+<div class="columns">
+<div class="column" style="width:55%;">
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb13"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a aria-label="1"></a>vc <span class="ot">&lt;-</span> <span class="fu">as.data.frame</span>(<span class="fu">VarCorr</span>(u_lmer_model))</span>
+<span id="cb13-2"><a aria-label="2"></a>v_patch <span class="ot">&lt;-</span> vc<span class="sc">$</span>vcov[vc<span class="sc">$</span>grp <span class="sc">!=</span> <span class="st">"Residual"</span>]</span>
+<span id="cb13-3"><a aria-label="3"></a>v_resid <span class="ot">&lt;-</span> vc<span class="sc">$</span>vcov[vc<span class="sc">$</span>grp <span class="sc">==</span> <span class="st">"Residual"</span>]</span>
+<span id="cb13-4"><a aria-label="4"></a></span>
+<span id="cb13-5"><a aria-label="5"></a><span class="fu">round</span>(<span class="fu">c</span>(<span class="at">among_patches  =</span> v_patch,</span>
+<span id="cb13-6"><a aria-label="6"></a>        <span class="at">within_patches =</span> v_resid,</span>
+<span id="cb13-7"><a aria-label="7"></a>        <span class="at">ICC =</span> v_patch <span class="sc">/</span> (v_patch <span class="sc">+</span> v_resid)), <span class="dv">3</span>)</span>
+<span id="cb13-8"><a aria-label="8"></a><span class="do">##  among_patches within_patches            ICC </span></span>
+<span id="cb13-9"><a aria-label="9"></a><span class="do">##        294.313        298.600          0.496</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>The <strong>ICC</strong> is the share of variance living <em>between</em> groups — equivalently, <strong>how strongly two quadrats in the same patch resemble each other</strong>.</p>
+</div><div class="column" style="width:45%;">
 <div class="callout callout-important callout-titled callout-style-default">
 <div class="callout-body">
 <div class="callout-title">
@@ -523,49 +984,42 @@ Bill Perry
 </div>
 <div class="callout-content">
 <p><strong>ICC = 0.50 is the whole reason we are here</strong></p>
-<p>Two quadrats from the same patch are <strong>half-correlated</strong>. They are not two independent observations — they are closer to one and a half.</p>
-<p>An ICC near 0 would mean patches barely matter and ordinary ANOVA would have been fine. An ICC of 0.5 means ignoring patch would have been badly wrong — and week 9’s naive model showed exactly how wrong (F = 16.1 instead of 2.7).</p>
+<p>Two quadrats from the same patch are <strong>half-correlated</strong>. They are not two independent observations.</p>
+<p>An ICC near 0 would mean patches barely matter and ordinary ANOVA would have been fine. An ICC of 0.50 means ignoring patch would have been badly wrong — and week 9’s naive model showed exactly how wrong (<em>F</em> = 16.1 instead of 2.7).</p>
 </div>
 </div>
 </div>
-</div><div class="column" style="width:40%;">
-<div class="callout callout-note callout-titled callout-style-default">
+<div class="callout callout-tip callout-titled callout-style-default">
 <div class="callout-body">
 <div class="callout-title">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
-<p><strong>Note</strong></p>
+<p><strong>Tip</strong></p>
 </div>
 <div class="callout-content">
-<p><strong>✅ Same number, three ways</strong></p>
-<p>You have now seen 294.3 arrive by three routes:</p>
-<ol type="1">
-<li>By hand from mean squares, <code>(MS_patch − MS_within)/n</code></li>
-<li>From <code>aov(Error(patch))</code></li>
-<li>From <code>VarCorr()</code> on the mixed model</li>
-</ol>
-<p>They agree because <strong>they are the same model</strong>, written three ways.</p>
+<p><strong>🖐 Use it to design the next study</strong></p>
+<p>With ICC = 0.50, a sixth quadrat in an existing patch buys you almost nothing. A <strong>new patch</strong> buys you a lot. The <em>p</em>-value could never have told you that.</p>
 </div>
 </div>
 </div>
 </div></div>
 </section>
-<section id="partial-pooling-what-actually-happens-to-each-patch" class="slide level2">
-<h2>Partial Pooling — What Actually Happens to Each Patch</h2>
+<section id="partial-pooling-what-happens-to-each-patch" class="slide level2">
+<h2>Partial Pooling — What Happens to Each Patch</h2>
 <div class="columns">
-<div class="column" style="width:60%;">
-<p>A random effect does not just adjust the p-value. It changes each patch’s <strong>estimate</strong>.</p>
+<div class="column" style="width:58%;">
+<p>A random effect does not just adjust the <em>p</em>-value. It changes each patch’s <strong>estimate</strong>.</p>
 <div class="cell">
 <div class="cell-output-display">
 <div>
 <figure>
-<p><img data-src="linear_mixed_models_lecture_files/figure-revealjs/linear-mixed-models-04c-1.png" alt="Slope plot comparing each patch's raw observed mean algae cover to its shrunken mixed-model estimate, with grey lines joining the two; estimates move toward their treatment mean, and patches with more extreme raw means move furthest." width="345"></p>
+<p><img data-src="linear_mixed_models_lecture_files/figure-revealjs/linear-mixed-models-04c-1.png" alt="Slope plot comparing each patch's raw observed mean algae cover to its shrunken mixed-model estimate, with lines joining the two; estimates move toward their treatment mean, and patches with more extreme raw means move furthest." width="403"></p>
 </figure>
 </div>
 </div>
 </div>
-</div><div class="column" style="width:40%;">
+</div><div class="column" style="width:42%;">
 <div class="callout callout-note callout-titled callout-style-default">
 <div class="callout-body">
 <div class="callout-title">
@@ -591,99 +1045,33 @@ Bill Perry
 </div>
 <div class="callout-content">
 <p><strong>🖐 Why this is a feature</strong></p>
-<p>A patch whose 5 quadrats happened to land high is probably <em>not</em> that extreme — the next 5 would come back closer to average. Shrinkage builds that expectation in, instead of taking every noisy group mean at face value.</p>
-<p>This is called <strong>partial pooling</strong>: somewhere between treating every patch as unrelated and pretending they are all identical.</p>
+<p>A patch whose 5 quadrats happened to land high is probably <em>not</em> that extreme — the next 5 would come back closer to average.</p>
+<p>This is <strong>partial pooling</strong>: between treating every patch as unrelated and pretending they are all identical.</p>
 </div>
 </div>
 </div>
 </div></div>
 </section>
-<section id="mixed-model-anova-method-1-f-distribution" class="slide level2">
-<h2>Mixed-Model ANOVA — Method 1: F-Distribution</h2>
+<section id="reporting-the-variance-components" class="slide level2">
+<h2>Reporting the Variance Components</h2>
 <div class="columns">
-<div class="column" style="width:50%;">
-<ul>
-<li>Accounts for the uncertainty in variance-component estimation</li>
-<li>More conservative (higher p-values)</li>
-<li>Better for small samples</li>
-</ul>
-</div><div class="column" style="width:50%;">
-<div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a aria-label="1"></a><span class="co"># car::Anova uses Kenward-Roger denominator df for test.statistic = "F"</span></span>
-<span id="cb6-2"><a aria-label="2"></a><span class="co"># (that is what the printed header says -- there is no ddf argument here)</span></span>
-<span id="cb6-3"><a aria-label="3"></a>u_anova_result <span class="ot">&lt;-</span> <span class="fu">Anova</span>(u_lmer_model, <span class="at">type =</span> <span class="dv">3</span>, <span class="at">test.statistic =</span> <span class="st">"F"</span>)</span>
-<span id="cb6-4"><a aria-label="4"></a><span class="fu">cat</span>(<span class="st">"Type III ANOVA with F test:</span><span class="sc">\n\n</span><span class="st">"</span>)</span>
-<span id="cb6-5"><a aria-label="5"></a><span class="do">## Type III ANOVA with F test:</span></span>
-<span id="cb6-6"><a aria-label="6"></a>u_anova_result</span>
-<span id="cb6-7"><a aria-label="7"></a><span class="do">## Analysis of Deviance Table (Type III Wald F tests with Kenward-Roger df)</span></span>
-<span id="cb6-8"><a aria-label="8"></a><span class="do">## </span></span>
-<span id="cb6-9"><a aria-label="9"></a><span class="do">## Response: algae</span></span>
-<span id="cb6-10"><a aria-label="10"></a><span class="do">##                   F Df Df.res   Pr(&gt;F)   </span></span>
-<span id="cb6-11"><a aria-label="11"></a><span class="do">## (Intercept) 18.5551  1     12 0.001018 **</span></span>
-<span id="cb6-12"><a aria-label="12"></a><span class="do">## treat        2.7171  3     12 0.091262 . </span></span>
-<span id="cb6-13"><a aria-label="13"></a><span class="do">## ---</span></span>
-<span id="cb6-14"><a aria-label="14"></a><span class="do">## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="column" style="width:52%;">
+<div class="callout callout-note callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
 </div>
-</div></div>
-</section>
-<section id="mixed-model-anova-method-2-chi-square" class="slide level2">
-<h2>Mixed-Model ANOVA — Method 2: Chi-Square</h2>
-<div class="columns">
-<div class="column" style="width:50%;">
-<ul>
-<li>Assumes variance components are known (not estimated)</li>
-<li>More liberal (lower p-values)</li>
-<li>Assumes large samples</li>
-</ul>
-<p><strong>Why different results?</strong> Chi-square = F × numerator df. The F-test accounts for the denominator df (12, here — reflecting sample size); Chi-square assumes infinite denominator df (i.e., a large sample).</p>
-<p><strong>Rule of thumb:</strong> under 100 observations or &lt; 20 random-effect levels, use the F-test. Over 500 observations and &gt; 50 random-effect levels, Chi-square is okay. In between, the F-test is safer.</p>
-</div><div class="column" style="width:50%;">
-<div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a aria-label="1"></a>u_anova_chisq <span class="ot">&lt;-</span> <span class="fu">Anova</span>(u_lmer_model, <span class="at">type =</span> <span class="dv">3</span>, <span class="at">test.statistic =</span> <span class="st">"Chisq"</span>)</span>
-<span id="cb7-2"><a aria-label="2"></a><span class="fu">cat</span>(<span class="st">"Type III ANOVA with Chi-square test:</span><span class="sc">\n\n</span><span class="st">"</span>)</span>
-<span id="cb7-3"><a aria-label="3"></a><span class="do">## Type III ANOVA with Chi-square test:</span></span>
-<span id="cb7-4"><a aria-label="4"></a>u_anova_chisq</span>
-<span id="cb7-5"><a aria-label="5"></a><span class="do">## Analysis of Deviance Table (Type III Wald chisquare tests)</span></span>
-<span id="cb7-6"><a aria-label="6"></a><span class="do">## </span></span>
-<span id="cb7-7"><a aria-label="7"></a><span class="do">## Response: algae</span></span>
-<span id="cb7-8"><a aria-label="8"></a><span class="do">##               Chisq Df Pr(&gt;Chisq)    </span></span>
-<span id="cb7-9"><a aria-label="9"></a><span class="do">## (Intercept) 18.5551  1 0.00001651 ***</span></span>
-<span id="cb7-10"><a aria-label="10"></a><span class="do">## treat        8.1513  3    0.04299 *  </span></span>
-<span id="cb7-11"><a aria-label="11"></a><span class="do">## ---</span></span>
-<span id="cb7-12"><a aria-label="12"></a><span class="do">## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>Note</strong></p>
 </div>
-</div></div>
-</section>
-<section id="the-nested-model-restated" class="slide level2">
-<h2>The Nested Model, Restated</h2>
-<div class="columns">
-<div class="column" style="width:50%;">
-<p><span class="math display">\[algae_{ijk} = \mu + \alpha_i + \beta_{j(i)} + \epsilon_{ijk}\]</span></p>
-<ul>
-<li><span class="math inline">\(\mu\)</span> is the overall mean</li>
-<li><span class="math inline">\(\alpha_i\)</span> is the fixed effect of treatment i</li>
-<li><span class="math inline">\(\beta_{j(i)}\)</span> is the random effect of patch j nested within treatment i</li>
-<li><span class="math inline">\(\epsilon_{ijk}\)</span> is the residual error for quadrat k in patch j within treatment i</li>
-</ul>
-</div><div class="column" style="width:50%;">
-<div class="cell">
-<pre><code>## Final ANOVA results:
-## Analysis of Deviance Table (Type III Wald F tests with Kenward-Roger df)
-## 
-## Response: algae
-##                   F Df Df.res   Pr(&gt;F)   
-## (Intercept) 18.5551  1     12 0.001018 **
-## treat        2.7171  3     12 0.091262 . 
-## ---
-## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</code></pre>
+<div class="callout-content">
+<p><strong>How to report this result</strong></p>
+<p>“Algal cover did not differ significantly among urchin density treatments (linear mixed model with patch as a random effect, <strong><em>F</em><sub>3,12</sub> = 2.72, <em>p</em> = 0.091</strong>, Kenward-Roger denominator df). Among-patch variance was substantial (<strong>σ²<sub>patch</sub> = 294.3</strong> vs <strong>σ²<sub>within</sub> = 298.6</strong>, ICC = 0.50), indicating strong spatial heterogeneity in algal cover.”</p>
 </div>
-</div></div>
-</section>
-<section id="part-3-post-hoc-and-interpretation" class="slide level2 divider">
-<h2>Part 3 · Post-Hoc and Interpretation</h2>
-</section>
-<section id="interpreting-the-variance-components" class="slide level2">
-<h2>Interpreting the Variance Components</h2>
+</div>
+</div>
+<p>Both halves belong in the sentence. The fixed effect answers <em>did the treatment do anything</em>; the variance component answers <em>how noisy is this reef</em>, which is what the next person planning a study needs.</p>
+</div><div class="column" style="width:48%;">
 <div class="callout callout-important callout-titled callout-style-default">
 <div class="callout-body">
 <div class="callout-title">
@@ -693,34 +1081,98 @@ Bill Perry
 <p><strong>Important</strong></p>
 </div>
 <div class="callout-content">
-<p><strong>⚠️ Two tests, two answers — and you must pick one <em>before</em> you look</strong></p>
-<table class="caption-top">
-<thead>
-<tr class="header">
-<th>Test</th>
-<th>Statistic</th>
-<th>p</th>
-<th>Verdict at α = 0.05</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td>F (Kenward-Roger df)</td>
-<td>F₃,₁₂ = 2.72</td>
-<td><strong>0.091</strong></td>
-<td>not significant</td>
-</tr>
-<tr class="even">
-<td>Wald χ²</td>
-<td>χ² = 8.15</td>
-<td><strong>0.043</strong></td>
-<td>significant</td>
-</tr>
-</tbody>
-</table>
-<p>Same model. Same data. <strong>Opposite conclusions.</strong></p>
-<p>The χ² test assumes it knows the variance components exactly and that the sample is large. We have <strong>16 patches</strong>. It is being over-confident, exactly as the rule of thumb two slides back predicted.</p>
-<p><strong>Report the F-test.</strong> It agrees with last week’s <code>aov(Error(patch))</code> result to four decimal places — because it is the same test.</p>
+<p><strong>⚠️ “Not significant” is not “no effect”</strong></p>
+<p>With σ²<sub>patch</sub> ≈ σ²<sub>within</sub>, patch-to-patch variation is as large as quadrat-to-quadrat variation. Four patches per treatment simply cannot resolve a treatment effect against that much background noise.</p>
+<p>The honest conclusion is <strong>“this design could not detect it”</strong>, not “urchins do not affect algae.”</p>
+</div>
+</div>
+</div>
+<div class="callout callout-tip callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Tip</strong></p>
+</div>
+<div class="callout-content">
+<p><strong>🖐 Where 294.3 came from</strong></p>
+<p>By hand from mean squares, from <code>aov(Error(patch))</code>, and from <code>VarCorr()</code> — three notations, one model. See Part 4.</p>
+</div>
+</div>
+</div>
+</div></div>
+</section>
+<section id="part-6-post-hoc-assumptions-and-reporting" class="slide level2 divider">
+<h2>Part 6 · Post-Hoc, Assumptions, and Reporting</h2>
+</section>
+<section id="estimated-marginal-means" class="slide level2 tight-code">
+<h2>Estimated Marginal Means</h2>
+<div class="columns">
+<div class="column" style="width:55%;">
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb14"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a aria-label="1"></a>u_emm <span class="ot">&lt;-</span> <span class="fu">emmeans</span>(u_lmer_model, <span class="sc">~</span> treat)</span>
+<span id="cb14-2"><a aria-label="2"></a>u_emm</span>
+<span id="cb14-3"><a aria-label="3"></a><span class="do">##  treat emmean   SE df lower.CL upper.CL</span></span>
+<span id="cb14-4"><a aria-label="4"></a><span class="do">##  0%      39.2 9.41 12    18.70     59.7</span></span>
+<span id="cb14-5"><a aria-label="5"></a><span class="do">##  33%     19.0 9.41 12    -1.50     39.5</span></span>
+<span id="cb14-6"><a aria-label="6"></a><span class="do">##  66%     21.6 9.41 12     1.05     42.0</span></span>
+<span id="cb14-7"><a aria-label="7"></a><span class="do">##  100%     1.3 9.41 12   -19.20     21.8</span></span>
+<span id="cb14-8"><a aria-label="8"></a><span class="do">## </span></span>
+<span id="cb14-9"><a aria-label="9"></a><span class="do">## Degrees-of-freedom method: kenward-roger </span></span>
+<span id="cb14-10"><a aria-label="10"></a><span class="do">## Confidence level used: 0.95</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</div><div class="column" style="width:45%;">
+<p>Every standard error is <strong>9.41</strong> — identical across treatments, because the design is balanced and the SE comes from the <strong>patch</strong> stratum (4 patches per treatment), not from the 20 quadrats.</p>
+<div class="callout callout-warning callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Warning</strong></p>
+</div>
+<div class="callout-content">
+<p><strong>⚠️ Two of these intervals go below zero</strong></p>
+<p>Algae cover is a percentage. It cannot be negative.</p>
+<p>The mixed model fixed the <strong>error structure</strong> and left the <strong>distribution</strong> alone — it still assumes normal, unbounded response. Last week you fixed the distribution and left the error structure alone. Real data often needs both: that is <code>glmer()</code>.</p>
+</div>
+</div>
+</div>
+</div></div>
+</section>
+<section id="post-hoc-comparisons" class="slide level2 tight-code">
+<h2>Post-Hoc Comparisons</h2>
+<div class="columns">
+<div class="column" style="width:55%;">
+<div class="cell">
+<pre><code>##  treat emmean   SE df lower.CL upper.CL .group
+##  100%     1.3 9.41 12   -19.20     21.8  a    
+##  33%     19.0 9.41 12    -1.50     39.5  a    
+##  66%     21.6 9.41 12     1.05     42.0  a    
+##  0%      39.2 9.41 12    18.70     59.7  a    
+## 
+## Degrees-of-freedom method: kenward-roger 
+## Confidence level used: 0.95 
+## P value adjustment: tukey method for comparing a family of 4 estimates 
+## significance level used: alpha = 0.05 
+## NOTE: If two or more means share the same grouping symbol,
+##       then we cannot show them to be different.
+##       But we also did not show them to be the same.</code></pre>
+</div>
+</div><div class="column" style="width:45%;">
+<div class="callout callout-important callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Important</strong></p>
+</div>
+<div class="callout-content">
+<p><strong>Every treatment shares the letter <code>a</code>.</strong></p>
+<p>No pair is distinguishable. That is the correct and expected result — the omnibus <em>F</em>-test was already non-significant (<em>p</em> = 0.091), so there was nothing for a post-hoc to find.</p>
+<p>Running post-hocs after a non-significant omnibus test is <strong>exploratory only</strong>. Report it as such, or not at all.</p>
 </div>
 </div>
 </div>
@@ -733,99 +1185,41 @@ Bill Perry
 <p><strong>Note</strong></p>
 </div>
 <div class="callout-content">
-<p><strong>How to report this result</strong></p>
-<p>“Algal cover did not differ significantly among urchin density treatments (linear mixed model with patch as a random effect, <strong>F₃,₁₂ = 2.72, p = 0.091</strong>, Kenward-Roger denominator df). Among-patch variance was substantial (<strong>σ²_patch = 294.3</strong> vs <strong>σ²_residual = 298.6</strong>, ICC = 0.50), indicating strong spatial heterogeneity in algal cover.”</p>
+<p><strong>📖 Read the pattern, not a ranking</strong></p>
+<p>The means run 39.2 → 19.0 → 21.6 → 1.3. The two middle treatments are effectively tied, so this is <strong>not</strong> a clean monotonic gradient. Resist the temptation to write one.</p>
 </div>
 </div>
-</div>
-</section>
-<section id="post-hoc-comparisons" class="slide level2">
-<h2>Post-Hoc Comparisons</h2>
-<div class="columns">
-<div class="column" style="width:60%;">
-<p>Although the main effect of treatment was marginally significant (p = 0.04306), we can examine mean differences between treatments to understand patterns in the data.</p>
-<div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb9"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a aria-label="1"></a>u_emm <span class="ot">&lt;-</span> <span class="fu">emmeans</span>(u_lmer_model, <span class="sc">~</span> treat)</span>
-<span id="cb9-2"><a aria-label="2"></a><span class="fu">cat</span>(<span class="st">"Estimated marginal means:</span><span class="sc">\n\n</span><span class="st">"</span>)</span>
-<span id="cb9-3"><a aria-label="3"></a><span class="do">## Estimated marginal means:</span></span>
-<span id="cb9-4"><a aria-label="4"></a>u_emm</span>
-<span id="cb9-5"><a aria-label="5"></a><span class="do">##  treat emmean   SE df lower.CL upper.CL</span></span>
-<span id="cb9-6"><a aria-label="6"></a><span class="do">##  0%      39.2 9.41 12    18.70     59.7</span></span>
-<span id="cb9-7"><a aria-label="7"></a><span class="do">##  33%     19.0 9.41 12    -1.50     39.5</span></span>
-<span id="cb9-8"><a aria-label="8"></a><span class="do">##  66%     21.6 9.41 12     1.05     42.0</span></span>
-<span id="cb9-9"><a aria-label="9"></a><span class="do">##  100%     1.3 9.41 12   -19.20     21.8</span></span>
-<span id="cb9-10"><a aria-label="10"></a><span class="do">## </span></span>
-<span id="cb9-11"><a aria-label="11"></a><span class="do">## Degrees-of-freedom method: kenward-roger </span></span>
-<span id="cb9-12"><a aria-label="12"></a><span class="do">## Confidence level used: 0.95</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-</div>
-</div><div class="column" style="width:40%;">
-<div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb10"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a aria-label="1"></a>u_pairs <span class="ot">&lt;-</span> <span class="fu">pairs</span>(u_emm, <span class="at">adjust =</span> <span class="st">"sidak"</span>)</span>
-<span id="cb10-2"><a aria-label="2"></a><span class="fu">cat</span>(<span class="st">"Pairwise comparisons (Sidak adjusted):</span><span class="sc">\n\n</span><span class="st">"</span>)</span>
-<span id="cb10-3"><a aria-label="3"></a><span class="do">## Pairwise comparisons (Sidak adjusted):</span></span>
-<span id="cb10-4"><a aria-label="4"></a>u_pairs</span>
-<span id="cb10-5"><a aria-label="5"></a><span class="do">##  contrast   estimate   SE df t.ratio p.value</span></span>
-<span id="cb10-6"><a aria-label="6"></a><span class="do">##  0% - 33%      20.20 13.3 12   1.518  0.6356</span></span>
-<span id="cb10-7"><a aria-label="7"></a><span class="do">##  0% - 66%      17.65 13.3 12   1.327  0.7557</span></span>
-<span id="cb10-8"><a aria-label="8"></a><span class="do">##  0% - 100%     37.90 13.3 12   2.849  0.0848</span></span>
-<span id="cb10-9"><a aria-label="9"></a><span class="do">##  33% - 66%     -2.55 13.3 12  -0.192  1.0000</span></span>
-<span id="cb10-10"><a aria-label="10"></a><span class="do">##  33% - 100%    17.70 13.3 12   1.330  0.7534</span></span>
-<span id="cb10-11"><a aria-label="11"></a><span class="do">##  66% - 100%    20.25 13.3 12   1.522  0.6331</span></span>
-<span id="cb10-12"><a aria-label="12"></a><span class="do">## </span></span>
-<span id="cb10-13"><a aria-label="13"></a><span class="do">## Degrees-of-freedom method: kenward-roger </span></span>
-<span id="cb10-14"><a aria-label="14"></a><span class="do">## P value adjustment: sidak method for 6 tests</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 </div></div>
 </section>
-<section id="compact-letter-display" class="slide level2">
-<h2>Compact Letter Display</h2>
+<section id="diagnostics" class="slide level2">
+<h2>Diagnostics</h2>
 <div class="columns">
-<div class="column" style="width:60%;">
+<div class="column" style="width:62%;">
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb11"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a aria-label="1"></a>u_cld <span class="ot">&lt;-</span> multcomp<span class="sc">::</span><span class="fu">cld</span>(u_emm, <span class="at">alpha =</span> <span class="fl">0.05</span>, <span class="at">Letters =</span> letters)</span>
-<span id="cb11-2"><a aria-label="2"></a><span class="fu">cat</span>(<span class="st">"Compact letter display:</span><span class="sc">\n\n</span><span class="st">"</span>)</span>
-<span id="cb11-3"><a aria-label="3"></a><span class="do">## Compact letter display:</span></span>
-<span id="cb11-4"><a aria-label="4"></a>u_cld</span>
-<span id="cb11-5"><a aria-label="5"></a><span class="do">##  treat emmean   SE df lower.CL upper.CL .group</span></span>
-<span id="cb11-6"><a aria-label="6"></a><span class="do">##  100%     1.3 9.41 12   -19.20     21.8  a    </span></span>
-<span id="cb11-7"><a aria-label="7"></a><span class="do">##  33%     19.0 9.41 12    -1.50     39.5  a    </span></span>
-<span id="cb11-8"><a aria-label="8"></a><span class="do">##  66%     21.6 9.41 12     1.05     42.0  a    </span></span>
-<span id="cb11-9"><a aria-label="9"></a><span class="do">##  0%      39.2 9.41 12    18.70     59.7  a    </span></span>
-<span id="cb11-10"><a aria-label="10"></a><span class="do">## </span></span>
-<span id="cb11-11"><a aria-label="11"></a><span class="do">## Degrees-of-freedom method: kenward-roger </span></span>
-<span id="cb11-12"><a aria-label="12"></a><span class="do">## Confidence level used: 0.95 </span></span>
-<span id="cb11-13"><a aria-label="13"></a><span class="do">## P value adjustment: tukey method for comparing a family of 4 estimates </span></span>
-<span id="cb11-14"><a aria-label="14"></a><span class="do">## significance level used: alpha = 0.05 </span></span>
-<span id="cb11-15"><a aria-label="15"></a><span class="do">## </span><span class="al">NOTE</span><span class="do">: If two or more means share the same grouping symbol,</span></span>
-<span id="cb11-16"><a aria-label="16"></a><span class="do">##       then we cannot show them to be different.</span></span>
-<span id="cb11-17"><a aria-label="17"></a><span class="do">##       But we also did not show them to be the same.</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div>
+<figure>
+<p><img data-src="linear_mixed_models_lecture_files/figure-revealjs/linear-mixed-models-12-1.png" alt="Three diagnostic plots of the mixed-model residuals side by side: a normal Q-Q plot, a histogram of residuals, and a residuals-versus-fitted-values plot with a dashed reference line at zero showing a funnel of increasing spread." width="518"></p>
+</figure>
 </div>
-</div><div class="column" style="width:40%;">
-<div class="callout callout-important callout-titled callout-style-default">
+</div>
+</div>
+</div><div class="column" style="width:38%;">
+<div class="callout callout-warning callout-titled callout-style-default">
 <div class="callout-body">
 <div class="callout-title">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
-<p><strong>Important</strong></p>
+<p><strong>Warning</strong></p>
 </div>
 <div class="callout-content">
-<p><strong>Interpreting treatment comparisons</strong></p>
-<p>Mean algae cover shows a pattern with increasing urchin density: None/Removed (39.20%) &gt; Medium/33% Density (19.00%) &gt; High/66% Density (21.55%) &gt; Low/Control (1.30%). This suggests an inverse relationship between urchin density and algae cover. The high variability among patches within treatments contributed to the marginal statistical significance for the treatment effect.</p>
+<p><strong>⚠️ The spread is not constant</strong></p>
+<p>It is tightest at the lowest fitted values and widens from there — the same heteroscedasticity the raw data showed. A mixed model fixes <em>correlation</em>, not <em>unequal variance</em>.</p>
 </div>
 </div>
 </div>
-</div></div>
-</section>
-<section id="part-4-assumptions-and-visualization" class="slide level2 divider">
-<h2>Part 4 · Assumptions and Visualization</h2>
-</section>
-<section id="anova-assumptions-testing-base-r" class="slide level2">
-<h2>ANOVA Assumptions Testing — Base R</h2>
-<div class="columns">
-<div class="column" style="width:60%;">
-<p>For valid inference from ANOVA, several assumptions must be met. We test these below with a base R approach — note that it doesn’t work all that well for a mixed model.</p>
-</div><div class="column" style="width:40%;">
 <div class="callout callout-tip callout-titled callout-style-default">
 <div class="callout-body">
 <div class="callout-title">
@@ -835,149 +1229,81 @@ Bill Perry
 <p><strong>Tip</strong></p>
 </div>
 <div class="callout-content">
-<p><strong>🖐 Notice</strong></p>
-<p><code>plot(mixed_model)</code> and friends were built for <code>lm()</code> objects — they mostly work for <code>lmer()</code>, but purpose-built tools like <code>DHARMa</code> do a better job (see the Nested ANOVA activity).</p>
+<p><strong>🖐 Use the right tool</strong></p>
+<p><code>plot()</code> and <code>qqnorm()</code> were built for <code>lm()</code> objects. They mostly work on an <code>lmer()</code> fit, but <strong>DHARMa</strong> simulates from the fitted model and is the purpose-built check — that is what the activity uses.</p>
 </div>
 </div>
 </div>
+<p>A mixed model also assumes the <strong>random effects</strong> are normal. With 16 patches you cannot check that honestly. Say so.</p>
 </div></div>
 </section>
-<section id="diagnostic-plots" class="slide level2">
-<h2>Diagnostic Plots</h2>
-
-<img data-src="linear_mixed_models_lecture_files/figure-revealjs/linear-mixed-models-12-1.png" alt="Three diagnostic plots of the mixed-model residuals side by side: a normal Q-Q plot, a histogram of residuals, and a residuals-versus-fitted-values plot with a dashed reference line at zero." width="364" class="r-stretch"></section>
-<section id="levenes-test-for-homogeneity-of-variance" class="slide level2">
-<h2>Levene’s Test for Homogeneity of Variance</h2>
+<section id="heterogeneity-of-variance" class="slide level2 tight-code">
+<h2>Heterogeneity of Variance</h2>
 <div class="columns">
-<div class="column" style="width:50%;">
+<div class="column" style="width:48%;">
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb12"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a aria-label="1"></a>u_levene <span class="ot">&lt;-</span> <span class="fu">leveneTest</span>(algae <span class="sc">~</span> treat, <span class="at">data =</span> u_df)</span>
-<span id="cb12-2"><a aria-label="2"></a><span class="fu">cat</span>(<span class="st">"Levene's test for homogeneity of variance:</span><span class="sc">\n\n</span><span class="st">"</span>)</span>
-<span id="cb12-3"><a aria-label="3"></a><span class="do">## Levene's test for homogeneity of variance:</span></span>
-<span id="cb12-4"><a aria-label="4"></a>u_levene</span>
-<span id="cb12-5"><a aria-label="5"></a><span class="do">## Levene's Test for Homogeneity of Variance (center = median)</span></span>
-<span id="cb12-6"><a aria-label="6"></a><span class="do">##       Df F value     Pr(&gt;F)    </span></span>
-<span id="cb12-7"><a aria-label="7"></a><span class="do">## group  3  8.1694 0.00008785 ***</span></span>
-<span id="cb12-8"><a aria-label="8"></a><span class="do">##       76                       </span></span>
-<span id="cb12-9"><a aria-label="9"></a><span class="do">## ---</span></span>
-<span id="cb12-10"><a aria-label="10"></a><span class="do">## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb16"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb16-1"><a aria-label="1"></a><span class="fu">leveneTest</span>(algae <span class="sc">~</span> treat, <span class="at">data =</span> u_df)</span>
+<span id="cb16-2"><a aria-label="2"></a><span class="do">## Levene's Test for Homogeneity of Variance (center = median)</span></span>
+<span id="cb16-3"><a aria-label="3"></a><span class="do">##       Df F value     Pr(&gt;F)    </span></span>
+<span id="cb16-4"><a aria-label="4"></a><span class="do">## group  3  8.1694 0.00008785 ***</span></span>
+<span id="cb16-5"><a aria-label="5"></a><span class="do">##       76                       </span></span>
+<span id="cb16-6"><a aria-label="6"></a><span class="do">## ---</span></span>
+<span id="cb16-7"><a aria-label="7"></a><span class="do">## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
-</div><div class="column" style="width:50%;">
-<div class="callout callout-important callout-titled callout-style-default">
+</div><div class="column" style="width:52%;">
+<div class="callout callout-warning callout-titled callout-style-default">
 <div class="callout-body">
 <div class="callout-title">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
-<p><strong>Important</strong></p>
+<p><strong>Warning</strong></p>
 </div>
 <div class="callout-content">
-<p><strong>Interpreting the assumption tests</strong></p>
-<p>The Q-Q plot shows some deviation from normality, particularly in the tails, and Levene’s test indicates significant heterogeneity of variances across treatments (p = 0.00008785). Quinn &amp; Keough (2002) noted “large differences in within-cell variances” in this dataset, and transformations (including arcsin) did not improve variance homogeneity. However, ANOVA is generally robust to heteroscedasticity with balanced designs, which is why they analyzed untransformed data. The Residuals vs.&nbsp;fitted plot also shows a pattern of increasing variance with increasing fitted values, confirming the heteroscedasticity.</p>
+<p><strong>⚠️ This test ignores <code>patch</code></strong></p>
+<p><code>leveneTest()</code> has no idea the quadrats are grouped. It is testing the 80 raw values as if they were independent — the very assumption this whole lecture exists to fix. Read it as a <strong>description</strong> of the raw spread, not as a test of the mixed model.</p>
+<p>The model’s own diagnostic is the residuals-vs-fitted plot, and DHARMa.</p>
 </div>
 </div>
 </div>
+<p>Variances really are unequal (the 100% treatment has SD 3.2, the 0% treatment 28.7). Quinn &amp; Keough noted the same thing, tried transformations including arcsine, and found none that fixed it — so they analysed the untransformed data and said so. A balanced ANOVA is reasonably robust to this. <strong>Say it out loud in the methods rather than hoping nobody checks.</strong></p>
 </div></div>
 </section>
-<section id="visualization-boxplot" class="slide level2">
-<h2>Visualization — Boxplot</h2>
-
-<img data-src="linear_mixed_models_lecture_files/figure-revealjs/linear-mixed-models-14-1.png" alt="Boxplot of algae cover percentage by urchin density treatment, with jittered individual quadrat points overlaid, showing algae cover highest at 'none' treatment and lowest at 'low' treatment." width="345" class="r-stretch"></section>
-<section id="visualization-means-plot" class="slide level2">
-<h2>Visualization — Means Plot</h2>
-
-<img data-src="linear_mixed_models_lecture_files/figure-revealjs/linear-mixed-models-15-1.png" alt="Mean algae cover by treatment plotted as points with standard error error bars, connected to show the pattern across urchin density treatments." width="326" class="r-stretch"></section>
-<section id="part-5-discussion-and-manual-calculation" class="slide level2 divider">
-<h2>Part 5 · Discussion and Manual Calculation</h2>
-</section>
-<section id="scientific-interpretation" class="slide level2">
-<h2>Scientific Interpretation</h2>
-<div class="callout callout-important callout-titled callout-style-default">
-<div class="callout-body">
-<div class="callout-title">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<p><strong>Important</strong></p>
-</div>
-<div class="callout-content">
-<p>Our mixed-model analysis revealed substantial spatial heterogeneity in algae cover, with significant variation among patches within each treatment. The effect of urchin density treatments on filamentous algae cover was marginally significant at the α = 0.05 level (p = 0.043). Descriptive statistics show algae cover increasing as urchin density decreases, with None/Removed showing the highest cover (39.20%), followed by Medium/33% Density (19.00%), High/66% Density (21.55%), and Low/Control showing minimal algae cover (1.30%). The variance component for patches nested within treatments (294.31, ~39.5% of total variance) shows that spatial heterogeneity is a major structuring force in these algal communities, and needs to be accounted for when designing and analyzing ecological field experiments.</p>
-</div>
-</div>
-</div>
-</section>
-<section id="we-can-do-this-manually-but-ugh" class="slide level2">
-<h2>We Can Do This Manually — but Ugh</h2>
+<section id="visualization" class="slide level2">
+<h2>Visualization</h2>
 <div class="columns">
 <div class="column" style="width:50%;">
-<p>Nobody would ever do this by hand in practice — but seeing it once makes the “which MS goes on the bottom of the F-ratio” logic concrete, and shows how the traditional nested-ANOVA F-ratio (last lecture) connects to the mixed-model result above.</p>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb13"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a aria-label="1"></a>u_man_model <span class="ot">&lt;-</span> <span class="fu">aov</span>(algae <span class="sc">~</span> treat <span class="sc">+</span> treat<span class="sc">:</span>patch, <span class="at">data =</span> u_df)</span>
-<span id="cb13-2"><a aria-label="2"></a>u_anova_summary <span class="ot">&lt;-</span> <span class="fu">summary</span>(u_man_model)[[<span class="dv">1</span>]]</span>
-<span id="cb13-3"><a aria-label="3"></a><span class="fu">cat</span>(<span class="st">"Standard ANOVA table:</span><span class="sc">\n\n</span><span class="st">"</span>)</span>
-<span id="cb13-4"><a aria-label="4"></a><span class="do">## Standard ANOVA table:</span></span>
-<span id="cb13-5"><a aria-label="5"></a>u_anova_summary</span>
-<span id="cb13-6"><a aria-label="6"></a><span class="do">##             Df Sum Sq Mean Sq F value        Pr(&gt;F)    </span></span>
-<span id="cb13-7"><a aria-label="7"></a><span class="do">## treat        3  14429  4809.7 16.1075 0.00000006579 ***</span></span>
-<span id="cb13-8"><a aria-label="8"></a><span class="do">## treat:patch 12  21242  1770.2  5.9282 0.00000083226 ***</span></span>
-<span id="cb13-9"><a aria-label="9"></a><span class="do">## Residuals   64  19110   298.6                          </span></span>
-<span id="cb13-10"><a aria-label="10"></a><span class="do">## ---</span></span>
-<span id="cb13-11"><a aria-label="11"></a><span class="do">## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div>
+<figure>
+<p><img data-src="linear_mixed_models_lecture_files/figure-revealjs/linear-mixed-models-14-1.png" alt="Boxplot of algae cover by urchin density treatment with jittered quadrat points overlaid, showing high cover and wide spread in the 0% treatment and near-zero cover in the 100% treatment." width="384"></p>
+</figure>
 </div>
-<div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb14"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a aria-label="1"></a>u_MS_treat <span class="ot">&lt;-</span> u_anova_summary[<span class="dv">1</span>, <span class="st">"Mean Sq"</span>]</span>
-<span id="cb14-2"><a aria-label="2"></a>u_MS_patch <span class="ot">&lt;-</span> u_anova_summary[<span class="dv">2</span>, <span class="st">"Mean Sq"</span>]</span>
-<span id="cb14-3"><a aria-label="3"></a>u_MS_residual <span class="ot">&lt;-</span> u_anova_summary[<span class="dv">3</span>, <span class="st">"Mean Sq"</span>]</span>
-<span id="cb14-4"><a aria-label="4"></a></span>
-<span id="cb14-5"><a aria-label="5"></a>u_df_treat <span class="ot">&lt;-</span> u_anova_summary[<span class="dv">1</span>, <span class="st">"Df"</span>]</span>
-<span id="cb14-6"><a aria-label="6"></a>u_df_patch <span class="ot">&lt;-</span> u_anova_summary[<span class="dv">2</span>, <span class="st">"Df"</span>]</span>
-<span id="cb14-7"><a aria-label="7"></a>u_df_residual <span class="ot">&lt;-</span> u_anova_summary[<span class="dv">3</span>, <span class="st">"Df"</span>]</span>
-<span id="cb14-8"><a aria-label="8"></a></span>
-<span id="cb14-9"><a aria-label="9"></a><span class="fu">cat</span>(<span class="st">"MS Treatment:"</span>, u_MS_treat, <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span>
-<span id="cb14-10"><a aria-label="10"></a><span class="do">## MS Treatment: 4809.712</span></span>
-<span id="cb14-11"><a aria-label="11"></a><span class="fu">cat</span>(<span class="st">"MS Patch(Treatment):"</span>, u_MS_patch, <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span>
-<span id="cb14-12"><a aria-label="12"></a><span class="do">## MS Patch(Treatment): 1770.163</span></span>
-<span id="cb14-13"><a aria-label="13"></a><span class="fu">cat</span>(<span class="st">"MS Residual:"</span>, u_MS_residual, <span class="st">"</span><span class="sc">\n\n</span><span class="st">"</span>)</span>
-<span id="cb14-14"><a aria-label="14"></a><span class="do">## MS Residual: 298.6</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
 </div>
 </div><div class="column" style="width:50%;">
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb15"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb15-1"><a aria-label="1"></a>u_F_treat_correct <span class="ot">&lt;-</span> u_MS_treat <span class="sc">/</span> u_MS_patch        <span class="co"># Treatment tested against patches</span></span>
-<span id="cb15-2"><a aria-label="2"></a>u_F_patch <span class="ot">&lt;-</span> u_MS_patch <span class="sc">/</span> u_MS_residual             <span class="co"># Patches tested against residual</span></span>
-<span id="cb15-3"><a aria-label="3"></a></span>
-<span id="cb15-4"><a aria-label="4"></a><span class="fu">cat</span>(<span class="st">"F Treatment:"</span>, u_F_treat_correct, <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span>
-<span id="cb15-5"><a aria-label="5"></a><span class="do">## F Treatment: 2.717102</span></span>
-<span id="cb15-6"><a aria-label="6"></a><span class="fu">cat</span>(<span class="st">"F Patch(Treatment):"</span>, u_F_patch, <span class="st">"</span><span class="sc">\n\n</span><span class="st">"</span>)</span>
-<span id="cb15-7"><a aria-label="7"></a><span class="do">## F Patch(Treatment): 5.928207</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div>
+<figure>
+<p><img data-src="linear_mixed_models_lecture_files/figure-revealjs/linear-mixed-models-15-1.png" alt="Model estimated marginal means with 95% confidence intervals by treatment, with the sixteen individual patch means plotted behind them, showing the patch means scatter widely within every treatment." width="384"></p>
+</figure>
 </div>
-<div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb16"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb16-1"><a aria-label="1"></a>u_p_treat_correct <span class="ot">&lt;-</span> <span class="fu">pf</span>(u_F_treat_correct, u_df_treat, u_df_patch, <span class="at">lower.tail =</span> <span class="cn">FALSE</span>)</span>
-<span id="cb16-2"><a aria-label="2"></a>u_p_patch <span class="ot">&lt;-</span> <span class="fu">pf</span>(u_F_patch, u_df_patch, u_df_residual, <span class="at">lower.tail =</span> <span class="cn">FALSE</span>)</span>
-<span id="cb16-3"><a aria-label="3"></a></span>
-<span id="cb16-4"><a aria-label="4"></a>u_corrected_table <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
-<span id="cb16-5"><a aria-label="5"></a>  <span class="at">Source =</span> <span class="fu">c</span>(<span class="st">"Treatment"</span>, <span class="st">"Patches(Treatment)"</span>, <span class="st">"Residual"</span>),</span>
-<span id="cb16-6"><a aria-label="6"></a>  <span class="at">Df =</span> <span class="fu">c</span>(u_df_treat, u_df_patch, u_df_residual),</span>
-<span id="cb16-7"><a aria-label="7"></a>  <span class="at">MS =</span> <span class="fu">round</span>(<span class="fu">c</span>(u_MS_treat, u_MS_patch, u_MS_residual), <span class="dv">1</span>),</span>
-<span id="cb16-8"><a aria-label="8"></a>  <span class="at">F =</span> <span class="fu">c</span>(<span class="fu">round</span>(u_F_treat_correct, <span class="dv">2</span>), <span class="fu">round</span>(u_F_patch, <span class="dv">2</span>), <span class="cn">NA</span>),</span>
-<span id="cb16-9"><a aria-label="9"></a>  <span class="at">p =</span> <span class="fu">c</span>(<span class="fu">ifelse</span>(u_p_treat_correct <span class="sc">&lt;</span> <span class="fl">0.001</span>, <span class="st">"&lt;0.001"</span>, <span class="fu">round</span>(u_p_treat_correct, <span class="dv">3</span>)),</span>
-<span id="cb16-10"><a aria-label="10"></a>        <span class="fu">ifelse</span>(u_p_patch <span class="sc">&lt;</span> <span class="fl">0.001</span>, <span class="st">"&lt;0.001"</span>, <span class="fu">round</span>(u_p_patch, <span class="dv">3</span>)),</span>
-<span id="cb16-11"><a aria-label="11"></a>        <span class="cn">NA</span>)</span>
-<span id="cb16-12"><a aria-label="12"></a>)</span>
-<span id="cb16-13"><a aria-label="13"></a><span class="fu">cat</span>(<span class="st">"Corrected ANOVA table:</span><span class="sc">\n\n</span><span class="st">"</span>)</span>
-<span id="cb16-14"><a aria-label="14"></a><span class="do">## Corrected ANOVA table:</span></span>
-<span id="cb16-15"><a aria-label="15"></a>u_corrected_table</span>
-<span id="cb16-16"><a aria-label="16"></a><span class="do">##               Source Df     MS    F      p</span></span>
-<span id="cb16-17"><a aria-label="17"></a><span class="do">## 1          Treatment  3 4809.7 2.72  0.091</span></span>
-<span id="cb16-18"><a aria-label="18"></a><span class="do">## 2 Patches(Treatment) 12 1770.2 5.93 &lt;0.001</span></span>
-<span id="cb16-19"><a aria-label="19"></a><span class="do">## 3           Residual 64  298.6   NA   &lt;NA&gt;</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
+</div>
+<p><strong>Grey</strong> — the 16 patch means. <strong>Red</strong> — the model’s treatment means and 95% intervals. The grey scatter <em>within</em> each treatment is σ²<sub>patch</sub>; it is why the red intervals are so wide.</p>
 </div></div>
+</section>
+<section id="part-7-wrap-up" class="slide level2 divider">
+<h2>Part 7 · Wrap-Up</h2>
 </section>
 <section id="the-lmer-formula-cheat-sheet" class="slide level2">
 <h2>The <code>lmer</code> Formula Cheat-Sheet</h2>
 <div class="columns">
-<div class="column" style="width:60%;">
+<div class="column" style="width:58%;">
 <p>Read every random term as <strong><code>( what varies | across what )</code></strong>.</p>
+<div class="compact-table">
 <table class="caption-top">
 <colgroup>
 <col style="width: 33%">
@@ -992,11 +1318,11 @@ Bill Perry
 <tbody>
 <tr class="odd">
 <td><code>y ~ x + (1|g)</code></td>
-<td>random <strong>intercept</strong> per group — each group has its own baseline</td>
+<td>random <strong>intercept</strong> per group</td>
 </tr>
 <tr class="even">
 <td><code>y ~ x + (1 + x|g)</code></td>
-<td>random intercept <strong>and slope</strong> — each group has its own baseline <em>and</em> its own response to x</td>
+<td>random intercept <strong>and slope</strong></td>
 </tr>
 <tr class="odd">
 <td><code>y ~ x + (0 + x|g)</code></td>
@@ -1012,6 +1338,7 @@ Bill Perry
 </tr>
 </tbody>
 </table>
+</div>
 <div class="callout callout-important callout-titled callout-style-default">
 <div class="callout-body">
 <div class="callout-title">
@@ -1023,11 +1350,10 @@ Bill Perry
 <div class="callout-content">
 <p><strong>⚠️ The confusion to avoid</strong></p>
 <p><code>(1|patch)</code> and <code>(1|treat:patch)</code> are <strong>both random-intercept</strong> models. The <code>1</code> is the intercept; what differs is only the <strong>grouping</strong>.</p>
-<p>You only have a random slope when something other than <code>1</code> appears on the left of the <code>|</code>.</p>
 </div>
 </div>
 </div>
-</div><div class="column" style="width:40%;">
+</div><div class="column" style="width:42%;">
 <div class="callout callout-tip callout-titled callout-style-default">
 <div class="callout-body">
 <div class="callout-title">
@@ -1053,7 +1379,8 @@ Bill Perry
 </div>
 <div class="callout-content">
 <p><strong>⚠️ “boundary (singular) fit”</strong></p>
-<p>Means a variance was estimated as ~0 — the grouping factor explains nothing, or you asked for more random structure than the data can support. Simplify the random effects; do not ignore it.</p>
+<p>A variance was estimated as <strong>exactly 0</strong> — the likelihood hit the edge of what a variance is allowed to be. It is the REML version of the moment estimator going negative (Part 4).</p>
+<p>Simplify the random effects; do not ignore it.</p>
 </div>
 </div>
 </div>
@@ -1062,16 +1389,17 @@ Bill Perry
 <section id="wrap-up" class="slide level2">
 <h2>Wrap-up</h2>
 <div class="columns">
-<div class="column" style="width:60%;">
+<div class="column" style="width:58%;">
 <p>Today you:</p>
 <ul>
 <li>Decided <strong>fixed vs random</strong> by asking whether you care about <em>these</em> levels or about <em>how much they vary</em></li>
-<li>Learned that a random factor costs <strong>one parameter</strong> (a variance) where a fixed one costs <em>k</em> − 1</li>
-<li>Read <code>(1|group)</code> correctly, and saw that it is <strong>not</strong> a random slope</li>
-<li>Got the <strong>ICC = 0.50</strong> — two quadrats in a patch are half-correlated, which is exactly why this design needed a mixed model</li>
-<li>Saw <strong>partial pooling</strong> move each patch estimate toward its treatment mean</li>
-<li>Chose between the <strong>F-test (p = 0.091)</strong> and the <strong>Wald χ² (p = 0.043)</strong> — and learned why the F-test is the right one at n = 16 groups</li>
+<li>Learned a random factor costs <strong>one parameter</strong> where a fixed one costs <em>k</em> − 1</li>
+<li>Read <code>(1|group)</code> correctly, and saw it is <strong>not</strong> a random slope</li>
+<li>Chose between the <strong><em>F</em>-test (<em>p</em> = 0.091)</strong> and the <strong>Wald χ² (<em>p</em> = 0.043)</strong> — and learned why the <em>F</em>-test is right at 16 groups</li>
+<li>Saw <strong>where the variance components come from</strong>: a search over a restricted likelihood, not a partition of sums of squares</li>
+<li>Got <strong>ICC = 0.50</strong>, and saw <strong>partial pooling</strong> shrink each patch estimate toward its treatment mean</li>
 </ul>
+</div><div class="column" style="width:42%;">
 <div class="callout callout-important callout-titled callout-style-default">
 <div class="callout-body">
 <div class="callout-title">
@@ -1081,12 +1409,12 @@ Bill Perry
 <p><strong>Important</strong></p>
 </div>
 <div class="callout-content">
-<p><strong>⚠️ Report the F-test, and say so</strong></p>
-<p>With few random-effect levels the χ² is anti-conservative — it assumes it knows the variance components exactly. Always state which approximation you used and what the denominator df were.</p>
+<p><strong>✅ The one idea to keep</strong></p>
+<p>A mixed model does not “remove” the patch effect — it <strong>estimates</strong> it, and tests the treatment against the right amount of noise.</p>
+<p>The old way <em>partitioned</em> variation that was already computed. The new way <em>proposes</em> variances and keeps the ones that make the data most likely. On a balanced design they agree exactly; everywhere else only the second still works.</p>
 </div>
 </div>
 </div>
-</div><div class="column" style="width:40%;">
 <div class="callout callout-note callout-titled callout-style-default">
 <div class="callout-body">
 <div class="callout-title">
@@ -1096,9 +1424,66 @@ Bill Perry
 <p><strong>Note</strong></p>
 </div>
 <div class="callout-content">
-<p><strong>✅ The one idea to keep</strong></p>
-<p>A mixed model does not “remove” the patch effect — it <strong>estimates</strong> it, and then tests the treatment against the right amount of noise.</p>
-<p><strong>σ²_patch = 294.3 arrived three ways:</strong> by hand from mean squares, from <code>aov(Error(patch))</code>, and from <code>VarCorr()</code>. Same model, three notations. If you understood the nested ANOVA, you already understood mixed models — this is just a better way to write and fit them.</p>
+<p><strong>📖 Up next</strong></p>
+<p><code>glmer()</code> — a non-normal response <strong>and</strong> a random effect. You now have both halves.</p>
+</div>
+</div>
+</div>
+</div></div>
+</section>
+<section id="before-next-class" class="slide level2">
+<h2>Before Next Class</h2>
+<div class="columns">
+<div class="column" style="width:55%;">
+<p>Take the pine needle data, <strong>collapsed to one value per team per side</strong> (the two-stage summary from Week 3):</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb17"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb17-1"><a aria-label="1"></a>p_df <span class="ot">&lt;-</span> pine_df <span class="sc">|&gt;</span></span>
+<span id="cb17-2"><a aria-label="2"></a>  <span class="fu">group_by</span>(team, side) <span class="sc">|&gt;</span></span>
+<span id="cb17-3"><a aria-label="3"></a>  <span class="fu">summarise</span>(<span class="at">needle_length_mm =</span> <span class="fu">mean</span>(needle_length_mm),</span>
+<span id="cb17-4"><a aria-label="4"></a>            <span class="at">.groups =</span> <span class="st">"drop"</span>)</span>
+<span id="cb17-5"><a aria-label="5"></a></span>
+<span id="cb17-6"><a aria-label="6"></a><span class="fu">anova</span>(<span class="fu">lmer</span>(needle_length_mm <span class="sc">~</span> side <span class="sc">+</span> (<span class="dv">1</span><span class="sc">|</span>team), <span class="at">data =</span> p_df))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>Compare <em>F</em> to the <strong>square of</strong> the paired-<em>t</em> statistic from Week 4 (<em>t</em> = −2.72). You should get <strong><em>F</em> = 7.41, df 1 and 3, <em>p</em> = 0.072</strong> — the paired <em>t</em>-test <strong>is</strong> this mixed model.</p>
+</div><div class="column" style="width:45%;">
+<div class="callout callout-tip callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Tip</strong></p>
+</div>
+<div class="callout-content">
+<p><strong>🚀 If you finish early</strong></p>
+<p>Run the same formula on the raw 64 needles instead. You get <em>p</em> = 0.057 and <strong>59</strong> denominator df, not 3.</p>
+<p>What changed? Check <code>VarCorr()</code> — one variance is estimated as exactly zero and R warns <strong>“singular fit”</strong>.</p>
+<p>You now know what that means: the likelihood walked to the edge of the parameter space, exactly as the moment estimator would have gone negative.</p>
+</div>
+</div>
+</div>
+</div></div>
+</section>
+<section id="readings" class="slide level2">
+<h2>Readings</h2>
+<div class="columns">
+<div class="column" style="width:55%;">
+<ul>
+<li><strong>Gotelli &amp; Ellison</strong>, Ch. 10 — The Analysis of Variance, for the random-effects and variance-component material this lecture rebuilds.</li>
+<li><strong>Quinn &amp; Keough</strong> (2002), <em>Experimental Design and Data Analysis for Biologists</em>, Ch. 9 §9.1 — nested designs and expected mean squares. This is the source of today’s worked example.</li>
+<li>Zuur, A. F., Ieno, E. N., Walker, N. J., Saveliev, A. A., &amp; Smith, G. M. (2009). <em>Mixed Effects Models and Extensions in Ecology with R</em>. Springer. Ch. 5 is the standard ecological treatment of REML.</li>
+<li>Bates, D., Mächler, M., Bolker, B., &amp; Walker, S. (2015). Fitting linear mixed-effects models using lme4. <em>Journal of Statistical Software</em>, 67(1), 1–48.</li>
+</ul>
+</div><div class="column" style="width:45%;">
+<div class="callout callout-note callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Note</strong></p>
+</div>
+<div class="callout-content">
+<p><strong>📖 On the dataset</strong></p>
+<p>The sea urchin grazing data are Andrew &amp; Underwood’s, as analysed in Quinn &amp; Keough Ch. 9 — the same file as week 9. The textbook PDFs are on Canvas.</p>
 </div>
 </div>
 </div>
@@ -1111,16 +1496,8 @@ Bill Perry
 <p><strong>Tip</strong></p>
 </div>
 <div class="callout-content">
-<p><strong>🖐 Before next class</strong></p>
-<p>Take the pine needle data, <strong>collapsed to one value per team per side</strong> (the two-stage summary from Week 3):</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb17"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb17-1"><a aria-label="1"></a>p_df <span class="ot">&lt;-</span> pine_df <span class="sc">|&gt;</span></span>
-<span id="cb17-2"><a aria-label="2"></a>  <span class="fu">group_by</span>(team, side) <span class="sc">|&gt;</span></span>
-<span id="cb17-3"><a aria-label="3"></a>  <span class="fu">summarise</span>(<span class="at">needle_length_mm =</span> <span class="fu">mean</span>(needle_length_mm),</span>
-<span id="cb17-4"><a aria-label="4"></a>            <span class="at">.groups =</span> <span class="st">"drop"</span>)</span>
-<span id="cb17-5"><a aria-label="5"></a></span>
-<span id="cb17-6"><a aria-label="6"></a><span class="fu">anova</span>(<span class="fu">lmer</span>(needle_length_mm <span class="sc">~</span> side <span class="sc">+</span> (<span class="dv">1</span><span class="sc">|</span>team), <span class="at">data =</span> p_df))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>Compare <code>F</code> to the <strong>square of</strong> the paired-t statistic from Week 4 (t = −2.72). You should get <strong>F = 7.41, df 1 and 3, p = 0.072</strong> — the paired t-test <em>is</em> this mixed model.</p>
-<p><strong>🚀 If you finish early:</strong> run the same formula on the raw 64 needles instead. You get p = 0.057 and <strong>59</strong> denominator df, not 3. What changed? (Hint: check <code>VarCorr()</code> — one variance is estimated as exactly zero, and R warns “singular fit”.)</p>
+<p><strong>🖐 Why no Whitlock &amp; Schluter</strong></p>
+<p>W&amp;S does not cover mixed models or random effects. For this topic, Gotelli, Quinn &amp; Keough, and Zuur are the references.</p>
 </div>
 </div>
 </div>

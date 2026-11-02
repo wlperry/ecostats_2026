@@ -169,6 +169,34 @@ invisible(NULL)
 # would have?
 
 
+# ---- 6b Now break the balance ----------------------------
+# A storm scours all but one quadrat out of four patches.
+# Code is on the activity page.
+#
+#   a) thin_df - drop quad > 1 in patches 2, 6, 10 and 14,
+#      then count() the quadrats per patch
+#   b) the nested aov() with Error(patch) on thin_df
+#   c) the patch-mean shortcut on the SAME thinned data
+#   d) compare the two F and p values
+
+# YOUR CODE:
+
+invisible(NULL)
+
+# THINK: on the balanced data those two gave identical F and
+# p. Do they still? Which is more optimistic?
+
+# THINK: a patch mean from 1 quadrat is noisier than one
+# from 5 - its variance is sigma^2_patch + sigma^2_within/n.
+# The ANOVA on the means weights all 16 equally. Which of
+# its assumptions is now broken by construction?
+
+# THINK: to weight patches by precision you need
+# sigma^2_within. Where did it go when you averaged? That is
+# why averaging is not a free shortcut, and why Week 11
+# reaches for a mixed model instead.
+
+
 # ==========================================================
 # WRITE-UP - graded
 #
@@ -184,6 +212,17 @@ invisible(NULL)
 #       patch ignored entirely
 #       nested, Error(patch)
 #
+# ANSWER:
+
+
+# Q1b. From section 6b, on the UNBALANCED data:
+#
+#                                      F      df      p
+#       nested, Error(patch)
+#       one-way on the patch means
+#
+#      They matched exactly when balanced. Say in one
+#      sentence why they no longer do.
 # ANSWER:
 
 

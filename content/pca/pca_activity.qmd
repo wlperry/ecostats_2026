@@ -3,7 +3,7 @@ order: 19
 week: 14
 title: "Activity: Principal Component Analysis"
 subtitle: "Ordination"
-description: "Hands-on activity: principal component analysis on the classic iris flower dataset — assumptions, standardization, loadings, scree plots, scores, and a manually-built biplot."
+description: "Hands-on activity: principal component analysis on the classic iris flower dataset — assumptions, standardization, eigenvalues and eigenvectors, component retention rules, loadings and the arbitrary sign of a component, scores, and a biplot built by hand."
 author: "Bill Perry"
 metadata-files:
   - ../../_templates/activities.yml
@@ -12,7 +12,67 @@ format:
   docx: default
 ---
 
-# Worksheet: Principal Component Analysis
+# In-class Activity 19: Principal Component Analysis
+
+### Today's Objectives
+
+1.  Check the four things PCA assumes before you run it
+2.  Standardize, and say why that means "use the correlation matrix"
+3.  Run `prcomp()` and read every piece of what it returns
+4.  Verify by hand that eigenvectors have unit length and are orthogonal
+5.  Apply three component-retention rules, and resolve them when they disagree
+6.  Interpret loadings as biology, **with the arbitrary sign resolved**
+7.  Build a biplot from scratch, and understand why the arrows need scaling
+8.  Say whether PCA recovered a grouping it was never told about
+
+::: callout-tip
+## 📂 Files for today
+
+[📥 Script skeleton (.R)](data/19_pca.R){.btn .btn-primary download="19_pca.R"}
+
+-   Save the skeleton as `scripts/19_pca.R`.
+-   **No data file today.** `iris` ships with base R — Anderson's 1935 measurements of 150 flowers, made famous by Fisher in 1936.
+:::
+
+::: callout-important
+## What you hand in
+
+-   **All of today's code is right here in this activity.** Type it into your script as we go and run it chunk by chunk. The skeleton has the plumbing and nothing else. Every line of statistics you type yourself.
+-   **Section 7 has no code here either.** By then you will have built the pieces of a biplot separately, so you assemble it on your own.
+-   The **Q** boxes are **things to think about**, not inline homework. They are not graded.
+-   The **write-up** at the bottom — sections 9, 10 and 11 — *is* graded. Those answers go into the script as `#` comments.
+-   Hand in `scripts/19_pca.R`. Run it top to bottom (**Ctrl/Cmd + Shift + Enter**) first — it must run with no errors.
+:::
+
+::: callout-note
+## 🔮 Predict before you run
+
+PCA will not be told which species each flower belongs to. Before you plot anything, commit out loud: **will the three species come apart on PC1 and PC2, or will they smear together?** All three? Two of three?
+:::
+
+::: callout-tip
+## The `invisible(NULL)` lines in the skeleton
+
+Every section ends with `invisible(NULL)`. It is a **bumper** — press Ctrl/Cmd + Enter on a section's last real line and the cursor stops there instead of jumping past the next heading. It does nothing and prints nothing.
+:::
+
+Keep the plots plain today. The one exception is the final figure in section 11, which is the graded deliverable.
+
+------------------------------------------------------------------------
+
+## Where this fits
+
+Last week you ran a PCA and read the answer. Today you open the box.
+
+| | What you did | What you do today |
+|----|----|----|
+| **Week 13** | ran `prcomp()`, read the output | — |
+| **Today** | — | eigenvalues, eigenvectors, retention rules, biplots from scratch |
+| **Week 15** | — | what to do when Euclidean distance fails |
+
+------------------------------------------------------------------------
+
+# Setup
 
 **▶ Run this in your Script:**
 
@@ -20,141 +80,125 @@ format:
 # ── Setup (1) ───────────────────────────────────────────────────────────
 library(vegan)
 library(corrplot)
+library(GGally)
+library(factoextra)
 library(janitor)
 library(patchwork)
 library(tidyverse)
+
+theme_set(theme_minimal(base_size = 11))
 ```
 
-**What is PCA?** PCA (Principal Component Analysis) is a technique to:
+------------------------------------------------------------------------
 
-- Reduce the number of variables in your dataset
-- Find patterns in high-dimensional data
-- Create new uncorrelated variables (principal components) from correlated original variables
-- Visualize complex relationships in multivariate data
+# Block A · Assumptions and standardization
 
-**When to use PCA:** you have multiple continuous variables that may be correlated, too many variables to analyze or visualize easily, need to reduce dimensionality while retaining most information, or want to explore patterns in multivariate data.
+*After lecture Parts 1–3.*
 
-**Key assumptions of PCA:**
+# 1 · The iris data
 
-1.  **Linear relationships** between variables
-2.  **No extreme outliers** (can distort results)
-3.  **Variables should be correlated** (if not, PCA won't reduce dimensions effectively)
-4.  **Adequate sample size** (generally n > 50)
-5.  **Consider standardization** when variables have different scales
+**▶ Run this:**
 
-::: callout-important
-**Critical first step:** Always **standardize your data** when variables are measured on different scales. This prevents variables with larger values from dominating the analysis.
+``` r
+# ── Part 1.1 · Load and look ────────────────────────────────────────────
+iris_df <- iris %>% clean_names()
+
+iris_data <- iris_df %>% dplyr::select(-species)
+
+glimpse(iris_df)
+
+iris_df %>% count(species)
+```
+
+**▶ Run this** — the four measurements, by species:
+
+``` r
+# ── Part 1.2 · The raw variables ────────────────────────────────────────
+iris_df %>%
+  pivot_longer(-species, names_to = "variable", values_to = "value") %>%
+  ggplot(aes(species, value, fill = species)) +
+  geom_boxplot() +
+  facet_wrap(~variable, scales = "free_y")
+```
+
+::: callout-note
+## ✏️ Q1
+
+Which measurement separates the species most cleanly on its own? Which separates them least? If one variable already did the whole job, what would you need PCA for?
+:::
+
+# 2 · Check the assumptions
+
+**▶ Run this** — are the variables correlated?
+
+``` r
+# ── Part 2.1 · Correlations ─────────────────────────────────────────────
+cor_matrix <- cor(iris_data)
+
+round(cor_matrix, 3)
+
+corrplot(cor_matrix, method = "color", type = "upper",
+         addCoef.col = "grey25")
+```
+
+**▶ Run this** — are the relationships linear, and are there outliers?
+
+``` r
+# ── Part 2.2 · Linearity and outliers ───────────────────────────────────
+ggpairs(iris_data,
+        upper = list(continuous = "cor"),
+        lower = list(continuous = "smooth"))
+
+iris_data %>%
+  pivot_longer(everything(), names_to = "variable", values_to = "value") %>%
+  ggplot(aes(variable, value)) +
+  geom_boxplot()
+```
+
+::: callout-note
+## ✏️ Q2
+
+Petal length and petal width correlate at about 0.96. That is PCA's best friend — explain why in one sentence, in terms of what PCA is trying to do.
+:::
+
+::: callout-note
+## ✏️ Q3
+
+Several of the `ggpairs` panels look slightly bent rather than straight. Look at the colours in the panel for petal length vs. sepal length. Is the bend evidence of a genuinely non-linear relationship, or is something else producing it?
+:::
+
+# 3 · Standardize
+
+**▶ Run this:**
+
+``` r
+# ── Part 3.1 · How different are the scales? ────────────────────────────
+round(apply(iris_data, 2, sd), 3)
+```
+
+**▶ Run this:**
+
+``` r
+# ── Part 3.2 · Standardize ──────────────────────────────────────────────
+iris_scaled <- scale(iris_data)
+
+round(colMeans(iris_scaled), 3)
+round(apply(iris_scaled, 2, sd), 3)
+```
+
+::: callout-note
+## ✏️ Q4
+
+Petal length varies about four times as much as sepal width does. If you skipped standardization — ran PCA on the **covariance** matrix instead — which variable would dominate PC1, and would that be a biological finding or a bookkeeping accident?
 :::
 
 ------------------------------------------------------------------------
 
-# Part 1 · Iris Data Overview
+# Block B · Running PCA and choosing components
 
-We'll analyze the famous iris dataset with measurements from three species: *Iris setosa*, *Iris versicolor*, and *Iris virginica*. Each flower has 4 measurements: sepal length, sepal width, petal length, and petal width.
+*After lecture Parts 4–5.*
 
-**▶ Run this:**
-
-``` r
-# ── Part 1.1 · Iris Data Overview ───────────────────────────────────────
-iris_df <- read.csv("data/iris.csv") %>%
-  clean_names() %>%
-  mutate(ind = row_number()) %>%
-  mutate(species_ind = paste(species, ind, sep="_"))
-
-head(iris_df)
-
-# Get numeric values only for PCA
-iris_data_df <- iris_df %>%
-  dplyr::select(sepal_length, sepal_width, petal_length, petal_width)
-
-# Keep species info for later
-iris_species_df <- iris_df %>%
-  dplyr::select(species, ind, species_ind)
-```
-
-**▶ Run this** — visualize the raw measurements by species:
-
-``` r
-# ── Part 1.2 · Iris Data Overview ───────────────────────────────────────
-iris_long_df <- iris_df %>%
-  pivot_longer(
-    cols = c(sepal_length, sepal_width, petal_length, petal_width),
-    names_to = "variable",
-    values_to = "values"
-  )
-
-overview_plot <- iris_long_df %>%
-  ggplot(aes(species, values, color = species)) +
-  geom_boxplot() +
-  facet_wrap(~variable, scales = "free") +
-  labs(title = "Iris Measurements by Species",
-       x = "Species",
-       y = "Measurement Value") +
-  theme_minimal(base_size = 7)
-
-overview_plot
-```
-
-------------------------------------------------------------------------
-
-# Part 2 · Check PCA Assumptions
-
-**▶ Run this** — check correlations between variables:
-
-``` r
-# ── Part 2.1 · Check PCA Assumptions ────────────────────────────────────
-cor_matrix <- cor(iris_data_df)
-cor_matrix
-
-corrplot(cor_matrix, method = "color", type = "upper",
-         addCoef.col = "grey55", tl.cex = 0.8, number.cex = 0.8,
-         title = "Correlation Matrix of Iris Variables",
-         mar = c(0, 0, 2, 0))
-```
-
-**▶ Run this** — check for outliers:
-
-``` r
-# ── Part 2.2 · Check PCA Assumptions ────────────────────────────────────
-outlier_plot <- iris_data_df %>%
-  pivot_longer(everything(), names_to = "variable", values_to = "value") %>%
-  ggplot(aes(x = variable, y = value)) +
-  geom_boxplot() +
-  labs(title = "Check for Outliers in Iris Variables",
-       x = "Variable",
-       y = "Value") +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
-
-outlier_plot
-```
-
-✏️ **Your turn:** Are the iris variables sufficiently correlated for PCA to be useful? Do you see any concerning outliers?
-
-`________________________`
-
-------------------------------------------------------------------------
-
-# Part 3 · Standardize the Data
-
-Since our variables have different scales (e.g., petal width ranges 0.1-2.5 while sepal length ranges 4-8), we need to standardize.
-
-**▶ Run this:**
-
-``` r
-# ── Part 3.1 · Standardize the Data ─────────────────────────────────────
-iris_scaled <- scale(iris_data_df)
-
-iris_scaled_df <- as.data.frame(iris_scaled)
-
-# Check standardization worked
-colMeans(iris_scaled_df)
-apply(iris_scaled_df, 2, sd)
-```
-
-------------------------------------------------------------------------
-
-# Part 4 · Perform PCA
+# 4 · Run it, and look inside
 
 **▶ Run this:**
 
@@ -163,260 +207,193 @@ apply(iris_scaled_df, 2, sd)
 iris_pca_model <- prcomp(iris_scaled, center = FALSE, scale. = FALSE)
 
 summary(iris_pca_model)
+
+names(iris_pca_model)
 ```
-
-------------------------------------------------------------------------
-
-# Part 5 · Extract and Understand Results
 
 **▶ Run this** — eigenvalues and variance explained:
 
 ``` r
-# ── Part 5.1 · Extract and Understand Results ───────────────────────────
-eigenvalues <- iris_pca_model$sdev^2
-prop_variance <- eigenvalues / sum(eigenvalues)
+# ── Part 4.2 · Eigenvalues ──────────────────────────────────────────────
+eigenvalues     <- iris_pca_model$sdev^2
+prop_variance   <- eigenvalues / sum(eigenvalues)
 cumsum_variance <- cumsum(prop_variance)
 
-pca_summary_df <- data.frame(
-  Component = paste0("PC", 1:length(eigenvalues)),
-  Eigenvalue = eigenvalues,
-  Prop_Variance = prop_variance,
-  Cumsum_Variance = cumsum_variance
-)
+tibble(Component  = paste0("PC", 1:4),
+       Eigenvalue = round(eigenvalues, 3),
+       Percent    = round(prop_variance * 100, 2),
+       Cumulative = round(cumsum_variance * 100, 2))
 
-pca_summary_df
+# the eigenvalues should sum to the number of variables
+sum(eigenvalues)
 ```
 
-**▶ Run this** — component loadings:
+::: callout-note
+## ✏️ Q5
+
+The four eigenvalues sum to exactly 4. Why must that be true when PCA runs on a correlation matrix? What would they sum to for the ten-variable cobra lily data from last week?
+:::
+
+::: callout-note
+## ✏️ Q6
+
+`summary()` reports a **standard deviation** for each component, not an eigenvalue. What is the relationship between the two? Check it in R.
+:::
+
+**▶ Run this** — verify the eigenvector properties from lecture:
 
 ``` r
-# ── Part 5.2 · Extract and Understand Results ───────────────────────────
-loadings_df <- data.frame(
-  Variable = rownames(iris_pca_model$rotation),
-  PC1 = iris_pca_model$rotation[, 1],
-  PC2 = iris_pca_model$rotation[, 2],
-  PC3 = iris_pca_model$rotation[, 3],
-  PC4 = iris_pca_model$rotation[, 4]
-)
+# ── Part 4.3 · Eigenvector properties ───────────────────────────────────
+# 1. each eigenvector has length 1
+round(colSums(iris_pca_model$rotation^2), 3)
 
-loadings_df
+# 2. PC1 and PC2 are orthogonal (dot product = 0)
+round(sum(iris_pca_model$rotation[, 1] * iris_pca_model$rotation[, 2]), 10)
+
+# 3. and so the scores are uncorrelated
+round(cor(iris_pca_model$x[, 1], iris_pca_model$x[, 2]), 10)
 ```
 
-✏️ **Your turn:** Which variable has the largest loading on PC1? On PC2?
+::: callout-note
+## ✏️ Q7
 
-`________________________`
+Property 3 is the reason you are allowed to drop PC scores straight into a multiple regression or an ANOVA. What problem does it spare you, and why would the four **original** iris variables have caused that problem?
+:::
 
-------------------------------------------------------------------------
-
-# Part 6 · Determine Number of Components
+# 5 · How many components?
 
 **▶ Run this** — a scree plot:
 
 ``` r
-# ── Part 6.1 · Determine Number of Components ───────────────────────────
-scree_data_df <- data.frame(
-  Component = factor(1:4),
-  Variance = prop_variance * 100
-)
-
-scree_plot <- ggplot(scree_data_df, aes(x = Component, y = Variance)) +
-  geom_col(fill = "darkblue") +
-  geom_line(aes(group = 1), linewidth = 1) +
-  geom_point(size = 3) +
-  labs(title = "Scree Plot - Variance Explained by Each Component",
-       x = "Principal Component",
-       y = "% of Variance Explained") +
-  theme_minimal()
-
-scree_plot
+# ── Part 5.1 · Scree plot ───────────────────────────────────────────────
+fviz_eig(iris_pca_model, addlabels = TRUE, ylim = c(0, 85))
 ```
 
-**▶ Run this** — apply decision rules:
+**▶ Run this** — three rules:
 
 ``` r
-# ── Part 6.2 · Determine Number of Components ───────────────────────────
-# Eigenvalue > 1 rule
-components_to_keep <- sum(eigenvalues > 1)
-components_to_keep
+# ── Part 5.2 · Retention rules ──────────────────────────────────────────
+# Kaiser: eigenvalue > 1
+sum(eigenvalues > 1)
 
-# Components explaining at least 80% variance
-components_80_percent <- which(cumsum_variance >= 0.80)[1]
-components_80_percent
+# first component reaching 80% cumulative
+which(cumsum_variance >= 0.80)[1]
 ```
+
+::: callout-note
+## ✏️ Q8
+
+Kaiser says keep one component; the 80% rule and the elbow both say keep two. These are **guidelines, not tests**. Give two reasons to keep PC2 anyway — one about interpretability, one about what you would be able to see.
+:::
 
 ------------------------------------------------------------------------
 
-# Part 7 · Create PCA Scores
+# Block C · Loadings, scores, and biplots
+
+*After lecture Parts 6–8.*
+
+# 6 · Loadings, and the sign trap
 
 **▶ Run this:**
 
 ``` r
-# ── Part 7.1 · Create PCA Scores ────────────────────────────────────────
-pca_scores_df <- data.frame(
-  iris_pca_model$x,
-  species = iris_species_df$species
-)
-
-head(pca_scores_df)
+# ── Part 6.1 · Loadings ─────────────────────────────────────────────────
+round(iris_pca_model$rotation, 3)
 ```
 
-------------------------------------------------------------------------
+::: callout-important
+## ⚠️ Before you write a word about PC1
 
-# Part 8 · Visualize Results
+Look at the **signs** on your screen. An eigenvector defines a line, and a line has no preferred end — your loadings may come back with the opposite signs to your neighbour's, or to the lecture slides, and **both are correct**.
 
-**▶ Run this** — a PCA scores plot:
+What is not correct is writing "virginica scores higher on PC1" and stopping. Translate the sign into biology first.
+:::
 
-``` r
-# ── Part 8.1 · Visualize Results ────────────────────────────────────────
-scores_plot <- ggplot(pca_scores_df, aes(x = PC1, y = PC2, color = species)) +
-  geom_point(size = 3, alpha = 0.7) +
-  stat_ellipse(level = 0.68, linetype = 2) +
-  labs(title = "PCA Scores Plot",
-       subtitle = paste0("PC1 explains ", round(prop_variance[1]*100, 1),
-                        "% of variance, PC2 explains ", round(prop_variance[2]*100, 1), "%"),
-       x = paste0("PC1 (", round(prop_variance[1]*100, 1), "%)"),
-       y = paste0("PC2 (", round(prop_variance[2]*100, 1), "%)"),
-       color = "Species") +
-  theme_minimal() +
-  scale_color_manual(values = c("#00AFBB", "#E7B800", "#FC4E07"))
+::: callout-note
+## ✏️ Q9
 
-scores_plot
-```
+On PC1, three variables load one way and **sepal width** loads the other. Write one sentence saying what a high PC1 score means for a flower, in plain English, with the sign on your screen resolved.
+:::
 
-**▶ Run this** — a loading plot (arrows only):
+::: callout-note
+## ✏️ Q10
+
+Look at PC2's loadings. One variable dominates it almost completely and two are nearly zero. Which? Given that PC2 is built out of whatever PC1 could not explain, why is that the variable you would have predicted?
+:::
+
+**▶ Run this** — a loading plot, arrows only:
 
 ``` r
-# ── Part 8.2 · Visualize Results ────────────────────────────────────────
-loading_data_df <- loadings_df %>%
-  dplyr::select(Variable, PC1, PC2)
+# ── Part 6.2 · Loading plot ─────────────────────────────────────────────
+loading_data_df <- tibble(
+  Variable = rownames(iris_pca_model$rotation),
+  PC1 = iris_pca_model$rotation[, 1],
+  PC2 = iris_pca_model$rotation[, 2])
 
-loading_plot <- ggplot(loading_data_df, aes(x = 0, y = 0)) +
+ggplot(loading_data_df, aes(x = 0, y = 0)) +
   geom_segment(aes(xend = PC1, yend = PC2),
                arrow = arrow(length = unit(0.3, "cm")),
                color = "red", linewidth = 1) +
-  geom_text(aes(x = PC1 * 1.1, y = PC2 * 1.1, label = Variable),
-            size = 4) +
-  xlim(-1, 1) + ylim(-1, 1) +
-  labs(title = "PCA Loading Plot",
-       x = paste0("PC1 (", round(prop_variance[1]*100, 1), "%)"),
-       y = paste0("PC2 (", round(prop_variance[2]*100, 1), "%)")) +
-  theme_minimal() +
+  geom_text(aes(x = PC1 * 1.1, y = PC2 * 1.1, label = Variable)) +
+  xlim(-1.2, 1.2) + ylim(-1.2, 1.2) +
   geom_vline(xintercept = 0, linetype = "dashed", alpha = 0.5) +
   geom_hline(yintercept = 0, linetype = "dashed", alpha = 0.5)
-
-loading_plot
 ```
 
-**▶ Run this** — combine scores and loadings into a manual biplot:
+::: callout-note
+## ✏️ Q11
 
-``` r
-# ── Part 8.3 · Visualize Results ────────────────────────────────────────
-arrow_scale <- 3
-
-biplot_plot <- ggplot(pca_scores_df, aes(x = PC1, y = PC2)) +
-  geom_point(aes(color = species), size = 2, alpha = 0.6) +
-  geom_segment(data = loading_data_df,
-               aes(x = 0, y = 0,
-                   xend = PC1 * arrow_scale,
-                   yend = PC2 * arrow_scale),
-               arrow = arrow(length = unit(0.3, "cm")),
-               color = "black", linewidth = 0.8) +
-  geom_text(data = loading_data_df,
-            aes(x = PC1 * arrow_scale * 1.1,
-                y = PC2 * arrow_scale * 1.1,
-                label = Variable),
-            size = 3) +
-  stat_ellipse(aes(color = species), level = 0.68, linetype = 2) +
-  labs(title = "PCA Biplot - Iris Dataset",
-       subtitle = "Points = Individual flowers, Arrows = Original variables",
-       x = paste0("PC1 (", round(prop_variance[1]*100, 1), "%)"),
-       y = paste0("PC2 (", round(prop_variance[2]*100, 1), "%)"),
-       color = "Species") +
-  theme_minimal() +
-  scale_color_manual(values = c("#00AFBB", "#E7B800", "#FC4E07"))
-
-biplot_plot
-```
-
-✏️ **Your turn:** In the biplot, which species has the largest (most positive) PC1 scores? Which arrow(s) point in roughly the same direction as that species' cluster?
-
-`________________________`
-
-::: callout-tip
-**🚀 If you finish early:** `arrow_scale <- 3` was chosen somewhat arbitrarily to make the arrows visible against the points. Try changing it to `1` and to `6` and re-running the biplot. What changes, and what stays the same?
-
-``` r
-# ── Part 8.4 · Visualize Results ────────────────────────────────────────
-# Write your code in the R script:
-```
+Two arrows at a small angle mean the variables are correlated; two near 90° mean they are nearly independent. Which arrow sits closest to 90° from the petal arrows, and does the correlation matrix from section 2 agree?
 :::
 
-------------------------------------------------------------------------
+# 7 · Your turn: build a biplot
 
-# Part 9 · Interpret Results
+**There is no code for this section.** You now have the two halves — the points and the arrows. Put them on one plot.
+
+Work out and write the code for each of these, in your script under `# ── Part 7.x`:
+
+1.  Build `pca_scores_df` from `iris_pca_model$x` with the species column attached, and plot PC1 against PC2 coloured by species, with `stat_ellipse(level = 0.68)`.
+2.  Add the loading arrows from section 6 on top of it with `geom_segment()`, multiplying both `PC1` and `PC2` by a constant `arrow_scale <- 3` so the arrows are visible against the points.
+3.  Label the arrows, and give both axes labels that name the component **and** its percentage of variance.
+
+::: callout-tip
+If the arrows vanish into the middle of the point cloud, your `arrow_scale` is too small; if they shoot off the plot, it is too large.
+:::
+
+::: callout-note
+## ✏️ Q12
+
+Try `arrow_scale <- 1` and then `arrow_scale <- 6`. What changes about the figure, and what stays exactly the same? Is the scaling constant part of the analysis, or part of the drawing?
+:::
+
+::: callout-note
+## ✏️ Q13
+
+Which species sits furthest along PC1 in the positive direction? Which arrows point that way? Using your answer to Q9, describe that species' flowers without using the words "PC1" or "score".
+:::
+
+# 8 · Did PCA find the species?
 
 **▶ Run this:**
 
 ``` r
-# ── Part 9.1 · Interpret Results ────────────────────────────────────────
-pc1_loadings <- iris_pca_model$rotation[, 1]
-pc1_loadings
-
-pc2_loadings <- iris_pca_model$rotation[, 2]
-pc2_loadings
-
-total_variance_2pc <- sum(prop_variance[1:2])
-total_variance_2pc
+# ── Part 8.1 · Mean scores by species ───────────────────────────────────
+as_tibble(iris_pca_model$x) %>%
+  mutate(species = iris_df$species) %>%
+  group_by(species) %>%
+  summarise(across(PC1:PC2, \(z) round(mean(z), 2)))
 ```
 
-✏️ **Your turn:** Write a one-sentence biological interpretation of PC1 and of PC2, based on the loadings you just examined.
+::: callout-note
+## ✏️ Q14
 
-```
-PC1 = ________________________________________________
-PC2 = ________________________________________________
-```
-
-------------------------------------------------------------------------
-
-# Summary checklist for PCA
-
-When conducting PCA, always follow these steps:
-
-::: callout-tip
-**PCA checklist**
-
-1.  **Explore your data** - check distributions and relationships.
-2.  **Check correlations** - PCA works best with correlated variables.
-3.  **Check for outliers** - they can distort results.
-4.  **Standardize if needed** - essential when variables have different scales.
-5.  **Run PCA** - extract components.
-6.  **Determine number of components** - use scree plot and variance explained.
-7.  **Interpret loadings** - understand what each component represents.
-8.  **Visualize results** - create scores plots and biplots.
-9.  **Validate interpretation** - ensure it makes biological sense.
+PC1 puts the three species in order. PC2 does something different — one species stands apart from the other two, and it is not the same one. Which species, and what does that tell you about keeping PC2 after Kaiser told you to drop it?
 :::
 
-**Key points to remember:**
+::: callout-note
+## ✏️ Q15
 
-- **PCA finds new variables** (components) that are linear combinations of original variables.
-- **Components are uncorrelated** and ordered by variance explained.
-- **Standardization is crucial** when variables have different units/scales.
-- **First few components** usually capture most variation.
-- **Loadings show** how original variables contribute to components.
-- **Scores show** where observations fall in the new component space.
-
-::: callout-important
-**Key points from PCA analysis**
-
-1.  **Check assumptions first** - especially correlations and outliers.
-2.  **Standardize when necessary** - prevents scale effects from dominating.
-3.  **Use multiple criteria** to decide number of components (scree plot, eigenvalue > 1, variance explained).
-4.  **Interpret components** based on loadings - what do they represent biologically?
-5.  **Visualize in 2D** using first two components if they explain sufficient variance.
-6.  **PCA is exploratory** - use it to understand patterns, not for hypothesis testing.
-7.  **Document your choices** - why you kept certain components, how you interpreted them.
-
-Remember: PCA is a dimension reduction technique - the goal is to simplify complex data while retaining the important patterns!
+PCA was never given the species column. It recovered the groups from morphology alone. Does that make PCA a classification method? Explain what it would take to turn this into an actual test of whether the species differ.
 :::
 
 ------------------------------------------------------------------------
@@ -425,18 +402,38 @@ Remember: PCA is a dimension reduction technique - the goal is to simplify compl
 
 At this point you can:
 
-- [ ] Check PCA assumptions (correlations, outliers, sample size)
-- [ ] Standardize variables before running PCA
-- [ ] Run `prcomp()` and interpret its summary output
-- [ ] Read a scree plot and apply decision rules for component retention
-- [ ] Interpret loadings to give principal components biological meaning
-- [ ] Build a scores plot, a loading plot, and a combined biplot
+- [ ] Check PCA's assumptions — correlation, linearity, outliers, sample size
+- [ ] Standardize, and say why that means using the correlation matrix
+- [ ] Run `prcomp()` and name every element it returns
+- [ ] Verify unit-length and orthogonality of eigenvectors in R
+- [ ] Apply three retention rules and resolve them when they disagree
+- [ ] Interpret loadings as biology **with the sign resolved**
+- [ ] Build a scores plot, a loading plot, and a biplot from the two
+- [ ] Say what an ordination can and cannot tell you about groups
+
+------------------------------------------------------------------------
+
+# Write-up — this part is graded
+
+Type these answers into `scripts/19_pca.R` as `#` comments, in the boxes at the bottom of the skeleton.
+
+# 9 · The components
+
+Write **three to four sentences**. Say how many components you retained and why, what percentage of the variance they carry, and what each one means biologically — **with the sign on your screen resolved**. No sentence may contain the phrase "higher PC1" without saying what higher means.
+
+# 10 · The sign problem
+
+Write **two to three sentences**. A classmate runs the same code and gets PC1 loadings with the opposite signs to yours. Explain to them why neither of you is wrong, what would have to be true for one of you to be wrong, and what the two of you must do before comparing your written interpretations.
+
+# 11 · The figure
+
+Produce **one** publication-quality biplot of the iris PCA.
+
+This one gets the full treatment — axis labels naming the component and its percentage, labelled arrows, a legend with a real title, a caption-worthy title, and a clean theme. Save it with `ggsave()` as a PDF.
 
 ::: callout-note
 **📤 What to turn in before next class**
 
-Upload both of these to the course management system:
-
-1. Your code — the `scripts/` folder (or just `09_pca.R`)
-2. This worksheet, with your written answers
+1.  `scripts/19_pca.R`, running top to bottom with no errors
+2.  Your biplot from section 11, as a PDF
 :::
