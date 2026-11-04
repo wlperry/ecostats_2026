@@ -6,7 +6,8 @@
 # Save as scripts/14_nested_anova.R
 #
 # Only the plumbing is written for you - libraries, the
-# data read, the treatment recode, the summarise block.
+# data read, the treatment recode, the summarise block and
+# the section 6b storm.
 # Every line of statistics you type yourself. The code is
 # on the activity page.
 #
@@ -18,6 +19,7 @@
 library(janitor)
 library(afex)       # aov_car()
 library(emmeans)
+library(effectsize) # eta_squared(), omega_squared()
 library(tidyverse)
 
 options(scipen = 999)
@@ -171,15 +173,23 @@ invisible(NULL)
 
 # ---- 6b Now break the balance ----------------------------
 # A storm scours all but one quadrat out of four patches.
-# Code is on the activity page.
-#
-#   a) thin_df - drop quad > 1 in patches 2, 6, 10 and 14,
-#      then count() the quadrats per patch
-#   b) the nested aov() with Error(patch) on thin_df
-#   c) the patch-mean shortcut on the SAME thinned data
-#   d) compare the two F and p values
+# The filter and the re-summarise are bookkeeping, so they
+# are written for you. The two aov() calls are the point.
 
-# YOUR CODE:
+thin_df <- u_df %>%
+  filter(!(patch %in% c(2, 6, 10, 14) & quad > 1))
+
+thin_df %>% count(patch)
+
+thin_patch_df <- thin_df %>%
+  group_by(treat, patch) %>%
+  summarise(mean_algae = mean(algae), .groups = "drop")
+
+invisible(NULL)
+
+# YOUR CODE: the nested aov() with Error(patch) on thin_df,
+# then the patch-mean shortcut on thin_patch_df. Compare
+# the two F and p values.
 
 invisible(NULL)
 
@@ -197,13 +207,40 @@ invisible(NULL)
 # reaches for a mixed model instead.
 
 
+# ---- 7 Effect size ---------------------------------------
+# p = 0.091 is a statement about CONFIDENCE, not about SIZE.
+# Before you report a non-significant result, say how big
+# the effect was that you failed to resolve.
+
+# YOUR CODE: eta_squared() and omega_squared() on
+# nested_model - effectsize takes the aovlist straight, and
+# the Group column tells you which error stratum it used.
+
+invisible(NULL)
+
+# YOUR CODE: the same on naive_model and ignore_model, then
+# interpret_eta_squared() on nested_model's Eta2_partial
+# with rules = "field2013".
+
+invisible(NULL)
+
+# THINK: the p-values differ by seven orders of magnitude.
+# Do the effect sizes? Which does pseudoreplication corrupt?
+
+# THINK: the nested effect is "large" and p = 0.091. Those
+# are not in conflict. What is each one measuring?
+
+# THINK: the nested CI includes zero and the naive one does
+# not. Which CI is lying to you?
+
+
 # ==========================================================
 # WRITE-UP - graded
 #
 # Type answers after ANSWER:, every line starting with #
 # ==========================================================
 
-# ---- 7 Report the model ----------------------------------
+# ---- 8 Report the model ----------------------------------
 
 # Q1. Fill in all three models:
 #
@@ -231,6 +268,13 @@ invisible(NULL)
 # ANSWER:
 
 
+# Q2b. Add the effect size to that paragraph - partial eta
+#      squared, its CI, and one clause saying what it means.
+#      It should now be clear this was an underpowered
+#      experiment, not proof that urchins do not matter.
+# ANSWER:
+
+
 # Q3. If you had reported either of the section 3 numbers
 #     instead, what would you have claimed, and what is the
 #     name for that mistake?
@@ -243,7 +287,7 @@ invisible(NULL)
 # ANSWER:
 
 
-# ---- 8 The final figure ----------------------------------
+# ---- 9 The final figure ----------------------------------
 # This one gets the full treatment - axis labels, a theme,
 # readable sizing. It is the graded deliverable.
 #

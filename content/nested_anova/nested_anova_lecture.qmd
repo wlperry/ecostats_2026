@@ -41,10 +41,31 @@ editor:
 #| collapse: true
 library(janitor)
 library(emmeans)
+library(effectsize)
+library(patchwork)
 library(tidyverse)
 
 options(contrasts = c("contr.sum", "contr.poly"))
 options(scipen = 999)  # no sci notation
+
+# The sea urchin data are read here so the variance-partition figure in
+# Part 5 can use them; Part 7 introduces them properly.
+u_df <- read_csv("data/andrew.csv") %>% clean_names()
+
+u_df <- u_df %>%
+  # Map to Quinn & Keough's Table 9.1 densities. NOTE the file's dens_33 /
+  # dens_66 labels are the reverse of the book's percentages -- verified by
+  # matching patch means: dens_33 is the book's 66% group, dens_66 its 33%.
+  mutate(treat = case_when(
+         treat == "removal" ~ "0%",     # book  0% density, mean algae 39.2
+         treat == "dens_66" ~ "33%",    # book 33% density, mean algae 19.0
+         treat == "dens_33" ~ "66%",    # book 66% density, mean algae 21.6
+         treat == "control" ~ "100%",   # book 100% density, mean algae 1.3
+         TRUE ~ "other")) %>%
+  mutate(treat = factor(treat,
+                        levels = c("0%", "33%", "66%", "100%"),
+                        labels = c("0%", "33%", "66%", "100%")),
+         patch = as_factor(patch))
 ```
 
 ## Where We Left Off
@@ -358,6 +379,108 @@ not the treatment mean — that's what makes it "nested," arithmetically.
 
 ## Part 5 · Partitioning Variance {.divider}
 
+## Where the Variation Goes
+
+::::: columns
+::: {.column width="42%"}
+One quadrat's distance from the grand mean splits into **three** pieces, not two:
+
+$$\underbrace{(Y_{ijk} - \bar{Y})}_{\text{total}} = \underbrace{(\bar{Y}_i - \bar{Y})}_{A} + \underbrace{(\bar{Y}_{ij} - \bar{Y}_i)}_{B(A)} + \underbrace{(Y_{ijk} - \bar{Y}_{ij})}_{\text{residual}}$$
+
+Square and sum over all 80 quadrats:
+
+$$SS_{total} = SS_A + SS_{B(A)} + SS_{resid}$$
+
+On the urchin data: **54 781 = 14 429 + 21 242 + 19 110** — the same three numbers `aov()` prints in Part 8.
+
+::: callout-note
+**The new row is the whole point**
+
+A one-way ANOVA has no $SS_{B(A)}$ row — that variation lands in the residual. Here it is **bigger than the treatment effect**, and it is what Factor A gets tested against.
+:::
+:::
+
+::: {.column width="58%"}
+```{r nested-anova-01b}
+#| echo: false
+#| message: false
+#| warning: false
+#| fig-width: 4.4
+#| fig-height: 4.6
+#| fig-alt: "Four stacked panels showing the nested ANOVA sums-of-squares allocation on the sea urchin data. Panel one, SS total: every quadrat's deviation from the dashed grand-mean line. Panel two, SS_A: each of the four treatment means' deviation from the grand mean. Panel three, SS_B(A): each of the sixteen patch means' deviation from its own treatment mean. Panel four, SS residual: every quadrat's deviation from its own patch mean."
+ss_df <- u_df %>%
+  arrange(treat, patch) %>%
+  mutate(patch = fct_inorder(patch)) %>%
+  group_by(treat) %>% mutate(treat_mean = mean(algae)) %>%
+  group_by(treat, patch) %>% mutate(patch_mean = mean(algae)) %>%
+  ungroup() %>%
+  mutate(grand = mean(algae), x = as.numeric(patch))
+
+pm <- ss_df %>% distinct(treat, patch, x, patch_mean, treat_mean, grand)
+
+tm <- ss_df %>%
+  group_by(treat) %>%
+  summarise(x = mean(x), xmin = min(x) - 0.45, xmax = max(x) + 0.45,
+            treat_mean = first(treat_mean), grand = first(grand),
+            .groups = "drop")
+
+set.seed(42)
+pts <- ss_df %>% mutate(xj = x + runif(n(), -0.22, 0.22))
+
+base <- function(p, ttl) {
+  p +
+    scale_colour_viridis_d(end = 0.9, guide = "none") +
+    scale_x_continuous(breaks = tm$x, labels = levels(ss_df$treat)) +
+    labs(title = ttl, x = NULL, y = "Algae (%)") +
+    coord_cartesian(ylim = c(-5, 82)) +
+    theme_minimal(base_size = 9) +
+    theme(plot.title = element_text(size = 9, face = "bold"),
+          panel.grid.minor = element_blank(),
+          panel.grid.major.x = element_blank())
+}
+
+p1 <- base(
+  ggplot(pts) +
+    geom_segment(aes(xj, xend = xj, y = grand, yend = algae, colour = treat),
+                 alpha = 0.45, linewidth = 0.3) +
+    geom_point(aes(xj, algae, colour = treat), size = 0.7, alpha = 0.8) +
+    geom_hline(yintercept = ss_df$grand[1], linetype = "dashed"),
+  expression(SS[total] * ": every quadrat vs. grand mean"))
+
+p2 <- base(
+  ggplot(tm) +
+    geom_segment(aes(x, xend = x, y = grand, yend = treat_mean, colour = treat),
+                 linewidth = 1.1) +
+    geom_segment(aes(xmin, xend = xmax, y = treat_mean, yend = treat_mean,
+                     colour = treat), linewidth = 0.8) +
+    geom_hline(yintercept = ss_df$grand[1], linetype = "dashed"),
+  expression(SS[A] * ": treatment means vs. grand mean"))
+
+p3 <- base(
+  ggplot(pm) +
+    geom_segment(aes(x, xend = x, y = treat_mean, yend = patch_mean,
+                     colour = treat), linewidth = 0.9) +
+    geom_point(aes(x, patch_mean, colour = treat), size = 1.4) +
+    geom_segment(data = tm, aes(xmin, xend = xmax, y = treat_mean,
+                                yend = treat_mean),
+                 linewidth = 0.5, colour = "grey30"),
+  expression(SS[B(A)] * ": patch means vs. their treatment mean"))
+
+p4 <- base(
+  ggplot(pts) +
+    geom_segment(aes(xj, xend = xj, y = patch_mean, yend = algae,
+                     colour = treat), alpha = 0.5, linewidth = 0.3) +
+    geom_point(aes(xj, algae, colour = treat), size = 0.7, alpha = 0.8) +
+    geom_segment(data = pm, aes(x = x - 0.35, xend = x + 0.35, y = patch_mean,
+                                yend = patch_mean),
+                 linewidth = 0.4, colour = "grey30"),
+  expression(SS[residual] * ": quadrats vs. their own patch mean"))
+
+p1 / p2 / p3 / p4
+```
+:::
+:::::
+
 ## Analysis of Variance: Residual and Total
 
 ::::: columns
@@ -553,23 +676,7 @@ cover of filamentous algae — the response variable).
 #| warning: false
 #| paged-print: false
 #| collapse: true
-u_df <- read_csv("data/andrew.csv") %>% clean_names()
-
-u_df <- u_df %>%
-  # Map to Quinn & Keough's Table 9.1 densities. NOTE the file's dens_33 /
-  # dens_66 labels are the reverse of the book's percentages -- verified by
-  # matching patch means: dens_33 is the book's 66% group, dens_66 its 33%.
-  mutate(treat = case_when(
-         treat == "removal" ~ "0%",     # book  0% density, mean algae 39.2
-         treat == "dens_66" ~ "33%",    # book 33% density, mean algae 19.0
-         treat == "dens_33" ~ "66%",    # book 66% density, mean algae 21.6
-         treat == "control" ~ "100%",   # book 100% density, mean algae 1.3
-         TRUE ~ "other")) %>%
-  mutate(treat = factor(treat,
-                        levels = c("0%", "33%", "66%", "100%"),
-                        labels = c("0%", "33%", "66%", "100%")),
-         patch = as_factor(patch))
-
+# u_df was read and relabelled in the setup chunk
 cat("Data\n\n")
 head(u_df)
 cat("\n\nTreatment levels:\n\n")
@@ -925,6 +1032,50 @@ the nested groups.
 ::::
 :::::::
 
+## Effect Size — How Big, Not Just Whether {.tight-code}
+
+::::::: columns
+:::: {.column width="52%"}
+*p* = 0.091 says "we could not resolve it." It does **not** say "there is nothing there." The effect size says how big the thing we could not resolve is.
+
+`effectsize` takes the `aovlist` straight, and the `Group` column tells you **which error stratum** it used — `patch`, the correct denominator.
+
+```{r nested-anova-07b}
+#| echo: true
+#| collapse: true
+#| message: false
+#| warning: false
+eta_squared(u_nested_model)
+
+omega_squared(u_nested_model)
+```
+::::
+
+:::: {.column width="48%"}
+```{r nested-anova-07c}
+#| echo: false
+#| collapse: true
+#| message: false
+#| warning: false
+e_nested <- eta_squared(u_nested_model)$Eta2_partial
+e_naive  <- eta_squared(aov(algae ~ treat + patch, data = u_df))$Eta2_partial[1]
+knitr::kable(data.frame(
+  Model     = c("Nested (correct)", "Naive factorial (wrong)"),
+  `partial eta2` = round(c(e_nested, e_naive), 2),
+  p         = c("0.091", "0.00000007"),
+  check.names = FALSE))
+```
+
+::: callout-important
+**🖐 Pseudoreplication corrupts the *p*-value, not the effect size**
+
+The wrong model and the right model agree the effect is **large** — 0.40 against 0.43. What they disagree about, by seven orders of magnitude, is how *confident* you are allowed to be.
+
+So the honest reading of this experiment is **not** "urchins do not matter." It is "a large effect that 4 patches per treatment could not resolve." That is a power problem, and the effect size is what lets you say so.
+:::
+::::
+:::::::
+
 ## Reporting a Nested ANOVA
 
 ::::::: columns
@@ -982,6 +1133,7 @@ Ignore that and you are pretending 80 quadrats are 80 independent observations. 
 - Watched the same 80 quadrats give **F = 16.11 (p < 0.0000001)** the wrong way and **F = 2.72 (p = 0.091)** the right way
 - Proved the nested *F* is just a one-way ANOVA on the **16 patch means** — and watched that equality fall apart the moment the design went unbalanced
 - Estimated **variance components** — half the variation lives between patches
+- Put an **effect size** next to the *p*-value, and found a *large* effect we were not powered to resolve
 - Reported it with the correct degrees of freedom
 ::::
 

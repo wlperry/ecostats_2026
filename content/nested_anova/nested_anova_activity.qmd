@@ -23,7 +23,8 @@ format:
 5.  Cross-check it with `afex::aov_car()`
 6.  Run post-hoc comparisons on the correct model
 7.  Prove the nested *F*-test is really a one-way ANOVA on the patch means — **and watch that break when the design goes unbalanced**
-8.  Name what goes wrong when you forget the design, and report the result honestly
+8.  Report an **effect size** with `effectsize`, and tell a null result from an underpowered one
+9.  Name what goes wrong when you forget the design, and report the result honestly
 
 ::: callout-tip
 ## 📂 Files for today
@@ -38,7 +39,7 @@ format:
 
 -   **All of today's code is right here in this activity.** Type it into your script as we go and run it chunk by chunk. The skeleton has the plumbing — libraries, the data read, the treatment recode, the summarise block — and nothing else. Every line of statistics you type yourself.
 -   The **Q** boxes are **things to think about**, not inline homework. Read them, talk them over, answer them in your head. You do **not** have to type answers into the script, and they are not graded.
--   The **write-up** at the bottom — sections 7 and 8 — *is* graded. Those answers go into the script as `#` comments.
+-   The **write-up** at the bottom — sections 8 and 9 — *is* graded. Those answers go into the script as `#` comments.
 -   Hand in `scripts/14_nested_anova.R`. Run it top to bottom (**Ctrl/Cmd + Shift + Enter**) first — it must run with no errors.
 :::
 
@@ -54,7 +55,7 @@ Today has a trap in it, on purpose. Section 3 gives you an answer that looks gre
 Every section ends with `invisible(NULL)`. It is a **bumper**. Press Ctrl/Cmd + Enter on a section's last real line and your cursor jumps to the next line *that has code on it* — without the bumper, that is the next section, way down past the next heading. With it, the cursor stops right there and you keep your place. It does nothing and prints nothing.
 :::
 
-Keep the plots plain today — no labels, colors, or themes. The goal is to **read** them. The one exception is the final figure in section 8, which is the graded deliverable.
+Keep the plots plain today — no labels, colors, or themes. The goal is to **read** them. The one exception is the final figure in section 9, which is the graded deliverable.
 
 ------------------------------------------------------------------------
 
@@ -71,6 +72,7 @@ Keep the plots plain today — no labels, colors, or themes. The goal is to **re
 library(janitor)
 library(afex)       # aov_car()
 library(emmeans)
+library(effectsize) # eta_squared(), omega_squared()
 library(tidyverse)
 
 options(scipen = 999)
@@ -227,7 +229,7 @@ summary(model_afx)
 
 > ## 🧩 Block 3 — Post-hoc, and where the variance lives *(after lecture Part 9)*
 >
-> Sections 5–6: compare the treatments, then reproduce what the nested test is really doing.
+> Sections 5–7: compare the treatments, reproduce what the nested test is really doing, then put an effect size next to the *p*-value.
 
 # Section 5 · Post-hoc comparisons
 
@@ -283,7 +285,7 @@ summary(patch_model)
 
 ✏️ **Q19:** So what did the five quadrats per patch actually buy you? (They did not buy you df for the treatment test — look at Q12.)
 
-**▶ Type this yourself** — now break the balance. A storm scours all but one quadrat out of four of the patches:
+*Written for you in the skeleton* — now break the balance. A storm scours all but one quadrat out of four of the patches. The `filter()` and the re-summarise are bookkeeping; the two `aov()` calls under them are the point. Run it and read it.
 
 ``` r
 thin_df <- u_df %>%
@@ -316,13 +318,66 @@ summary(aov(mean_algae ~ treat, data = thin_patch_df))
 
 ------------------------------------------------------------------------
 
+# Section 7 · Effect size — a null result, or an underpowered one?
+
+Section 4 gave you *p* = 0.091 and you wrote it down as "not significant." That is a statement about **confidence**, not about **size**. Before you report a non-significant result, you owe the reader the other number: *how big was the effect you failed to resolve?*
+
+`effectsize` takes the `aovlist` from `aov(..., Error(patch))` directly — and the `Group` column in the output tells you which error stratum it used.
+
+**▶ Type this yourself:**
+
+``` r
+# ---- 7 Effect size ---------------------------------------
+eta_squared(nested_model)
+
+omega_squared(nested_model)
+```
+
+> 🔮 **Predict first:** the naive factorial in section 3 had *p* = 0.00000007 and the nested model *p* = 0.091 — seven orders of magnitude apart. Will their **effect sizes** be that far apart too?
+
+**▶ Type this yourself** — the same effect size off the two wrong models from section 3:
+
+``` r
+eta_squared(naive_model)
+
+eta_squared(ignore_model)
+```
+
+You should get roughly:
+
+```
+model                            partial eta^2      p
+nested, Error(patch)   (right)       0.40         0.091
+naive factorial        (wrong)       0.43         0.00000007
+patch ignored entirely (wrong)       0.26         < 0.001
+```
+
+**▶ Type this yourself** — turn it into a word:
+
+``` r
+interpret_eta_squared(eta_squared(nested_model)$Eta2_partial,
+                      rules = "field2013")
+```
+
+✏️ **Q21:** Write down partial η² for the nested model and for the naive factorial. Was your prediction right? Which moved more between the two models — the effect size or the *p*-value?
+
+✏️ **Q22:** `interpret_eta_squared()` calls the nested effect **large**, and its *p*-value is 0.091. Those are not in conflict. Say in one sentence what each one is measuring.
+
+✏️ **Q23:** Look at the confidence interval on the nested η². It runs from 0 to 1 — it includes zero, which is the same message as *p* > 0.05. Now look at the CI for the naive model, which does not include zero. Which of those two CIs is lying to you, and why?
+
+> 💡 **Key idea:** **pseudoreplication corrupts the *p*-value, not the effect size.** The wrong model and the right model agree the treatment effect is large — 0.43 against 0.40. What they disagree about, by seven orders of magnitude, is how confident you get to be about it.
+>
+> That changes what you are entitled to write in section 8. "Urchin density had no effect on algal cover" is **not** what these data say. "A large effect (partial η² = 0.40) that four patches per treatment could not resolve (*F*₃,₁₂ = 2.72, *p* = 0.091)" is. The first sentence blames the urchins; the second blames the design — and only the second one is honest.
+
+------------------------------------------------------------------------
+
 # Write-up — graded
 
 *These go into the bottom of your script, as `#` comments after `ANSWER:`.*
 
-## Section 7 · Report the model
+## Section 8 · Report the model
 
-✏️ **Q21:** Fill in all three models:
+✏️ **Q24:** Fill in all three models:
 
 ```
                               F      df        p
@@ -331,23 +386,25 @@ patch ignored entirely
 nested, Error(patch)
 ```
 
-✏️ **Q22:** Write a 2–3 sentence results paragraph for the **correct** model, using your own *F*, df, and *p*.
+✏️ **Q25:** Write a 2–3 sentence results paragraph for the **correct** model, using your own *F*, df, and *p*.
 
-✏️ **Q23:** If you had reported either of the section 3 numbers instead, what would you have claimed? What is the name for that mistake?
+✏️ **Q25b:** Add the effect size to your Q25 paragraph — partial η², its CI, and one clause saying what it means. Your paragraph should now make clear this was an underpowered experiment, not a demonstration that urchins do not matter.
 
-✏️ **Q24:** Does this experiment show urchins have **no** effect on algae cover? Be careful here — separate "we did not detect an effect" from "there is no effect," and say which one you are entitled to.
+✏️ **Q26:** If you had reported either of the section 3 numbers instead, what would you have claimed? What is the name for that mistake?
 
-## Section 8 · The final figure
+✏️ **Q27:** Does this experiment show urchins have **no** effect on algae cover? Be careful here — separate "we did not detect an effect" from "there is no effect," and say which one you are entitled to.
+
+## Section 9 · The final figure
 
 One publication-quality figure that shows the **nesting**: treatment on the x-axis, the patch means as points, so a reader can see the among-patch spread the *F*-test is actually working with. Proper axis labels, a real theme, readable sizing — this one is graded on presentation. Export it with `ggsave()`.
 
 ``` r
-# ---- 8 The final figure ----------------------------------
+# ---- 9 The final figure ----------------------------------
 # Build it from patch_df, then:
 # ggsave("figures/14_urchin_patches.pdf", width = 7, height = 5)
 ```
 
-✏️ **Q25:** Your figure shows why the test came out the way it did. Point at the specific feature of the figure that explains the non-significant *p*-value.
+✏️ **Q28:** Your figure shows why the test came out the way it did. Point at the specific feature of the figure that explains the non-significant *p*-value.
 
 ------------------------------------------------------------------------
 
@@ -364,6 +421,8 @@ At this point you should be able to:
 -   [ ] Show that the nested test is a one-way ANOVA on the unit means **when the design is balanced**, and say why that equality fails when it is not
 -   [ ] Explain why unequal subsample counts make the patch means unequally precise, and what you lose by averaging them
 -   [ ] Explain why more subsamples do not buy replication
+-   [ ] Report partial η² and ω² for a nested model with `effectsize`, and read which error stratum it used
+-   [ ] Tell a null result from an underpowered one, and say which one you have
 -   [ ] Report a non-significant result without overclaiming
 
 Run your whole script top to bottom with **Ctrl/Cmd + Shift + Enter**. It must run clean.
