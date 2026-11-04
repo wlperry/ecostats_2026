@@ -722,16 +722,78 @@ Four lines of arithmetic, and they match `anova()` to the last digit — **and t
 ## F-Ratio Calculations
 
 ::::::: columns
+:::: {.column width="55%"}
+SS converts to MS; **which MS goes in the denominator** depends on whether each factor is fixed or random.
+
+The rule: the denominator must have the *same expected MS* as the numerator when $H_0$ is true.
+
+For a **main effect**:
+
+- crossed only with **fixed** factors → its expected MS collapses to $\sigma^2$ under $H_0$ → test over $MS_{Res}$
+- crossed with a **random** factor → its expected MS keeps an extra $n\sigma^2_{AB}$ → test over $MS_{AB}$
+
+The interaction is tested over $MS_{Res}$ in all three models.
+::::
+
+:::: {.column width="45%"}
+::: {.compact-table}
+| Source | Model 1 both fixed | Model 2 both random | Model 3 A fixed, B random |
+|:---|:---|:---|:---|
+| A | $MS_A/MS_{Res}$ | $MS_A/MS_{AB}$ | $MS_A/MS_{AB}$ |
+| B | $MS_B/MS_{Res}$ | $MS_B/MS_{AB}$ | $MS_B/MS_{Res}$ |
+| AB | $MS_{AB}/MS_{Res}$ | $MS_{AB}/MS_{Res}$ | $MS_{AB}/MS_{Res}$ |
+:::
+::::
+:::::::
+
+## Why a Mixed Model Tests the Fixed Factor over the Interaction
+
+::::::: columns
+:::: {.column width="58%"}
+Expected mean squares, with $a$ levels of A, $b$ levels of B, $n$ per cell:
+
+::: {.compact-table}
+| Source | Both fixed | Both random | A fixed, B random |
+|:---|:---|:---|:---|
+| A | $\sigma^2 + nb\Sigma\alpha^2/(a-1)$ | $\sigma^2 + n\sigma^2_{AB} + nb\sigma^2_A$ | $\sigma^2 + n\sigma^2_{AB} + nb\Sigma\alpha^2/(a-1)$ |
+| B | $\sigma^2 + na\Sigma\beta^2/(b-1)$ | $\sigma^2 + n\sigma^2_{AB} + na\sigma^2_B$ | $\sigma^2 + na\sigma^2_B$ |
+| AB | $\sigma^2 + n\Sigma(\alpha\beta)^2/[(a-1)(b-1)]$ | $\sigma^2 + n\sigma^2_{AB}$ | $\sigma^2 + n\sigma^2_{AB}$ |
+| Residual | $\sigma^2$ | $\sigma^2$ | $\sigma^2$ |
+:::
+
+Under Model 3, if A has no effect, $E(MS_A)$ collapses to $\sigma^2 + n\sigma^2_{AB}$ — exactly $E(MS_{AB})$. Dividing by $MS_{Res}$ would leave $n\sigma^2_{AB}$ in the numerator and **inflate F even with no real A effect**.
+
+$E(MS_B)$ has **no** $n\sigma^2_{AB}$ term, so the random factor B is tested over $MS_{Res}$ — not $MS_{AB}$.
+::::
+
+:::: {.column width="42%"}
+::: callout-note
+**✅ Key idea**
+
+When B is random, its levels are a *sample* (sites, years, lakes, families). If A's effect varies across B levels, the A means you observed depend on which B levels you happened to draw. That sampling noise in the A effect *is* $\sigma^2_{AB}$, and within-cell error never sees it. So your effective replication for generalizing A is the **number of B levels** — which is why the test of A has $(a-1)$ and $(a-1)(b-1)$ df. Same logic as avoiding pseudoreplication.
+:::
+::::
+:::::::
+
+## Restricted vs. Unrestricted Mixed Models
+
+::::::: columns
 :::: {.column width="60%"}
-SS converts to MS; F-ratio calculations differ depending on whether factors are fixed, random, or mixed.
+The Model 3 column on the last two slides is the **restricted** mixed model — Sokal & Rohlf, Zar, and most biostats texts. It assumes interaction effects sum to zero across levels of the fixed factor, which drops $\sigma^2_{AB}$ from $E(MS_B)$ and leaves B tested over $MS_{Res}$.
+
+The **unrestricted** model (Searle; the default behind some software, e.g. SAS's `RANDOM` statement) keeps $n\sigma^2_{AB}$ in $E(MS_B)$ and tests B over $MS_{AB}$.
+
+Neither is universally "right" — it's a long-running debate. Know which one your software used before you trust its F-ratios.
 ::::
 
 :::: {.column width="40%"}
-| Source | A, B fixed | A, B random | A fixed, B random |
-|:---|:---|:---|:---|
-| A | $MS_A/MS_{Res}$ | $MS_A/MS_{AB}$ | $MS_A/MS_{AB}$ |
-| B | $MS_B/MS_{Res}$ | $MS_B/MS_{AB}$ | $MS_B/MS_{AB}$ |
-| AB | $MS_{AB}/MS_{Res}$ | $MS_{AB}/MS_{Res}$ | $MS_{AB}/MS_{Res}$ |
+::: callout-warning
+**⚠️ Watch out!**
+
+Software output can disagree with the textbook for exactly this reason.
+
+Fitting with `lmer()` and Satterthwaite or Kenward-Roger df sidesteps hand-picking denominators altogether — and it handles unbalanced designs, where this EMS logic breaks down anyway.
+:::
 ::::
 :::::::
 

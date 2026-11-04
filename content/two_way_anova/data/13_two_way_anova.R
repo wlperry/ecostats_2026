@@ -6,9 +6,9 @@
 # Save as scripts/13_two_way_anova.R
 #
 # Only the plumbing is written for you - libraries, the
-# data read, the summarise block, the balancing. Every line
-# of statistics you type yourself. The code is on the
-# activity page.
+# data read, the summarise block, the balancing, and the
+# section 7 EMM comparison. Every line of statistics you
+# type yourself. The code is on the activity page.
 #
 # The THINK lines are to talk about, not to answer here.
 # The WRITE-UP at the bottom is what gets graded.
@@ -18,6 +18,7 @@
 library(palmerpenguins)
 library(car)        # Anova(), leveneTest()
 library(emmeans)    # emmeans(), emmip()
+library(effectsize) # eta_squared(), omega_squared()
 library(broom)      # augment()
 library(tidyverse)
 
@@ -80,14 +81,10 @@ invisible(NULL)
 
 
 # ---- 3 Fit the balanced factorial model ------------------
-# This one line IS written for you, because getting it
-# wrong breaks Type III silently rather than loudly.
-# Set it before fitting anything.
+# Fit under R's DEFAULT contrasts. Section 6 is where the
+# contrast coding starts to matter.
 
-options(contrasts = c("contr.sum", "contr.poly"))
-
-# YOUR CODE: pb_model on pb_df, then summary() and a
-# Type III Anova().
+# YOUR CODE: pb_model on pb_df, then summary() and anova().
 
 invisible(NULL)
 
@@ -128,12 +125,6 @@ invisible(NULL)
 
 invisible(NULL)
 
-# YOUR CODE: joint_tests() on the model, then joint_tests()
-# again with by = "sex" - the SIMPLE effects, which is what
-# you report once the interaction is significant.
-
-invisible(NULL)
-
 # THINK: on balanced data the EMMs matched the raw means
 # exactly. Why? Watch that break in section 7.
 
@@ -146,13 +137,30 @@ invisible(NULL)
 # Type I is sequential, Type II conditions on the other
 # main effect, Type III conditions on everything.
 
-# YOUR CODE: all three on pb_model - anova() for Type I,
-# Anova(type = 2), Anova(type = 3).
+# YOUR CODE: anova(pb_model) for Type I, then
+# Anova(pb_model, type = 2) for Type II. Both are
+# contrast-free.
+
+invisible(NULL)
+
+# Type III is NOT contrast-free. It needs orthogonal
+# contrasts, and they are baked in when the model is FIT -
+# so set the option, refit, test, then put R back.
+
+# YOUR CODE:
+#   options(contrasts = c("contr.sum", "contr.poly"))
+#   pb_model_3 <- lm(...) on pb_df
+#   Anova(pb_model_3, type = 3)
+#   options(contrasts = c("contr.treatment", "contr.poly"))
 
 invisible(NULL)
 
 # THINK: compare the three F-values for spp. What do you
 # notice, and what is it about THIS dataset that causes it?
+
+# THINK: Anova(pb_model, type = 3) on the DEFAULT-contrast
+# model gives F = 196.1 for spp instead of 477.2. No error,
+# no warning. What is the options() line changing?
 
 
 # ---- 7 The same model, unbalanced ------------------------
@@ -160,11 +168,29 @@ invisible(NULL)
 # 3-6, but on the full p_df instead of pb_df.
 
 # YOUR CODE:
-#   a) pu_model on p_df
-#   b) the three SS types, as in section 6
-#   c) the cell EMMs next to the raw cell means, as in
-#      section 5 - they will NOT match this time
+#   a) pu_model on p_df, then summary()
+#   b) Type I and Type II on pu_model
+#   c) the contrast dance from section 6: set contr.sum,
+#      refit as pu_model_3, Anova(type = 3), reset
 #   d) the two formal assumption tests
+
+invisible(NULL)
+
+# The EMM comparison is written for you - it is section 5's
+# code with p_df swapped in. Run it and read it.
+
+pu_cell_emm <- emmeans(pu_model, ~ spp * sex)
+
+as.data.frame(pu_cell_emm) %>%
+  select(spp, sex, emmean) %>%
+  pivot_wider(names_from = sex, values_from = emmean)
+
+p_df %>%
+  group_by(spp, sex) %>%
+  summarise(raw_mean = mean(mass_g), .groups = "drop") %>%
+  pivot_wider(names_from = sex, values_from = raw_mean)
+
+emmeans(pu_model, ~ spp)
 
 invisible(NULL)
 
@@ -176,14 +202,34 @@ invisible(NULL)
 # means?
 
 
+# ---- 8 Effect size ---------------------------------------
+# A p-value says whether. An effect size says how big. The
+# lecture built partial eta squared by hand; the package
+# takes the Anova() object straight.
+
+# YOUR CODE: eta_squared() and omega_squared() on a Type III
+# Anova() of pu_model_3 - the orthogonal-contrast refit, not
+# pu_model - then interpret_eta_squared() on the
+# Eta2_partial column with rules = "field2013".
+
+invisible(NULL)
+
+# THINK: spp:sex was significant but its partial eta squared
+# is the smallest of the three. What does that add that the
+# p-value did not?
+
+# THINK: the small/medium/large labels are psychology
+# cutoffs. Is 0.05 "small" for penguin body mass?
+
+
 # ==========================================================
 # WRITE-UP - graded
 #
 # Type answers after ANSWER:, every line starting with #
 # ==========================================================
 
-# ---- 8 Report the model ----------------------------------
-# Use your pu_model from section 7.
+# ---- 9 Report the model ----------------------------------
+# Use your pu_model_3 from section 7.
 
 # Q1. Fill in the Type III table for the unbalanced model:
 #
@@ -206,7 +252,13 @@ invisible(NULL)
 # ANSWER:
 
 
-# ---- 9 The final figure ----------------------------------
+# Q4. Report partial eta squared for all three terms, and
+#     say in one sentence what the interaction's effect
+#     size means that its p-value did not.
+# ANSWER:
+
+
+# ---- 10 The final figure ---------------------------------
 # This one gets the full treatment - axis labels, a theme,
 # readable sizing. It is the graded deliverable.
 # Build it from the EMMs, not the raw means.
@@ -215,7 +267,7 @@ invisible(NULL)
 
 invisible(NULL)
 
-# Q4. Your figure shows the interaction term as a picture.
+# Q5. Your figure shows the interaction term as a picture.
 #     Are the lines parallel? Say how the figure and the
 #     spp:sex p-value agree.
 # ANSWER:

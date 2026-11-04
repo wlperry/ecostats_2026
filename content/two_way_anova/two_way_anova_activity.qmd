@@ -3,7 +3,7 @@ order: 13
 week: 9
 title: "Activity: Two-Way ANOVA"
 subtitle: "Factorial designs"
-description: "Hands-on activity: factorial ANOVA, estimated marginal means, and Type I/II/III sums of squares, run first on a balanced subsample of the palmerpenguins species-by-sex data and then on the full, naturally unbalanced dataset."
+description: "Hands-on activity: factorial ANOVA, estimated marginal means, Type I/II/III sums of squares, and effect sizes with the effectsize package, run first on a balanced subsample of the palmerpenguins species-by-sex data and then on the full, naturally unbalanced dataset."
 author: "Bill Perry"
 metadata-files:
   - ../../_templates/activities.yml
@@ -23,7 +23,7 @@ format:
 5.  Compute estimated marginal means, and see why they are not just group means
 6.  Compare Type I, II, and III sums of squares on a **balanced** design
 7.  Run the same model on the **unbalanced** design and watch the three types come apart
-8.  Follow a significant interaction with **simple effects**, not main effects
+8.  Report **effect sizes** with `effectsize`, not just *p*-values
 9.  Report the result, and show the interaction as a figure
 
 ::: callout-tip
@@ -38,9 +38,9 @@ format:
 ::: callout-important
 ## What you hand in
 
--   **All of today's code is right here in this activity.** Type it into your script as we go and run it chunk by chunk. The skeleton has the plumbing — libraries, the data read, the summarise block, the balancing — and nothing else. Every line of statistics you type yourself.
+-   **All of today's code is right here in this activity.** Type it into your script as we go and run it chunk by chunk. The skeleton has the plumbing — libraries, the data read, the summarise block, the balancing, and the section 7 EMM comparison — and nothing else. Every line of statistics you type yourself.
 -   The **Q** boxes are **things to think about**, not inline homework. Read them, talk them over, answer them in your head. You do **not** have to type answers into the script, and they are not graded.
--   The **write-up** at the bottom — sections 8 and 9 — *is* graded. Those answers go into the script as `#` comments.
+-   The **write-up** at the bottom — sections 9 and 10 — *is* graded. Those answers go into the script as `#` comments.
 -   Hand in `scripts/13_two_way_anova.R`. Run it top to bottom (**Ctrl/Cmd + Shift + Enter**) first — it must run with no errors.
 :::
 
@@ -73,6 +73,7 @@ Keep the plots plain today — no labels, colors, or themes. The goal is to **re
 library(palmerpenguins)
 library(car)        # Anova(), leveneTest()
 library(emmeans)    # emmeans(), emmip()
+library(effectsize) # eta_squared(), omega_squared()
 library(broom)      # augment()
 library(tidyverse)
 ```
@@ -146,32 +147,28 @@ pb_df %>%
 
 # Section 3 · Fit the balanced factorial model
 
-The `options()` line is already in your skeleton. It has to run **before** you fit anything, because it changes how R codes the factors — and if it is wrong, Type III sums of squares come out silently wrong rather than loudly broken.
-
-``` r
-# ---- 3 Fit the balanced factorial model ------------------
-options(contrasts = c("contr.sum", "contr.poly"))
-```
+One line fits it. We fit under R's **default** contrasts for now — section 6 is where the contrast coding starts to matter.
 
 > 🔮 **Predict first:** three terms — species, sex, and the interaction. Which will be significant? Will the interaction be?
 
 **▶ Type this yourself:**
 
 ``` r
+# ---- 3 Fit the balanced factorial model ------------------
 pb_model <- lm(mass_g ~ spp * sex, data = pb_df)
 
 summary(pb_model)
 
-Anova(pb_model, type = 3)
+anova(pb_model)
 ```
 
 The formula `mass_g ~ spp * sex` is shorthand. R expands the `*` into three terms: `spp + sex + spp:sex` — the two main effects and the interaction.
 
-✏️ **Q6:** Read the `spp:sex` row of the `Anova()` table first, before the two main effects. Why does the interaction get read first? (What does a significant interaction do to the *meaning* of a main effect?)
+✏️ **Q6:** Read the `spp:sex` row of the `anova()` table first, before the two main effects. Why does the interaction get read first? (What does a significant interaction do to the *meaning* of a main effect?)
 
 ✏️ **Q7:** Report the interaction: *F*, df, and *p*. Significant at α = 0.05?
 
-✏️ **Q8:** `summary()` and `Anova()` are both describing the same model. What does `Anova()` give you that `summary()`'s coefficient table does not?
+✏️ **Q8:** `summary()` and `anova()` are both describing the same model. What does `anova()` give you that `summary()`'s coefficient table does not?
 
 ------------------------------------------------------------------------
 
@@ -275,23 +272,11 @@ emmip(pb_model, sex ~ spp, CIs = TRUE)
 
 `emmip()` is the one-line version of the interaction plot the lecture built by hand with `ggplot()`. Use it here to *look*; you will build the polished one in section 9.
 
-**▶ Type this yourself** — the simple effects:
-
-``` r
-joint_tests(pb_model)
-
-joint_tests(pb_model, by = "sex")
-```
-
-`joint_tests()` gives you an F-test per term — the same rows as `Anova()`. With `by = "sex"` it instead gives the **simple effect** of species *within* each sex. That is the test you report once the interaction is significant, instead of the species main effect.
-
 ✏️ **Q13:** In a compact letter display, cells sharing a letter are **not** distinguishable. Which cells share a letter?
 
 ✏️ **Q14:** `emmip()` draws one line per sex across the three species. If there were **no** interaction, what would those two lines look like? Do yours look like that?
 
 ✏️ **Q15:** Does the interaction plot tell you the same thing as the `spp:sex` *p*-value from Q7? Say how.
-
-✏️ **Q15b:** Compare `joint_tests(pb_model)` to `Anova(pb_model, type = 3)`. Same numbers? Now compare `joint_tests(pb_model, by = "sex")` to the single `spp` row — why are there *two* species tests instead of one, and which one would you report?
 
 ------------------------------------------------------------------------
 
@@ -312,11 +297,27 @@ Three different ways to decide what "the effect of species" means when there is 
 anova(pb_model)            # Type I
 
 Anova(pb_model, type = 2)  # Type II
-
-Anova(pb_model, type = 3)  # Type III
 ```
 
+Type I and Type II are **contrast-free** — they give the same answer however R coded the factors. Type III is not. It needs *orthogonal* contrasts (`contr.sum`), and the contrasts are baked into the model when it is fitted, so changing the option is only half the job: **you have to refit.**
+
+**▶ Type this yourself** — set it, refit, then put R back the way you found it:
+
+``` r
+options(contrasts = c("contr.sum", "contr.poly"))
+
+pb_model_3 <- lm(mass_g ~ spp * sex, data = pb_df)
+
+Anova(pb_model_3, type = 3)  # Type III
+
+options(contrasts = c("contr.treatment", "contr.poly"))
+```
+
+> ⚠️ **Watch out!** This is the single most common silent error in a factorial ANOVA. Run `Anova(pb_model, type = 3)` on the default-contrast model and you get *F* = 196.1 for `spp` instead of 477.2 — a real number, no error, no warning, and wrong. The reset line at the end matters too: leave `contr.sum` switched on and every `summary()` coefficient table for the rest of your session reads against the grand mean instead of a reference level.
+
 ✏️ **Q16:** Write down the *F*-value for `spp` under all three types. What do you notice? Was your prediction right?
+
+✏️ **Q16b:** Type III on `pb_model_3` matches Types I and II. Type III on `pb_model` does not. Both are "Type III on a balanced design" — so what exactly is the `options()` line changing?
 
 ✏️ **Q17:** Explain *why* they come out that way. (What is it about equal cell sizes that makes "order of entry" stop mattering?)
 
@@ -326,7 +327,7 @@ Anova(pb_model, type = 3)  # Type III
 
 > ## 🧩 Block 4 — The payoff *(after lecture Parts 8–10)*
 >
-> Section 7: the same analysis, unbalanced. This is the one you do on your own.
+> Sections 7–8: the same analysis, unbalanced, then the effect sizes that go with it. Section 7 is the one you do on your own.
 >
 > The lecture warned you the penguin imbalance is **mild** — five of six cells are exactly even. So the three SS types will separate, but only a little, and no conclusion will change. Your job is to find *where* they separate and say *why*, not to find a dramatic result.
 
@@ -338,7 +339,7 @@ Only **one** of the six cells is unbalanced (Q4), so the honest expectation is t
 
 > 🔮 **Predict first:** with just one slightly-uneven cell out of six, will the three SS types still agree? Will the EMMs still match the raw means?
 
-**▶ Type this yourself:**
+**▶ Type this yourself** — fit it, then the three SS types with the same contrast dance as section 6:
 
 ``` r
 # ---- 7 The same model, unbalanced ------------------------
@@ -346,20 +347,28 @@ pu_model <- lm(mass_g ~ spp * sex, data = p_df)
 
 summary(pu_model)
 
-Anova(pu_model, type = 3)
-```
-
-**▶ Type this yourself** — the three SS types, as in section 6:
-
-``` r
 anova(pu_model)            # Type I
 
 Anova(pu_model, type = 2)  # Type II
 
-Anova(pu_model, type = 3)  # Type III
+options(contrasts = c("contr.sum", "contr.poly"))
+
+pu_model_3 <- lm(mass_g ~ spp * sex, data = p_df)
+
+Anova(pu_model_3, type = 3)  # Type III
+
+options(contrasts = c("contr.treatment", "contr.poly"))
 ```
 
-**▶ Type this yourself** — the EMMs against the raw means, as in section 5:
+**▶ Type this yourself** — the assumption checks:
+
+``` r
+shapiro.test(residuals(pu_model))
+
+leveneTest(mass_g ~ spp * sex, data = p_df)
+```
+
+*The EMM comparison below is written for you in the skeleton — it is the same code as section 5 with `p_df` swapped in. Run it and read it.*
 
 ``` r
 pu_cell_emm <- emmeans(pu_model, ~ spp * sex)
@@ -376,15 +385,7 @@ p_df %>%
 emmeans(pu_model, ~ spp)
 ```
 
-**▶ Type this yourself** — the assumption checks:
-
-``` r
-shapiro.test(residuals(pu_model))
-
-leveneTest(mass_g ~ spp * sex, data = p_df)
-```
-
-✏️ **Q18:** Fill in the *F*-values and compare the two runs:
+✏️ **Q18:** Fill in the *F*-values and compare the two runs (Type III from the `_3` models):
 
 ```
                  balanced          unbalanced
@@ -406,6 +407,52 @@ spp:sex
 
 ------------------------------------------------------------------------
 
+# Section 8 · Effect size — how big, not just whether
+
+A *p*-value answers "is there an effect?" It does **not** answer "how big?" With 333 birds, a trivial effect can still clear *p* < 0.05 — so every ANOVA you report needs an effect size next to it.
+
+The lecture built **partial η²** by hand: $\eta^2_p = SS_{effect} / (SS_{effect} + SS_{residual})$. You will not do that again. The `effectsize` package takes the `Anova()` object directly and returns all three terms with confidence intervals.
+
+**▶ Type this yourself** — note it is `pu_model_3`, the orthogonal-contrast refit from section 7:
+
+``` r
+# ---- 8 Effect size ---------------------------------------
+eta_squared(Anova(pu_model_3, type = 3))
+
+omega_squared(Anova(pu_model_3, type = 3))
+```
+
+`effectsize` prints a reminder about Type III needing orthogonal contrasts every time you call it — the same point as section 6. Here it is satisfied, because `pu_model_3` *was* refit under `contr.sum`. Hand it `pu_model` instead and the warning is the only thing standing between you and a wrong effect size.
+
+**▶ Type this yourself** — turn the numbers into words:
+
+``` r
+pu_eta <- eta_squared(Anova(pu_model_3, type = 3))
+
+interpret_eta_squared(pu_eta$Eta2_partial, rules = "field2013")
+```
+
+You should get roughly:
+
+```
+            partial eta^2    95% CI        label
+spp             0.82         [0.80, 1.00]  large
+sex             0.49         [0.43, 1.00]  large
+spp:sex         0.05         [0.02, 1.00]  small
+```
+
+Species accounts for about **82%** of the variation it could have accounted for; sex about **49%**; the interaction about **5%**.
+
+✏️ **Q23:** The `spp:sex` interaction was *significant* in section 7, and its partial η² is 0.05 — the smallest of the three. Say in one sentence what the effect size tells you that the *p*-value did not.
+
+✏️ **Q24:** Compare `eta_squared()` to `omega_squared()`. They agree for `spp` but the interaction drops from 0.05 to 0.04. η² is *biased upward* in small samples and ω² corrects for it. Which term got corrected most, and why would the smallest effect be the one that moves?
+
+✏️ **Q25:** The `field2013` labels ("small / medium / large") are cutoffs borrowed from psychology — 0.01, 0.06, 0.14. Is a partial η² of 0.05 for a sex-by-species interaction in penguin body mass "small" in any biological sense? Defend your answer without using the word "significant."
+
+> 💡 **Key idea:** report an effect size with every *F*-test, and report the **same** one throughout — partial η² pairs with Type III SS, which is why the lecture used it all day. The canned "small / medium / large" labels are a crutch for reading the scale, not a verdict. A 5% interaction in a body-mass model may be biologically real and worth a paragraph; a 5% effect somewhere else may be noise. The number is the finding, the label is not.
+
+------------------------------------------------------------------------
+
 # Homework
 
 **[Homework 8 — Factorial ANOVA](../../homeworks/factorial_anova_homework/factorial_anova_homework.qmd)**
@@ -422,11 +469,11 @@ Start a new script for it — do not add it to `13_two_way_anova.R`.
 
 *These go into the bottom of your script, as `#` comments after `ANSWER:`.*
 
-## Section 8 · Report the model
+## Section 9 · Report the model
 
-Use your `pu_model` from section 7.
+Use your `pu_model_3` from section 7.
 
-✏️ **Q23:** Fill in the Type III table:
+✏️ **Q26:** Fill in the Type III table:
 
 ```
 effect        F      df      p
@@ -435,23 +482,23 @@ sex
 spp:sex
 ```
 
-✏️ **Q24:** One sentence per term — species, sex, interaction — saying what each result means for **penguins**, not for the model.
+✏️ **Q27:** One sentence per term — species, sex, interaction — saying what each result means for **penguins**, not for the model.
 
-✏️ **Q25:** Which SS type did you report, and why was it the right choice for an unbalanced design?
+✏️ **Q28:** Which SS type did you report, and why was it the right choice for an unbalanced design?
 
-## Section 9 · The final figure
+## Section 10 · The final figure
 
 One publication-quality interaction plot: body mass by species, with sex as separate lines or colors, error bars from the EMMs. Proper axis labels, a real theme, readable sizing — this one is graded on presentation. Build it from `pu_cell_emm`, not from the raw means, and export it with `ggsave()`.
 
 ``` r
-# ---- 9 The final figure ----------------------------------
+# ---- 10 The final figure ---------------------------------
 pub_df <- as.data.frame(pu_cell_emm)
 
 # ... your plot here, then:
 # ggsave("figures/13_penguin_interaction.pdf", width = 7, height = 5)
 ```
 
-✏️ **Q26:** Your figure shows the interaction term as a picture. Are the lines parallel? Say how the figure and the `spp:sex` *p*-value agree.
+✏️ **Q29:** Your figure shows the interaction term as a picture. Are the lines parallel? Say how the figure and the `spp:sex` *p*-value agree.
 
 ------------------------------------------------------------------------
 
@@ -466,7 +513,7 @@ At this point you should be able to:
 -   [ ] Compute estimated marginal means, and explain why they equal raw means only when the design is balanced
 -   [ ] Explain Type I, II, and III sums of squares, and say when they agree and when they do not
 -   [ ] Choose and defend an SS type for an unbalanced design
--   [ ] Follow a significant interaction with simple effects (`emmeans(m, ~ a | b)`, `joint_tests(m, by = "b")`) rather than reporting a main effect
+-   [ ] Report partial η² (and ω²) with `effectsize`, and say what it adds to the *p*-value
 -   [ ] Show an interaction as a figure, and match it to the *p*-value
 
 Run your whole script top to bottom with **Ctrl/Cmd + Shift + Enter**. It must run clean.
