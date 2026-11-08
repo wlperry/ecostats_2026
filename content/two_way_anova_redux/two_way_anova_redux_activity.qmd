@@ -1,0 +1,326 @@
+---
+order: 14
+week: 9
+title: "Activity: Two-Way ANOVA Redux"
+subtitle: "The same machinery on data that fights back"
+description: "Hands-on activity: a second factorial ANOVA on the genuinely unbalanced Sargent & Lodge crayfish growth data — reading Anova(type = 3) and summary() line by line, recovering the coefficients contr.sum does not print, comparing Type I/II/III where they actually differ, and using emmeans four ways to localise an interaction."
+author: "Bill Perry"
+metadata-files:
+  - ../../_templates/activities.yml
+format:
+  html: default
+  docx: default
+---
+
+# In-class Activity 14: Two-Way ANOVA Redux
+
+### Today's Objectives
+
+1.  Measure how unbalanced a design is, and say why proportionality matters
+2.  Read `Anova(model, type = 3)` completely — every row, every df
+3.  Read `summary(model)` line by line, and recover the coefficients `contr.sum` does not print
+4.  Rebuild a cell mean by hand from the coefficients and match `emmeans`
+5.  Compare Type I, II and III on a design where they disagree
+6.  Use `emmeans` four ways: marginal, simple effects both directions, interaction contrast
+7.  Decide whether a failed assumption changes the conclusion
+
+::: callout-tip
+## 📂 Files for today
+
+[📥 Script skeleton (.R)](data/14_two_way_anova_redux.R){.btn .btn-primary download="14_two_way_anova_redux.R"}
+[📥 Crayfish growth data](data/sargent_lodge_crayfish.csv){.btn .btn-primary download="sargent_lodge_crayfish.csv"}
+
+-   Save the skeleton as `scripts/14_two_way_anova_redux.R`.
+-   Save the csv in your project's `data/` folder.
+:::
+
+::: callout-important
+## What you hand in
+
+-   **All of today's code is on this page.** The skeleton has the plumbing — libraries, the data read, and the cell-count block — and nothing else. Every line of statistics you type yourself.
+-   The **Q** boxes are **things to think about**, not inline homework. They are not graded.
+-   The **write-up** at the bottom — section 8 — *is* graded, as `#` comments in the script.
+-   Hand in `scripts/14_two_way_anova_redux.R`. Run it top to bottom first — it must run clean.
+:::
+
+::: callout-note
+## 🔮 Predict before you run
+
+You did this analysis last session on penguins. Before each chunk, say what you expect **to be different this time**. The point of today is noticing which choices stopped being free.
+:::
+
+Keep the plots plain — no labels, colors or themes. The one exception is the final figure in section 8.
+
+------------------------------------------------------------------------
+
+> ## 🧩 Block 1 — The design, and how broken it is *(after lecture Parts 1–2)*
+>
+> Sections 1–2: meet the data, then measure the imbalance.
+
+# Section 1 · The data
+
+*Written for you in the skeleton — run it and read it.*
+
+``` r
+# ---- Libraries -------------------------------------------
+library(car)        # Anova(), leveneTest()
+library(emmeans)    # emmeans(), emmip(), contrast()
+library(effectsize) # eta_squared()
+library(janitor)    # clean_names()
+library(tidyverse)
+```
+
+``` r
+# ---- 1 The data ------------------------------------------
+cray_df <- read_csv("data/sargent_lodge_crayfish.csv") %>%
+  clean_names() %>%
+  mutate(range = factor(range, levels = c("Native", "Invasive")),
+         lake  = factor(lake,  levels = c("Big", "High", "Papoose")))
+
+head(cray_df)
+
+cray_cells <- cray_df %>%
+  group_by(range, lake) %>%
+  summarise(n = n(),
+            mean = mean(growth_per_day),
+            sd   = sd(growth_per_day),
+            .groups = "drop")
+
+cray_cells
+```
+
+`range` (2 levels) × `lake` (3 levels), crossed — a **2 × 3 factorial** with six cells and 84 crayfish.
+
+✏️ **Q1:** Read the `mean` column in pairs within each lake. Where is the Native–Invasive gap large, and where is it gone?
+
+✏️ **Q2:** Now read the `sd` column. Which cell has the smallest spread, which the largest, and roughly what is the ratio?
+
+------------------------------------------------------------------------
+
+# Section 2 · How unbalanced?
+
+*Written for you in the skeleton — this is bookkeeping.*
+
+``` r
+# ---- 2 How unbalanced ------------------------------------
+cray_df %>%
+  count(range, lake) %>%
+  pivot_wider(names_from = lake, values_from = n)
+```
+
+✏️ **Q3:** Every cell is filled, so every term is estimable. But is the design **proportional** — do the cell counts follow the row and column totals? Work out what fraction of the Native crayfish were in Big, and what fraction of the Invasive ones were.
+
+✏️ **Q4:** Last session you *forced* the penguins to be balanced by throwing birds away. Why is that a bad idea here?
+
+------------------------------------------------------------------------
+
+Now look at it before modelling it.
+
+``` r
+ggplot(cray_df, aes(lake, growth_per_day, fill = range)) +
+  geom_boxplot()
+
+ggplot(cray_cells, aes(lake, mean, color = range, group = range)) +
+  geom_line() +
+  geom_point()
+```
+
+✏️ **Q5:** In the second plot, are the lines parallel? Do they cross? Describe in one sentence the *shape* of what you see.
+
+------------------------------------------------------------------------
+
+Before any model, check the design for confounds.
+
+``` r
+cray_df %>%
+  group_by(range) %>%
+  summarise(days = paste(sort(unique(days)), collapse = ", "),
+            mean_temp = mean(avg_temp),
+            n = n())
+```
+
+✏️ **Q6:** `days` and `range` are perfectly confounded. The response is growth *per day*, so what does that fix — and what does it **not** fix? Which of the three ANOVA terms are unaffected by this problem?
+
+------------------------------------------------------------------------
+
+> ## 🧩 Block 2 — Reading the two tables properly *(after lecture Parts 3–4)*
+>
+> Sections 3–5: the ANOVA table, the coefficient table, and the SS types.
+
+# Section 3 · Fit it, and read `Anova(type = 3)`
+
+``` r
+# ---- 3 Fit and test --------------------------------------
+options(contrasts = c("contr.sum", "contr.poly"))
+```
+
+**YOUR CODE:** fit `cray_model` as `lm(growth_per_day ~ range * lake, ...)`, then run `Anova(cray_model, type = 3)`.
+
+✏️ **Q7:** Account for every df in the table. Where do 1, 2, 2 and 78 each come from? (Hint: 84 crayfish, 6 cells.)
+
+✏️ **Q8:** Which row do you read first, and why? What does that do to your reading of the two main-effect rows?
+
+✏️ **Q9:** The `(Intercept)` row has *F* = 4461 and *p* < 0.0001. What null hypothesis is that rejecting, and why does nobody report it?
+
+------------------------------------------------------------------------
+
+# Section 4 · Read `summary()` line by line
+
+**YOUR CODE:** run `summary(cray_model)`.
+
+✏️ **Q10:** The design has six cells and the table has six rows. List the coefficient names you *expected* and did not get. How many are missing?
+
+✏️ **Q11:** Nothing was dropped. What rule is `contr.sum` imposing that makes those rows redundant?
+
+Now recover them.
+
+``` r
+# ---- 4 Recover the missing coefficients ------------------
+```
+
+**YOUR CODE:** pull `b <- coef(cray_model)`, then build a named vector containing the Native effect, the **Invasive** effect, the Big and High effects, and the **Papoose** effect.
+
+✏️ **Q12:** Which lake has the largest effect in absolute size? Was it printed by `summary()`?
+
+✏️ **Q13:** `lake1` and `lake2` are both positive and significant. Explain why "being in a lake raises growth" is the wrong conclusion to draw from that.
+
+------------------------------------------------------------------------
+
+Next, the intercept.
+
+**YOUR CODE:** compare three numbers — `coef(cray_model)[[1]]`, `mean(cray_cells$mean)`, and `mean(cray_df$growth_per_day)`.
+
+✏️ **Q14:** Two of those three are identical. Which two, and what does that tell you the intercept actually is? Why would all three have agreed on the penguins' balanced subsample?
+
+------------------------------------------------------------------------
+
+Now the payoff: rebuild a cell mean from the coefficients.
+
+**YOUR CODE:** compute the fitted mean for **Invasive crayfish in Papoose** using only `b`. Every term is a negative, because Invasive is level 2 of `range` and Papoose is level 3 of `lake`. Then compare it to `emmeans(cray_model, ~ range * lake)` and to the observed cell mean.
+
+✏️ **Q15:** Do all three agree exactly, or just closely? Why does a model with an interaction reproduce the cell means perfectly?
+
+✏️ **Q16:** `summary()` gives `lake` two *t*-tests and `Anova()` gives it one *F*-test. Which would you report to claim "lake matters", and why is the other one not a substitute?
+
+------------------------------------------------------------------------
+
+# Section 5 · Type I, II and III
+
+``` r
+# ---- 5 The three SS types --------------------------------
+```
+
+**YOUR CODE:** run all three on `cray_model` — `anova()` for Type I, `Anova(..., type = 2)`, `Anova(..., type = 3)`. Compare the three *F* values for each of the three terms.
+
+✏️ **Q17:** Which term's *F* changes most between Type I and Type III? By how much?
+
+✏️ **Q18:** The interaction *F* is identical in all three. Why must that always be true?
+
+Now show that Type I depends on typing order.
+
+**YOUR CODE:** fit the model again as `growth_per_day ~ lake * range` and pull `range`'s Type I sum of squares from each of the two fits.
+
+✏️ **Q19:** You got two different sums of squares for the same term from the same data. Which one is "right"?
+
+✏️ **Q20:** Which type would you report here, and what is the one-sentence justification? (Think about whether either factor is *prior* to the other.)
+
+------------------------------------------------------------------------
+
+> ## 🧩 Block 3 — `emmeans` four ways, then assumptions *(after lecture Parts 6–7)*
+>
+> Sections 6–7: unpack the interaction, then decide whether you can trust it.
+
+# Section 6 · `emmeans`, four ways
+
+``` r
+# ---- 6 emmeans, four ways --------------------------------
+```
+
+**Way 1 — marginal means.**
+
+**YOUR CODE:** `emmeans(cray_model, ~ range)`. Then compute the raw mean of `growth_per_day` by `range` with `group_by()` and compare.
+
+✏️ **Q21:** The EMM difference is larger than the raw difference. Which direction is the raw mean biased, and which cells caused it?
+
+✏️ **Q22:** R printed a NOTE above the table. What is it warning you about, and is it right?
+
+**Way 2 — simple effects of `range` within each lake.**
+
+**YOUR CODE:** `pairs(emmeans(cray_model, ~ range | lake))`.
+
+✏️ **Q23:** Write the result of the study in one sentence using these three numbers.
+
+**Way 3 — simple effects of `lake` within each range.**
+
+**YOUR CODE:** `pairs(emmeans(cray_model, ~ lake | range))`.
+
+✏️ **Q24:** Did lake stop mattering for one of the ranges, or does it matter *more* for one? What does that tell you about the shape of the interaction?
+
+✏️ **Q25:** Way 3 shows a Tukey adjustment and Way 2 does not. Why?
+
+**Way 4 — the interaction contrast.**
+
+**YOUR CODE:** `contrast(emmeans(cray_model, ~ range * lake), interaction = c("pairwise", "pairwise"))`.
+
+✏️ **Q26:** These are differences *of* differences. Which lake is responsible for the interaction, and which two lakes behave the same?
+
+✏️ **Q27:** Of the four ways, only one tells you **where in the design** the interaction lives. Which, and why can the `Anova()` table never do that?
+
+Finally, the picture.
+
+``` r
+emmip(cray_model, range ~ lake, CIs = TRUE)
+```
+
+✏️ **Q28:** Where do the confidence bands overlap, and where do they not? Does the figure agree with Way 4?
+
+------------------------------------------------------------------------
+
+# Section 7 · Effect size and assumptions
+
+``` r
+# ---- 7 Effect size and assumptions -----------------------
+```
+
+**YOUR CODE:** `eta_squared(Anova(cray_model, type = 3))`.
+
+✏️ **Q29:** Which term has the largest effect size? Was it the one the study was about? What does that suggest about how to design the *next* experiment?
+
+**YOUR CODE:** check the assumptions — `shapiro.test(residuals(cray_model))`, `leveneTest(growth_per_day ~ range * lake, data = cray_df)`, and a plot of `rstandard()` against `fitted()`.
+
+✏️ **Q30:** Both tests fail. Look at the cell `sd` column from section 1 again — is the spread random, or does it track the cell means?
+
+Now find out whether it matters.
+
+**YOUR CODE:** refit on `log(growth_per_day)`, run `Anova(..., type = 3)` on it, and re-run `shapiro.test` and `leveneTest` on the log model.
+
+✏️ **Q31:** Did the log transform fix the assumptions? Did it change any conclusion?
+
+✏️ **Q32:** You now have two analyses that agree. Which do you report, and what one extra sentence do you owe the reader?
+
+------------------------------------------------------------------------
+
+# Section 8 · Write-up *(graded)*
+
+Put these in your script as `#` comments.
+
+**8a.** A **methods** paragraph: the design, the response, the model, which SS type you used and why, and the transformation. Two or three sentences.
+
+**8b.** A **results** paragraph. It must contain: the interaction before the main effects, the three simple effects from Way 2, the interaction contrast result from Way 4, and one effect size. Do not write a sentence that would be false in Papoose Lake.
+
+**8c.** One sentence disclosing the `days` / temperature confound, as it would appear in the paper.
+
+**8d.** A **publication-quality figure** — build it from `as.data.frame(emmeans(cray_model, ~ range * lake))` with points and error bars, axis labels with units, and a readable legend. This is the one plot you polish.
+
+------------------------------------------------------------------------
+
+### Checkpoint — can you do these now?
+
+-   [ ] Say what *proportional* means and test a design for it
+-   [ ] Account for every df in a factorial `Anova()` table
+-   [ ] Recover a `contr.sum` coefficient R did not print
+-   [ ] Rebuild a cell mean from the coefficient table by hand
+-   [ ] Explain why the interaction *F* is the same in all three SS types
+-   [ ] Choose between Type I, II and III and justify it in one sentence
+-   [ ] Use `emmeans` four ways, and say which one localises an interaction
+-   [ ] Decide whether a failed assumption changed your conclusion

@@ -1,0 +1,2012 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.11.9">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+<meta name="author" content="Bill Perry">
+<meta name="description" content="Random intercept vs.&nbsp;random intercept-and-slope in lme4, and how to change the residual variance-covariance matrix (AR(1), compound symmetry, unstructured, unequal variances) with nlme for repeated-measures and time-series data.">
+
+<title>Mixed Model Structures – UMD Biostatistics</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: 1.5em;}
+div.column{flex: auto;}
+@media screen {
+div.columns{gap: min(4vw, 1.5em);}
+div.column{overflow-x: auto;}
+}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="../../site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="../../site_libs/quarto-nav/headroom.min.js"></script>
+<script src="../../site_libs/clipboard/clipboard.min.js"></script>
+<script src="../../site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="../../site_libs/quarto-search/fuse.min.js"></script>
+<script src="../../site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="../../">
+<link href="../../favicon.png" rel="icon" type="image/png">
+<script src="../../site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="../../site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="../../site_libs/quarto-html/scrollable-regions/scrollable-regions.js" type="module"></script>
+<script src="../../site_libs/quarto-html/popper.min.js"></script>
+<script src="../../site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="../../site_libs/quarto-html/anchor.min.js"></script>
+<link href="../../site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="../../site_libs/quarto-html/quarto-syntax-highlighting-63b5708e65d6cd79cd7618c58d0c21e7.css" rel="stylesheet" class="quarto-color-scheme" id="quarto-text-highlighting-styles">
+<link href="../../site_libs/quarto-html/quarto-syntax-highlighting-dark-447e42e69aaa9833c0ba1b986f430b20.css" rel="stylesheet" class="quarto-color-scheme quarto-color-alternate" id="quarto-text-highlighting-styles">
+<link href="../../site_libs/quarto-html/quarto-syntax-highlighting-63b5708e65d6cd79cd7618c58d0c21e7.css" rel="stylesheet" class="quarto-color-scheme-extra" id="quarto-text-highlighting-styles">
+<script src="../../site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="../../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="../../site_libs/bootstrap/bootstrap-3431743946fbc76bd96a63f3170e626e.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme" id="quarto-bootstrap" data-mode="light">
+<link href="../../site_libs/bootstrap/bootstrap-dark-327ae6616030957aa12bd5e853eb97c0.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme quarto-color-alternate" id="quarto-bootstrap" data-mode="dark">
+<link href="../../site_libs/bootstrap/bootstrap-3431743946fbc76bd96a63f3170e626e.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme-extra" id="quarto-bootstrap" data-mode="light">
+<script id="quarto-search-options" type="application/json">{
+  "location": "sidebar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "start",
+  "type": "textbox",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+
+  <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
+  <script defer="" src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-chtml.js" type="text/javascript"></script>
+
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN" && texText && texText.data) {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
+
+<link rel="stylesheet" href="../../css/main.css">
+<meta property="og:title" content="Mixed Model Structures – UMD Biostatistics">
+<meta property="og:description" content="Random intercept vs.&nbsp;random intercept-and-slope in lme4, and how to change the residual variance-covariance matrix (AR(1), compound symmetry, unstructured, unequal variances) with nlme for repeated-measures and time-series data.">
+<meta property="og:image" content="https://wlperry.github.io/ecostats_2026/vignettes/22_mixed_models_vignette/mixed_model_structures_files/figure-html/fig-parallel-1.png">
+<meta property="og:site_name" content="UMD Biostatistics">
+<meta property="og:image:alt" content="Reaction time against days of sleep deprivation for eighteen subjects, with the random-intercept model's fitted lines drawn for each subject. All eighteen lines are parallel and differ only in height.">
+<meta property="og:image:height" content="652">
+<meta property="og:image:width" content="960">
+</head>
+
+<body class="nav-sidebar docked quarto-light"><a id="quarto-skip-link" class="visually-hidden-focusable" href="#quarto-document-content">Skip to main content</a><script id="quarto-html-before-body" type="application/javascript">
+    const toggleBodyColorMode = (bsSheetEl) => {
+      const mode = bsSheetEl.getAttribute("data-mode");
+      const bodyEl = window.document.querySelector("body");
+      if (mode === "dark") {
+        bodyEl.classList.add("quarto-dark");
+        bodyEl.classList.remove("quarto-light");
+      } else {
+        bodyEl.classList.add("quarto-light");
+        bodyEl.classList.remove("quarto-dark");
+      }
+    }
+    const toggleBodyColorPrimary = () => {
+      const bsSheetEl = window.document.querySelector("link#quarto-bootstrap:not([rel=disabled-stylesheet])");
+      if (bsSheetEl) {
+        toggleBodyColorMode(bsSheetEl);
+      }
+    }
+    const setColorSchemeToggle = (alternate) => {
+      const toggles = window.document.querySelectorAll('.quarto-color-scheme-toggle');
+      for (let i=0; i < toggles.length; i++) {
+        const toggle = toggles[i];
+        if (toggle) {
+          toggle.setAttribute("aria-checked", alternate ? "true" : "false");
+          if (alternate) {
+            toggle.classList.add("alternate");
+          } else {
+            toggle.classList.remove("alternate");
+          }
+        }
+      }
+    };
+    const toggleColorMode = (alternate) => {
+      // Switch the stylesheets
+      const primaryStylesheets = window.document.querySelectorAll('link.quarto-color-scheme:not(.quarto-color-alternate)');
+      const alternateStylesheets = window.document.querySelectorAll('link.quarto-color-scheme.quarto-color-alternate');
+      manageTransitions('#quarto-margin-sidebar .nav-link', false);
+      if (alternate) {
+        // note: dark is layered on light, we don't disable primary!
+        enableStylesheet(alternateStylesheets);
+        for (const sheetNode of alternateStylesheets) {
+          if (sheetNode.id === "quarto-bootstrap") {
+            toggleBodyColorMode(sheetNode);
+          }
+        }
+      } else {
+        disableStylesheet(alternateStylesheets);
+        enableStylesheet(primaryStylesheets)
+        toggleBodyColorPrimary();
+      }
+      manageTransitions('#quarto-margin-sidebar .nav-link', true);
+      // Switch the toggles
+      setColorSchemeToggle(alternate)
+    }
+    // Hack to workaround the fact that safari doesn't
+    // properly recolor the scrollbar when toggling (#1455).
+    // Not run on load: stylesheets are set before first paint there, and
+    // scrolling would undo the scroll to a URL fragment (#14973).
+    // The one pixel nudge keeps the reader where they were.
+    const refreshSafariScrollbar = () => {
+      if (navigator.userAgent.indexOf('Safari') > 0 && navigator.userAgent.indexOf('Chrome') == -1) {
+        manageTransitions("body", false);
+        const scrollY = window.scrollY;
+        window.scrollTo(0, scrollY > 0 ? scrollY - 1 : 1);
+        setTimeout(() => {
+          window.scrollTo(0, scrollY);
+          manageTransitions("body", true);
+        }, 40);
+      }
+    }
+    const disableStylesheet = (stylesheets) => {
+      for (let i=0; i < stylesheets.length; i++) {
+        const stylesheet = stylesheets[i];
+        stylesheet.rel = 'disabled-stylesheet';
+      }
+    }
+    const enableStylesheet = (stylesheets) => {
+      for (let i=0; i < stylesheets.length; i++) {
+        const stylesheet = stylesheets[i];
+        if(stylesheet.rel !== 'stylesheet') { // for Chrome, which will still FOUC without this check
+          stylesheet.rel = 'stylesheet';
+        }
+      }
+    }
+    const manageTransitions = (selector, allowTransitions) => {
+      const els = window.document.querySelectorAll(selector);
+      for (let i=0; i < els.length; i++) {
+        const el = els[i];
+        if (allowTransitions) {
+          el.classList.remove('notransition');
+        } else {
+          el.classList.add('notransition');
+        }
+      }
+    }
+    const isFileUrl = () => {
+      return window.location.protocol === 'file:';
+    }
+    const hasAlternateSentinel = () => {
+      let styleSentinel = getColorSchemeSentinel();
+      if (styleSentinel !== null) {
+        return styleSentinel === "alternate";
+      } else {
+        return false;
+      }
+    }
+    const setStyleSentinel = (alternate) => {
+      const value = alternate ? "alternate" : "default";
+      if (!isFileUrl()) {
+        window.localStorage.setItem("quarto-color-scheme", value);
+      } else {
+        localAlternateSentinel = value;
+      }
+    }
+    const getColorSchemeSentinel = () => {
+      if (!isFileUrl()) {
+        const storageValue = window.localStorage.getItem("quarto-color-scheme");
+        return storageValue != null ? storageValue : localAlternateSentinel;
+      } else {
+        return localAlternateSentinel;
+      }
+    }
+    const toggleGiscusIfUsed = (isAlternate, darkModeDefault) => {
+      const baseTheme = document.querySelector('#giscus-base-theme')?.value ?? 'light';
+      const alternateTheme = document.querySelector('#giscus-alt-theme')?.value ?? 'dark';
+      let newTheme = '';
+      if(authorPrefersDark) {
+        newTheme = isAlternate ? baseTheme : alternateTheme;
+      } else {
+        newTheme = isAlternate ? alternateTheme : baseTheme;
+      }
+      const changeGiscusTheme = () => {
+        // From: https://github.com/giscus/giscus/issues/336
+        const sendMessage = (message) => {
+          const iframe = document.querySelector('iframe.giscus-frame');
+          if (!iframe) return;
+          iframe.contentWindow.postMessage({ giscus: message }, 'https://giscus.app');
+        }
+        sendMessage({
+          setConfig: {
+            theme: newTheme
+          }
+        });
+      }
+      const isGiscussLoaded = window.document.querySelector('iframe.giscus-frame') !== null;
+      if (isGiscussLoaded) {
+        changeGiscusTheme();
+      }
+    };
+    const authorPrefersDark = false;
+    const darkModeDefault = authorPrefersDark;
+      document.querySelector('link#quarto-text-highlighting-styles.quarto-color-scheme-extra').rel = 'disabled-stylesheet';
+      document.querySelector('link#quarto-bootstrap.quarto-color-scheme-extra').rel = 'disabled-stylesheet';
+    let localAlternateSentinel = darkModeDefault ? 'alternate' : 'default';
+    // Dark / light mode switch
+    window.quartoToggleColorScheme = () => {
+      // Read the current dark / light value
+      let toAlternate = !hasAlternateSentinel();
+      toggleColorMode(toAlternate);
+      refreshSafariScrollbar();
+      setStyleSentinel(toAlternate);
+      toggleGiscusIfUsed(toAlternate, darkModeDefault);
+      window.dispatchEvent(new Event('resize'));
+    };
+    // Switch to dark mode if need be
+    if (hasAlternateSentinel()) {
+      toggleColorMode(true);
+    } else {
+      toggleColorMode(false);
+    }
+  </script>
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+  <nav class="quarto-secondary-nav" aria-label="Toolbar">
+    <div class="container-fluid d-flex">
+      <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+        <i class="bi bi-layout-text-sidebar-reverse"></i>
+      </button>
+        <nav class="quarto-page-breadcrumbs" aria-label="Breadcrumbs"><ol class="breadcrumb"><li class="breadcrumb-item">Mixed Model Structures</li></ol></nav>
+        <a class="flex-grow-1" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
+        </a>
+      <button type="button" class="btn quarto-search-button" aria-label="Search" onclick="window.quartoOpenSearch();">
+        <i class="bi bi-search"></i>
+      </button>
+    </div>
+  </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article">
+<!-- sidebar -->
+  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation docked overflow-auto" aria-label="Site">
+    <div class="pt-lg-2 mt-2 text-left sidebar-header">
+      <a href="../../index.html" class="sidebar-logo-link">
+      <img src="../../images/course-hex.png" alt="" class="sidebar-logo light-content py-0 d-lg-inline d-none">
+      <img src="../../images/course-hex.png" alt="" class="sidebar-logo dark-content py-0 d-lg-inline d-none">
+      </a>
+      <div class="sidebar-tools-main">
+  <button type="button" role="switch" aria-checked="false" class="quarto-color-scheme-toggle quarto-navigation-tool  px-1" onclick="window.quartoToggleColorScheme(); return false;" title="Toggle dark mode" aria-label="Toggle dark mode"><i class="bi"></i></button>
+</div>
+      </div>
+        <div class="mt-2 flex-shrink-0 align-items-center">
+        <div class="sidebar-search">
+        <div id="quarto-search" class="" title="Search"></div>
+        </div>
+        </div>
+    <div class="sidebar-menu-container"> 
+    <ul class="list-unstyled mt-1">
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="https://wlperry.github.io/index.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">← Back to Homepage</span></a>
+  </div>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <button type="button" class="sidebar-item-text sidebar-item-toggle sidebar-link text-start collapsed" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" aria-controls="quarto-sidebar-section-1" aria-expanded="false">
+ <span class="menu-text" id="quarto-sidebar-section-1-label">Course Information</span><i class="bi bi-chevron-right" aria-hidden="true"></i></button>
+      </div>
+      <ul id="quarto-sidebar-section-1" aria-labelledby="quarto-sidebar-section-1-label" class="collapse list-unstyled sidebar-section depth1 ">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../../index.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Schedule</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../../syllabus.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Syllabus</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../../overview.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Overview</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../../links.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Helpful Links</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <button type="button" class="sidebar-item-text sidebar-item-toggle sidebar-link text-start collapsed" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" aria-controls="quarto-sidebar-section-2" aria-expanded="false">
+ <span class="menu-text" id="quarto-sidebar-section-2-label">Course Materials</span><i class="bi bi-chevron-right" aria-hidden="true"></i></button>
+      </div>
+      <ul id="quarto-sidebar-section-2" aria-labelledby="quarto-sidebar-section-2-label" class="collapse list-unstyled sidebar-section depth1 ">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../../lectures.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Lectures</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../../activities.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Activities</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../../homeworks/index.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Homework</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../../vignettes/index.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Vignettes</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+    </ul>
+    </div>
+</nav>
+<div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+    <div class="quarto-alternate-formats"><h2>Other Formats</h2><ul><li><a href="mixed_model_structures.docx"><i class="bi bi-file-word"></i>MS Word</a></li></ul></div></div>
+<!-- main -->
+<main class="content" id="quarto-document-content" tabindex="-1">
+
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">Mixed Model Structures</h1>
+<p class="subtitle lead">Random slopes and variance-covariance structures</p>
+</div>
+
+<div>
+  <div class="description">
+    Random intercept vs.&nbsp;random intercept-and-slope in lme4, and how to change the residual variance-covariance matrix (AR(1), compound symmetry, unstructured, unequal variances) with nlme for repeated-measures and time-series data.
+  </div>
+</div>
+
+
+<div class="quarto-title-meta">
+
+    <div>
+    <div class="quarto-title-meta-heading">Author</div>
+    <div class="quarto-title-meta-contents">
+             <p>Bill Perry </p>
+          </div>
+  </div>
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<p><a href="mixed_model_structures.R" class="btn btn-primary" download="mixed_model_structures.R">📥 Download the R script</a></p>
+<section id="why-this-page-exists" class="level1">
+<h1>Why This Page Exists</h1>
+<p>The linear mixed models lecture fits exactly one random effect — <code>(1 | patch)</code>, a <strong>random intercept</strong>. That is the right place to start, and it covers most nested designs. But two questions come up the moment you have data collected <strong>over time</strong> or <strong>along a gradient</strong>:</p>
+<ol type="1">
+<li>What if the <em>relationship</em> differs from group to group, not just the baseline? → a <strong>random slope</strong>.</li>
+<li>What if observations close together in time are more alike than observations far apart? → a <strong>residual correlation structure</strong>.</li>
+</ol>
+<p>This page answers both, with runnable code. It is a reference, not a lecture — read the section you need.</p>
+<div class="callout callout-style-default callout-important callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Important</span>The two halves of a mixed model
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Every mixed model specifies <strong>two</strong> variance-covariance matrices, and people routinely confuse them:</p>
+<p><span class="math display">\[\mathbf{V} = \underbrace{\mathbf{Z}\,\mathbf{G}\,\mathbf{Z}^\top}_{\text{random effects}} \;+\; \underbrace{\mathbf{R}}_{\text{residuals}}\]</span></p>
+<ul>
+<li><span class="math inline">\(\mathbf{G}\)</span> — the variance-covariance of the <strong>random effects</strong>. This is what <code>(1 | g)</code> vs.&nbsp;<code>(1 + x | g)</code> changes.</li>
+<li><span class="math inline">\(\mathbf{R}\)</span> — the variance-covariance of the <strong>residuals</strong>. By default <span class="math inline">\(\mathbf{R} = \sigma^2\mathbf{I}\)</span>: equal variances, zero correlation. This is what <code>correlation =</code> and <code>weights =</code> change.</li>
+</ul>
+<p><strong><code>lme4</code> can only change <span class="math inline">\(\mathbf{G}\)</span>.</strong> To change <span class="math inline">\(\mathbf{R}\)</span> you need <code>nlme</code> or <code>glmmTMB</code>. That single fact explains most of this page.</p>
+</div>
+</div>
+<section id="setup" class="level2">
+<h2 class="anchored" data-anchor-id="setup">Setup</h2>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(lme4)</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(lmerTest)   <span class="co"># Satterthwaite / Kenward-Roger df for lmer</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(nlme)       <span class="co"># residual correlation and variance structures</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tidyverse)</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="fu">options</span>(<span class="at">contrasts =</span> <span class="fu">c</span>(<span class="st">"contr.sum"</span>, <span class="st">"contr.poly"</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div class="callout callout-style-default callout-warning callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Warning</span>Load order matters
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><code>nlme</code> and <code>lme4</code> both define <code>lmer</code>-adjacent generics, and both export a function called <code>lmList</code>. Loading <strong><code>nlme</code> after <code>lme4</code></strong> (as above) is the order that works for this page: <code>lmer()</code> still comes from <code>lme4</code>, and <code>lme()</code>, <code>gls()</code>, <code>corAR1()</code> come from <code>nlme</code>. If anything behaves oddly, call functions explicitly — <code>lme4::lmer()</code>, <code>nlme::lme()</code>.</p>
+</div>
+</div>
+</section>
+</section>
+<section id="part-1-random-intercept-only" class="level1">
+<h1>Part 1 · Random Intercept Only</h1>
+<p>We will use <code>sleepstudy</code>, which ships with <code>lme4</code>: the average reaction time of 18 subjects on each of 10 nights of restricted sleep. Eighteen groups, ten observations each, perfectly balanced.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="fu">data</span>(sleepstudy)</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="fu">head</span>(sleepstudy, <span class="dv">4</span>)</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="do">##   Reaction Days Subject</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="do">## 1 249.5600    0     308</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="do">## 2 258.7047    1     308</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="do">## 3 250.8006    2     308</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="do">## 4 321.4398    3     308</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>A random intercept says: <strong>every subject has their own baseline reaction time, but sleep deprivation costs everybody the same amount per night.</strong></p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>m_int <span class="ot">&lt;-</span> <span class="fu">lmer</span>(Reaction <span class="sc">~</span> Days <span class="sc">+</span> (<span class="dv">1</span> <span class="sc">|</span> Subject), <span class="at">data =</span> sleepstudy)</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="fu">VarCorr</span>(m_int)</span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="do">##  Groups   Name        Std.Dev.</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="do">##  Subject  (Intercept) 37.124  </span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a><span class="do">##  Residual             30.991</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a><span class="fu">fixef</span>(m_int)</span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a><span class="do">## (Intercept)        Days </span></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a><span class="do">##   251.40510    10.46729</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p><span class="math display">\[\text{Reaction}_{ij} = \beta_0 + \beta_1 \text{Days}_{ij} + b_{0i} + \epsilon_{ij},
+\qquad b_{0i} \sim N(0, \sigma^2_{\text{int}})\]</span></p>
+<p>One extra variance, 37.1², is all the random effect costs. Read the fit as <strong>18 parallel lines</strong> — different heights, identical slope of 10.47 ms per night.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>sleepstudy<span class="sc">$</span>fit_int <span class="ot">&lt;-</span> <span class="fu">fitted</span>(m_int)</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(sleepstudy, <span class="fu">aes</span>(Days, Reaction, <span class="at">group =</span> Subject)) <span class="sc">+</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>(<span class="at">alpha =</span> <span class="fl">0.3</span>, <span class="at">size =</span> <span class="dv">1</span>) <span class="sc">+</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_line</span>(<span class="fu">aes</span>(<span class="at">y =</span> fit_int), <span class="at">alpha =</span> <span class="fl">0.7</span>, <span class="at">color =</span> <span class="st">"steelblue"</span>) <span class="sc">+</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Days of sleep deprivation"</span>, <span class="at">y =</span> <span class="st">"Reaction time (ms)"</span>,</span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>       <span class="at">title =</span> <span class="st">"(1 | Subject): parallel lines"</span>) <span class="sc">+</span></span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>(<span class="at">base_size =</span> <span class="dv">10</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div id="fig-parallel" class="quarto-float quarto-figure quarto-figure-center anchored" alt="Reaction time against days of sleep deprivation for eighteen subjects, with the random-intercept model's fitted lines drawn for each subject. All eighteen lines are parallel and differ only in height." width="480">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-parallel-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="mixed_model_structures_files/figure-html/fig-parallel-1.png" id="fig-parallel" class="img-fluid figure-img" alt="Reaction time against days of sleep deprivation for eighteen subjects, with the random-intercept model's fitted lines drawn for each subject. All eighteen lines are parallel and differ only in height." width="480">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig quarto-uncaptioned" id="fig-parallel-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;1
+</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>When a random intercept is enough
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<ul>
+<li>The groups are <strong>nesting units</strong>, not things you measured a slope in — patches, tanks, litters, plots.</li>
+<li>You have one predictor level per group (every quadrat in a patch got the same treatment), so there is <strong>no within-group slope to estimate</strong>. This is the sea urchin case: <code>treat</code> does not vary inside a patch, so <code>(1 + treat | patch)</code> is not even estimable.</li>
+</ul>
+</div>
+</div>
+</section>
+<section id="part-2-random-intercept-and-random-slope" class="level1">
+<h1>Part 2 · Random Intercept <strong>and</strong> Random Slope</h1>
+<p>Now allow each subject their own <em>response</em> to sleep loss:</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>m_slope <span class="ot">&lt;-</span> <span class="fu">lmer</span>(Reaction <span class="sc">~</span> Days <span class="sc">+</span> (<span class="dv">1</span> <span class="sc">+</span> Days <span class="sc">|</span> Subject), <span class="at">data =</span> sleepstudy)</span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="fu">VarCorr</span>(m_slope)</span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a><span class="do">##  Groups   Name        Std.Dev. Corr  </span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a><span class="do">##  Subject  (Intercept) 24.7407        </span></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a><span class="do">##           Days         5.9221  0.066 </span></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a><span class="do">##  Residual             25.5918</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p><span class="math display">\[\text{Reaction}_{ij} = \beta_0 + \beta_1 \text{Days}_{ij} + b_{0i} + b_{1i}\text{Days}_{ij} + \epsilon_{ij}\]</span></p>
+<p><span class="math display">\[\begin{pmatrix} b_{0i} \\ b_{1i} \end{pmatrix} \sim
+N\!\left( \begin{pmatrix} 0 \\ 0 \end{pmatrix},\;
+\mathbf{G} = \begin{pmatrix} \sigma^2_{\text{int}} &amp; \rho\,\sigma_{\text{int}}\sigma_{\text{slope}} \\
+\rho\,\sigma_{\text{int}}\sigma_{\text{slope}} &amp; \sigma^2_{\text{slope}} \end{pmatrix} \right)\]</span></p>
+<p><code>VarCorr()</code> now prints <strong>three</strong> numbers, not one: an intercept SD, a slope SD, and the <strong>correlation between them</strong>. That correlation is the off-diagonal of <span class="math inline">\(\mathbf{G}\)</span> — it asks <em>do subjects who start slow also deteriorate fastest?</em></p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="fu">head</span>(<span class="fu">coef</span>(m_slope)<span class="sc">$</span>Subject, <span class="dv">5</span>)   <span class="co"># each subject's own intercept and slope</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="do">##     (Intercept)      Days</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a><span class="do">## 308    253.6637 19.666262</span></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a><span class="do">## 309    211.0064  1.847605</span></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a><span class="do">## 310    212.4447  5.018429</span></span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a><span class="do">## 330    275.0957  5.652936</span></span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a><span class="do">## 331    273.6654  7.397374</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>sleepstudy<span class="sc">$</span>fit_slope <span class="ot">&lt;-</span> <span class="fu">fitted</span>(m_slope)</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(sleepstudy, <span class="fu">aes</span>(Days, Reaction, <span class="at">group =</span> Subject)) <span class="sc">+</span></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>(<span class="at">alpha =</span> <span class="fl">0.3</span>, <span class="at">size =</span> <span class="dv">1</span>) <span class="sc">+</span></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_line</span>(<span class="fu">aes</span>(<span class="at">y =</span> fit_slope), <span class="at">alpha =</span> <span class="fl">0.7</span>, <span class="at">color =</span> <span class="st">"firebrick"</span>) <span class="sc">+</span></span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Days of sleep deprivation"</span>, <span class="at">y =</span> <span class="st">"Reaction time (ms)"</span>,</span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>       <span class="at">title =</span> <span class="st">"(1 + Days | Subject): lines fan out"</span>) <span class="sc">+</span></span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>(<span class="at">base_size =</span> <span class="dv">10</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div id="fig-slopes" class="quarto-float quarto-figure quarto-figure-center anchored" alt="Reaction time against days of sleep deprivation for eighteen subjects with the random-slope model's fitted lines. The lines now fan out, differing in steepness as well as height, with one subject nearly flat and another rising steeply." width="480">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-slopes-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="mixed_model_structures_files/figure-html/fig-slopes-1.png" id="fig-slopes" class="img-fluid figure-img" alt="Reaction time against days of sleep deprivation for eighteen subjects with the random-slope model's fitted lines. The lines now fan out, differing in steepness as well as height, with one subject nearly flat and another rising steeply." width="480">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig quarto-uncaptioned" id="fig-slopes-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;2
+</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<div class="callout callout-style-default callout-tip callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Tip</span>Reading the formula, every time
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><span class="math display">\[(\ \text{what varies}\ \mid\ \text{across what}\ )\]</span></p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Formula</th>
+<th><span class="math inline">\(\mathbf{G}\)</span> is</th>
+<th>Parameters in <span class="math inline">\(\mathbf{G}\)</span></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>(1 \| g)</code></td>
+<td>1 × 1</td>
+<td>1 variance</td>
+</tr>
+<tr class="even">
+<td><code>(1 + x \| g)</code></td>
+<td>2 × 2, correlated</td>
+<td>2 variances + 1 correlation = <strong>3</strong></td>
+</tr>
+<tr class="odd">
+<td><code>(1 + x + z \| g)</code></td>
+<td>3 × 3</td>
+<td>3 variances + 3 correlations = <strong>6</strong></td>
+</tr>
+<tr class="even">
+<td><code>(0 + x \| g)</code></td>
+<td>1 × 1</td>
+<td>1 variance (slope only, shared intercept)</td>
+</tr>
+</tbody>
+</table>
+<p><code>1 + x</code> is the default, so <code>(x \| g)</code> and <code>(1 + x \| g)</code> are the <strong>same model</strong>. Write the <code>1</code> anyway — it is what reminds you the intercept is in there.</p>
+</div>
+</div>
+<div class="callout callout-style-default callout-warning callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Warning</span>Random slopes get expensive fast
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>A random slope for every predictor is a <span class="math inline">\(k \times k\)</span> matrix with <span class="math inline">\(k(k+1)/2\)</span> parameters. Three random slopes plus an intercept is <strong>10</strong> variance parameters estimated from however many groups you have. This is the single most common cause of <code>boundary (singular) fit</code> — the model is asking the data for more than it contains. Keep the random-effects structure as simple as the design allows.</p>
+</div>
+</div>
+</section>
+<section id="part-3-correlated-vs.-uncorrelated-slopes" class="level1">
+<h1>Part 3 · Correlated vs.&nbsp;Uncorrelated Slopes</h1>
+<p>By default <code>lme4</code> estimates the intercept-slope correlation. You can forbid it, which saves a parameter:</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>m_corr   <span class="ot">&lt;-</span> <span class="fu">lmer</span>(Reaction <span class="sc">~</span> Days <span class="sc">+</span> (<span class="dv">1</span> <span class="sc">+</span> Days <span class="sc">|</span> Subject), sleepstudy)</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>m_uncorr <span class="ot">&lt;-</span> <span class="fu">lmer</span>(Reaction <span class="sc">~</span> Days <span class="sc">+</span> (<span class="dv">1</span> <span class="sc">|</span> Subject) <span class="sc">+</span> (<span class="dv">0</span> <span class="sc">+</span> Days <span class="sc">|</span> Subject),</span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>                 sleepstudy)</span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>m_dbar   <span class="ot">&lt;-</span> <span class="fu">lmer</span>(Reaction <span class="sc">~</span> Days <span class="sc">+</span> (Days <span class="sc">||</span> Subject), sleepstudy)</span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a><span class="fu">VarCorr</span>(m_corr)</span>
+<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a><span class="do">##  Groups   Name        Std.Dev. Corr  </span></span>
+<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a><span class="do">##  Subject  (Intercept) 24.7407        </span></span>
+<span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a><span class="do">##           Days         5.9221  0.066 </span></span>
+<span id="cb8-12"><a href="#cb8-12" aria-hidden="true" tabindex="-1"></a><span class="do">##  Residual             25.5918</span></span>
+<span id="cb8-13"><a href="#cb8-13" aria-hidden="true" tabindex="-1"></a><span class="fu">VarCorr</span>(m_uncorr)</span>
+<span id="cb8-14"><a href="#cb8-14" aria-hidden="true" tabindex="-1"></a><span class="do">##  Groups    Name        Std.Dev.</span></span>
+<span id="cb8-15"><a href="#cb8-15" aria-hidden="true" tabindex="-1"></a><span class="do">##  Subject   (Intercept) 25.0513 </span></span>
+<span id="cb8-16"><a href="#cb8-16" aria-hidden="true" tabindex="-1"></a><span class="do">##  Subject.1 Days         5.9882 </span></span>
+<span id="cb8-17"><a href="#cb8-17" aria-hidden="true" tabindex="-1"></a><span class="do">##  Residual              25.5653</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p><code>m_uncorr</code> and <code>m_dbar</code> are the same model — <code>||</code> is shorthand for splitting the term. Here the estimated correlation is tiny, so dropping it changes almost nothing and buys back a df.</p>
+<div class="callout callout-style-default callout-warning callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Warning</span><code>||</code> does not do what you expect with a <strong>factor</strong>
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><code>(f \|\| g)</code> does <strong>not</strong> decorrelate the levels of a factor <code>f</code> — it expands <code>f</code> into one term, not one per level. For a factor you need <code>afex::mixed</code>’s <code>expand_re = TRUE</code>, or <code>(1 \| g) + (0 + dummy(f, "b") \| g)</code> written out by hand. With a <strong>numeric</strong> predictor, as here, <code>||</code> works exactly as advertised.</p>
+</div>
+</div>
+</section>
+<section id="part-4-choosing-between-them" class="level1">
+<h1>Part 4 · Choosing Between Them</h1>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="co"># RANDOM effects: compare with REML, which is the default.</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="co"># refit = FALSE stops anova() from silently refitting with ML.</span></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a><span class="fu">anova</span>(m_int, m_uncorr, m_corr, <span class="at">refit =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a><span class="do">## Data: sleepstudy</span></span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a><span class="do">## Models:</span></span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a><span class="do">## m_int: Reaction ~ Days + (1 | Subject)</span></span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a><span class="do">## m_uncorr: Reaction ~ Days + (1 | Subject) + (0 + Days | Subject)</span></span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a><span class="do">## m_corr: Reaction ~ Days + (1 + Days | Subject)</span></span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a><span class="do">##          npar    AIC    BIC  logLik -2*log(L)  Chisq Df Pr(&gt;Chisq)    </span></span>
+<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a><span class="do">## m_int       4 1794.5 1807.2 -893.23    1786.5                         </span></span>
+<span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a><span class="do">## m_uncorr    5 1753.7 1769.6 -871.83    1743.7 42.796  1  6.076e-11 ***</span></span>
+<span id="cb9-12"><a href="#cb9-12" aria-hidden="true" tabindex="-1"></a><span class="do">## m_corr      6 1755.6 1774.8 -871.81    1743.6  0.041  1     0.8395    </span></span>
+<span id="cb9-13"><a href="#cb9-13" aria-hidden="true" tabindex="-1"></a><span class="do">## ---</span></span>
+<span id="cb9-14"><a href="#cb9-14" aria-hidden="true" tabindex="-1"></a><span class="do">## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>The jump from <code>m_int</code> to <code>m_uncorr</code> is enormous — the random slope is real. The further jump to <code>m_corr</code> is worth nothing, so the intercept–slope correlation is not supported here.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="co"># FIXED effects: refit with ML first. REML likelihoods from models with</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="co"># different fixed effects are NOT comparable.</span></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>m0 <span class="ot">&lt;-</span> <span class="fu">lmer</span>(Reaction <span class="sc">~</span> <span class="dv">1</span>    <span class="sc">+</span> (<span class="dv">1</span> <span class="sc">+</span> Days <span class="sc">|</span> Subject), sleepstudy, <span class="at">REML =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>m1 <span class="ot">&lt;-</span> <span class="fu">lmer</span>(Reaction <span class="sc">~</span> Days <span class="sc">+</span> (<span class="dv">1</span> <span class="sc">+</span> Days <span class="sc">|</span> Subject), sleepstudy, <span class="at">REML =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a><span class="fu">anova</span>(m0, m1)</span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a><span class="do">## Data: sleepstudy</span></span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a><span class="do">## Models:</span></span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a><span class="do">## m0: Reaction ~ 1 + (1 + Days | Subject)</span></span>
+<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a><span class="do">## m1: Reaction ~ Days + (1 + Days | Subject)</span></span>
+<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a><span class="do">##    npar    AIC    BIC  logLik -2*log(L)  Chisq Df Pr(&gt;Chisq)    </span></span>
+<span id="cb10-11"><a href="#cb10-11" aria-hidden="true" tabindex="-1"></a><span class="do">## m0    5 1785.5 1801.4 -887.74    1775.5                         </span></span>
+<span id="cb10-12"><a href="#cb10-12" aria-hidden="true" tabindex="-1"></a><span class="do">## m1    6 1763.9 1783.1 -875.97    1751.9 23.537  1  1.226e-06 ***</span></span>
+<span id="cb10-13"><a href="#cb10-13" aria-hidden="true" tabindex="-1"></a><span class="do">## ---</span></span>
+<span id="cb10-14"><a href="#cb10-14" aria-hidden="true" tabindex="-1"></a><span class="do">## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</span></span>
+<span id="cb10-15"><a href="#cb10-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-16"><a href="#cb10-16" aria-hidden="true" tabindex="-1"></a><span class="co"># or, better for a small sample, the F-test with adjusted denominator df</span></span>
+<span id="cb10-17"><a href="#cb10-17" aria-hidden="true" tabindex="-1"></a><span class="fu">anova</span>(m_slope)</span>
+<span id="cb10-18"><a href="#cb10-18" aria-hidden="true" tabindex="-1"></a><span class="do">## Type III Analysis of Variance Table with Satterthwaite's method</span></span>
+<span id="cb10-19"><a href="#cb10-19" aria-hidden="true" tabindex="-1"></a><span class="do">##      Sum Sq Mean Sq NumDF DenDF F value    Pr(&gt;F)    </span></span>
+<span id="cb10-20"><a href="#cb10-20" aria-hidden="true" tabindex="-1"></a><span class="do">## Days  30031   30031     1    17  45.853 3.264e-06 ***</span></span>
+<span id="cb10-21"><a href="#cb10-21" aria-hidden="true" tabindex="-1"></a><span class="do">## ---</span></span>
+<span id="cb10-22"><a href="#cb10-22" aria-hidden="true" tabindex="-1"></a><span class="do">## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div class="callout callout-style-default callout-important callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Important</span>Three rules for comparing mixed models
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<ol type="1">
+<li><strong>Different random effects, same fixed effects</strong> → compare with <strong>REML</strong> (<code>refit = FALSE</code>).</li>
+<li><strong>Different fixed effects</strong> → compare with <strong>ML</strong> (<code>REML = FALSE</code>), or better, don’t do an LRT at all — use the Kenward-Roger or Satterthwaite <em>F</em>-test.</li>
+<li>The LRT <em>p</em>-value for dropping a <strong>variance</strong> is <strong>conservative</strong>. The null sits on the boundary (σ² = 0), so the test statistic is not really χ²₁ — it is a 50:50 mixture of χ²₀ and χ²₁. Halve the <em>p</em>-value, or use <code>RLRsim::exactRLRT()</code>, if you are near the line.</li>
+</ol>
+</div>
+</div>
+<div class="callout callout-style-default callout-tip callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Tip</span>Keep it maximal, but keep it fitting
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>The common advice (Barr et al.&nbsp;2013) is to include a random slope for <strong>every predictor that varies within a group</strong> — the “maximal” model — because omitting one inflates Type I error for that fixed effect. The counter-argument (Bates et al.&nbsp;2015) is that maximal models often do not converge and cost power. A workable compromise: start maximal, and if you get a singular fit, drop correlations first (<code>||</code>), then the least-supported slope, and <strong>report what you dropped and why</strong>.</p>
+</div>
+</div>
+</section>
+<section id="part-5-changing-the-residual-matrix-why-you-need-nlme" class="level1">
+<h1>Part 5 · Changing the Residual Matrix — Why You Need <code>nlme</code></h1>
+<p>Everything so far changed <span class="math inline">\(\mathbf{G}\)</span>. Now for <span class="math inline">\(\mathbf{R}\)</span>.</p>
+<p><code>lmer()</code> hard-codes <span class="math inline">\(\mathbf{R} = \sigma^2\mathbf{I}\)</span>: every residual has the same variance and no two residuals are correlated. For repeated measures that is often wrong on <strong>both</strong> counts. <code>nlme::lme()</code> lets you set <span class="math inline">\(\mathbf{R}\)</span> with two arguments:</p>
+<ul>
+<li><code>correlation =</code> — the <strong>correlation</strong> part of <span class="math inline">\(\mathbf{R}\)</span></li>
+<li><code>weights =</code> — the <strong>variance</strong> part of <span class="math inline">\(\mathbf{R}\)</span></li>
+</ul>
+<p>We switch datasets to something with a real time axis: <code>Loblolly</code>, which ships with base R — the height of 14 loblolly pine seed sources measured at ages 3, 5, 10, 15, 20 and 25 years. Fourteen groups, six times each, balanced, and <strong>unevenly spaced in time</strong>, which will matter.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="fu">data</span>(Loblolly)</span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>lob <span class="ot">&lt;-</span> <span class="fu">as.data.frame</span>(Loblolly)</span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a><span class="fu">str</span>(lob)</span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a><span class="do">## 'data.frame':    84 obs. of  3 variables:</span></span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a><span class="do">##  $ height: num  4.51 10.89 28.72 41.74 52.7 ...</span></span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a><span class="do">##  $ age   : num  3 5 10 15 20 25 3 5 10 15 ...</span></span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a><span class="do">##  $ Seed  : Ord.factor w/ 14 levels "329"&lt;"327"&lt;"325"&lt;..: 10 10 10 10 10 10 13 13 13 13 ...</span></span>
+<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a><span class="fu">table</span>(<span class="fu">table</span>(lob<span class="sc">$</span>Seed))        <span class="co"># 14 seed sources, 6 measurements each</span></span>
+<span id="cb11-9"><a href="#cb11-9" aria-hidden="true" tabindex="-1"></a><span class="do">## </span></span>
+<span id="cb11-10"><a href="#cb11-10" aria-hidden="true" tabindex="-1"></a><span class="do">##  6 </span></span>
+<span id="cb11-11"><a href="#cb11-11" aria-hidden="true" tabindex="-1"></a><span class="do">## 14</span></span>
+<span id="cb11-12"><a href="#cb11-12" aria-hidden="true" tabindex="-1"></a><span class="fu">sort</span>(<span class="fu">unique</span>(lob<span class="sc">$</span>age))</span>
+<span id="cb11-13"><a href="#cb11-13" aria-hidden="true" tabindex="-1"></a><span class="do">## [1]  3  5 10 15 20 25</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(lob, <span class="fu">aes</span>(age, height, <span class="at">group =</span> Seed)) <span class="sc">+</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_line</span>(<span class="at">alpha =</span> <span class="fl">0.6</span>) <span class="sc">+</span> <span class="fu">geom_point</span>(<span class="at">size =</span> <span class="dv">1</span>, <span class="at">alpha =</span> <span class="fl">0.6</span>) <span class="sc">+</span></span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Age (yr)"</span>, <span class="at">y =</span> <span class="st">"Height (ft)"</span>) <span class="sc">+</span></span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>(<span class="at">base_size =</span> <span class="dv">10</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div id="fig-lob" class="quarto-float quarto-figure quarto-figure-center anchored" alt="Height of fourteen loblolly pine seed sources plotted against age from 3 to 25 years, one line per seed source. All lines rise steeply and nearly straight, and the spread between seed sources widens with age." width="480">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-lob-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="mixed_model_structures_files/figure-html/fig-lob-1.png" id="fig-lob" class="img-fluid figure-img" alt="Height of fourteen loblolly pine seed sources plotted against age from 3 to 25 years, one line per seed source. All lines rise steeply and nearly straight, and the spread between seed sources widens with age." width="480">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig quarto-uncaptioned" id="fig-lob-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;3
+</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<p>The baseline model, the <code>nlme</code> equivalent of <code>lmer(height ~ age + (1|Seed))</code>:</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb13"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>ctrl <span class="ot">&lt;-</span> <span class="fu">lmeControl</span>(<span class="at">opt =</span> <span class="st">"optim"</span>, <span class="at">msMaxIter =</span> <span class="dv">200</span>)</span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>l_ri <span class="ot">&lt;-</span> <span class="fu">lme</span>(height <span class="sc">~</span> age, <span class="at">random =</span> <span class="sc">~</span> <span class="dv">1</span> <span class="sc">|</span> Seed, <span class="at">data =</span> lob, <span class="at">control =</span> ctrl)</span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a><span class="co"># nlme syntax map:</span></span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a><span class="co">#   lmer(y ~ x + (1     | g))  -&gt;  lme(y ~ x, random = ~ 1     | g)</span></span>
+<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a><span class="co">#   lmer(y ~ x + (1 + x | g))  -&gt;  lme(y ~ x, random = ~ 1 + x | g)</span></span>
+<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a><span class="co">#   lmer(y ~ x + (1|a) + (1|b)) -&gt; lme(y ~ x, random = list(a = ~1, b = ~1))</span></span>
+<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a><span class="co">#                                   ... for NESTED a/b only; nlme cannot do</span></span>
+<span id="cb13-10"><a href="#cb13-10" aria-hidden="true" tabindex="-1"></a><span class="co">#                                   crossed random effects. Use lme4 for those.</span></span>
+<span id="cb13-11"><a href="#cb13-11" aria-hidden="true" tabindex="-1"></a><span class="fu">VarCorr</span>(l_ri)</span>
+<span id="cb13-12"><a href="#cb13-12" aria-hidden="true" tabindex="-1"></a><span class="do">## Seed = pdLogChol(1) </span></span>
+<span id="cb13-13"><a href="#cb13-13" aria-hidden="true" tabindex="-1"></a><span class="do">##             Variance  StdDev   </span></span>
+<span id="cb13-14"><a href="#cb13-14" aria-hidden="true" tabindex="-1"></a><span class="do">## (Intercept) 0.7735569 0.8795208</span></span>
+<span id="cb13-15"><a href="#cb13-15" aria-hidden="true" tabindex="-1"></a><span class="do">## Residual    7.9474860 2.8191286</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>Is my residual correlation real? Look first.
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb14"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="fu">ACF</span>(l_ri, <span class="at">maxLag =</span> <span class="dv">4</span>)</span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a><span class="do">##   lag        ACF</span></span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a><span class="do">## 1   0  1.0000000</span></span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a><span class="do">## 2   1  0.3713379</span></span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a><span class="do">## 3   2 -0.4800010</span></span>
+<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a><span class="do">## 4   3 -0.7395571</span></span>
+<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a><span class="do">## 5   4  0.1445762</span></span>
+<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(<span class="fu">ACF</span>(l_ri, <span class="at">maxLag =</span> <span class="dv">4</span>), <span class="at">alpha =</span> <span class="fl">0.05</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="mixed_model_structures_files/figure-html/acf-1.png" class="img-fluid figure-img" alt="Autocorrelation function of the within-group residuals from the random-intercept model, plotted against lag 0 to 4, with a dashed significance band; the lag-1 autocorrelation is positive and the lag-2 and lag-3 values are negative and outside the band." width="480"></p>
+</figure>
+</div>
+</div>
+</div>
+<p><code>ACF()</code> on an <code>lme</code> fit is the diagnostic: it computes the autocorrelation of the <strong>within-group</strong> residuals at each lag. Points outside the band mean the independence assumption built into <span class="math inline">\(\mathbf{R}\)</span> is violated.</p>
+<p>Keep <code>maxLag</code> well below the number of observations per group. With 6 measurements per tree, lag 5 rests on <strong>one pair per group</strong> and is noise.</p>
+</div>
+</div>
+<div class="callout callout-style-default callout-warning callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Warning</span>Serial correlation is often a misspecified <strong>mean</strong>, not correlated noise
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Notice the lag-1 value is positive and lag 2–3 are negative. That is the signature of fitting a <strong>straight line to a curve</strong>: the residuals are systematically high in the middle and low at the ends, and an ACF reads that as correlation.</p>
+<p>Before you buy an AR(1), ask whether the fix is actually a better mean structure — <code>poly(age, 2)</code>, a log transform, a spline, or a nonlinear growth model (<code>nlme::nlme()</code>). An AR(1) bolted onto the wrong curve makes the <em>p</em>-values look better without making the model right. On this dataset both are arguably true, which is why it is a good teaching example and a bad final analysis.</p>
+</div>
+</div>
+</section>
+<section id="part-6-time-series-correlation-structures" class="level1">
+<h1>Part 6 · Time-Series Correlation Structures</h1>
+<section id="ar1-the-workhorse" class="level2">
+<h2 class="anchored" data-anchor-id="ar1-the-workhorse">AR(1) — the workhorse</h2>
+<p>An autoregressive-1 structure says the correlation between two residuals decays geometrically with how far apart they are:</p>
+<p><span class="math display">\[\mathbf{R} = \sigma^2
+\begin{pmatrix}
+1 &amp; \phi &amp; \phi^2 &amp; \phi^3 \\
+\phi &amp; 1 &amp; \phi &amp; \phi^2 \\
+\phi^2 &amp; \phi &amp; 1 &amp; \phi \\
+\phi^3 &amp; \phi^2 &amp; \phi &amp; 1
+\end{pmatrix}\]</span></p>
+<p><strong>One</strong> parameter, <span class="math inline">\(\phi\)</span>, for a matrix of any size. That is why it is the default choice for time series.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb15"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>l_ar1 <span class="ot">&lt;-</span> <span class="fu">lme</span>(height <span class="sc">~</span> age, <span class="at">random =</span> <span class="sc">~</span> <span class="dv">1</span> <span class="sc">|</span> Seed, <span class="at">data =</span> lob,</span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>             <span class="at">correlation =</span> <span class="fu">corAR1</span>(<span class="at">form =</span> <span class="sc">~</span> <span class="dv">1</span> <span class="sc">|</span> Seed), <span class="at">control =</span> ctrl)</span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a><span class="co"># the estimated phi</span></span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a><span class="fu">coef</span>(l_ar1<span class="sc">$</span>modelStruct<span class="sc">$</span>corStruct, <span class="at">unconstrained =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a><span class="do">##       Phi </span></span>
+<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a><span class="do">## 0.5548038</span></span>
+<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a><span class="co"># the 6x6 residual correlation matrix the model is now using</span></span>
+<span id="cb15-10"><a href="#cb15-10" aria-hidden="true" tabindex="-1"></a><span class="fu">round</span>(<span class="fu">corMatrix</span>(l_ar1<span class="sc">$</span>modelStruct<span class="sc">$</span>corStruct)[[<span class="dv">1</span>]], <span class="dv">3</span>)</span>
+<span id="cb15-11"><a href="#cb15-11" aria-hidden="true" tabindex="-1"></a><span class="do">##       [,1]  [,2]  [,3]  [,4]  [,5]  [,6]</span></span>
+<span id="cb15-12"><a href="#cb15-12" aria-hidden="true" tabindex="-1"></a><span class="do">## [1,] 1.000 0.555 0.308 0.171 0.095 0.053</span></span>
+<span id="cb15-13"><a href="#cb15-13" aria-hidden="true" tabindex="-1"></a><span class="do">## [2,] 0.555 1.000 0.555 0.308 0.171 0.095</span></span>
+<span id="cb15-14"><a href="#cb15-14" aria-hidden="true" tabindex="-1"></a><span class="do">## [3,] 0.308 0.555 1.000 0.555 0.308 0.171</span></span>
+<span id="cb15-15"><a href="#cb15-15" aria-hidden="true" tabindex="-1"></a><span class="do">## [4,] 0.171 0.308 0.555 1.000 0.555 0.308</span></span>
+<span id="cb15-16"><a href="#cb15-16" aria-hidden="true" tabindex="-1"></a><span class="do">## [5,] 0.095 0.171 0.308 0.555 1.000 0.555</span></span>
+<span id="cb15-17"><a href="#cb15-17" aria-hidden="true" tabindex="-1"></a><span class="do">## [6,] 0.053 0.095 0.171 0.308 0.555 1.000</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div class="callout callout-style-default callout-important callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Important</span>Read <code>form =</code> carefully — it is the whole thing
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><code>correlation = corAR1(form = ~ time | group)</code></p>
+<ul>
+<li><strong>right of the <code>|</code></strong> — the grouping. Residuals in <em>different</em> groups are independent. Almost always the same grouping as your random effect.</li>
+<li><strong>left of the <code>|</code></strong> — the <strong>time variable</strong>, which must be a <strong>position index</strong>: <code>corAR1</code> raises <span class="math inline">\(\phi\)</span> to the power of the <em>difference in position</em>, and assumes successive positions are equally spaced.</li>
+<li><code>form = ~ 1 | g</code> means “use row order within the group”. Fine <strong>only</strong> if the rows are sorted by time and nothing is missing. Being explicit (<code>form = ~ visit | g</code>) is safer.</li>
+</ul>
+</div>
+</div>
+</section>
+<section id="corcar1-when-the-times-are-not-equally-spaced" class="level2">
+<h2 class="anchored" data-anchor-id="corcar1-when-the-times-are-not-equally-spaced"><code>corCAR1</code> — when the times are not equally spaced</h2>
+<p>Our ages are 3, 5, 10, 15, 20, 25. The gap from 3 to 5 is two years; the gap from 20 to 25 is five. <code>corAR1</code> with <code>form = ~ 1 | Seed</code> treats both as “one step apart”, which is wrong. <code>corCAR1</code> uses the actual value: <span class="math inline">\(\text{cor} = \phi^{|t_i - t_j|}\)</span> for continuous <span class="math inline">\(t\)</span>.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb16"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a>l_car1 <span class="ot">&lt;-</span> <span class="fu">lme</span>(height <span class="sc">~</span> age, <span class="at">random =</span> <span class="sc">~</span> <span class="dv">1</span> <span class="sc">|</span> Seed, <span class="at">data =</span> lob,</span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>              <span class="at">correlation =</span> <span class="fu">corCAR1</span>(<span class="at">form =</span> <span class="sc">~</span> age <span class="sc">|</span> Seed), <span class="at">control =</span> ctrl)</span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a><span class="fu">coef</span>(l_car1<span class="sc">$</span>modelStruct<span class="sc">$</span>corStruct, <span class="at">unconstrained =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a><span class="do">##       Phi </span></span>
+<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a><span class="do">## 0.8940231</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div class="callout callout-style-default callout-warning callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Warning</span><code>corAR1</code> needs an <strong>integer</strong> time variable — and fails silently
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><code>corAR1</code> requires the variable left of the <code>|</code> to be a consecutive integer sequence. Hand it <code>age</code> and it does <strong>not</strong> error:</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb17"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a>l_wrong <span class="ot">&lt;-</span> <span class="fu">lme</span>(height <span class="sc">~</span> age, <span class="at">random =</span> <span class="sc">~</span> <span class="dv">1</span> <span class="sc">|</span> Seed, <span class="at">data =</span> lob,</span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>               <span class="at">correlation =</span> <span class="fu">corAR1</span>(<span class="at">form =</span> <span class="sc">~</span> age <span class="sc">|</span> Seed), <span class="at">control =</span> ctrl)</span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a><span class="fu">coef</span>(l_wrong<span class="sc">$</span>modelStruct<span class="sc">$</span>corStruct, <span class="at">unconstrained =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a><span class="do">## Phi1 </span></span>
+<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a><span class="do">##    0</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>φ comes back as <strong>exactly 0</strong> — the structure quietly switched itself off, and you would have reported “no autocorrelation” from a model that found φ = 0.55 when asked properly. Either pass a true index (<code>form = ~ 1 | Seed</code> on time-sorted data, or a <code>visit</code> column numbered 1, 2, 3 …) or use <code>corCAR1</code>, which is built for real-valued time. <strong>Always print the estimated φ.</strong></p>
+</div>
+</div>
+</section>
+<section id="the-rest-of-the-catalogue" class="level2">
+<h2 class="anchored" data-anchor-id="the-rest-of-the-catalogue">The rest of the catalogue</h2>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb18"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="co"># compound symmetry: ONE correlation for every pair of times, any distance</span></span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>l_cs <span class="ot">&lt;-</span> <span class="fu">lme</span>(height <span class="sc">~</span> age, <span class="at">random =</span> <span class="sc">~</span> <span class="dv">1</span> <span class="sc">|</span> Seed, <span class="at">data =</span> lob,</span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>            <span class="at">correlation =</span> <span class="fu">corCompSymm</span>(<span class="at">form =</span> <span class="sc">~</span> <span class="dv">1</span> <span class="sc">|</span> Seed), <span class="at">control =</span> ctrl)</span>
+<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a><span class="co"># ARMA(1,1): an AR part and a moving-average part</span></span>
+<span id="cb18-6"><a href="#cb18-6" aria-hidden="true" tabindex="-1"></a>l_arma <span class="ot">&lt;-</span> <span class="fu">lme</span>(height <span class="sc">~</span> age, <span class="at">random =</span> <span class="sc">~</span> <span class="dv">1</span> <span class="sc">|</span> Seed, <span class="at">data =</span> lob,</span>
+<span id="cb18-7"><a href="#cb18-7" aria-hidden="true" tabindex="-1"></a>              <span class="at">correlation =</span> <span class="fu">corARMA</span>(<span class="at">form =</span> <span class="sc">~</span> <span class="dv">1</span> <span class="sc">|</span> Seed, <span class="at">p =</span> <span class="dv">1</span>, <span class="at">q =</span> <span class="dv">1</span>),</span>
+<span id="cb18-8"><a href="#cb18-8" aria-hidden="true" tabindex="-1"></a>              <span class="at">control =</span> ctrl)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb19"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="fu">anova</span>(l_ri, l_cs)</span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a><span class="do">##      Model df      AIC      BIC    logLik   Test      L.Ratio p-value</span></span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a><span class="do">## l_ri     1  4 429.6429 439.2697 -210.8214                            </span></span>
+<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a><span class="do">## l_cs     2  5 431.6429 443.6765 -210.8214 1 vs 2 1.591616e-12       1</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div class="callout callout-style-default callout-important callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Important</span>Compound symmetry adds <strong>nothing</strong> to a random intercept
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>The log-likelihoods are <strong>identical</strong> and the LRT statistic is zero. This is not a bug and it is worth understanding, because it is the cleanest illustration of <span class="math inline">\(\mathbf{V} = \mathbf{ZGZ}^\top + \mathbf{R}\)</span>:</p>
+<p>A random intercept already <em>implies</em> compound symmetry. Two observations in the same group share <span class="math inline">\(b_{0i}\)</span>, so</p>
+<p><span class="math display">\[\text{cor} = \frac{\sigma^2_{\text{int}}}{\sigma^2_{\text{int}} + \sigma^2} = \text{ICC}\]</span></p>
+<p>for <strong>every</strong> pair, regardless of distance. <code>(1 | Seed)</code> and <code>corCompSymm</code> are two notations for the same matrix, and fitting both makes the model unidentifiable — <code>nlme</code> just puts the whole thing in one of the two terms.</p>
+<p><strong>So: the reason to reach for AR(1) is not that you have grouped data — the random intercept already handled that. It is that you believe observations close in time are <em>more</em> alike than observations far apart.</strong> A random intercept cannot express that. AR(1) can.</p>
+</div>
+</div>
+</section>
+<section id="comparing-them" class="level2">
+<h2 class="anchored" data-anchor-id="comparing-them">Comparing them</h2>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb20"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="fu">AIC</span>(l_ri, l_cs, l_ar1, l_car1, l_arma)</span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a><span class="do">##        df      AIC</span></span>
+<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a><span class="do">## l_ri    4 429.6429</span></span>
+<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a><span class="do">## l_cs    5 431.6429</span></span>
+<span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a><span class="do">## l_ar1   5 410.6506</span></span>
+<span id="cb20-6"><a href="#cb20-6" aria-hidden="true" tabindex="-1"></a><span class="do">## l_car1  5 403.0928</span></span>
+<span id="cb20-7"><a href="#cb20-7" aria-hidden="true" tabindex="-1"></a><span class="do">## l_arma  6 395.9626</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>These are not all nested in one another, so this is an AIC comparison, not a sequence of LRTs. The ordering is the story:</p>
+<ul>
+<li><code>l_cs</code> is worse than <code>l_ri</code> <strong>only</strong> by the 2 points its redundant extra parameter costs.</li>
+<li><code>l_ar1</code> is a large improvement — there <strong>is</strong> serial correlation.</li>
+<li><code>l_car1</code> is better still, because it uses the real age gaps.</li>
+<li><code>l_arma</code> is best here, but with 14 groups be suspicious of the third correlation parameter before you report it.</li>
+</ul>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>Structures available in <code>nlme</code>
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<table class="caption-top table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Call</th>
+<th><span class="math inline">\(\mathbf{R}\)</span> structure</th>
+<th>Parameters</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><em>(default)</em></td>
+<td>independent, equal variance</td>
+<td>1 (σ²)</td>
+</tr>
+<tr class="even">
+<td><code>corCompSymm</code></td>
+<td>compound symmetry / exchangeable</td>
+<td>2</td>
+</tr>
+<tr class="odd">
+<td><code>corAR1</code></td>
+<td>AR(1), equally spaced integer time</td>
+<td>2</td>
+</tr>
+<tr class="even">
+<td><code>corCAR1</code></td>
+<td>continuous-time AR(1)</td>
+<td>2</td>
+</tr>
+<tr class="odd">
+<td><code>corARMA(p, q)</code></td>
+<td>ARMA</td>
+<td>2 + <em>p</em> + <em>q</em></td>
+</tr>
+<tr class="even">
+<td><code>corSymm</code></td>
+<td>unstructured (“general”)</td>
+<td>1 + <em>t</em>(<em>t</em>−1)/2</td>
+</tr>
+<tr class="odd">
+<td><code>corExp</code>, <code>corGaus</code>, <code>corSpher</code>, <code>corLin</code>, <code>corRatio</code></td>
+<td><strong>spatial</strong> — decay with 2-D distance; <code>form = ~ x + y \| g</code></td>
+<td>2–3</td>
+</tr>
+</tbody>
+</table>
+<p>The spatial ones are the same idea with distance in place of time, and are how you handle spatially autocorrelated residuals.</p>
+</div>
+</div>
+</section>
+<section id="unstructured-estimate-every-correlation" class="level2">
+<h2 class="anchored" data-anchor-id="unstructured-estimate-every-correlation">Unstructured — estimate every correlation</h2>
+<p>The opposite extreme: no assumption at all, one parameter per pair of times. With 6 times that is 15 correlations plus 6 variances.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb21"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a>l_un <span class="ot">&lt;-</span> <span class="fu">gls</span>(height <span class="sc">~</span> age, <span class="at">data =</span> lob,</span>
+<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a>            <span class="at">correlation =</span> <span class="fu">corSymm</span>(<span class="at">form =</span> <span class="sc">~</span> <span class="dv">1</span> <span class="sc">|</span> Seed),</span>
+<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a>            <span class="at">weights =</span> <span class="fu">varIdent</span>(<span class="at">form =</span> <span class="sc">~</span> <span class="dv">1</span> <span class="sc">|</span> age),</span>
+<span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a>            <span class="at">control =</span> <span class="fu">glsControl</span>(<span class="at">opt =</span> <span class="st">"optim"</span>))</span>
+<span id="cb21-5"><a href="#cb21-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-6"><a href="#cb21-6" aria-hidden="true" tabindex="-1"></a><span class="fu">round</span>(<span class="fu">corMatrix</span>(l_un<span class="sc">$</span>modelStruct<span class="sc">$</span>corStruct)[[<span class="dv">1</span>]], <span class="dv">3</span>)</span>
+<span id="cb21-7"><a href="#cb21-7" aria-hidden="true" tabindex="-1"></a><span class="do">##       [,1]  [,2]  [,3]  [,4]  [,5]  [,6]</span></span>
+<span id="cb21-8"><a href="#cb21-8" aria-hidden="true" tabindex="-1"></a><span class="do">## [1,] 1.000 0.985 0.935 0.928 0.940 0.868</span></span>
+<span id="cb21-9"><a href="#cb21-9" aria-hidden="true" tabindex="-1"></a><span class="do">## [2,] 0.985 1.000 0.974 0.969 0.971 0.881</span></span>
+<span id="cb21-10"><a href="#cb21-10" aria-hidden="true" tabindex="-1"></a><span class="do">## [3,] 0.935 0.974 1.000 0.995 0.981 0.847</span></span>
+<span id="cb21-11"><a href="#cb21-11" aria-hidden="true" tabindex="-1"></a><span class="do">## [4,] 0.928 0.969 0.995 1.000 0.993 0.882</span></span>
+<span id="cb21-12"><a href="#cb21-12" aria-hidden="true" tabindex="-1"></a><span class="do">## [5,] 0.940 0.971 0.981 0.993 1.000 0.919</span></span>
+<span id="cb21-13"><a href="#cb21-13" aria-hidden="true" tabindex="-1"></a><span class="do">## [6,] 0.868 0.881 0.847 0.882 0.919 1.000</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div class="callout callout-style-default callout-warning callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Warning</span>Unstructured needs a lot of data
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><span class="math inline">\(t(t-1)/2\)</span> correlations from <em>n</em> groups. With 6 times and 14 seed sources we are estimating 15 correlations from 14 groups — the numbers above are not to be trusted, and they are near 1 because this is a growth curve, not because the trees are interchangeable. Rule of thumb: you want <strong>many more groups than correlation parameters</strong>. If not, use AR(1).</p>
+<p>Note also that <code>gls()</code> has <strong>no random effect</strong> — with an unstructured <span class="math inline">\(\mathbf{R}\)</span> you usually drop the random intercept, since compound symmetry is already a special case of unstructured (see the trap above).</p>
+</div>
+</div>
+</section>
+</section>
+<section id="part-7-unequal-variances" class="level1">
+<h1>Part 7 · Unequal Variances</h1>
+<p>The other half of <span class="math inline">\(\mathbf{R}\)</span>. The Loblolly figure fans out with age, so a single σ² is clearly wrong.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb22"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="co"># one residual variance per age (a "variance group")</span></span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>l_vi <span class="ot">&lt;-</span> <span class="fu">lme</span>(height <span class="sc">~</span> age, <span class="at">random =</span> <span class="sc">~</span> <span class="dv">1</span> <span class="sc">|</span> Seed, <span class="at">data =</span> lob,</span>
+<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a>            <span class="at">weights =</span> <span class="fu">varIdent</span>(<span class="at">form =</span> <span class="sc">~</span> <span class="dv">1</span> <span class="sc">|</span> age), <span class="at">control =</span> ctrl)</span>
+<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a><span class="co"># variance as a smooth power of the fitted value: Var = sigma^2 * |mu|^(2*delta)</span></span>
+<span id="cb22-6"><a href="#cb22-6" aria-hidden="true" tabindex="-1"></a>l_vp <span class="ot">&lt;-</span> <span class="fu">lme</span>(height <span class="sc">~</span> age, <span class="at">random =</span> <span class="sc">~</span> <span class="dv">1</span> <span class="sc">|</span> Seed, <span class="at">data =</span> lob,</span>
+<span id="cb22-7"><a href="#cb22-7" aria-hidden="true" tabindex="-1"></a>            <span class="at">weights =</span> <span class="fu">varPower</span>(), <span class="at">control =</span> ctrl)</span>
+<span id="cb22-8"><a href="#cb22-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-9"><a href="#cb22-9" aria-hidden="true" tabindex="-1"></a><span class="fu">AIC</span>(l_ri, l_vi, l_vp)</span>
+<span id="cb22-10"><a href="#cb22-10" aria-hidden="true" tabindex="-1"></a><span class="do">##      df      AIC</span></span>
+<span id="cb22-11"><a href="#cb22-11" aria-hidden="true" tabindex="-1"></a><span class="do">## l_ri  4 429.6429</span></span>
+<span id="cb22-12"><a href="#cb22-12" aria-hidden="true" tabindex="-1"></a><span class="do">## l_vi  9 367.2260</span></span>
+<span id="cb22-13"><a href="#cb22-13" aria-hidden="true" tabindex="-1"></a><span class="do">## l_vp  5 369.7453</span></span>
+<span id="cb22-14"><a href="#cb22-14" aria-hidden="true" tabindex="-1"></a><span class="fu">anova</span>(l_ri, l_vp)</span>
+<span id="cb22-15"><a href="#cb22-15" aria-hidden="true" tabindex="-1"></a><span class="do">##      Model df      AIC      BIC    logLik   Test  L.Ratio p-value</span></span>
+<span id="cb22-16"><a href="#cb22-16" aria-hidden="true" tabindex="-1"></a><span class="do">## l_ri     1  4 429.6429 439.2697 -210.8214                        </span></span>
+<span id="cb22-17"><a href="#cb22-17" aria-hidden="true" tabindex="-1"></a><span class="do">## l_vp     2  5 369.7453 381.7789 -179.8727 1 vs 2 61.89753  &lt;.0001</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>Both are massive improvements — a single σ² was badly wrong. <code>varIdent</code> wins on AIC here (it spends 5 extra parameters and uses them), but <code>varPower</code> gets most of the way on <strong>one</strong> parameter, and unlike <code>varIdent</code> it extrapolates to ages you did not measure. With a continuous trend like this one, prefer <code>varPower</code>; reserve <code>varIdent</code> for a handful of genuinely discrete groups.</p>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>Variance functions in <code>nlme</code>
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<table class="caption-top table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Call</th>
+<th>Models</th>
+<th>Use when</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>varIdent(form = ~ 1 \| f)</code></td>
+<td>one σ² per level of <code>f</code></td>
+<td>a few discrete groups with obviously different spread</td>
+</tr>
+<tr class="even">
+<td><code>varPower()</code></td>
+<td>σ²·|μ|^2δ</td>
+<td>spread grows with the mean</td>
+</tr>
+<tr class="odd">
+<td><code>varExp()</code></td>
+<td>σ²·e^(2δμ)</td>
+<td>spread grows faster than a power</td>
+</tr>
+<tr class="even">
+<td><code>varConstPower()</code></td>
+<td>σ²(δ₁+|μ|^δ₂)²</td>
+<td>spread grows but is nonzero at μ = 0</td>
+</tr>
+<tr class="odd">
+<td><code>varFixed(~ x)</code></td>
+<td>σ²·x</td>
+<td>you know the weights (e.g.&nbsp;group sizes)</td>
+</tr>
+</tbody>
+</table>
+<p>These combine: <code>weights = varPower()</code> <strong>and</strong> <code>correlation = corCAR1(...)</code> in the same call is normal and often necessary.</p>
+</div>
+</div>
+</section>
+<section id="which-package-do-i-use" class="level1">
+<h1>Which Package Do I Use?</h1>
+<div class="callout callout-style-default callout-important callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Important
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<table class="caption-top table">
+<colgroup>
+<col style="width: 25%">
+<col style="width: 25%">
+<col style="width: 25%">
+<col style="width: 25%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>I need</th>
+<th><code>lme4</code></th>
+<th><code>nlme</code></th>
+<th><code>glmmTMB</code></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Random intercepts and slopes</td>
+<td>✅</td>
+<td>✅</td>
+<td>✅</td>
+</tr>
+<tr class="even">
+<td><strong>Crossed</strong> random effects</td>
+<td>✅ fast</td>
+<td>❌ nested only</td>
+<td>✅</td>
+</tr>
+<tr class="odd">
+<td>Thousands of groups</td>
+<td>✅ fast</td>
+<td>slow</td>
+<td>✅</td>
+</tr>
+<tr class="even">
+<td>Residual correlation (AR1, …)</td>
+<td>❌</td>
+<td>✅</td>
+<td>✅ (<code>ar1()</code>, <code>ou()</code>, <code>exp()</code>)</td>
+</tr>
+<tr class="odd">
+<td>Unequal residual variance</td>
+<td>❌</td>
+<td>✅ <code>weights =</code></td>
+<td>✅ <code>dispformula =</code></td>
+</tr>
+<tr class="even">
+<td>Non-normal response</td>
+<td><code>glmer()</code></td>
+<td>❌</td>
+<td>✅ best support</td>
+</tr>
+<tr class="odd">
+<td>Zero inflation</td>
+<td>❌</td>
+<td>❌</td>
+<td>✅</td>
+</tr>
+<tr class="even">
+<td>Kenward-Roger <em>F</em>-tests</td>
+<td>✅ <code>pbkrtest</code></td>
+<td>❌ containment df only</td>
+<td>❌</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<p><strong>A practical decision rule.</strong> Nested or crossed grouping and nothing special about the residuals → <strong><code>lme4</code></strong>. Repeated measures over time, or unequal variances, with a normal response → <strong><code>nlme</code></strong>. Anything non-normal, zero-inflated, or needing both a correlation structure <em>and</em> crossed random effects → <strong><code>glmmTMB</code></strong>.</p>
+<div class="callout callout-style-default callout-tip callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Tip</span><code>glmmTMB</code> equivalents, for reference
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><code>glmmTMB</code> writes a residual correlation structure as an extra random term, with the time variable as a <strong>factor</strong>:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb23"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(glmmTMB)</span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a><span class="co"># AR(1) residuals within Seed</span></span>
+<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a><span class="fu">glmmTMB</span>(height <span class="sc">~</span> age <span class="sc">+</span> (<span class="dv">1</span> <span class="sc">|</span> Seed) <span class="sc">+</span> <span class="fu">ar1</span>(<span class="fu">factor</span>(age) <span class="sc">+</span> <span class="dv">0</span> <span class="sc">|</span> Seed), <span class="at">data =</span> lob)</span>
+<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a><span class="co"># Ornstein-Uhlenbeck: continuous-time AR(1), the corCAR1 analogue</span></span>
+<span id="cb23-7"><a href="#cb23-7" aria-hidden="true" tabindex="-1"></a><span class="fu">glmmTMB</span>(height <span class="sc">~</span> age <span class="sc">+</span> <span class="fu">ou</span>(<span class="fu">factor</span>(age) <span class="sc">+</span> <span class="dv">0</span> <span class="sc">|</span> Seed), <span class="at">data =</span> lob)</span>
+<span id="cb23-8"><a href="#cb23-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-9"><a href="#cb23-9" aria-hidden="true" tabindex="-1"></a><span class="co"># unstructured</span></span>
+<span id="cb23-10"><a href="#cb23-10" aria-hidden="true" tabindex="-1"></a><span class="fu">glmmTMB</span>(height <span class="sc">~</span> age <span class="sc">+</span> <span class="fu">us</span>(<span class="fu">factor</span>(age) <span class="sc">+</span> <span class="dv">0</span> <span class="sc">|</span> Seed), <span class="at">data =</span> lob)</span>
+<span id="cb23-11"><a href="#cb23-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-12"><a href="#cb23-12" aria-hidden="true" tabindex="-1"></a><span class="co"># unequal residual variance by age</span></span>
+<span id="cb23-13"><a href="#cb23-13" aria-hidden="true" tabindex="-1"></a><span class="fu">glmmTMB</span>(height <span class="sc">~</span> age <span class="sc">+</span> (<span class="dv">1</span> <span class="sc">|</span> Seed), <span class="at">dispformula =</span> <span class="sc">~</span> <span class="fu">factor</span>(age), <span class="at">data =</span> lob)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>The <code>+ 0</code> matters — it drops the intercept from that term so you get one level per time point. <code>glmmTMB</code> is not installed on the lab machines; install it with <code>install.packages("glmmTMB")</code> if you want to try these.</p>
+</div>
+</div>
+</section>
+<section id="common-errors-and-what-they-mean" class="level1">
+<h1>Common Errors and What They Mean</h1>
+<div class="callout callout-style-default callout-warning callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Warning
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><strong><code>boundary (singular) fit: see help('isSingular')</code></strong></p>
+<p>A variance or correlation hit the edge of its range — a variance of exactly 0, or a correlation of exactly ±1. Your random-effects structure asks for more than the data support. Drop the correlation (<code>||</code>), then the least-supported slope. Do not ignore it.</p>
+</div>
+</div>
+<div class="callout callout-style-default callout-warning callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Warning
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><strong><code>Model failed to converge with max|grad| ...</code></strong></p>
+<p>Usually benign if small (&lt; 0.01) and the estimates look sane. Try scaling your predictors (<code>scale(x)</code>) — wildly different predictor scales are the usual cause — or a different optimizer: <code>control = lmerControl(optimizer = "bobyqa")</code>.</p>
+</div>
+</div>
+<div class="callout callout-style-default callout-warning callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Warning
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><strong><code>Error ... nlminb problem, convergence error code = 1</code> (nlme)</strong></p>
+<p><code>nlme</code>’s default optimizer is fragile with correlation structures. Pass <code>control = lmeControl(opt = "optim", msMaxIter = 200)</code>, as every <code>lme()</code> call on this page does.</p>
+</div>
+</div>
+<div class="callout callout-style-default callout-warning callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Warning
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><strong><code>number of levels of each grouping factor must be &lt; number of observations</code></strong></p>
+<p>You have asked for a random effect with one group per row. That variance is not identifiable separately from the residual. Either drop it or model it as the residual.</p>
+</div>
+</div>
+</section>
+<section id="the-one-page-summary" class="level1">
+<h1>The One-Page Summary</h1>
+<div class="callout callout-style-default callout-important callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Important</span><span class="math inline">\(\mathbf{G}\)</span> — the random effects (<code>lme4</code> or <code>nlme</code>)
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb24"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a>(<span class="dv">1</span>     <span class="sc">|</span> g)   <span class="co"># random intercept:   parallel lines</span></span>
+<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a>(<span class="dv">1</span> <span class="sc">+</span> x <span class="sc">|</span> g)   <span class="co"># intercept + slope:  lines fan out, correlated</span></span>
+<span id="cb24-3"><a href="#cb24-3" aria-hidden="true" tabindex="-1"></a>(<span class="dv">1</span> <span class="sc">|</span> g) <span class="sc">+</span> (<span class="dv">0</span> <span class="sc">+</span> x <span class="sc">|</span> g)   <span class="co"># same, correlation forced to 0</span></span>
+<span id="cb24-4"><a href="#cb24-4" aria-hidden="true" tabindex="-1"></a>(x <span class="sc">||</span> g)      <span class="co"># shorthand for the line above (numeric x only)</span></span>
+<span id="cb24-5"><a href="#cb24-5" aria-hidden="true" tabindex="-1"></a>(<span class="dv">0</span> <span class="sc">+</span> x <span class="sc">|</span> g)   <span class="co"># slope only, shared intercept</span></span>
+<span id="cb24-6"><a href="#cb24-6" aria-hidden="true" tabindex="-1"></a>(<span class="dv">1</span> <span class="sc">|</span> a<span class="sc">/</span>b)     <span class="co"># b nested in a  ==  (1|a) + (1|a:b)</span></span>
+<span id="cb24-7"><a href="#cb24-7" aria-hidden="true" tabindex="-1"></a>(<span class="dv">1</span> <span class="sc">|</span> a) <span class="sc">+</span> (<span class="dv">1</span> <span class="sc">|</span> b)   <span class="co"># a and b crossed</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<section id="mathbfr-the-residuals-nlme-or-glmmtmb" class="level2">
+<h2 class="anchored" data-anchor-id="mathbfr-the-residuals-nlme-or-glmmtmb"><span class="math inline">\(\mathbf{R}\)</span> — the residuals (<code>nlme</code> or <code>glmmTMB</code>)</h2>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb25"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="fu">lme</span>(y <span class="sc">~</span> x, <span class="at">random =</span> <span class="sc">~</span> <span class="dv">1</span> <span class="sc">|</span> g, <span class="at">data =</span> d,</span>
+<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a>    <span class="at">correlation =</span> <span class="fu">corCAR1</span>(<span class="at">form =</span> <span class="sc">~</span> time <span class="sc">|</span> g),   <span class="co"># correlation part</span></span>
+<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a>    <span class="at">weights     =</span> <span class="fu">varPower</span>(),                   <span class="co"># variance part</span></span>
+<span id="cb25-4"><a href="#cb25-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">control     =</span> <span class="fu">lmeControl</span>(<span class="at">opt =</span> <span class="st">"optim"</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>Diagnose before you prescribe:</strong> <code>plot(ACF(fit), alpha = 0.05)</code> for serial correlation, residuals-vs-fitted for unequal variance. Then compare candidate structures by <strong>AIC under REML with identical fixed effects</strong>.</p>
+</section>
+</div>
+</div>
+</section>
+<section id="readings" class="level1">
+<h1>Readings</h1>
+<ul>
+<li><strong>Pinheiro, J. C., &amp; Bates, D. M.</strong> (2000). <em>Mixed-Effects Models in S and S-PLUS</em>. Springer. §5.3 is the definitive account of <code>nlme</code>’s <code>correlation =</code> and <code>weights =</code> arguments.</li>
+<li><strong>Zuur, A. F., Ieno, E. N., Walker, N. J., Saveliev, A. A., &amp; Smith, G. M.</strong> (2009). <em>Mixed Effects Models and Extensions in Ecology with R</em>. Springer. Ch. 6–7 — temporal and spatial correlation in ecological data, worked in <code>nlme</code>.</li>
+<li><strong>Bates, D., Mächler, M., Bolker, B., &amp; Walker, S.</strong> (2015). Fitting linear mixed-effects models using lme4. <em>Journal of Statistical Software, 67</em>(1), 1–48.</li>
+<li><strong>Barr, D. J., Levy, R., Scheepers, C., &amp; Tily, H. J.</strong> (2013). Random effects structure for confirmatory hypothesis testing: Keep it maximal. <em>Journal of Memory and Language, 68</em>(3), 255–278.</li>
+<li><strong>Brooks, M. E., et al.</strong> (2017). glmmTMB balances speed and flexibility among packages for zero-inflated generalized linear mixed modeling. <em>The R Journal, 9</em>(2), 378–400.</li>
+</ul>
+
+
+</section>
+
+</main> <!-- /main -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    // Ensure there is a toggle, if there isn't float one in the top right
+    if (window.document.querySelector('.quarto-color-scheme-toggle') === null) {
+      const toggle = window.document.createElement('button');
+      toggle.type = "button";
+      toggle.setAttribute("role", "switch");
+      toggle.setAttribute("aria-checked", "false");
+      toggle.classList.add('top-right');
+      toggle.classList.add('quarto-color-scheme-toggle');
+      toggle.setAttribute("aria-label", "Toggle dark mode");
+      toggle.onclick = function() { try { window.quartoToggleColorScheme(); } catch {} return false; };
+      const i = window.document.createElement("i");
+      i.classList.add('bi');
+      toggle.appendChild(i);
+      // Put the toggle in a landmark of its own, so that landmark navigation
+      // can reach it.
+      //
+      // The container is always a fresh direct child of body, and the toggle is
+      // never moved into page furniture that the theme or the author controls.
+      // The toggle is positioned against the page, so any ancestor that
+      // establishes a containing block captures it: a positioned element or a
+      // grid for position: absolute, and transform, filter, will-change or
+      // contain for position: fixed. A direct child of body has none of these
+      // to inherit, and the shift when one appears is silent and visual.
+      //
+      // ARIA says a document should have at most one banner, and axe reports a
+      // duplicate whether or not the banners carry distinct labels. So use a
+      // header when the page has no banner yet, and a named region otherwise.
+      //
+      // A header is a banner wherever it sits, unless it is inside sectioning
+      // content, so this cannot just look at the children of body: a custom
+      // page layout wraps the title block header in a plain div. An explicit
+      // role="banner" always counts.
+      const sectioning = 'article, aside, main, nav, section, [role="article"], [role="complementary"], [role="main"], [role="navigation"], [role="region"]';
+      const hasBanner = Array.from(
+        window.document.querySelectorAll('header:not([role]), [role="banner"]')
+      ).some(function(el) {
+        return el.hasAttribute("role") || el.closest(sectioning) === null;
+      });
+      const container = window.document.createElement(hasBanner ? "div" : "header");
+      if (hasBanner) {
+        container.setAttribute("role", "region");
+        container.setAttribute("aria-label", "Toggle dark mode");
+      }
+      container.classList.add('quarto-color-scheme-toggle-container');
+      container.appendChild(toggle);
+      window.document.body.appendChild(container);
+    }
+    setColorSchemeToggle(hasAlternateSentinel())
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp("https:\/\/wlperry\.github\.io\/ecostats_2026");
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+      window.quartoDecorateExternalLinks = function (root) {
+     var links = (root || window.document).querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+          if (!link.classList.contains('no-external-icon')) {
+          }
+        }
+      }
+      };
+      window.quartoDecorateExternalLinks(window.document);
+    // Esc closes the popup (WCAG 1.4.13) and focus leaving both trigger and
+    // popup closes it (WCAG 2.4.11); tippy handles neither for interactive popups.
+    const hideOnEscAndFocusOut = {
+      name: 'hideOnEscAndFocusOut',
+      defaultValue: true,
+      fn(instance) {
+        const dismiss = () => {
+          // A show scheduled by the trigger delay would otherwise reopen it
+          instance.clearDelayTimeouts();
+          instance.hide();
+        };
+        const onKeyDown = (event) => {
+          if (event.key !== 'Escape') {
+            return;
+          }
+          // Keep Esc from also reaching page handlers (e.g. reveal.js overview),
+          // except an open reveal.js slide menu, which Esc should close too.
+          // The menu handles keys only when its keyboard option is on.
+          const menuHandlesEsc = window.Reveal?.getPlugin?.('menu')?.isOpen() &&
+            window.Reveal.getConfig().menu?.keyboard !== false;
+          if (!menuHandlesEsc) {
+            event.stopPropagation();
+          }
+          if (instance.popper.contains(window.document.activeElement)) {
+            // Disabled while refocusing so the focus trigger does not reopen it
+            instance.disable();
+            instance.reference.focus();
+            instance.enable();
+          }
+          dismiss();
+        };
+        const onFocusOut = (event) => {
+          const target = event.relatedTarget;
+          if (target && !instance.reference.contains(target) &&
+              !instance.popper.contains(target)) {
+            dismiss();
+          }
+        };
+        // On the trigger too: a click trigger (code-annotations: select) has no
+        // blur handling. Attached for the instance's lifetime so leaving the
+        // trigger also cancels a show still pending on the trigger delay.
+        instance.reference.addEventListener('focusout', onFocusOut);
+        return {
+          onShow() {
+            window.document.addEventListener('keydown', onKeyDown, true);
+            instance.popper.addEventListener('focusout', onFocusOut);
+          },
+          onHide() {
+            window.document.removeEventListener('keydown', onKeyDown, true);
+            instance.popper.removeEventListener('focusout', onFocusOut);
+          },
+          onDestroy() {
+            instance.reference.removeEventListener('focusout', onFocusOut);
+          },
+        };
+      },
+    };
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+        plugins: [hideOnEscAndFocusOut],
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          // Each band is positioned against its own containing block, which is
+          // not the offsetParent of the lines, so place it from client rects.
+          const placeBand = (band, firstEl, lastEl, codeBlock) => {
+            const container = band.offsetParent;
+            if (container === null) {
+              return;
+            }
+            const containerRect = container.getBoundingClientRect();
+            // Reveal.js scales slides with a transform, so convert client
+            // pixels back to the CSS pixels of the container.
+            const scale = containerRect.height / container.offsetHeight || 1;
+            const firstRect = firstEl.getBoundingClientRect();
+            const lastRect = lastEl.getBoundingClientRect();
+            const top = (firstRect.top - containerRect.top) / scale - container.clientTop + container.scrollTop;
+            const height = (lastRect.bottom - firstRect.top) / scale;
+            band.style.top = top - 2 + "px";
+            band.style.height = height + 4 + "px";
+            if (codeBlock) {
+              // Without the copy button wrapper, the containing block is wider
+              // than the code block, so span the code block explicitly.
+              const blockRect = codeBlock.getBoundingClientRect();
+              band.style.left = (blockRect.left - containerRect.left) / scale - container.clientLeft + container.scrollLeft + "px";
+              band.style.width = blockRect.width / scale + "px";
+            }
+          };
+          if (lineIds.length > 0) {
+            const el = window.document.getElementById(lineIds[0]);
+            const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+            const parent = el.parentElement.parentElement;
+            // cook up a div (if necessary) and position it
+            let div = window.document.getElementById("code-annotation-line-highlight");
+            if (div === null) {
+              div = window.document.createElement("div");
+              div.setAttribute("id", "code-annotation-line-highlight");
+              div.style.position = 'absolute';
+              parent.appendChild(div);
+            }
+            placeBand(div, el, lastEl, parent.closest("div.sourceCode") || parent);
+            let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+            if (gutterDiv === null) {
+              gutterDiv = window.document.createElement("div");
+              gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+              gutterDiv.style.position = 'absolute';
+              const codeCell = window.document.getElementById(targetCell);
+              const gutter = codeCell.querySelector('.code-annotation-gutter');
+              gutter.appendChild(gutterDiv);
+            }
+            placeBand(gutterDiv, el, lastEl);
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+  <script type="application/javascript">
+  window.quartoScrollableRegionsLabels = {"code":"Scrollable code","output":"Scrollable output"};
+  </script>
+</div> <!-- /content -->
+<footer class="footer">
+  <div class="nav-footer">
+    <div class="nav-footer-left">
+<p>© 2026 UMD Biostatistics</p>
+</div>   
+    <div class="nav-footer-center">
+      &nbsp;
+    </div>
+    <div class="nav-footer-right">
+      <ul class="footer-items list-unstyled">
+    <li class="nav-item compact">
+    <a class="nav-link" href="https://github.com/wlperry">
+      <i class="bi bi-github" role="img">
+</i> 
+    </a>
+  </li>  
+    <li class="nav-item compact">
+    <a class="nav-link" href="mailto:wlperry@d.umn.edu">
+      <i class="bi bi-envelope-heart-fill" role="img">
+</i> 
+    </a>
+  </li>  
+</ul>
+    </div>
+  </div>
+</footer>
+
+
+
+
+</body></html>

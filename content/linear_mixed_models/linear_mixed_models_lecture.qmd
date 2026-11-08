@@ -40,10 +40,10 @@ editor:
 #| paged-print: false
 #| collapse: true
 library(car)
+library(effectsize)
 library(lme4)
 library(lmerTest)
 library(emmeans)
-library(afex)
 library(performance)
 library(patchwork)
 library(janitor)
@@ -81,34 +81,36 @@ Covered last time — **generalized** linear models:
 - Poisson and negative binomial for counts; overdispersion
 - Logistic regression and the odds ratio
 
-Covered in week 9 — **nested ANOVA**, the traditional way:
+And from the ANOVA weeks — **factorial designs**:
 
-- Factorial vs. nested designs, and variance partitioning
-- Fixed vs. random effects — B nested in A
-- The naive (wrong) factorial model vs. `aov(..., Error(...))`
+- Two crossed factors, main effects and an interaction
+- Type I / II / III sums of squares on unbalanced data
+- Estimated marginal means, and simple effects
+
+Today the second factor is **not** crossed with the first, and we do not
+care about its levels at all.
 ::::
 
 ::: {.column width="42%"}
 ::: callout-note
-**✅ Key idea we are building on**
+**✅ Where today fits**
 
-`patch` nested in `treat` needs the right error term — MS~patch(treat)~,
-not MS~resid~ — or the *F*-test for treatment is wrong.
-
-Last week changed the **distribution**; this week changes the **error
-structure**. Put both together and you get `glmer()`.
+Last week changed the **distribution** of the response. This week
+changes the **error structure** — which observations are allowed to be
+independent. Put both together and you get `glmer()`.
 :::
 
 ::: callout-tip
-**🖐 Notice**
+**🖐 Part 1 is self-contained**
 
-Same sea urchin dataset as week 9 — same question, same data, a
-different and far more flexible way to fit the model.
+Part 1 builds the **hierarchical** design, and the traditional
+`aov(..., Error())` analysis of it, from scratch — so that Parts 2–7
+have something to improve on. No earlier lecture required.
 :::
 :::
 ::::::
 
-## Part 1 · The Sea Urchin Data, Again {.divider}
+## Part 1 · The Data, and Why a One-Way ANOVA Fails It {.divider}
 
 ## Data Overview {.tight-code}
 
@@ -147,6 +149,240 @@ u_summary %>%
 39.2 → 19.0 → 21.6 → 1.3. The 33% and 66% means sit within noise of
 each other. That is the data, not an error — and it is part of why the
 treatment effect comes out non-significant.
+:::
+:::
+:::::
+
+## The Design Is Hierarchical, Not Factorial {.tight-code}
+
+::::: columns
+::: {.column width="50%"}
+`treat` and `patch` are **not crossed**. Patch 7 exists only inside one
+treatment; there is no "patch 7 of the 0% treatment *and* of the 100%
+treatment."
+
+That is a **nested**, or hierarchical, design:
+
+$$\text{treatment} \rightarrow \text{patch} \rightarrow \text{quadrat}$$
+
+The 5 quadrats in a patch are **subsamples of that patch**, not 5
+independent replicates of the treatment. The treatment was applied to
+the **patch**.
+:::
+
+::: {.column width="50%"}
+::: callout-important
+**⚠️ So what is *n*?**
+
+For testing `treat` there are **16** experimental units, not 80. Four
+patches per treatment.
+
+Treating the 80 quadrats as independent replicates of the treatment is
+**pseudoreplication** (Hurlbert 1984) — the single most common fatal
+flaw in ecological statistics.
+:::
+
+::: callout-tip
+**🖐 The giveaway question**
+
+*"What did I apply the treatment to?"* Count those. If you measured
+more things than you manipulated, the extra measurements are
+subsamples.
+:::
+:::
+:::::
+
+## Pseudoreplication, Priced {.tight-code}
+
+::::: columns
+::: {.column width="52%"}
+Same 80 numbers, two models. The only difference is what the treatment
+is tested against:
+
+```{r lmm-pseudo-01}
+#| echo: true
+#| message: false
+#| warning: false
+#| collapse: true
+a_ps <- summary(aov(algae ~ treat + treat:patch,
+                    data = u_df))[[1]]
+
+round(a_ps[, c("Df", "Sum Sq", "Mean Sq")], 1)
+
+c(naive_F  = a_ps[1, "Mean Sq"] / a_ps[3, "Mean Sq"],
+  nested_F = a_ps[1, "Mean Sq"] / a_ps[2, "Mean Sq"]
+  ) %>% round(2)
+```
+:::
+
+::: {.column width="48%"}
+::: callout-important
+**16.11 against 2.72**
+
+Both divide $MS_{treat}$ = 4810. The **naive** model divides by
+$MS_{resid}$ = 298.6, the quadrat-to-quadrat noise. The **correct** one
+divides by $MS_{patch(treat)}$ = 1770.2, the patch-to-patch noise.
+
+*p* goes from **0.00000007** to **0.091** — from a headline result to
+nothing — on exactly the same data.
+:::
+
+The traditional fix is to name the error stratum by hand:
+
+``` r
+aov(algae ~ treat + Error(patch), data = u_df)
+```
+
+**That is what the rest of this lecture replaces.**
+:::
+:::::
+
+## Where the Variation Goes
+
+::::: columns
+::: {.column width="42%"}
+One quadrat's distance from the grand mean splits into **three** pieces,
+not two:
+
+$$\underbrace{(Y_{ijk} - \bar{Y})}_{\text{total}} = \underbrace{(\bar{Y}_i - \bar{Y})}_{A} + \underbrace{(\bar{Y}_{ij} - \bar{Y}_i)}_{B(A)} + \underbrace{(Y_{ijk} - \bar{Y}_{ij})}_{\text{resid}}$$
+
+Square and sum over all 80 quadrats:
+
+$$SS_{total} = SS_A + SS_{B(A)} + SS_{resid}$$
+
+On these data: **54 781 = 14 429 + 21 242 + 19 110**.
+
+::: callout-note
+**The middle row is the whole point**
+
+A one-way ANOVA has no $SS_{B(A)}$ row — that variation lands in the
+residual. Here it is **bigger than the treatment effect**, and it is
+what the treatment must be tested against.
+:::
+:::
+
+::: {.column width="58%"}
+```{r lmm-pseudo-02}
+#| echo: false
+#| message: false
+#| warning: false
+#| fig-width: 4.4
+#| fig-height: 4.6
+#| fig-alt: "Four stacked panels showing the nested sums-of-squares allocation on the sea urchin data. Panel one, SS total: every quadrat's deviation from the dashed grand-mean line. Panel two, SS_A: each of the four treatment means' deviation from the grand mean. Panel three, SS_B(A): each of the sixteen patch means' deviation from its own treatment mean. Panel four, SS residual: every quadrat's deviation from its own patch mean."
+ss_df <- u_df %>%
+  arrange(treat, patch) %>%
+  mutate(patch = fct_inorder(patch)) %>%
+  group_by(treat) %>% mutate(treat_mean = mean(algae)) %>%
+  group_by(treat, patch) %>% mutate(patch_mean = mean(algae)) %>%
+  ungroup() %>%
+  mutate(grand = mean(algae), x = as.numeric(patch))
+
+pm <- ss_df %>% distinct(treat, patch, x, patch_mean, treat_mean, grand)
+
+tm <- ss_df %>%
+  group_by(treat) %>%
+  summarise(x = mean(x), xmin = min(x) - 0.45, xmax = max(x) + 0.45,
+            treat_mean = first(treat_mean), grand = first(grand),
+            .groups = "drop")
+
+set.seed(42)
+pts <- ss_df %>% mutate(xj = x + runif(n(), -0.22, 0.22))
+
+base <- function(p, ttl) {
+  p +
+    scale_colour_viridis_d(end = 0.9, guide = "none") +
+    scale_x_continuous(breaks = tm$x, labels = levels(ss_df$treat)) +
+    labs(title = ttl, x = NULL, y = "Algae (%)") +
+    coord_cartesian(ylim = c(-5, 82)) +
+    theme_minimal(base_size = 9) +
+    theme(plot.title = element_text(size = 9, face = "bold"),
+          panel.grid.minor = element_blank(),
+          panel.grid.major.x = element_blank())
+}
+
+p1 <- base(
+  ggplot(pts) +
+    geom_segment(aes(xj, xend = xj, y = grand, yend = algae, colour = treat),
+                 alpha = 0.45, linewidth = 0.3) +
+    geom_point(aes(xj, algae, colour = treat), size = 0.7, alpha = 0.8) +
+    geom_hline(yintercept = ss_df$grand[1], linetype = "dashed"),
+  expression(SS[total] * ": every quadrat vs. grand mean"))
+
+p2 <- base(
+  ggplot(tm) +
+    geom_segment(aes(x, xend = x, y = grand, yend = treat_mean, colour = treat),
+                 linewidth = 1.1) +
+    geom_segment(aes(xmin, xend = xmax, y = treat_mean, yend = treat_mean,
+                     colour = treat), linewidth = 0.8) +
+    geom_hline(yintercept = ss_df$grand[1], linetype = "dashed"),
+  expression(SS[A] * ": treatment means vs. grand mean"))
+
+p3 <- base(
+  ggplot(pm) +
+    geom_segment(aes(x, xend = x, y = treat_mean, yend = patch_mean,
+                     colour = treat), linewidth = 0.9) +
+    geom_point(aes(x, patch_mean, colour = treat), size = 1.4) +
+    geom_segment(data = tm, aes(xmin, xend = xmax, y = treat_mean,
+                                yend = treat_mean),
+                 linewidth = 0.5, colour = "grey30"),
+  expression(SS[B(A)] * ": patch means vs. their treatment mean"))
+
+p4 <- base(
+  ggplot(pts) +
+    geom_segment(aes(xj, xend = xj, y = patch_mean, yend = algae,
+                     colour = treat), alpha = 0.5, linewidth = 0.3) +
+    geom_point(aes(xj, algae, colour = treat), size = 0.7, alpha = 0.8) +
+    geom_segment(data = pm, aes(x = x - 0.35, xend = x + 0.35, y = patch_mean,
+                                yend = patch_mean),
+                 linewidth = 0.4, colour = "grey30"),
+  expression(SS[residual] * ": quadrats vs. their own patch mean"))
+
+p1 / p2 / p3 / p4
+```
+:::
+:::::
+
+## Pseudoreplication Corrupts the *p*-Value, Not the Effect Size {.tight-code}
+
+::::: columns
+::: {.column width="52%"}
+```{r lmm-pseudo-03}
+#| echo: false
+#| message: false
+#| warning: false
+#| collapse: true
+e_nested <- eta_squared(
+  aov(algae ~ treat + Error(patch), data = u_df))$Eta2_partial
+e_naive <- eta_squared(
+  aov(algae ~ treat + patch, data = u_df))$Eta2_partial[1]
+
+data.frame(
+  model = c("Nested (correct)", "Naive (pseudoreplicated)"),
+  partial_eta2 = round(c(e_nested, e_naive), 2),
+  p = c("0.091", "0.00000007"))
+```
+
+The wrong model and the right model agree the treatment effect is
+**large** — 0.40 against 0.43.
+:::
+
+::: {.column width="48%"}
+::: callout-important
+**What they disagree about is confidence**
+
+Seven orders of magnitude in *p*, and almost nothing in effect size.
+Pseudoreplication does not invent an effect. It invents **certainty**.
+:::
+
+::: callout-note
+**📖 So what is the honest conclusion?**
+
+Not "urchins do not affect algae." It is **"a large effect that four
+patches per treatment could not resolve"** — a power problem, and the
+effect size is what lets you say so.
+
+Hold onto that. In Part 5 the variance components will tell you
+*exactly why* four patches were not enough, and what to do about it.
 :::
 :::
 :::::
@@ -218,7 +454,8 @@ $$(\ \text{what varies}\ \mid\ \text{across what}\ )$$
 - **`(1|treat:patch)`** — the same thing, just naming the group as the
   treatment-patch combination. Still intercept-only.
 - **`(1 + depth|patch)`** — *this* is a random **slope**: each patch gets
-  its own intercept **and** its own slope for `depth`.
+  its own intercept **and** its own slope for `depth`. (There is no
+  `depth` in this dataset — it is what one would look like.)
 :::
 
 ::: {.column width="48%"}
@@ -323,8 +560,9 @@ Anova(u_lmer_model, type = 3,
 - Assumes **infinite** denominator df, i.e. a large sample
 - Here: χ²~3~ = 8.15, ***p* = 0.043**
 
-χ² = *F* × numerator df = 2.717 × 3 = 8.15. The only difference is what
-goes on the bottom.
+χ² = *F* × numerator df = 2.717 × 3 = 8.15 — exactly. The only thing
+that differs is the **reference distribution**: χ²~3~ assumes infinite
+denominator df; *F*~3,12~ admits there are 12.
 :::
 :::::
 
@@ -340,11 +578,13 @@ goes on the bottom.
 | Wald χ² | χ²~3~ = 8.15 | **0.043** | significant |
 :::
 
-**Rule of thumb.** Under ~100 observations or fewer than ~20
-random-effect levels, use the *F*-test. Over ~500 observations and more
-than ~50 levels, χ² is fine. In between, the *F*-test is safer.
+**Rule of thumb: default to the *F*-test.** As the number of groups
+grows its denominator df grow with them, and it converges on the χ² — so
+you give up nothing by always using it, and you are protected when the
+sample is small. The χ² is a **large-sample shortcut**, not a better
+test.
 
-We have **80 observations and 16 patches**. The rule picks the *F*-test.
+We have **80 observations and 16 patches** — nowhere near large sample.
 :::
 
 ::: {.column width="45%"}
@@ -354,7 +594,7 @@ We have **80 observations and 16 patches**. The rule picks the *F*-test.
 The χ² is being over-confident. It pretends it knows σ²~patch~ and
 σ²~within~ exactly, when they were estimated from 16 patches.
 
-The *F*-test agrees with week 9's `aov(Error(patch))` to four decimal
+The *F*-test agrees with Part 1's `aov(Error(patch))` to four decimal
 places, **because it is the same test**.
 :::
 
@@ -385,15 +625,15 @@ squares anywhere.
 **So where did that number come from, and why is it not an SS table?**
 
 The rest of this part is the answer. It is the single biggest
-conceptual change between week 9 and today — bigger than the notation,
-bigger than the *p*-value.
+conceptual change between Part 1 and the rest of today — bigger than
+the notation, bigger than the *p*-value.
 :::
 
 ## The Old Route — Sums of Squares and Expected Mean Squares {.tight-code}
 
 ::::: columns
 ::: {.column width="52%"}
-Week 9's table, one more time:
+Part 1's table, one more time:
 
 ```{r lmm-ems-01}
 #| echo: true
@@ -518,6 +758,9 @@ Three pieces, each doing one job:
   effects
 
 The answer is the pair where those forces balance.
+
+(An additive constant, $-\tfrac12 (n-p)\log 2\pi$, is left out — it
+shifts the curve but not where the maximum is.)
 :::
 :::::
 
@@ -605,11 +848,12 @@ common** methodologically. One is algebra on a table of sums of
 squares; the other is a numerical search over a likelihood surface.
 
 On a **balanced** design the restricted maximum-likelihood solution has
-a closed form, and that closed form *is* the moment estimator.
+a closed form, and that closed form *is* the moment estimator — as long
+as it comes out positive.
 :::
 
-So week 9 was never wrong. It was a special case that happens to have a
-shortcut — and you have been using the shortcut without being told it
+So the traditional route was never wrong. It was a special case that
+happens to have a shortcut — and you have been using the shortcut without being told it
 was one.
 
 **Next slide: what happens when the shortcut stops existing.**
@@ -727,7 +971,7 @@ with different fixed effects.**
 ## Part 4 — The Short Version
 
 ::: {.compact-table}
-| | **Nested ANOVA (week 9)** | **Mixed model (today)** |
+| | **Nested ANOVA (Part 1)** | **Mixed model (Parts 2–7)** |
 |------------------|---------------------------|---------------------------|
 | Starts from | the total sum of squares | the variance matrix $\mathbf{V}$ |
 | Core move | **partition** SS by source | **search** for the most likely variances |
@@ -781,8 +1025,8 @@ two independent observations.
 
 An ICC near 0 would mean patches barely matter and ordinary ANOVA would
 have been fine. An ICC of 0.50 means ignoring patch would have been
-badly wrong — and week 9's naive model showed exactly how wrong
-(*F* = 16.1 instead of 2.7).
+badly wrong — and Part 1's naive model showed exactly how wrong
+(*F* = 16.11 instead of 2.72).
 :::
 
 ::: callout-tip
@@ -887,8 +1131,9 @@ The honest conclusion is **"this design could not detect it"**, not
 ::: callout-tip
 **🖐 Where 294.3 came from**
 
-By hand from mean squares, from `aov(Error(patch))`, and from
-`VarCorr()` — three notations, one model. See Part 4.
+By hand from the mean squares, from a restricted likelihood maximised
+with `optim()`, and from `VarCorr()` — three routes, one number.
+See Part 4.
 :::
 :::
 :::::
@@ -1003,17 +1248,17 @@ p_rf <- ggplot(data.frame(f = u_fitted, r = u_residuals), aes(f, r)) +
 ::: callout-warning
 **⚠️ The spread is not constant**
 
-It is tightest at the lowest fitted values and widens from there — the
-same heteroscedasticity the raw data showed. A mixed model fixes *correlation*, not *unequal
-variance*.
+Tightest at the lowest fitted values, widening from there — the same
+heteroscedasticity the raw data showed. A mixed model fixes
+*correlation*, not *unequal variance*.
 :::
 
 ::: callout-tip
 **🖐 Use the right tool**
 
-`plot()` and `qqnorm()` were built for `lm()` objects. They mostly work
-on an `lmer()` fit, but **DHARMa** simulates from the fitted model and
-is the purpose-built check — that is what the activity uses.
+`plot()` and `qqnorm()` were built for `lm()`. They mostly work on an
+`lmer()` fit, but **DHARMa** simulates from the model and is the
+purpose-built check — that is what the activity uses.
 :::
 
 A mixed model also assumes the **random effects** are normal. With 16
@@ -1121,6 +1366,10 @@ Read every random term as **`( what varies | across what )`**.
 | `y ~ x + (1|a/b)` | b **nested** in a — shorthand for `(1|a) + (1|a:b)` |
 :::
 
+Random **slopes** and time-series error structures get their own
+reference page:
+[Mixed Model Structures](../../vignettes/22_mixed_models_vignette/mixed_model_structures.qmd).
+
 ::: callout-important
 **⚠️ The confusion to avoid**
 
@@ -1219,15 +1468,16 @@ the paired *t*-test **is** this mixed model.
 ::: callout-tip
 **🚀 If you finish early**
 
-Run the same formula on the raw 64 needles instead. You get *p* = 0.057
-and **59** denominator df, not 3.
+Run the same formula on the **raw 64 needles**. You get *p* = 0.057 on
+**59** denominator df, not 3 — because `(1|team)` alone assumes `side`
+behaves identically in every team, so all 64 needles count as
+replicates of the side effect.
 
-What changed? Check `VarCorr()` — one variance is estimated as exactly
-zero and R warns **"singular fit"**.
-
-You now know what that means: the likelihood walked to the edge of the
-parameter space, exactly as the moment estimator would have gone
-negative.
+Now let each team have its own side difference, by adding
+**`+ (1|team:side)`**. R warns **"boundary (singular) fit"**:
+σ²~team:side~ comes back as exactly **0**, the df stay at 59, and
+nothing is fixed. Four teams cannot separate that variance from zero —
+which is why the collapsed 8-value analysis is the defensible one.
 :::
 :::
 :::::
@@ -1237,6 +1487,7 @@ negative.
 ::::::: columns
 :::: {.column width="55%"}
 - **Gotelli & Ellison**, Ch. 10 — The Analysis of Variance, for the random-effects and variance-component material this lecture rebuilds.
+- Hurlbert, S. H. (1984). Pseudoreplication and the design of ecological field experiments. *Ecological Monographs, 54*(2), 187–211. The Part 1 reference, and still worth reading in full.
 - **Quinn & Keough** (2002), *Experimental Design and Data Analysis for Biologists*, Ch. 9 §9.1 — nested designs and expected mean squares. This is the source of today's worked example.
 - Zuur, A. F., Ieno, E. N., Walker, N. J., Saveliev, A. A., & Smith, G. M. (2009). *Mixed Effects Models and Extensions in Ecology with R*. Springer. Ch. 5 is the standard ecological treatment of REML.
 - Bates, D., Mächler, M., Bolker, B., & Walker, S. (2015). Fitting linear mixed-effects models using lme4. *Journal of Statistical Software*, 67(1), 1–48.
@@ -1247,8 +1498,7 @@ negative.
 **📖 On the dataset**
 
 The sea urchin grazing data are Andrew & Underwood's, as analysed in
-Quinn & Keough Ch. 9 — the same file as week 9. The textbook PDFs are
-on Canvas.
+Quinn & Keough Ch. 9. The textbook PDFs are on Canvas.
 :::
 
 ::: callout-tip

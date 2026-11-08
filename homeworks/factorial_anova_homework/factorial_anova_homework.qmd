@@ -7,16 +7,24 @@ description: "Two-factor / factorial ANOVA."
 author: "Bill Perry"
 ---
 
-[📥 Crayfish growth data](data/sargent_lodge_crayfish.csv){.btn .btn-primary download="sargent_lodge_crayfish.csv"}
+[📥 Leaf area data](data/reich_leaf_area.csv){.btn .btn-primary download="reich_leaf_area.csv"}
 
 ::: callout-note
 ## 📚 Where these data come from
 
-**Original study:** Sargent, L.W. & Lodge, D.M. (2014). Evolution of invasive traits in nonindigenous species: increased survival and faster growth in invasive populations of rusty crayfish (*Orconectes rusticus*). *Evolutionary Applications* 7: 949–961.
+**Source:** Quinn, G.P. & Keough, M.J. (2002), *Experimental Design and Data Analysis for Biologists*, **Ch. 9** — Box 9-2. The original study is Reich, P.B., Walters, M.B., Ellsworth, D.S., et al. (1998), *Oecologia* 114: 471–482.
 
-A common-garden experiment: young-of-year crayfish from native (Ohio) and invasive (Wisconsin) populations, grown in enclosures in three northern Wisconsin lakes in summer 2011. **Not a textbook dataset** — there is no chapter to look up, but the paper is worth reading.
+Leaf area was measured on woody plants at **four locations** spanning a huge climatic range — New Mexico, South Carolina, Venezuela and Wisconsin — and each plant was classified by **growth form**: shrub or tree. The question is whether the shrub/tree difference in leaf area is the same everywhere, or whether it depends on where you are.
 
-You will see these data again in **Homework 9 (Linear Mixed Models)**, where `lake` stops being a fixed factor and becomes a random effect.
+**In class you analysed the crayfish common-garden experiment.** This is the same design class — a two-factor factorial with badly unequal cell sizes — on a different question, and it behaves differently in a way worth finding.
+:::
+
+::: callout-warning
+## ⚠️ Three things about this file
+
+1.  It uses a **`.`** to mark a missing value. Check `class()` on your response column before you model anything — if it came in as `character`, that is why. `read_csv(..., na = c("", "NA", "."))` is the fix.
+2.  The cell sizes run from **2 to 21**. Every cell is filled, so every term is estimable, but nothing about this design is balanced.
+3.  **Look at a histogram of the raw response before you fit.** Leaf areas are a classic case where the untransformed scale will not pass a normality check. You are allowed to transform — but say so, and say why.
 :::
 
 ```{r setup_libraries}
@@ -35,7 +43,7 @@ theme_set(theme_light())
 
 # Assignment Overview
 
-This homework assignment analyzes crayfish growth data from Sargent and Lodge (2014) to examine differences in growth rates between native and invasive populations of rusty crayfish (*Orconectes rusticus*) across different lake environments using two-way ANOVA.
+This homework assignment analyzes the Reich et al. leaf-area data to examine whether the difference in leaf area between **shrubs** and **trees** is consistent across four **locations**, using a two-way factorial ANOVA on an unbalanced design.
 
 ## Learning Objectives
 
@@ -51,16 +59,15 @@ By completing this assignment, you will be able to:
 
 ## Data Description
 
-The dataset contains growth measurements from a common garden experiment where young-of-year (YOY) rusty crayfish from native (Ohio) and invasive (Wisconsin) populations were grown in enclosures in three northern Wisconsin lakes during summer 2011.
+The dataset contains leaf-area measurements on woody plants sampled at four locations, each plant classified as a shrub or a tree. There are 58 rows, one of which has a missing response.
 
 **Key variables:**
 
-- \- `range`: Population origin (Native vs Invasive)
-- \- `lake`: Lake location (Big, High, Papoose)
-- \- `growth_per_day`: Daily growth rate (mm/day) - response variable
-- \- `initial_length`: Starting length (mm)
-- \- `final_length`: Ending length (mm)
-- \- `days`: Duration of experiment
+- \- `LOCATION`: sampling location (Newmex, Scarolin, Venezuel, Wiscons) — 4 levels
+- \- `FUNCTION`: growth form (Shrub vs Tree) — 2 levels
+- \- `LEAFAREA`: leaf area (cm²) — the response variable
+
+Note that `FUNCTION` is a reserved word in R. `janitor::clean_names()` will lower-case it, and you should rename it to something safe — `func`, say — before you use it in a formula.
 
 ------------------------------------------------------------------------
 
@@ -87,35 +94,37 @@ The dataset contains growth measurements from a common garden experiment where y
 
 **Type of Analysis:** Two-way factorial ANOVA
 
-**Model Equation:** Growth Rate = μ + Range + Lake + (Range × Lake) + ε
+**Model Equation:** Leaf area = μ + Location + Function + (Location × Function) + ε
 
 Where:
 
-- \- Growth Rate = daily growth rate (mm/day)
-- \- Range = population origin (Native vs Invasive)
-- \- Lake = lake environment (Big vs High vs Papoose)
-- \- Range × Lake = interaction between range and lake
+- \- Leaf area = leaf area, cm² (transform it if your diagnostics tell you to)
+- \- Location = sampling location (4 levels)
+- \- Function = growth form (Shrub vs Tree)
+- \- Location × Function = interaction between the two
 - \- ε = random error
 
 **Hypotheses:**
 
 - *Main Effect*
-  - *- Range:*
-    - \- H₀: μ_Native = μ_Invasive (no difference in growth between ranges)
-    - \- H₁: μ_Native ≠ μ_Invasive (difference exists between ranges)
-  - *- Lake:*
-    - \- H₀: μ_Big = μ_High = μ_Papoose (no difference among lakes)
-    - \- H₁: At least one lake mean differs from others
+  - *- Location:*
+    - \- H₀: μ_Newmex = μ_Scarolin = μ_Venezuel = μ_Wiscons
+    - \- H₁: At least one location mean differs from the others
+  - *- Function:*
+    - \- H₀: μ_Shrub = μ_Tree (no difference in leaf area between growth forms)
+    - \- H₁: μ_Shrub ≠ μ_Tree
 - *Interaction Effect:*
-  - \- H₀: No interaction between Range and Lake
+  - \- H₀: The shrub–tree difference is the same at every location
 
-  - \- H₁: Interaction exists between Range and Lake
+  - \- H₁: The shrub–tree difference depends on location
 
 **Variables:**
 
-- \- Response: growth_per_day (continuous, mm/day)
-- \- Factor 1: range (categorical, 2 levels: Native, Invasive)
-- \- Factor 2: lake (categorical, 3 levels: Big, High, Papoose)
+- \- Response: leafarea (continuous, cm²)
+- \- Factor 1: location (categorical, 4 levels)
+- \- Factor 2: func (categorical, 2 levels: Shrub, Tree)
+
+**Because the design is unbalanced, use Type III sums of squares** — `car::Anova(model, type = 3)` — and set `options(contrasts = c("contr.sum", "contr.poly"))` **before** you fit the model.
 
 ------------------------------------------------------------------------
 
@@ -126,13 +135,13 @@ Where:
 ```{r data_summary_basic}
 #| paged-print: false
 
-# cray_df %>% group_by(range) %>% 
+# leaf_df %>% group_by(location, func) %>% 
 # skim()
 ```
 
 ## 3.2 Exploratory Visualizations
 
-```{r histogram_by_range}
+```{r histogram_of_response}
 
 ```
 
@@ -169,26 +178,26 @@ at the top.
 **▶ Run this** on your fitted model:
 
 ```{r effect_sizes}
-# eta_squared(crayfish_model, partial = FALSE)
+# eta_squared(leaf_model, partial = FALSE)
 #
-# omega_squared(crayfish_model, partial = FALSE)
+# omega_squared(leaf_model, partial = FALSE)
 ```
 
-Each gives you one row per term — `range`, `lake` and `range:lake` — with the estimate and
-its 95% CI.
+Each gives you one row per term — `location`, `func` and `location:func` — with the
+estimate and its 95% CI.
 
 To get the small / medium / large label without looking it up in a table:
 
 ```{r effect_size_interpretation}
-# eta_squared(crayfish_model, partial = FALSE) %>%
+# eta_squared(leaf_model, partial = FALSE) %>%
 #   interpret_eta_squared()
 ```
 
 ### What the two numbers mean
 
 - **Eta-squared (η²)** is the proportion of total variance explained by that term:
-  η² = SS_term / SS_total. If η² = 0.10 for `range`, then 10% of the variance in growth
-  rate is explained by whether the crayfish came from a native or invasive population.
+  η² = SS_term / SS_total. If η² = 0.10 for `func`, then 10% of the variance in leaf area
+  is explained by whether the plant is a shrub or a tree.
 - **Omega-squared (ω²)** is the same idea corrected for bias. η² always overestimates a
   little, especially with small samples; ω² is the more honest estimate. They will be close.
 
@@ -208,10 +217,10 @@ Large           0.14          14% of variance explained
 ✏️ **Your turn:** Fill in from your own output, then answer the question underneath.
 
 ```
-             eta2      omega2    label
-range      ______     ______    ______
-lake       ______     ______    ______
-range:lake ______     ______    ______
+                eta2      omega2    label
+location      ______     ______    ______
+func          ______     ______    ______
+location:func ______     ______    ______
 ```
 
 A term can be highly significant and still explain very little. Which of your three terms
@@ -221,6 +230,44 @@ and if not, what does that tell you about what p-values measure?
 ```
 ____________________________________________________________
 
+____________________________________________________________
+```
+
+### ⚠️ The part that is different from class
+
+In class, all three terms were significant and you read the interaction first. **Here, one
+of your two main effects will not be significant.** Before you write "growth form does not
+affect leaf area," do this:
+
+**▶ Run the simple effects** — the shrub–tree contrast *separately within each location*:
+
+```{r simple_effects_by_location}
+# pairs(emmeans(leaf_model, ~ func | location))
+```
+
+Then answer:
+
+1.  Is the shrub–tree difference zero at **every** location, or does it differ between
+    locations in **direction** as well as size?
+
+```
+____________________________________________________________
+```
+
+2.  Given your answer, explain in one or two sentences **how a factor can have a
+    non-significant main effect and still matter enormously.** What is the main-effect test
+    averaging over, and why does that average come out near zero here?
+
+```
+____________________________________________________________
+
+____________________________________________________________
+```
+
+3.  Write the one sentence you would put in a results section. It must not contain a claim
+    that is false at any of the four locations.
+
+```
 ____________________________________________________________
 ```
 
@@ -255,17 +302,17 @@ ____________________________________________________________
 # emmeans_interaction_df <- as.data.frame(emmeans_interaction)
 # 
 # emmeans_interaction_plot <- emmeans_interaction_df %>%
-#   ggplot(aes(x = lake, y = emmean, color = range, group = range)) +
+#   ggplot(aes(x = location, y = emmean, color = func, group = func)) +
 #   geom_point(size = 3, position = position_dodge(width=0.2)) +
 #   geom_line(size = 1, position = position_dodge(width=0.2)) +
 #   geom_errorbar(aes(ymin = lower.CL, ymax = upper.CL), 
 #                 width = 0.1, size = 1,
 #                 , position = position_dodge(width=0.2)) +
-#   labs(x = "Lake", 
-#        y = "Estimated Marginal Mean Growth Rate (mm/day)",
-#        color = "Range",
+#   labs(x = "Location", 
+#        y = "Estimated Marginal Mean Leaf Area",
+#        color = "Growth form",
 #        title = "Estimated Marginal Means with 95% Confidence Intervals") +
-#   scale_color_manual(values = c("Native" = "coral", "Invasive" = "darkblue")) +
+#   scale_color_manual(values = c("Shrub" = "coral", "Tree" = "darkblue")) +
 #   theme_classic()
 # 
 # emmeans_interaction_plot
@@ -280,7 +327,7 @@ ____________________________________________________________
 ```{r assumption_testing_base}
 # # Create diagnostic plots
 # par(mfrow = c(2, 2))
-# plot(crayfish_anova_model)
+# plot(leaf_model)
 # par(mfrow = c(1, 1))
 
 ```

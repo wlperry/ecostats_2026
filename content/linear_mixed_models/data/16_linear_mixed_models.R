@@ -32,7 +32,7 @@ invisible(NULL)
 
 
 # ---- 1 The sea urchin data, again ------------------------
-# The same data as Activity 14. 16 patches of reef got one
+# The data from lecture Part 1. 16 patches of reef got one
 # urchin-density treatment each; 5 quadrats scored inside
 # every patch.
 #
@@ -57,7 +57,7 @@ head(u_df)
 
 invisible(NULL)
 
-# THINK: in Activity 14 you wrote Error(patch) and got a
+# THINK: lecture Part 1 wrote Error(patch) and got a
 # p-value of 0.091. Two weeks later, what question is still
 # unanswered about those patches?
 
@@ -136,7 +136,7 @@ invisible(NULL)
 # THINK: an ICC near zero would mean what? Near one?
 
 # ---- 4b Where that variance came from, the old way -------
-# lmer() never computed a sum of squares. Week 9 did
+# lmer() never computed a sum of squares. Part 1 did
 # nothing else. Code is on the activity page.
 #
 #   a) the week-9 table: aov(algae ~ treat + treat:patch)
@@ -175,19 +175,19 @@ invisible(NULL)
 # enough to check that assumption honestly?
 
 
-# ---- 6 Does it agree with Activity 14? -------------------
+# ---- 6 Does it agree with the nested ANOVA? --------------
 # YOUR TURN - no code on the activity page.
 #
 # The claim: lmer() with (1|patch) and aov() with
 # Error(patch) are the same test on this balanced design.
 # Check it.
 #
-#   a) refit the Activity 14 nested model with
+#   a) fit the traditional nested model with
 #      aov(... + Error(patch)) on u_df
 #   b) put its F, df and p next to the F-test from
 #      section 3
 #   c) collapse to the 16 patch means and run a plain
-#      one-way aov() - as you did in Activity 14 - and add
+#      one-way aov() on those 16 numbers - and add
 #      that row too
 #   d) three rows, one table. Decide which numbers match.
 
@@ -240,7 +240,8 @@ invisible(NULL)
 
 
 # Q4. Does this experiment show urchins have no effect on
-#     algae? Same question as Activity 14 - has your answer
+#     algae? The lecture called it a large effect that four
+#     patches could not resolve - has your answer
 #     changed now that you can see the variance components?
 # ANSWER:
 
