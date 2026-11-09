@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="author" content="Bill Perry">
-<meta name="description" content="Hands-on activity: a second factorial ANOVA on the genuinely unbalanced Sargent &amp; Lodge crayfish growth data — reading Anova(type = 3) and summary() line by line, recovering the coefficients contr.sum does not print, comparing Type I/II/III where they actually differ, and using emmeans four ways to localise an interaction.">
+<meta name="description" content="Hands-on activity: a second factorial ANOVA on the genuinely unbalanced Sargent &amp; Lodge crayfish growth data — writing the factorial model, reading Anova(type = 3), using emmeans four ways to unpack an interaction, and checking whether a failed assumption changed the answer.">
 
 <title>Activity: Two-Way ANOVA Redux – UMD Biostatistics</title>
 <style>
@@ -121,7 +121,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <link rel="stylesheet" href="../../css/main.css">
 <link rel="stylesheet" href="../../css/main.css">
 <meta property="og:title" content="Activity: Two-Way ANOVA Redux – UMD Biostatistics">
-<meta property="og:description" content="Hands-on activity: a second factorial ANOVA on the genuinely unbalanced Sargent &amp; Lodge crayfish growth data — reading Anova(type = 3) and summary() line by line, recovering the coefficients contr.sum does not print, comparing Type I/II/III where they actually differ, and using emmeans four ways to localise an interaction.">
+<meta property="og:description" content="Hands-on activity: a second factorial ANOVA on the genuinely unbalanced Sargent &amp; Lodge crayfish growth data — writing the factorial model, reading Anova(type = 3), using emmeans four ways to unpack an interaction, and checking whether a failed assumption changed the answer.">
 <meta property="og:site_name" content="UMD Biostatistics">
 </head>
 
@@ -422,7 +422,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 <div>
   <div class="description">
-    Hands-on activity: a second factorial ANOVA on the genuinely unbalanced Sargent &amp; Lodge crayfish growth data — reading Anova(type = 3) and summary() line by line, recovering the coefficients contr.sum does not print, comparing Type I/II/III where they actually differ, and using emmeans four ways to localise an interaction.
+    Hands-on activity: a second factorial ANOVA on the genuinely unbalanced Sargent &amp; Lodge crayfish growth data — writing the factorial model, reading Anova(type = 3), using emmeans four ways to unpack an interaction, and checking whether a failed assumption changed the answer.
   </div>
 </div>
 
@@ -450,13 +450,10 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <section id="todays-objectives" class="level3">
 <h3 class="anchored">Today’s Objectives</h3>
 <ol type="1">
-<li>Measure how unbalanced a design is, and say why proportionality matters</li>
-<li>Read <code>Anova(model, type = 3)</code> completely — every row, every df</li>
-<li>Read <code>summary(model)</code> line by line, and recover the coefficients <code>contr.sum</code> does not print</li>
-<li>Rebuild a cell mean by hand from the coefficients and match <code>emmeans</code></li>
-<li>Compare Type I, II and III on a design where they disagree</li>
+<li>Write a two-factor model with an interaction, and say what each term is</li>
+<li>Read <code>Anova(model, type = 3)</code> on an unbalanced design</li>
 <li>Use <code>emmeans</code> four ways: marginal, simple effects both directions, interaction contrast</li>
-<li>Decide whether a failed assumption changes the conclusion</li>
+<li>Check the model with <code>check_model()</code> and decide whether a violation mattered</li>
 </ol>
 <div class="callout callout-style-default callout-tip callout-titled">
 <div class="callout-header d-flex align-content-center">
@@ -481,202 +478,193 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <i class="callout-icon"></i>
 </div>
 <div class="callout-title-container flex-fill">
-<span class="screen-reader-only">Important</span>What you hand in
+<span class="screen-reader-only">Important</span>How today works
 </div>
 </div>
 <div class="callout-body-container callout-body">
 <ul>
-<li><strong>All of today’s code is on this page.</strong> The skeleton has the plumbing — libraries, the data read, and the cell-count block — and nothing else. Every line of statistics you type yourself.</li>
-<li>The <strong>Q</strong> boxes are <strong>things to think about</strong>, not inline homework. They are not graded.</li>
-<li>The <strong>write-up</strong> at the bottom — section 8 — <em>is</em> graded, as <code>#</code> comments in the script.</li>
-<li>Hand in <code>scripts/14_two_way_anova_redux.R</code>. Run it top to bottom first — it must run clean.</li>
+<li>Each section gives you the <strong>shape</strong> of the code — the function and its arguments with generic names — and you fill in the names from <em>this</em> dataset.</li>
+<li>The <strong>✏️ Q</strong> boxes are to answer out loud as we go. Nothing is graded today.</li>
+<li>The skeleton is deliberately written so that <strong>you can reuse it on your own two-factor data</strong>. Swap the data read and the two factor names and the rest still runs.</li>
 </ul>
 </div>
 </div>
-<div class="callout callout-style-default callout-note callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-<span class="screen-reader-only">Note</span>🔮 Predict before you run
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p>You did this analysis last session on penguins. Before each chunk, say what you expect <strong>to be different this time</strong>. The point of today is noticing which choices stopped being free.</p>
-</div>
-</div>
-<p>Keep the plots plain — no labels, colors or themes. The one exception is the final figure in section 8.</p>
+<p>Keep the plots plain — no labels, colors or themes. The goal is to read them.</p>
 <hr>
 <blockquote class="blockquote">
-<h2 id="block-1-the-design-and-how-broken-it-is-after-lecture-parts-12" class="anchored" data-anchor-id="todays-objectives">🧩 Block 1 — The design, and how broken it is <em>(after lecture Parts 1–2)</em></h2>
-<p>Sections 1–2: meet the data, then measure the imbalance.</p>
+<h2 id="block-1-the-design-lecture-parts-12" class="anchored" data-anchor-id="todays-objectives">🧩 Block 1 — The design <em>(lecture Parts 1–2)</em></h2>
 </blockquote>
 </section>
 </section>
-<section id="section-1-the-data" class="level1">
-<h1>Section 1 · The data</h1>
-<p><em>Written for you in the skeleton — run it and read it.</em></p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ---- Libraries -------------------------------------------</span></span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(car)        <span class="co"># Anova(), leveneTest()</span></span>
-<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(emmeans)    <span class="co"># emmeans(), emmip(), contrast()</span></span>
-<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(effectsize) <span class="co"># eta_squared()</span></span>
-<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(janitor)    <span class="co"># clean_names()</span></span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tidyverse)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ---- 1 The data ------------------------------------------</span></span>
-<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>cray_df <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="st">"data/sargent_lodge_crayfish.csv"</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">clean_names</span>() <span class="sc">%&gt;%</span></span>
-<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">range =</span> <span class="fu">factor</span>(range, <span class="at">levels =</span> <span class="fu">c</span>(<span class="st">"Native"</span>, <span class="st">"Invasive"</span>)),</span>
-<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>         <span class="at">lake  =</span> <span class="fu">factor</span>(lake,  <span class="at">levels =</span> <span class="fu">c</span>(<span class="st">"Big"</span>, <span class="st">"High"</span>, <span class="st">"Papoose"</span>)))</span>
-<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="fu">head</span>(cray_df)</span>
-<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>cray_cells <span class="ot">&lt;-</span> cray_df <span class="sc">%&gt;%</span></span>
-<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(range, lake) <span class="sc">%&gt;%</span></span>
-<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">n =</span> <span class="fu">n</span>(),</span>
-<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>            <span class="at">mean =</span> <span class="fu">mean</span>(growth_per_day),</span>
-<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>            <span class="at">sd   =</span> <span class="fu">sd</span>(growth_per_day),</span>
-<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>            <span class="at">.groups =</span> <span class="st">"drop"</span>)</span>
-<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>cray_cells</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><code>range</code> (2 levels) × <code>lake</code> (3 levels), crossed — a <strong>2 × 3 factorial</strong> with six cells and 84 crayfish.</p>
-<p>✏️ <strong>Q1:</strong> Read the <code>mean</code> column in pairs within each lake. Where is the Native–Invasive gap large, and where is it gone?</p>
-<p>✏️ <strong>Q2:</strong> Now read the <code>sd</code> column. Which cell has the smallest spread, which the largest, and roughly what is the ratio?</p>
+<section id="section-1-libraries-and-data" class="level1">
+<h1>Section 1 · Libraries and data</h1>
+<p><em>Written for you in the skeleton.</em></p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(car)         <span class="co"># Anova()</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(emmeans)     <span class="co"># emmeans(), emmip(), contrast()</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(effectsize)  <span class="co"># eta_squared()</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(performance) <span class="co"># check_model(), check_normality()</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(janitor)     <span class="co"># clean_names()</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tidyverse)</span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>cray_df <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="st">"data/sargent_lodge_crayfish.csv"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">clean_names</span>() <span class="sc">%&gt;%</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">range =</span> <span class="fu">factor</span>(range, <span class="at">levels =</span> <span class="fu">c</span>(<span class="st">"Native"</span>, <span class="st">"Invasive"</span>)),</span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>         <span class="at">lake  =</span> <span class="fu">factor</span>(lake,  <span class="at">levels =</span> <span class="fu">c</span>(<span class="st">"Big"</span>, <span class="st">"High"</span>, <span class="st">"Papoose"</span>)))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <hr>
 </section>
-<section id="section-2-how-unbalanced" class="level1">
-<h1>Section 2 · How unbalanced?</h1>
-<p><em>Written for you in the skeleton — this is bookkeeping.</em></p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ---- 2 How unbalanced ------------------------------------</span></span>
-<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>cray_df <span class="sc">%&gt;%</span></span>
-<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">count</span>(range, lake) <span class="sc">%&gt;%</span></span>
-<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_wider</span>(<span class="at">names_from =</span> lake, <span class="at">values_from =</span> n)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>✏️ <strong>Q3:</strong> Every cell is filled, so every term is estimable. But is the design <strong>proportional</strong> — do the cell counts follow the row and column totals? Work out what fraction of the Native crayfish were in Big, and what fraction of the Invasive ones were.</p>
-<p>✏️ <strong>Q4:</strong> Last session you <em>forced</em> the penguins to be balanced by throwing birds away. Why is that a bad idea here?</p>
+<section id="section-2-look-at-the-design-before-you-model-it" class="level1">
+<h1>Section 2 · Look at the design before you model it</h1>
+<p>The cell counts, then the cell means.</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># the shape:</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="co">#   df %&gt;% count(factor_1, factor_2) %&gt;%</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="co">#     pivot_wider(names_from = factor_2, values_from = n)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>▶ YOUR CODE:</strong> count the cells, and pivot them into a 2 × 3 table.</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co"># the shape:</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="co">#   df %&gt;% group_by(factor_1, factor_2) %&gt;%</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="co">#     summarise(n = n(), mean = mean(response), sd = sd(response),</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="co">#               .groups = "drop")</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>▶ YOUR CODE:</strong> build <code>cray_cells</code> — <code>n</code>, <code>mean</code> and <code>sd</code> for all six cells.</p>
+<p>✏️ <strong>Q1:</strong> The smallest cell is 5 and the largest is 20. Is the design <em>proportional</em> — do the cell counts follow the row and column totals?</p>
+<p>✏️ <strong>Q2:</strong> Read the <code>mean</code> column in pairs within each lake. Where is the Native–Invasive gap large, and where has it gone?</p>
+<p>✏️ <strong>Q3:</strong> Read the <code>sd</code> column. Which cell has the smallest spread, which the largest, and roughly what ratio? Does the spread track the means?</p>
 <hr>
-<p>Now look at it before modelling it.</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(cray_df, <span class="fu">aes</span>(lake, growth_per_day, <span class="at">fill =</span> range)) <span class="sc">+</span></span>
-<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_boxplot</span>()</span>
-<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(cray_cells, <span class="fu">aes</span>(lake, mean, <span class="at">color =</span> range, <span class="at">group =</span> range)) <span class="sc">+</span></span>
-<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_line</span>() <span class="sc">+</span></span>
-<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>✏️ <strong>Q5:</strong> In the second plot, are the lines parallel? Do they cross? Describe in one sentence the <em>shape</em> of what you see.</p>
+<p>Now two plots.</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co"># the shape:</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="co">#   ggplot(df, aes(factor_2, response, fill = factor_1)) + geom_boxplot()</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="co">#</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="co">#   ggplot(cells, aes(factor_2, mean, color = factor_1, group = factor_1)) +</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a><span class="co">#     geom_line() + geom_point()</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>▶ YOUR CODE:</strong> a boxplot of the raw data, then an interaction plot of the cell means.</p>
+<p>✏️ <strong>Q4:</strong> In the interaction plot, are the lines parallel? Do they cross? Describe the <em>shape</em> in one sentence.</p>
 <hr>
 <p>Before any model, check the design for confounds.</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>cray_df <span class="sc">%&gt;%</span></span>
-<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(range) <span class="sc">%&gt;%</span></span>
-<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">days =</span> <span class="fu">paste</span>(<span class="fu">sort</span>(<span class="fu">unique</span>(days)), <span class="at">collapse =</span> <span class="st">", "</span>),</span>
-<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>            <span class="at">mean_temp =</span> <span class="fu">mean</span>(avg_temp),</span>
-<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>            <span class="at">n =</span> <span class="fu">n</span>())</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>✏️ <strong>Q6:</strong> <code>days</code> and <code>range</code> are perfectly confounded. The response is growth <em>per day</em>, so what does that fix — and what does it <strong>not</strong> fix? Which of the three ANOVA terms are unaffected by this problem?</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co"># the shape:</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="co">#   df %&gt;% group_by(factor_1) %&gt;%</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="co">#     summarise(days = paste(sort(unique(days)), collapse = ", "),</span></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a><span class="co">#               mean_temp = mean(avg_temp), n = n())</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>▶ YOUR CODE:</strong> run it, and look at <code>days</code> and <code>avg_temp</code> by <code>range</code>.</p>
+<p>✏️ <strong>Q5:</strong> <code>days</code> is perfectly confounded with <code>range</code>. The response is growth <em>per day</em> — what does that fix, and what does it <strong>not</strong> fix? Which of the three model terms are unaffected?</p>
 <hr>
 <blockquote class="blockquote">
-<h2 id="block-2-reading-the-two-tables-properly-after-lecture-parts-34" class="anchored" data-anchor-id="section-2-how-unbalanced">🧩 Block 2 — Reading the two tables properly <em>(after lecture Parts 3–4)</em></h2>
-<p>Sections 3–5: the ANOVA table, the coefficient table, and the SS types.</p>
+<h2 id="block-2-the-model-and-its-table-lecture-parts-35" class="anchored" data-anchor-id="section-2-look-at-the-design-before-you-model-it">🧩 Block 2 — The model and its table <em>(lecture Parts 3–5)</em></h2>
 </blockquote>
 </section>
-<section id="section-3-fit-it-and-read-anovatype-3" class="level1">
-<h1>Section 3 · Fit it, and read <code>Anova(type = 3)</code></h1>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ---- 3 Fit and test --------------------------------------</span></span>
-<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="fu">options</span>(<span class="at">contrasts =</span> <span class="fu">c</span>(<span class="st">"contr.sum"</span>, <span class="st">"contr.poly"</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>YOUR CODE:</strong> fit <code>cray_model</code> as <code>lm(growth_per_day ~ range * lake, ...)</code>, then run <code>Anova(cray_model, type = 3)</code>.</p>
-<p>✏️ <strong>Q7:</strong> Account for every df in the table. Where do 1, 2, 2 and 78 each come from? (Hint: 84 crayfish, 6 cells.)</p>
-<p>✏️ <strong>Q8:</strong> Which row do you read first, and why? What does that do to your reading of the two main-effect rows?</p>
-<p>✏️ <strong>Q9:</strong> The <code>(Intercept)</code> row has <em>F</em> = 4461 and <em>p</em> &lt; 0.0001. What null hypothesis is that rejecting, and why does nobody report it?</p>
+<section id="section-3-write-the-factorial-model" class="level1">
+<h1>Section 3 · Write the factorial model</h1>
+<p>A two-factor model with an interaction has <strong>three</strong> terms. Written out in full:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co"># the shape, written the long way:</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="co">#   model &lt;- lm(y ~ x1 + x2 + x1:x2, data = df)</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a><span class="co">#</span></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a><span class="co"># and the shorthand that means exactly the same thing:</span></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a><span class="co">#   model &lt;- lm(y ~ x1 * x2, data = df)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<ul>
+<li><code>x1</code> — the first main effect</li>
+<li><code>x2</code> — the second main effect</li>
+<li><code>x1:x2</code> — the <strong>interaction</strong>, which asks whether <code>x1</code>’s effect is the same at every level of <code>x2</code></li>
+<li><code>x1 * x2</code> — shorthand for all three</li>
+</ul>
+<p>Type III sums of squares need <strong>sum-to-zero</strong> contrasts, and contrasts are fixed when <code>lm()</code> runs. So the order is always <strong>set → fit → test</strong>.</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="co"># the shape:</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="co">#   options(contrasts = c("contr.sum", "contr.poly"))</span></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a><span class="co">#   model &lt;- lm(y ~ x1 * x2, data = df)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>▶ YOUR CODE:</strong> set the contrasts, then fit <code>cray_model</code> with <code>growth_per_day</code> as the response and <code>range</code> and <code>lake</code> as the two factors.</p>
+<p>✏️ <strong>Q6:</strong> Write out in words what each of the three terms is asking.</p>
 <hr>
 </section>
-<section id="section-4-read-summary-line-by-line" class="level1">
-<h1>Section 4 · Read <code>summary()</code> line by line</h1>
-<p><strong>YOUR CODE:</strong> run <code>summary(cray_model)</code>.</p>
-<p>✏️ <strong>Q10:</strong> The design has six cells and the table has six rows. List the coefficient names you <em>expected</em> and did not get. How many are missing?</p>
-<p>✏️ <strong>Q11:</strong> Nothing was dropped. What rule is <code>contr.sum</code> imposing that makes those rows redundant?</p>
-<p>Now recover them.</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ---- 4 Recover the missing coefficients ------------------</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>YOUR CODE:</strong> pull <code>b &lt;- coef(cray_model)</code>, then build a named vector containing the Native effect, the <strong>Invasive</strong> effect, the Big and High effects, and the <strong>Papoose</strong> effect.</p>
-<p>✏️ <strong>Q12:</strong> Which lake has the largest effect in absolute size? Was it printed by <code>summary()</code>?</p>
-<p>✏️ <strong>Q13:</strong> <code>lake1</code> and <code>lake2</code> are both positive and significant. Explain why “being in a lake raises growth” is the wrong conclusion to draw from that.</p>
-<hr>
-<p>Next, the intercept.</p>
-<p><strong>YOUR CODE:</strong> compare three numbers — <code>coef(cray_model)[[1]]</code>, <code>mean(cray_cells$mean)</code>, and <code>mean(cray_df$growth_per_day)</code>.</p>
-<p>✏️ <strong>Q14:</strong> Two of those three are identical. Which two, and what does that tell you the intercept actually is? Why would all three have agreed on the penguins’ balanced subsample?</p>
-<hr>
-<p>Now the payoff: rebuild a cell mean from the coefficients.</p>
-<p><strong>YOUR CODE:</strong> compute the fitted mean for <strong>Invasive crayfish in Papoose</strong> using only <code>b</code>. Every term is a negative, because Invasive is level 2 of <code>range</code> and Papoose is level 3 of <code>lake</code>. Then compare it to <code>emmeans(cray_model, ~ range * lake)</code> and to the observed cell mean.</p>
-<p>✏️ <strong>Q15:</strong> Do all three agree exactly, or just closely? Why does a model with an interaction reproduce the cell means perfectly?</p>
-<p>✏️ <strong>Q16:</strong> <code>summary()</code> gives <code>lake</code> two <em>t</em>-tests and <code>Anova()</code> gives it one <em>F</em>-test. Which would you report to claim “lake matters”, and why is the other one not a substitute?</p>
-<hr>
-</section>
-<section id="section-5-type-i-ii-and-iii" class="level1">
-<h1>Section 5 · Type I, II and III</h1>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ---- 5 The three SS types --------------------------------</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>YOUR CODE:</strong> run all three on <code>cray_model</code> — <code>anova()</code> for Type I, <code>Anova(..., type = 2)</code>, <code>Anova(..., type = 3)</code>. Compare the three <em>F</em> values for each of the three terms.</p>
-<p>✏️ <strong>Q17:</strong> Which term’s <em>F</em> changes most between Type I and Type III? By how much?</p>
-<p>✏️ <strong>Q18:</strong> The interaction <em>F</em> is identical in all three. Why must that always be true?</p>
-<p>Now show that Type I depends on typing order.</p>
-<p><strong>YOUR CODE:</strong> fit the model again as <code>growth_per_day ~ lake * range</code> and pull <code>range</code>’s Type I sum of squares from each of the two fits.</p>
-<p>✏️ <strong>Q19:</strong> You got two different sums of squares for the same term from the same data. Which one is “right”?</p>
-<p>✏️ <strong>Q20:</strong> Which type would you report here, and what is the one-sentence justification? (Think about whether either factor is <em>prior</em> to the other.)</p>
+<section id="section-4-read-the-anova-table" class="level1">
+<h1>Section 4 · Read the ANOVA table</h1>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="co"># the shape:</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="co">#   Anova(model, type = 3)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>▶ YOUR CODE:</strong> run it on <code>cray_model</code>.</p>
+<p>✏️ <strong>Q7:</strong> Account for every df in the table. Where do 1, 2, 2 and 78 come from? (84 crayfish, 6 cells.)</p>
+<p>✏️ <strong>Q8:</strong> Which row do you read <strong>first</strong>, and why? What does that do to how you read the two main-effect rows?</p>
+<p>✏️ <strong>Q9:</strong> The <code>(Intercept)</code> row has <em>F</em> = 4461 and <em>p</em> &lt; 0.0001. What is it testing, and why does nobody report it?</p>
+<p>✏️ <strong>Q10:</strong> Now run <code>anova(cray_model)</code> — lower-case, base R. That is <strong>Type I</strong>. Compare the <code>lake</code> row to the Type III one. Which is bigger, and which would you report here?</p>
 <hr>
 <blockquote class="blockquote">
-<h2 id="block-3-emmeans-four-ways-then-assumptions-after-lecture-parts-67" class="anchored" data-anchor-id="section-5-type-i-ii-and-iii">🧩 Block 3 — <code>emmeans</code> four ways, then assumptions <em>(after lecture Parts 6–7)</em></h2>
-<p>Sections 6–7: unpack the interaction, then decide whether you can trust it.</p>
+<h2 id="block-3-unpacking-it-and-checking-it-lecture-parts-67" class="anchored" data-anchor-id="section-4-read-the-anova-table">🧩 Block 3 — Unpacking it, and checking it <em>(lecture Parts 6–7)</em></h2>
 </blockquote>
 </section>
-<section id="section-6-emmeans-four-ways" class="level1">
-<h1>Section 6 · <code>emmeans</code>, four ways</h1>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ---- 6 emmeans, four ways --------------------------------</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<section id="section-5-emmeans-four-ways" class="level1">
+<h1>Section 5 · <code>emmeans</code>, four ways</h1>
+<p>The interaction was significant, so the main effects are now conditional statements. These four calls are how you say what actually happened.</p>
 <p><strong>Way 1 — marginal means.</strong></p>
-<p><strong>YOUR CODE:</strong> <code>emmeans(cray_model, ~ range)</code>. Then compute the raw mean of <code>growth_per_day</code> by <code>range</code> with <code>group_by()</code> and compare.</p>
-<p>✏️ <strong>Q21:</strong> The EMM difference is larger than the raw difference. Which direction is the raw mean biased, and which cells caused it?</p>
-<p>✏️ <strong>Q22:</strong> R printed a NOTE above the table. What is it warning you about, and is it right?</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="co"># the shape:</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="co">#   emmeans(model, ~ x1)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>▶ YOUR CODE:</strong> the marginal means for <code>range</code>. Then compute the raw mean by <code>range</code> with <code>group_by()</code> / <code>summarise()</code> and compare.</p>
+<p>✏️ <strong>Q11:</strong> The EMM difference is bigger than the raw difference. Which direction is the raw mean biased, and which cells caused it?</p>
+<p>✏️ <strong>Q12:</strong> R printed a NOTE above the table. What is it warning you about — and is it right?</p>
 <p><strong>Way 2 — simple effects of <code>range</code> within each lake.</strong></p>
-<p><strong>YOUR CODE:</strong> <code>pairs(emmeans(cray_model, ~ range | lake))</code>.</p>
-<p>✏️ <strong>Q23:</strong> Write the result of the study in one sentence using these three numbers.</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="co"># the shape:</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="co">#   pairs(emmeans(model, ~ x1 | x2))</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>▶ YOUR CODE:</strong> run it. The <code>|</code> means “separately within each level of”.</p>
+<p>✏️ <strong>Q13:</strong> Write the result of the study in one sentence, using these three numbers.</p>
 <p><strong>Way 3 — simple effects of <code>lake</code> within each range.</strong></p>
-<p><strong>YOUR CODE:</strong> <code>pairs(emmeans(cray_model, ~ lake | range))</code>.</p>
-<p>✏️ <strong>Q24:</strong> Did lake stop mattering for one of the ranges, or does it matter <em>more</em> for one? What does that tell you about the shape of the interaction?</p>
-<p>✏️ <strong>Q25:</strong> Way 3 shows a Tukey adjustment and Way 2 does not. Why?</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="co"># the shape:</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a><span class="co">#   pairs(emmeans(model, ~ x2 | x1))</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>▶ YOUR CODE:</strong> swap the two factors around.</p>
+<p>✏️ <strong>Q14:</strong> Did lake stop mattering for one range, or does it matter <em>more</em> for one? What shape of interaction is that?</p>
+<p>✏️ <strong>Q15:</strong> Way 3 shows a Tukey adjustment and Way 2 does not. Why?</p>
 <p><strong>Way 4 — the interaction contrast.</strong></p>
-<p><strong>YOUR CODE:</strong> <code>contrast(emmeans(cray_model, ~ range * lake), interaction = c("pairwise", "pairwise"))</code>.</p>
-<p>✏️ <strong>Q26:</strong> These are differences <em>of</em> differences. Which lake is responsible for the interaction, and which two lakes behave the same?</p>
-<p>✏️ <strong>Q27:</strong> Of the four ways, only one tells you <strong>where in the design</strong> the interaction lives. Which, and why can the <code>Anova()</code> table never do that?</p>
-<p>Finally, the picture.</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="fu">emmip</span>(cray_model, range <span class="sc">~</span> lake, <span class="at">CIs =</span> <span class="cn">TRUE</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>✏️ <strong>Q28:</strong> Where do the confidence bands overlap, and where do they not? Does the figure agree with Way 4?</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="co"># the shape:</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a><span class="co">#   contrast(emmeans(model, ~ x1 * x2),</span></span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a><span class="co">#            interaction = c("pairwise", "pairwise"))</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>▶ YOUR CODE:</strong> run it. These are differences <em>of</em> differences.</p>
+<p>✏️ <strong>Q16:</strong> Which lake is responsible for the interaction? Which two lakes behave the same?</p>
+<p>✏️ <strong>Q17:</strong> Only one of the four ways tells you <strong>where in the design</strong> the interaction lives. Which one, and why can the <code>Anova()</code> table never do that?</p>
+<p><strong>And the picture.</strong></p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb13"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="co"># the shape:</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a><span class="co">#   emmip(model, x1 ~ x2, CIs = TRUE)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>▶ YOUR CODE:</strong> plot it.</p>
+<p>✏️ <strong>Q18:</strong> Where do the confidence bands overlap, and where do they not? Does the figure agree with Way 4?</p>
 <hr>
 </section>
-<section id="section-7-effect-size-and-assumptions" class="level1">
-<h1>Section 7 · Effect size and assumptions</h1>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ---- 7 Effect size and assumptions -----------------------</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>YOUR CODE:</strong> <code>eta_squared(Anova(cray_model, type = 3))</code>.</p>
-<p>✏️ <strong>Q29:</strong> Which term has the largest effect size? Was it the one the study was about? What does that suggest about how to design the <em>next</em> experiment?</p>
-<p><strong>YOUR CODE:</strong> check the assumptions — <code>shapiro.test(residuals(cray_model))</code>, <code>leveneTest(growth_per_day ~ range * lake, data = cray_df)</code>, and a plot of <code>rstandard()</code> against <code>fitted()</code>.</p>
-<p>✏️ <strong>Q30:</strong> Both tests fail. Look at the cell <code>sd</code> column from section 1 again — is the spread random, or does it track the cell means?</p>
+<section id="section-6-effect-size" class="level1">
+<h1>Section 6 · Effect size</h1>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb14"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="co"># the shape:</span></span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a><span class="co">#   eta_squared(Anova(model, type = 3))</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>▶ YOUR CODE:</strong> run it.</p>
+<p>✏️ <strong>Q19:</strong> Which term has the largest effect size? Is it the term the study was about? What does that suggest about designing the <em>next</em> experiment?</p>
+<hr>
+</section>
+<section id="section-7-check-the-model" class="level1">
+<h1>Section 7 · Check the model</h1>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb15"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="co"># the shape:</span></span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a><span class="co">#   check_model(model, check = c("qq", "homogeneity", "outliers"))</span></span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a><span class="co">#   check_normality(model)</span></span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a><span class="co">#   check_heteroscedasticity(model)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>▶ YOUR CODE:</strong> all three, on <code>cray_model</code>.</p>
+<p>✏️ <strong>Q20:</strong> Which panels are unhappy, and what are they telling you? Does it match what you saw in the <code>sd</code> column in Q3?</p>
 <p>Now find out whether it matters.</p>
-<p><strong>YOUR CODE:</strong> refit on <code>log(growth_per_day)</code>, run <code>Anova(..., type = 3)</code> on it, and re-run <code>shapiro.test</code> and <code>leveneTest</code> on the log model.</p>
-<p>✏️ <strong>Q31:</strong> Did the log transform fix the assumptions? Did it change any conclusion?</p>
-<p>✏️ <strong>Q32:</strong> You now have two analyses that agree. Which do you report, and what one extra sentence do you owe the reader?</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb16"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="co"># the shape:</span></span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a><span class="co">#   model_log &lt;- lm(log(y) ~ x1 * x2, data = df)</span></span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a><span class="co">#   Anova(model_log, type = 3)</span></span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a><span class="co">#   check_normality(model_log)</span></span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a><span class="co">#   check_heteroscedasticity(model_log)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>▶ YOUR CODE:</strong> refit on the log scale and re-check.</p>
+<p>✏️ <strong>Q21:</strong> Both <code>Warning:</code> lines should now say <code>OK:</code>. Did any conclusion change?</p>
+<p>✏️ <strong>Q22:</strong> You have two analyses that agree. Which do you report, and what one extra sentence do you owe the reader?</p>
 <hr>
 </section>
-<section id="section-8-write-up-graded" class="level1">
-<h1>Section 8 · Write-up <em>(graded)</em></h1>
-<p>Put these in your script as <code>#</code> comments.</p>
-<p><strong>8a.</strong> A <strong>methods</strong> paragraph: the design, the response, the model, which SS type you used and why, and the transformation. Two or three sentences.</p>
-<p><strong>8b.</strong> A <strong>results</strong> paragraph. It must contain: the interaction before the main effects, the three simple effects from Way 2, the interaction contrast result from Way 4, and one effect size. Do not write a sentence that would be false in Papoose Lake.</p>
-<p><strong>8c.</strong> One sentence disclosing the <code>days</code> / temperature confound, as it would appear in the paper.</p>
-<p><strong>8d.</strong> A <strong>publication-quality figure</strong> — build it from <code>as.data.frame(emmeans(cray_model, ~ range * lake))</code> with points and error bars, axis labels with units, and a readable legend. This is the one plot you polish.</p>
+<section id="section-8-the-figure" class="level1">
+<h1>Section 8 · The figure</h1>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb17"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="co"># the shape:</span></span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a><span class="co">#   as.data.frame(emmeans(model, ~ x1 * x2)) %&gt;%</span></span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a><span class="co">#     ggplot(aes(x2, emmean, color = x1)) +</span></span>
+<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a><span class="co">#     geom_pointrange(aes(ymin = lower.CL, ymax = upper.CL),</span></span>
+<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a><span class="co">#                     position = position_dodge(0.3))</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>▶ YOUR CODE:</strong> build the figure from the model’s estimated marginal means — points, error bars, axis labels with units, readable legend. This is the one plot worth polishing.</p>
+<p>✏️ <strong>Q23:</strong> Why build the figure from <code>emmeans()</code> output rather than from the raw cell means? On a <em>balanced</em> design, would it have mattered?</p>
 <hr>
 <section id="checkpoint-can-you-do-these-now" class="level3">
 <h3 class="anchored" data-anchor-id="checkpoint-can-you-do-these-now">Checkpoint — can you do these now?</h3>
 <ul class="task-list">
-<li><label><input type="checkbox">Say what <em>proportional</em> means and test a design for it</label></li>
+<li><label><input type="checkbox">Write a two-factor model with an interaction, long form and shorthand</label></li>
+<li><label><input type="checkbox">Say why <code>options(contrasts = ...)</code> has to come before <code>lm()</code></label></li>
 <li><label><input type="checkbox">Account for every df in a factorial <code>Anova()</code> table</label></li>
-<li><label><input type="checkbox">Recover a <code>contr.sum</code> coefficient R did not print</label></li>
-<li><label><input type="checkbox">Rebuild a cell mean from the coefficient table by hand</label></li>
-<li><label><input type="checkbox">Explain why the interaction <em>F</em> is the same in all three SS types</label></li>
-<li><label><input type="checkbox">Choose between Type I, II and III and justify it in one sentence</label></li>
+<li><label><input type="checkbox">Read the interaction row first, and say what it does to the main effects</label></li>
 <li><label><input type="checkbox">Use <code>emmeans</code> four ways, and say which one localises an interaction</label></li>
+<li><label><input type="checkbox">Read a <code>check_model()</code> panel and the matching <code>check_*()</code> tests</label></li>
 <li><label><input type="checkbox">Decide whether a failed assumption changed your conclusion</label></li>
 </ul>
 

@@ -5,27 +5,31 @@
 #
 # Save as scripts/14_two_way_anova_redux.R
 #
-# Only the plumbing is written for you - libraries, the data
-# read, and the cell counts. Every line of statistics you
-# type yourself. The code is on the activity page.
+# This is a TEMPLATE for any two-factor factorial analysis.
+# To reuse it on your own data, change three things:
+#   1. the file name in read_csv()
+#   2. the response variable
+#   3. the two factor names
+# Everything after that runs unchanged.
 #
-# THINK lines are to talk about, not to answer here.
-# The WRITE-UP in section 8 is what gets graded.
+# Libraries, the data read and the cell summary are written
+# for you. Each other section says what it does and gives
+# you the shape of the call. You type it.
 # ==========================================================
 
 # ---- Libraries -------------------------------------------
-library(car)        # Anova(), leveneTest()
-library(emmeans)    # emmeans(), emmip(), contrast()
-library(effectsize) # eta_squared()
-library(janitor)    # clean_names()
+library(car)         # Anova()
+library(emmeans)     # emmeans(), emmip(), contrast()
+library(effectsize)  # eta_squared()
+library(performance) # check_model(), check_normality()
+library(janitor)     # clean_names()
 library(tidyverse)
 
-invisible(NULL)
 
-
-# ---- 1 The data ------------------------------------------
-# range (2) x lake (3), crossed = a 2 x 3 factorial.
-# Response: growth_per_day. Written for you.
+# ---- 1 Read the data -------------------------------------
+# clean_names() lower-cases the headers. factor() with an
+# explicit levels= puts the levels in the order you want
+# them plotted, instead of alphabetical.
 
 cray_df <- read_csv("data/sargent_lodge_crayfish.csv") %>%
   clean_names() %>%
@@ -34,192 +38,150 @@ cray_df <- read_csv("data/sargent_lodge_crayfish.csv") %>%
 
 head(cray_df)
 
+
+# ---- 2 Describe the design before modelling --------------
+# Cell counts first: are all six cells filled, and are the
+# counts proportional to the row and column totals?
+
+cray_df %>%
+  count(range, lake) %>%
+  pivot_wider(names_from = lake, values_from = n)
+
+# Then n, mean and sd for every cell. The sd column is your
+# first look at the equal-variance assumption.
+
 cray_cells <- cray_df %>%
   group_by(range, lake) %>%
-  summarise(n = n(),
+  summarise(n    = n(),
             mean = mean(growth_per_day),
             sd   = sd(growth_per_day),
             .groups = "drop")
 
 cray_cells
 
-invisible(NULL)
 
-# THINK: read mean in pairs within each lake. Where is the
-# Native-Invasive gap large, and where has it gone?
-# THINK: read sd. Smallest cell, largest cell, what ratio?
-
-
-# ---- 2 How unbalanced ------------------------------------
-# Every cell is filled, so every term is estimable. The
-# question is whether it is PROPORTIONAL. Written for you.
-
-cray_df %>%
-  count(range, lake) %>%
-  pivot_wider(names_from = lake, values_from = n)
-
-invisible(NULL)
-
-# THINK: what fraction of Native crayfish were in Big? Of
-# Invasive? If those differ, the design is not proportional.
-
-# YOUR CODE: the boxplot and the cell-mean interaction plot.
+# ---- 3 Plot the design -----------------------------------
+# Two plots: the raw data, then the cell means. The second
+# one is the interaction plot - non-parallel lines are the
+# interaction you are about to test.
+#
+#   ggplot(df, aes(factor_2, response, fill = factor_1)) +
+#     geom_boxplot()
+#
+#   ggplot(cells, aes(factor_2, mean, color = factor_1,
+#                     group = factor_1)) +
+#     geom_line() + geom_point()
 
 
-# YOUR CODE: check the confound - days and avg_temp by range.
-
-# THINK: growth is PER DAY, so duration is divided out. What
-# is still confounded? Which ANOVA terms are unaffected?
 
 
-# ---- 3 Fit and test --------------------------------------
-# Type III SS need sum-to-zero contrasts, and contrasts are
-# baked in when lm() runs. So: set, then fit, then test.
+# ---- 4 Check the design for confounds --------------------
+# Anything that varies WITH a factor rather than within it
+# cannot be separated from that factor.
+#
+#   df %>% group_by(factor_1) %>%
+#     summarise(days = paste(sort(unique(days)), collapse = ", "),
+#               mean_temp = mean(avg_temp), n = n())
+
+
+
+
+# ---- 5 Fit the factorial model ---------------------------
+# Three terms: two main effects and the interaction.
+#
+#   lm(y ~ x1 + x2 + x1:x2, data = df)   # written out
+#   lm(y ~ x1 * x2, data = df)           # the same thing
+#
+# Type III SS require sum-to-zero contrasts, and contrasts
+# are fixed when lm() runs. Order is always: SET, FIT, TEST.
 
 options(contrasts = c("contr.sum", "contr.poly"))
 
-# YOUR CODE: cray_model <- lm(...), then Anova(..., type = 3).
-
-invisible(NULL)
-
-# THINK: account for every df - 1, 2, 2, 78. Where from?
-# THINK: which row do you read first, and what does that do
-# to the two main-effect rows?
-# THINK: the (Intercept) row has F = 4461. What is its null
-# hypothesis, and why does nobody report it?
+# YOUR CODE: cray_model <- lm(... ~ range * lake, data = cray_df)
 
 
-# ---- 4 Read summary() line by line -----------------------
-# Six cells, six coefficient rows. Four names you expect are
-# not there.
-
-# YOUR CODE: summary(cray_model).
-
-# THINK: which names are missing? What rule does contr.sum
-# impose that makes them redundant?
-
-# YOUR CODE: b <- coef(cray_model), then build a named vector
-# holding the Native, Invasive, Big, High and Papoose effects.
-
-invisible(NULL)
-
-# THINK: which lake effect is largest? Was it printed?
-
-# YOUR CODE: compare coef(cray_model)[[1]] with
-# mean(cray_cells$mean) and mean(cray_df$growth_per_day).
-
-# THINK: two of the three match. What IS the intercept?
-
-# YOUR CODE: rebuild the Invasive/Papoose cell mean from b
-# alone, then check it against emmeans() and the observed
-# cell mean. Every term is a negative - work out why.
-
-invisible(NULL)
-
-# THINK: exact match or close? Why does a model with an
-# interaction reproduce every cell mean exactly?
 
 
-# ---- 5 The three SS types --------------------------------
-# anova() is Type I and sequential. car::Anova() is not the
-# same function.
-
-# YOUR CODE: Type I, II and III on cray_model. Compare the
-# three F values for each term.
-
-# YOUR CODE: refit as lake * range and pull range's Type I
-# sum of squares from both fits.
-
-invisible(NULL)
-
-# THINK: which term moves most between Type I and Type III?
-# THINK: why is the interaction F identical in all three?
-# THINK: two different SS for the same term. Which is right?
-# THINK: which type do you report, in one sentence?
+# ---- 6 Test the model ------------------------------------
+# car::Anova(type = 3) gives each term tested with the other
+# two already in the model - the right test for unbalanced
+# data. Read the INTERACTION row first; if it is significant
+# the main-effect rows are averages over a changing effect.
+#
+#   Anova(model, type = 3)
+#
+# anova() - lower case, base R - is Type I and sequential.
+# Run it too and compare, so you can see the difference.
 
 
-# ---- 6 emmeans, four ways --------------------------------
-# One model, four questions. Way 4 is the only one that says
-# WHERE the interaction lives.
-
-# YOUR CODE: Way 1 - emmeans(cray_model, ~ range), then the
-# raw means by range for comparison.
-
-# THINK: which direction is the raw mean biased, and why?
-# THINK: what is R's NOTE warning you about? Is it right?
-
-# YOUR CODE: Way 2 - pairs(emmeans(cray_model, ~ range | lake)).
-
-# THINK: write the study's result in one sentence.
-
-# YOUR CODE: Way 3 - pairs(emmeans(cray_model, ~ lake | range)).
-
-# THINK: did lake stop mattering, or matter more? What shape
-# of interaction is that?
-# THINK: why does Tukey appear in Way 3 but not Way 2?
-
-# YOUR CODE: Way 4 - contrast(emmeans(cray_model, ~ range * lake),
-#            interaction = c("pairwise", "pairwise")).
-
-invisible(NULL)
-
-# THINK: which lake drives the interaction? Which two match?
-# THINK: why can the Anova() table never tell you this?
-
-# YOUR CODE: emmip(cray_model, range ~ lake, CIs = TRUE).
 
 
-# ---- 7 Effect size and assumptions -----------------------
+# ---- 7 emmeans, four ways --------------------------------
+# One model, four questions. emmeans works off the model, so
+# it corrects for the unbalanced cell sizes.
+
+# Way 1 - marginal means for one factor:
+#   emmeans(model, ~ x1)
+
+# Way 2 - simple effects of x1 within each level of x2:
+#   pairs(emmeans(model, ~ x1 | x2))
+
+# Way 3 - simple effects of x2 within each level of x1:
+#   pairs(emmeans(model, ~ x2 | x1))
+
+# Way 4 - the interaction contrast, differences of
+#         differences; the only one that says WHERE the
+#         interaction lives:
+#   contrast(emmeans(model, ~ x1 * x2),
+#            interaction = c("pairwise", "pairwise"))
+
+# And the picture:
+#   emmip(model, x1 ~ x2, CIs = TRUE)
+
+
+
+
+# ---- 8 Effect size ---------------------------------------
+# p tells you whether an effect is detectable; eta-squared
+# tells you how much of the variation it accounts for.
+#
+#   eta_squared(Anova(model, type = 3))
+
+
+
+
+# ---- 9 Check the assumptions -----------------------------
+# check_model() to look, the check_*() tests to decide.
+#
+#   check_model(model, check = c("qq", "homogeneity", "outliers"))
+#   check_normality(model)
+#   check_heteroscedasticity(model)
+
+
+
+
+# ---- 10 Did the violation matter? ------------------------
 # Failing an assumption test is not the end of the analysis.
-# It is the start of checking whether it mattered.
-
-# YOUR CODE: eta_squared(Anova(cray_model, type = 3)).
-
-# THINK: largest effect size - is it the term the study was
-# about? What does that say about the next design?
-
-# YOUR CODE: shapiro.test() on the residuals, leveneTest()
-# on the six cells, and rstandard() against fitted().
-
-invisible(NULL)
-
-# THINK: is the unequal spread random, or does it track the
-# cell means?
-
-# YOUR CODE: refit on log(growth_per_day). Anova type 3 on
-# it, then shapiro.test() and leveneTest() again.
-
-invisible(NULL)
-
-# THINK: fixed? Did any conclusion change? Which model do
-# you report, and what sentence do you owe the reader?
-
-
-# ---- 8 Write-up (GRADED) ---------------------------------
-# Answer as comments, right here.
-
-# 8a METHODS - design, response, model, SS type and why,
-#    transformation. Two or three sentences.
+# Refit on a transformed response and see whether any
+# CONCLUSION changes. If nothing changes, say so and report
+# the model you prefer.
 #
-#
-#
+#   model_log <- lm(log(y) ~ x1 * x2, data = df)
+#   Anova(model_log, type = 3)
+#   check_normality(model_log)
+#   check_heteroscedasticity(model_log)
 
-# 8b RESULTS - interaction first, then the three simple
-#    effects from Way 2, the Way 4 contrast, one effect
-#    size. Do not write a sentence that is false in Papoose.
-#
-#
-#
-#
 
-# 8c The confound, in one sentence, as it would appear in
-#    the paper.
-#
-#
 
-# 8d YOUR CODE: the publication figure, built from
-#    as.data.frame(emmeans(cray_model, ~ range * lake)).
-#    Points, error bars, axis labels with units, legend.
-#    This is the one plot you polish.
 
-invisible(NULL)
+# ---- 11 The figure ---------------------------------------
+# Build it from the MODEL's estimated marginal means, not the
+# raw cell means - on an unbalanced design they differ.
+#
+#   as.data.frame(emmeans(model, ~ x1 * x2)) %>%
+#     ggplot(aes(x2, emmean, color = x1)) +
+#     geom_pointrange(aes(ymin = lower.CL, ymax = upper.CL),
+#                     position = position_dodge(0.3))
+#
+# Axis labels with units, a readable legend, and ggsave() if
+# you want to keep it.

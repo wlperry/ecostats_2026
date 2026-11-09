@@ -40,6 +40,7 @@ editor:
 #| paged-print: false
 #| collapse: true
 library(car)
+library(DHARMa)
 library(effectsize)
 library(lme4)
 library(lmerTest)
@@ -1209,62 +1210,186 @@ the temptation to write one.
 :::
 :::::
 
-## Diagnostics
+## Diagnostics 1 — `check_model()` First {.tight-code}
 
-::::: columns
-::: {.column width="62%"}
+:::::: columns
+::: {.column width="56%"}
 ```{r linear-mixed-models-12}
-#| echo: false
+#| echo: true
 #| message: false
 #| warning: false
-#| paged-print: false
-#| fig-width: 5.4
-#| fig-height: 3.4
-#| fig-alt: "Three diagnostic plots of the mixed-model residuals side by side: a normal Q-Q plot, a histogram of residuals, and a residuals-versus-fitted-values plot with a dashed reference line at zero showing a funnel of increasing spread."
-u_fitted <- fitted(u_lmer_model)
-u_residuals <- residuals(u_lmer_model)
-
-p_qq <- ggplot(data.frame(r = u_residuals), aes(sample = r)) +
-  stat_qq() + stat_qq_line() +
-  labs(title = "Normal Q-Q", x = "Theoretical", y = "Sample") +
-  theme_minimal(base_size = 8)
-
-p_hist <- ggplot(data.frame(r = u_residuals), aes(x = r)) +
-  geom_histogram(bins = 15, fill = "lightblue", color = "black") +
-  labs(title = "Histogram", x = "Residuals", y = "Count") +
-  theme_minimal(base_size = 8)
-
-p_rf <- ggplot(data.frame(f = u_fitted, r = u_residuals), aes(f, r)) +
-  geom_point(alpha = 0.6) +
-  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
-  labs(title = "Residuals vs. Fitted", x = "Fitted", y = "Residuals") +
-  theme_minimal(base_size = 8)
-
-(p_qq + p_hist) / p_rf
+#| fig-width: 5.0
+#| fig-height: 3.3
+#| fig-alt: "The performance package's check_model output for the urchin mixed model, with three panels: a normal Q-Q plot of the residuals whose tails bend away from the line, a Q-Q plot of the sixteen patch random effects which sit close to their line, and a homogeneity-of-variance panel whose trend rises from left to right."
+check_model(u_lmer_model,
+            check = c("qq", "reqq", "homogeneity"))
 ```
 :::
 
-::: {.column width="38%"}
-::: callout-warning
-**⚠️ The spread is not constant**
+::::: {.column width="44%"}
+The same one call as every other model this term — and on a `merMod` it
+adds a panel you have not seen before.
 
-Tightest at the lowest fitted values, widening from there — the same
-heteroscedasticity the raw data showed. A mixed model fixes
-*correlation*, not *unequal variance*.
+::: callout-note
+**📖 The `reqq` panel is the new one**
+
+A mixed model assumes **two** things are normal: the residuals *and the
+random effects*. `reqq` is a Q-Q plot of the 16 patch intercepts, and it
+is the only diagnostic here that looks at them.
+
+```{r lmm-diag-01}
+#| echo: true
+#| collapse: true
+check_normality(u_lmer_model,
+                effects = "random")
+```
+
+Reassuring — but it is 16 numbers. Report it, and say that 16 levels
+cannot carry a strong claim either way.
+:::
+:::::
+::::::
+
+## Diagnostics 2 — Why Those Residual Tests Mislead {.tight-code}
+
+:::::: columns
+::: {.column width="50%"}
+```{r lmm-diag-02}
+#| echo: true
+#| message: false
+#| warning: false
+#| collapse: true
+check_normality(u_lmer_model)
+
+check_heteroscedasticity(u_lmer_model)
+```
+
+Both scream *p* < .001. **Neither number means what it would mean for an
+`lm()`.**
+:::
+
+::: {.column width="50%"}
+::: callout-important
+**⚠️ The reference distribution is wrong**
+
+Those tests ask: *are these residuals iid normal with constant
+variance?* For an `lm()` that **is** the assumption. For a mixed model
+it is **not**:
+
+- Conditional residuals are **shrunk** toward zero by partial pooling,
+  so they are not even supposed to have variance σ²~within~
+- How much each one shrinks depends on its patch's *n* and the ICC
+- So a non-normal, non-constant-variance pattern is partly **what the
+  model does on purpose**
+
+Shapiro and Breusch–Pagan have no way to know that. They compare your
+residuals against a yardstick that does not apply.
+:::
+:::
+::::::
+
+## Diagnostics 3 — DHARMa Builds the Right Yardstick {.tight-code}
+
+:::::: columns
+::: {.column width="52%"}
+Instead of assuming a reference distribution, **simulate** it from the
+fitted model:
+
+```{r lmm-diag-03}
+#| echo: true
+#| message: false
+#| warning: false
+#| fig-width: 5.0
+#| fig-height: 2.5
+#| fig-alt: "DHARMa diagnostic output for the urchin mixed model: a Q-Q plot of scaled residuals against a uniform reference with the KS, dispersion and outlier test results printed on it, beside a plot of scaled residuals against predicted values with quantile regression lines."
+set.seed(42)
+sim <- simulateResiduals(u_lmer_model, n = 1000)
+plot(sim)
+```
+
+1. Simulate 1000 new datasets from the fitted model
+2. For each observation, ask **what quantile of its own simulated
+   distribution** the real value sits at
+3. Under a correct model those quantiles are **Uniform(0, 1)** — always
+:::
+
+::: {.column width="48%"}
+::: callout-important
+**✅ Why this is better**
+
+The yardstick is **generated by your model**, so it already contains the
+shrinkage, the unequal group sizes, the ICC — everything that broke the
+tests on the last slide.
+
+And "should be uniform" holds for **any** model: `lmer`, `glmer`,
+Poisson, negative binomial, zero-inflated. You learn **one** diagnostic
+instead of one per family.
 :::
 
 ::: callout-tip
-**🖐 Use the right tool**
+**🖐 Keep `check_model()` anyway**
 
-`plot()` and `qqnorm()` were built for `lm()`. They mostly work on an
-`lmer()` fit, but **DHARMa** simulates from the model and is the
-purpose-built check — that is what the activity uses.
+It is faster to read, and `reqq` is genuinely useful. Use it to **look**,
+and DHARMa to **decide**.
+:::
+:::
+::::::
+
+## Diagnostics 4 — What DHARMa Actually Concluded {.tight-code}
+
+:::::: columns
+::: {.column width="52%"}
+```{r lmm-diag-04}
+#| echo: true
+#| message: false
+#| warning: false
+#| collapse: true
+testUniformity(sim, plot = FALSE)$p.value
+
+testDispersion(sim, plot = FALSE)$p.value
+
+testOutliers(sim, plot = FALSE)$p.value
+```
+
+```{r lmm-diag-05}
+#| echo: true
+#| message: false
+#| warning: false
+#| collapse: true
+# test at the level of the experimental unit
+sim_patch <- recalculateResiduals(
+  sim, group = u_df$patch)
+
+testUniformity(sim_patch, plot = FALSE)$p.value
+```
 :::
 
-A mixed model also assumes the **random effects** are normal. With 16
-patches you cannot check that honestly. Say so.
+::: {.column width="48%"}
+::: {.compact-table}
+| Test | *p* | Verdict |
+|------------------|------------------|------------------|
+| Shapiro, residuals | **< 0.001** | wrong yardstick |
+| Breusch–Pagan | **< 0.001** | wrong yardstick |
+| DHARMa uniformity | **0.022** | mild deviation |
+| DHARMa dispersion | **0.64** | fine |
+| DHARMa outliers | **1.00** | none |
+| DHARMa, by patch | **0.092** | fine |
 :::
-:::::
+
+::: callout-important
+**The honest summary changed**
+
+Not "this model fails two assumptions at *p* < 0.001". It is **"a mild
+distributional deviation, no dispersion problem, no outliers, and
+nothing wrong at the level of the 16 patches."**
+
+Same model, same data. The second description is the defensible one.
+:::
+
+**`recalculateResiduals(group =)`** is the mixed-model-specific move:
+the treatment was applied to **patches**, so test there too.
+:::
+::::::
 
 ## Heterogeneity of Variance {.tight-code}
 
