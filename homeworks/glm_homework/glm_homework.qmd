@@ -1,0 +1,338 @@
+---
+order: 15
+week: 10
+title: "Homework 15 — GLM & Logistic Regression"
+subtitle: "Generalized linear models"
+description: "Generalized linear models for count data: fitting a linear model, a Poisson GLM and a negative binomial GLM to the same social-spider colony data, and finding out that all three give a different answer."
+author: "Bill Perry"
+---
+
+[📥 Social spider colony data](data/social_spider_colonies.csv){.btn .btn-primary download="social_spider_colonies.csv"}
+[📥 Homework script (.R)](data/16_glm_homework.R){.btn .btn-primary download="16_glm_homework.R"}
+
+::: callout-note
+## 📚 Where these data come from
+
+**Source:** Whitlock, M.C. & Schluter, D., *The Analysis of Biological Data*, **Ch. 17**, practice problem 15.
+
+Social spiders live in communal webs. For **17 colonies**, two things were recorded: the **height** of the colony above the ground (cm) and the **number of spiders** living in it.
+
+**The question:** does colony size change with height above the ground?
+
+**In class you analysed the Galápagos islands** — a count where the Poisson failed and the negative binomial fixed it — **and the New England ants**, a count where the Poisson was already right. This is a third count, and it behaves differently from both.
+:::
+
+::: callout-warning
+## ⚠️ Read this before you start
+
+This dataset will give you **three different answers** depending on which model you fit — and one of them is "there is no relationship." Your job is not to pick the one you like. It is to work out which model you were **entitled** to, and to say so.
+
+Do **not** skip Part 2. The wrong model is part of the assignment.
+:::
+
+```{r setup_libraries}
+#| message: false
+#| warning: false
+
+library(MASS)        # glm.nb()
+library(car)         # Anova()
+library(performance) # check_overdispersion()
+library(DHARMa)      # simulateResiduals()
+library(broom)
+library(janitor)
+library(tidyverse)
+
+theme_set(theme_light())
+```
+
+::: callout-tip
+`MASS::select()` masks `dplyr::select()`. If `select()` starts misbehaving, write `dplyr::select()` explicitly.
+:::
+
+# Assignment Overview
+
+You will fit three models to one question and compare what they claim. The statistical content is the **dispersion check** and what it does to a standard error.
+
+## Learning Objectives
+
+1.  Recognise a count response and say why a linear model is the wrong tool for it
+2.  Fit a Poisson GLM and test it for overdispersion
+3.  Fit a negative binomial GLM and confirm the overdispersion is gone
+4.  Say what overdispersion does to standard errors and *p*-values, and in which direction
+5.  Check a GLM with DHARMa rather than with a test that does not apply
+6.  Run a sensitivity check on an influential observation without deleting it
+7.  Report a count model properly, and build a figure on the right scale
+
+## Data Description
+
+17 colonies, three columns.
+
+**Key variables:**
+
+-   `colony` — colony ID, 1–17 (**not** a predictor)
+-   `height_cm` — height of the colony above the ground, cm — the **predictor**
+-   `n_spiders` — number of spiders in the colony — the **response**, a count
+
+------------------------------------------------------------------------
+
+# Part 1: Data and Exploration
+
+## 1.1 Read the data
+
+```{r load_spider_data}
+#| message: false
+#| warning: false
+
+```
+
+## 1.2 Describe the response
+
+Compute the **mean**, the **variance**, and the **variance-to-mean ratio** of `n_spiders`.
+
+```{r response_summary}
+
+```
+
+✏️ **Q1:** What is the ratio? What does the Poisson distribution insist it should be?
+
+```
+____________________________________________________________
+```
+
+## 1.3 Plot it
+
+A scatterplot of `n_spiders` against `height_cm`, and a histogram of `n_spiders`.
+
+```{r exploratory_plots}
+
+```
+
+✏️ **Q2:** Describe the shape of the response. Is there an obvious outlier — and is it at an extreme **height**, or just an extreme **count**?
+
+```
+____________________________________________________________
+```
+
+------------------------------------------------------------------------
+
+# Part 2: The Wrong Model, On Purpose
+
+## 2.1 Fit a linear model
+
+Fit `lm(n_spiders ~ height_cm)`. Report the slope's *p*-value, then run `shapiro.test()` on the residuals.
+
+```{r linear_model}
+
+```
+
+✏️ **Q3:** What is the *p*-value for `height_cm`? What would you conclude from this model alone?
+
+```
+____________________________________________________________
+```
+
+✏️ **Q4:** What is the Shapiro–Wilk *p*-value? Were you entitled to the conclusion in Q3?
+
+```
+____________________________________________________________
+```
+
+------------------------------------------------------------------------
+
+# Part 3: The Poisson GLM
+
+## 3.1 Fit it
+
+```{r poisson_model}
+
+```
+
+Test the slope with `Anova(model, type = 3, test = "LR")` — not an *F*-test.
+
+```{r poisson_test}
+
+```
+
+✏️ **Q5:** Report the slope, its standard error, and its *p*-value. Compare the *p*-value to Part 2's.
+
+```
+____________________________________________________________
+```
+
+## 3.2 Check the dispersion
+
+```{r poisson_dispersion}
+
+```
+
+✏️ **Q6:** What is the dispersion ratio? Is the Poisson an acceptable model here?
+
+```
+____________________________________________________________
+```
+
+✏️ **Q7:** Why can a Poisson GLM not be tested with an *F*-test? (One sentence, about the denominator.)
+
+```
+____________________________________________________________
+```
+
+------------------------------------------------------------------------
+
+# Part 4: The Negative Binomial
+
+## 4.1 Fit it
+
+Use `glm.nb()`. Report `theta`, re-check the dispersion, and run the LR test.
+
+```{r negbin_model}
+
+```
+
+```{r negbin_dispersion}
+
+```
+
+## 4.2 Put the two side by side
+
+Build a small table comparing the **slope**, the **standard error**, the **LR χ²**, the **dispersion ratio** and the **AIC** for the Poisson and the negative binomial.
+
+```{r compare_models}
+
+```
+
+✏️ **Q8:** Which quantity barely moved between the two models, and which moved roughly six-fold? What does that tell you about what overdispersion damages?
+
+```
+____________________________________________________________
+
+____________________________________________________________
+```
+
+✏️ **Q9:** You now have **three** *p*-values for one question — about 0.16, about 10⁻³³, and about 0.017. Which do you report, and what single piece of output decided it?
+
+```
+____________________________________________________________
+
+____________________________________________________________
+```
+
+✏️ **Q10:** In class, the Galápagos conclusion did **not** change when you moved from the Poisson to the negative binomial — both said *p* < 0.001. Here it nearly does. Explain what "nearly" means in terms of what a reader would have been told.
+
+```
+____________________________________________________________
+
+____________________________________________________________
+```
+
+## 4.3 Check it properly
+
+Run DHARMa on the negative binomial model.
+
+```{r dharma_check}
+
+```
+
+✏️ **Q11:** Do the DHARMa tests pass? Why is this a better check than `shapiro.test()` on the residuals?
+
+```
+____________________________________________________________
+```
+
+------------------------------------------------------------------------
+
+# Part 5: The Influential Colony
+
+One colony sits well above the trend. Refit the negative binomial **without** it — as a *sensitivity check*, not as a deletion.
+
+```{r sensitivity_check}
+
+```
+
+✏️ **Q12:** What happens to the slope and the *p*-value when that colony is dropped? Did removing it make the relationship **weaker** or **stronger**?
+
+```
+____________________________________________________________
+```
+
+✏️ **Q13:** That is probably the opposite of what you expected. Explain why this point was working *against* the relationship rather than creating it.
+
+```
+____________________________________________________________
+
+____________________________________________________________
+```
+
+✏️ **Q14:** Which model do you report — with the colony or without it — and what one sentence do you owe the reader either way?
+
+```
+____________________________________________________________
+```
+
+------------------------------------------------------------------------
+
+# Part 6: Interpretation and Figure
+
+## 6.1 Read the slope on the count scale
+
+The slope is on the **log** scale. Exponentiate it, and express the effect as a **percentage change per 10 cm** of height.
+
+```{r interpret_slope}
+
+```
+
+✏️ **Q15:** Finish this sentence with your own numbers: "Each additional 10 cm of height above the ground is associated with a ___% change in the expected number of spiders."
+
+```
+____________________________________________________________
+```
+
+## 6.2 Publication-quality figure
+
+`n_spiders` against `height_cm`, raw data plus the negative binomial fit with a confidence band. Real axis labels with units, a readable theme.
+
+```{r publication_figure}
+
+```
+
+✏️ **Q16:** Why is the fitted line a **curve** rather than a straight line — the distribution, or the link function?
+
+```
+____________________________________________________________
+```
+
+## 6.3 Results paragraph
+
+Two or three sentences, as they would appear in a paper. Include the model you fitted and why, the statistic with its df, the *p*-value, and the effect on the count scale. Do not write a sentence that the sensitivity check in Part 5 contradicts.
+
+```
+____________________________________________________________
+
+____________________________________________________________
+
+____________________________________________________________
+```
+
+------------------------------------------------------------------------
+
+# Submission Guidelines
+
+## What to turn in
+
+1.  An **R script** (`16_glm_homework.R`) with all of your code and your answers as `#` comments. All of it should run top to bottom. **(2 points)**
+
+2.  **A PDF of your final figure** from Part 6, saved with `ggsave()`. **(2 points)**
+
+3.  **Comments in the script** saying what each block does and what you concluded — credit is given even if the code does not work, as long as you detail what you were trying to do. **(2 points)**
+
+No Quarto file and no rendered HTML are required — a commented `.R` script is enough.
+
+## Points
+
+-   summary stats and exploratory graphs — 2 points
+-   the linear model and why it fails — 2 points
+-   Poisson fit and the dispersion check — 3 points
+-   negative binomial and the comparison table — 3 points
+-   sensitivity check — 2 points
+-   interpretation on the count scale — 2 points
+-   final figure — 1 point

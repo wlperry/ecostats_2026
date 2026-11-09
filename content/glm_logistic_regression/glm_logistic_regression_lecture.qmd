@@ -42,7 +42,7 @@ editor:
 library(janitor)
 library(car)                # Anova()
 library(MASS)               # glm.nb()
-library(performance)        # check_overdispersion(), r2()
+library(performance)        # check_overdispersion(), check_model(), r2()
 library(DHARMa)             # simulateResiduals()
 library(emmeans)
 library(broom)
@@ -50,24 +50,23 @@ library(parameters)         # model_parameters()
 library(pscl)               # pR2()
 library(ResourceSelection)  # hoslem.test()
 library(patchwork)
-library(faraway)            # the gala data
 library(tidyverse)
 
 options(scipen = 999)
 
-# ---- the Galapagos count data (same object as the activity) ----
-g_df <- gala %>%
+# ---- Galapagos plant richness - Gotelli & Ellison, the SAME file used in
+#      week 6 (correlation & linear models). 17 islands, corrected areas. ----
+g_df <- read_csv("data/galapagos_species_area.csv", show_col_types = FALSE)
+
+# ---- Gotelli & Ellison New England ant species density - the count where
+#      the Poisson actually fits ----
+ant_df <- read_csv("data/gotelli_ant_species.csv", show_col_types = FALSE)
+
+# ---- Sargent & Lodge crayfish - last week's data, used in Part 8 to show
+#      that a one-way ANOVA IS a Gaussian GLM ----
+cray_df <- read_csv("data/sargent_lodge_crayfish.csv", show_col_types = FALSE) %>%
   clean_names() %>%
-  rename(spp = species) %>%
-  mutate(
-    size_cat = case_when(
-      area < 1               ~ "small",
-      area >= 1 & area < 100 ~ "medium",
-      area >= 100            ~ "large"
-    ),
-    size_cat = factor(size_cat, levels = c("small", "medium", "large"))
-  ) %>%
-  filter(area < 3000)
+  mutate(range = factor(range, levels = c("Native", "Invasive")))
 
 # ---- Polis et al. (1998) Uta lizards - Quinn & Keough Box 13-1 ----
 polis_df <- read_csv("data/polis.csv", na = c(".", ""),
@@ -89,13 +88,13 @@ bolger_df <- read_csv("data/bolger.csv", show_col_types = FALSE) %>%
 Three weeks of **linear models**:
 
 -   One-way ANOVA
--   Factorial ANOVA
--   Nested ANOVA
+-   Factorial ANOVA I
+-   Factorial ANOVA II — the redux
 
 Every one of them assumed:
 
 -   **Normality** of the residuals
--   **Homogeneity of variance** — Levene's or Bartlett's
+-   **Homogeneity of variance** — Levene's or Breusch–Pagan
 -   **Independence** of observations
 ::::
 
@@ -111,34 +110,36 @@ Today: keep the linear part, change the distribution.
 ## The Data: Galápagos Island Biogeography
 
 ::::: columns
-::: {.column width="55%"}
-The `gala` data — 29 Galápagos islands, MacArthur & Wilson's island
-biogeography.
+::: {.column width="54%"}
+Gotelli & Ellison's Galápagos data — **17 islands**, plant species
+richness against island area.
 
 | Column | What it is |
-|-----------|-----------------------------------|
-| `spp` | number of plant species — **a count** |
-| `endemics` | number of endemic species — **a count** |
-| `area` | island area, km² |
-| `elevation` | maximum elevation, m |
+|-------------|------------------------------------|
+| `island` | island name (the historical names) |
+| `area_km2` | island area, km² |
+| `n_species` | number of plant species — **a count** |
 
-We bin `area` into `size_cat` so the predictor is **categorical** — the
-same shape of question as week 9.
+::: callout-tip
+**You have already analysed this dataset.** In **week 6** you fitted
+$\log_{10}(S) \sim \log_{10}(A)$ to it and used it for the
+influential-point demonstration.
 
-Isabela is dropped: at ~4600 km² it is 20× anything else and flattens
-every plot.
+Same islands, same question. Today the response gets treated as what it
+actually is — a **count**.
+:::
 :::
 
-::: {.column width="45%"}
+::: {.column width="46%"}
 ```{r glm-01}
 #| echo: false
 #| message: false
 #| warning: false
 #| fig-height: 3.2
 #| fig-width: 3.6
-#| fig-alt: "Histogram of plant species counts across the Galapagos islands, strongly right-skewed with most islands under 50 species and a long tail out past 400."
+#| fig-alt: "Histogram of plant species counts across the 17 Galapagos islands, strongly right-skewed with most islands under 100 species and a long tail out past 300."
 
-ggplot(g_df, aes(x = spp)) +
+ggplot(g_df, aes(x = n_species)) +
   geom_histogram(binwidth = 25, fill = "darkblue", color = "white") +
   labs(x = "Number of plant species", y = "Number of islands") +
   theme_minimal(base_size = 10)
@@ -148,7 +149,10 @@ ggplot(g_df, aes(x = spp)) +
 #| echo: true
 #| message: false
 #| warning: false
-count(g_df, size_cat)
+g_df %>%
+  summarise(n = n(),
+            min = min(n_species),
+            max = max(n_species))
 ```
 :::
 :::::
@@ -168,14 +172,14 @@ A count has three properties a normal distribution does not:
 #| message: false
 #| warning: false
 g_df %>%
-  summarise(mean_spp = mean(spp),
-            var_spp  = var(spp),
+  summarise(mean_spp = mean(n_species),
+            var_spp  = var(n_species),
             ratio    = var_spp / mean_spp)
 ```
 
-The variance is **145×** the mean. A normal distribution is free to have
+The variance is **103×** the mean. A normal distribution is free to have
 any variance it likes, so that ratio is not itself a violation — but
-look at what it does to the *groups*.
+hold on to it. The Poisson will insist it is **1**.
 :::
 
 ::: {.column width="50%"}
@@ -185,17 +189,18 @@ look at what it does to the *groups*.
 #| warning: false
 #| fig-height: 3.4
 #| fig-width: 3.6
-#| fig-alt: "Boxplot of plant species counts by island size category, showing the spread of the large-island group is many times wider than the small-island group."
+#| fig-alt: "Scatterplot of plant species against island area in square kilometres on the raw scale, showing almost all islands crushed against the left axis and one very large island far to the right."
 
-ggplot(g_df, aes(x = size_cat, y = spp, fill = size_cat)) +
-  geom_boxplot(show.legend = FALSE) +
-  labs(x = "Island size category", y = "Number of plant species") +
+ggplot(g_df, aes(x = area_km2, y = n_species)) +
+  geom_point(size = 2) +
+  labs(x = "Island area (km²)", y = "Number of plant species") +
   theme_minimal(base_size = 10)
 ```
 
 ::: callout-warning
-**The spread grows with the mean.** That is the equal-variance
-assumption breaking, and it is the signature of count data.
+**On the raw scale the relationship is unreadable** — area spans four
+orders of magnitude. Both axes need logs, which is exactly what you did
+in week 6.
 :::
 :::
 :::::
@@ -208,36 +213,93 @@ assumption breaking, and it is the signature of count data.
 #| echo: true
 #| message: false
 #| warning: false
-lm_model <- lm(spp ~ size_cat, data = g_df)
+lm_raw <- lm(n_species ~ area_km2, data = g_df)
 
-Anova(lm_model, type = 3)
+glance(lm_raw) %>%
+  dplyr::select(r.squared, p.value)
 ```
 
 ```{r glm-06}
 #| echo: true
 #| message: false
 #| warning: false
-shapiro.test(residuals(lm_model))$p.value
-leveneTest(spp ~ size_cat, data = g_df)$`Pr(>F)`[1]
+shapiro.test(residuals(lm_raw))$p.value
+
+# predict the SMALLEST island
+predict(lm_raw,
+        newdata = data.frame(area_km2 = 0.518),
+        interval = "prediction")
 ```
 :::
 
 ::: {.column width="50%"}
 ::: callout-important
-**The *p*-value is 0.0000035. The model did not earn it.**
+**The model predicts a 95% interval of −111 to 302 species.**
 
--   Normality of residuals: **p < 0.001**
--   Equal variance: **p < 0.001**
-
-Both assumptions fail, and they fail badly — not marginally.
+A negative number of plant species is not a wide interval. It is an
+**impossible** one.
 :::
 
-The question is not wrong. Island size almost certainly does drive
-species richness. The *model being used to answer it* is making promises
-the data does not keep.
+-   Normality of residuals: ***p* = 0.002** — it fails
+-   Equal variance: Breusch–Pagan *p* = 0.66 — this one is **fine**
 
-**A normal 95% interval on the small islands predicts negative species
-counts.**
+The question is not wrong. Area almost certainly does drive richness.
+The *model being used to answer it* is making promises the data cannot
+keep — chiefly that the response is free to go negative.
+
+**Say only what the diagnostics say.** Here variance is not the problem;
+the normal distribution's unbounded support is.
+:::
+:::::
+
+## You Already Know One Fix — You Used It in Week 6 {.tight-code}
+
+::::: columns
+::: {.column width="50%"}
+```{r glm-06b}
+#| echo: true
+#| message: false
+#| warning: false
+lm_log <- lm(log10(n_species) ~ log10(area_km2),
+             data = g_df)
+
+glance(lm_log) %>%
+  dplyr::select(r.squared, p.value)
+
+shapiro.test(residuals(lm_log))$p.value
+```
+
+R² rises from 0.33 to **0.59**, normality goes from *p* = 0.002 to
+***p* = 0.48**, and the slope **0.331** is the species–area exponent *z*.
+
+**The transformation works.** So why is there anything left to teach?
+:::
+
+::: {.column width="50%"}
+Three reasons, and each one is a thing a GLM does that a transformation
+cannot.
+
+1.  **A count is discrete.** The log of a count is a continuous variable
+    that the data can never actually take.
+
+2.  **`log(0)` is undefined.** No island here has zero species, but an
+    island with none is a real observation — and then the transformation
+    needs a fudge (`log(y + 1)`) that changes the answer.
+
+3.  **It answers a different question.** `lm` on logged counts models
+    the mean of the log, which back-transforms to the **geometric**
+    mean.
+
+```{r glm-06c}
+#| echo: true
+#| message: false
+#| warning: false
+c(arithmetic = mean(g_df$n_species),
+  geometric  = exp(mean(log(g_df$n_species))))
+```
+
+**119.3 versus 73.6 species.** Two different quantities — and the
+transformation silently hands you the second one.
 :::
 :::::
 
@@ -251,7 +313,7 @@ A **generalized linear model** keeps the linear part — $\beta_0 +
 | Component | What it is | Example |
 |------------------|------------------------|---------------|
 | **Random** | the response's distribution | Poisson for counts |
-| **Systematic** | the predictors | `size_cat`, `area` |
+| **Systematic** | the predictors | `log(area_km2)` |
 | **Link** | connects the mean to the predictors | `log` for counts |
 
 $$g(\mu) = \beta_0 + \beta_1X_1 + \beta_2X_2 \dots$$
@@ -350,7 +412,10 @@ follows today changes exactly those two.
 #| echo: true
 #| message: false
 #| warning: false
-gauss_model <- glm(spp ~ size_cat,
+lm_model <- lm(n_species ~ log(area_km2),
+               data = g_df)
+
+gauss_model <- glm(n_species ~ log(area_km2),
                    data = g_df,
                    family = gaussian(link = "identity"))
 
@@ -374,9 +439,9 @@ all.equal(coef(lm_model), coef(gauss_model))
 Anova(gauss_model, type = "III", test = "F")
 ```
 
-Identical to the `Anova()` on `lm_model` from Part 1 — *F* = 21.21,
-*p* = 0.0000035, and identical for the same reason: it **is** that
-model.
+Identical to `Anova()` on the `lm` — identical estimates, identical
+*F*, and identical for the same reason: it **is** that model, fitted by
+a different algorithm.
 :::
 :::::
 
@@ -388,8 +453,6 @@ model.
 #| echo: false
 #| message: false
 #| warning: false
-a <- anova(lm_model)
-
 data.frame(
   `GLM summary says` = c("Dispersion parameter",
                          "Null deviance",
@@ -402,7 +465,7 @@ data.frame(
   `ANOVA calls it` = c("Residual mean square",
                        "SS total",
                        "SS residual",
-                       "SS size_cat"),
+                       "SS log(area)"),
   check.names = FALSE)
 ```
 :::
@@ -418,8 +481,8 @@ A GLM summary renames three things you already know:
     with the **grand mean** alone. For a Gaussian GLM this is
     **SS~total~**.
 
--   **Residual deviance** — the error left **after** fitting
-    `size_cat`. For a Gaussian GLM this is **SS~residual~**.
+-   **Residual deviance** — the error left **after** fitting the
+    predictor. For a Gaussian GLM this is **SS~residual~**.
 
 ::: callout-important
 Null deviance − residual deviance = the **model** sum of squares. The
@@ -453,7 +516,8 @@ set them separately.
 
 ::: {.column width="45%"}
 ::: callout-warning
-**Remember the ratio.** The variance of `spp` is **145×** its mean.
+**Remember the ratio.** The variance of `n_species` is **103×** its
+mean.
 
 Poisson insists that ratio is **1**.
 
@@ -476,7 +540,7 @@ positive. Counts can never come out negative.
 #| echo: true
 #| message: false
 #| warning: false
-poiss_model <- glm(spp ~ size_cat,
+poiss_model <- glm(n_species ~ log(area_km2),
                    data = g_df,
                    family = poisson(link = "log"))
 
@@ -488,16 +552,19 @@ round(summary(poiss_model)$coefficients, 4)
 The model predicts the **natural log** of the expected count, so
 exponentiate to read it:
 
--   $e^{2.671} = 14.5$ species on a **small** island
--   $e^{1.338} = 3.81$ — a **medium** island has 3.8× the species of a
-    small one
--   $e^{2.774} = 16.0$ — a **large** island has 16× the species of a
-    small one
+-   Slope **0.2875** on the log scale
+-   $e^{0.2875} = 1.333$ — every **e-fold** (2.72×) increase in area
+    multiplies expected richness by **1.33**
+-   Equivalently, a **doubling** of area multiplies richness by
+    $2^{0.2875} = 1.22$ — a 22% gain
 
 ::: callout-important
 With a log link, coefficients are **multiplicative**, not additive. A
 coefficient of β multiplies the mean by $e^{\beta}$.
 :::
+
+Compare that 0.2875 with week 6's log–log slope of **0.331**. Close, but
+**not the same number** — and the next slide but one says why.
 :::
 :::::
 
@@ -522,12 +589,12 @@ Anova(poiss_model, type = "III", test = "LR")
     in the denominator.
 
 -   So we use a **likelihood ratio (LR)** test instead: fit the model
-    with `size_cat` and the model without it, and compare how much
+    with the predictor and the model without it, and compare how much
     better the full model explains the data.
 
 $$\text{LR } \chi^2 = 2(\log L_{full} - \log L_{reduced})$$
 
-**Hold on to that 2133.2.** It is about to shrink by a factor of 43.
+**Hold on to that χ² of 979.** It is about to shrink to 24.
 :::
 :::::
 
@@ -538,16 +605,19 @@ $$\text{LR } \chi^2 = 2(\log L_{full} - \log L_{reduced})$$
 |--------------|------------------------|---------------------------------|
 | **GLM, log link** | `glm(Y ~ X, family = poisson)` | A 1-unit change in X multiplies the **mean** of Y by $e^{\beta_1}$ |
 | **lm on logged Y** | `lm(log(Y) ~ X)` | A 1-unit change in X multiplies the **median** of Y by $e^{\beta_1}$ |
-| **log-log** | `lm(log(Y) ~ log(X))` | A 1% change in X gives a β₁% change in Y |
+| **log-log** | `lm(log(Y) ~ log(X))` | A 1% change in X gives a β₁% change in Y — **week 6** |
 :::
 
 ::: callout-important
 **These are not the same model.** A GLM with a log link models the log
 of the mean, $\log(E[Y])$. Logging the response models the mean of the
 log, $E[\log(Y)]$ — which back-transforms to a **geometric** mean, not
-an arithmetic one. The GLM also never has to decide what to do with a
-zero count.
+an arithmetic one: **73.6 species, not 119.3**. The GLM also never has
+to decide what to do with a zero count.
 :::
+
+That is the whole difference between **0.2875** and **0.331**. Neither
+is a mistake; they are answers to two different questions.
 
 ## Part 4 · Overdispersion and the Negative Binomial {.divider}
 
@@ -574,11 +644,10 @@ check_overdispersion(poiss_model)
 
 ::: {.column width="50%"}
 ::: callout-warning
-**Dispersion ratio 33.5, not 1.**
+**Dispersion ratio 39.7, not 1.**
 
-The model is claiming the variance of a large island's species count is
-about 232 — because Poisson forces variance = mean. The data say it is
-**20,400**.
+The model claims the variance in richness on the largest island is equal
+to its mean — about 325. The data say it is far larger.
 :::
 
 > ⚠️ `shapiro.test(residuals(poiss_model))` will **run**, and give you a
@@ -628,7 +697,8 @@ of extra spread.
 #| echo: true
 #| message: false
 #| warning: false
-nb_model <- glm.nb(spp ~ size_cat, data = g_df)
+nb_model <- glm.nb(n_species ~ log(area_km2),
+                   data = g_df)
 
 c(theta = nb_model$theta)
 
@@ -647,9 +717,9 @@ AIC(poiss_model, nb_model)
 ```
 
 ::: callout-note
-The dispersion is gone, and the AIC drops by **773**. Same data, same
-predictor, same link — the only thing added was permission for the
-variance to be larger than the mean.
+The dispersion is gone — 39.7 down to **0.68** — and the AIC drops by
+**496**. Same data, same predictor, same link. The only thing added was
+permission for the variance to be larger than the mean.
 :::
 :::
 :::::
@@ -663,121 +733,99 @@ variance to be larger than the mean.
 #| message: false
 #| warning: false
 cbind(estimate = round(coef(poiss_model), 4),
-      SE_poisson = round(summary(poiss_model)$coefficients[, 2], 3),
-      SE_negbin  = round(summary(nb_model)$coefficients[, 2], 3))
+      SE_poisson = round(summary(poiss_model)$coefficients[, 2], 4),
+      SE_negbin  = round(summary(nb_model)$coefficients[, 2], 4))
 ```
 
 ::: {.compact-table}
 | | Poisson | Negative binomial |
 |------------------------|------------|------------------|
-| `size_cat` LR χ² | **2133.2** | **49.9** |
-| dispersion ratio | 33.5 | 0.59 |
-| AIC | 1057.2 | 284.0 |
+| slope | 0.2875 | 0.2988 |
+| **SE of the slope** | **0.0096** | **0.0610** |
+| LR χ² | **979** | **23.8** |
+| dispersion ratio | 39.7 | 0.68 |
+| AIC | 682.8 | 187.0 |
 :::
 :::
 
 ::: {.column width="48%"}
 ::: callout-important
-**Every coefficient is identical to four decimal places.**
+**The slope barely moved — 0.2875 to 0.2988. The standard error moved
+6.4-fold.**
 
-The two models put the means in exactly the same place. What changed is
-the **standard errors** — the Poisson's are 3× to 5× too small, and the
-LR χ² is inflated **43-fold**.
+The two models put the line in essentially the same place. What changed
+is how certain they claim to be about it.
 :::
 
 Overdispersion does not move your estimate. It makes you **far more
 confident in it than you are entitled to be** — smaller SEs, bigger test
 statistics, narrower intervals, smaller *p*-values.
 
-Both models here say *p* < 0.001. The conclusion did not change. Only
-the **honesty** of it did — and that is still worth getting right,
-because the next dataset will be the one where it flips.
+`summary(poiss_model)` reports *p* ≈ 10⁻¹⁹⁸ for this slope. That is not a
+result; it is an arithmetic consequence of an assumption nobody checked.
+
+Both models here still say *p* < 0.001. The conclusion did not change.
+Only the **honesty** of it did — and your homework is the dataset where
+it very nearly flips.
 :::
 :::::
 
-## Estimated Marginal Means on the Count Scale {.tight-code}
+## Not Every Count Is Overdispersed {.tight-code}
 
 ::::: columns
-::: {.column width="52%"}
-```{r glm-19}
+::: {.column width="50%"}
+Gotelli & Ellison's New England **ant species density** — 22 bogs, ant
+richness against latitude and elevation.
+
+```{r glm-18b}
 #| echo: true
 #| message: false
 #| warning: false
-nb_emm <- emmeans(nb_model, ~ size_cat,
-                  type = "response")
-nb_emm
+ant_df %>%
+  summarise(mean = mean(n_ant_species),
+            var  = var(n_ant_species),
+            ratio = var / mean)
 ```
 
-`type = "response"` back-transforms from the log scale, which is why the
-confidence limits are **not symmetric** around each mean — the interval
-was symmetric on the log scale, and exponentiating stretches the upper
-half.
-:::
+The raw variance-to-mean ratio is **2.02**. On the Galápagos logic, that
+looks like trouble.
 
-::: {.column width="48%"}
-```{r glm-20}
-#| echo: false
+```{r glm-18c}
+#| echo: true
 #| message: false
 #| warning: false
-multcomp::cld(nb_emm, Letters = letters)
-```
-:::
-:::::
+ant_poiss <- glm(n_ant_species ~ latitude + elevation_m,
+                 data = ant_df,
+                 family = poisson(link = "log"))
 
-## Poisson vs. Negative Binomial, Drawn
-
-::::: columns
-::: {.column width="58%"}
-```{r glm-21}
-#| echo: false
-#| message: false
-#| warning: false
-#| fig-height: 3.6
-#| fig-width: 4.6
-#| fig-alt: "Jittered raw species counts by island size category on a log scale, with Poisson estimated means and intervals in red and negative binomial estimated means and intervals in blue. The two sets of means sit on top of each other while the negative binomial intervals are several times wider."
-
-p_emm <- as.data.frame(emmeans(poiss_model, ~ size_cat, type = "response")) %>%
-  rename(mean = rate) %>% mutate(model = "Poisson")
-n_emm <- as.data.frame(nb_emm) %>%
-  rename(mean = response) %>% mutate(model = "Negative binomial")
-both <- bind_rows(p_emm, n_emm) %>%
-  mutate(model = factor(model, levels = c("Poisson", "Negative binomial")))
-
-ggplot() +
-  geom_jitter(data = g_df, aes(size_cat, spp),
-              width = 0.15, alpha = 0.4) +
-  geom_pointrange(data = both,
-                  aes(size_cat, mean, ymin = asymp.LCL, ymax = asymp.UCL,
-                      color = model),
-                  position = position_dodge(width = 0.45), size = 0.6) +
-  scale_color_manual(values = c("Poisson" = "firebrick",
-                                "Negative binomial" = "steelblue")) +
-  scale_y_log10() +
-  labs(x = "Island size category", y = "Plant species (log scale)",
-       color = NULL) +
-  theme_minimal(base_size = 10) +
-  theme(legend.position = "top")
+check_overdispersion(ant_poiss)
 ```
 :::
 
-::: {.column width="42%"}
-The **means land on top of each other.** Only the intervals differ.
+::: {.column width="50%"}
+::: callout-important
+**Dispersion 0.83, *p* = 0.68. The Poisson is the right model here.**
 
-For the large islands:
+Fit the negative binomial anyway and θ comes back at about **184,000** —
+`glm.nb` is telling you it found no extra variance to absorb — and the
+AIC gets *worse*, 109.6 → 111.6.
+:::
 
--   Poisson: 232 (220 – 244)
--   Negative binomial: 232 (124 – 432)
-
-The Poisson interval is 24 species wide and excludes most of the
-observed data. The negative binomial interval is 308 species wide and
-actually contains it.
+**Overdispersion is a property of the model, not of the data.** The raw
+ratio of 2.02 was variation *between* bogs at different latitudes and
+elevations. Once the predictors account for it, nothing is left over.
 
 ::: callout-tip
-**Report the one whose diagnostics pass**, not the one with the smaller
-*p*-value.
+**So the lesson is not "counts need a negative binomial."** It is: fit
+the Poisson, **check the dispersion**, and only reach for θ when the
+check tells you to.
+
+Ant richness falls **21% per degree of latitude** (*p* = 0.002) — a real
+result, from the simpler model.
 :::
 :::
 :::::
+
 
 ## Part 5 · Logistic Regression {.divider}
 
@@ -1415,14 +1463,16 @@ a GLM where:
 So a one-way ANOVA, a linear regression on a categorical predictor, and
 a Gaussian GLM are **three names for one fit**.
 
+Here on **last week's crayfish** — a genuine two-level factor:
+
 ```{r glm-38}
 #| echo: true
 #| message: false
 #| warning: false
-aov_fit  <- aov(spp ~ size_cat, data = g_df)
-lm_fit   <- lm(spp ~ size_cat, data = g_df)
-glm_fit  <- glm(spp ~ size_cat, data = g_df,
-                family = gaussian(link = "identity"))
+aov_fit <- aov(growth_per_day ~ range, data = cray_df)
+lm_fit  <- lm(growth_per_day ~ range, data = cray_df)
+glm_fit <- glm(growth_per_day ~ range, data = cray_df,
+               family = gaussian(link = "identity"))
 ```
 :::
 
@@ -1453,8 +1503,9 @@ they contain it.
 1.  **Gaussian** + identity link = the linear model and ANOVA you
     already know
 2.  **Poisson** + log link = counts — and always check the dispersion
-3.  **Negative binomial** = counts whose variance exceeds the mean,
-    which in ecology is most of them
+3.  **Negative binomial** = counts whose variance exceeds the mean —
+    common in ecology, but **check** rather than assume (the ants did
+    not need it)
 4.  **Binomial** + logit link = binary responses, read as odds ratios
 
 What they share: the linear predictor is unchanged. You are still
@@ -1469,9 +1520,9 @@ predict something impossible.
 Fit it → check the diagnostic that matches the model → change one
 assumption → refit.
 
-Today that chain ran three times on one question and gave three
-different *p*-values, all of them tiny. The number was never the
-problem. What changed was whether you were entitled to it.
+Today that chain ran on one question and gave *p*-values from 10⁻¹⁹⁸ to
+10⁻⁷, all of them tiny. The number was never the problem. What changed
+was whether you were entitled to it.
 :::
 
 ::: callout-note
@@ -1511,7 +1562,7 @@ properly.
 ::: callout-note
 **📖 On the datasets**
 
-The *Uta* lizard data are Polis et al.'s, reproduced in Quinn & Keough **Box 13-1**. The canyon rodent data are Bolger et al.'s, reproduced in **Box 13-2**. The Galápagos data ship with the `faraway` package.
+The *Uta* lizard data are Polis et al.'s, reproduced in Quinn & Keough **Box 13-1**. The canyon rodent data are Bolger et al.'s, reproduced in **Box 13-2**. The Galápagos and New England ant data are **Gotelli & Ellison**'s, from *A Primer of Ecological Statistics* (Ch. 8 and Ch. 9) — the Galápagos file is the same one you used in week 6.
 
 The textbook PDFs are on Canvas.
 :::

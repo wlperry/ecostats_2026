@@ -277,6 +277,6 @@ invisible(NULL)
 # Run the whole script top to bottom with
 # Ctrl/Cmd + Shift + Enter. It must run clean.
 #
-# Homework 8 (Factorial ANOVA, crayfish) is a separate
+# Homework 13 (Factorial ANOVA, crayfish) is a separate
 # worksheet - start a new script for it.
 # ==========================================================

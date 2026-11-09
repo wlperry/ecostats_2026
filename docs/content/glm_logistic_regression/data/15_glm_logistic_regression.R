@@ -5,334 +5,210 @@
 #
 # Save as scripts/15_glm_logistic_regression.R
 #
-# Only the plumbing is written for you - libraries and the
-# two data reads. Every line of statistics you type
-# yourself. The code is on the activity page.
+# This is a TEMPLATE for any GLM analysis. To reuse it on
+# your own data, change three things:
+#   1. the file name in read_csv()
+#   2. the response variable
+#   3. the predictor(s)
+# Then pick the family that matches your response:
+#   counts  -> poisson, then check dispersion, then glm.nb
+#   binary  -> binomial(link = "logit")
+#   normal  -> gaussian(link = "identity"), i.e. lm()
 #
-# Section 6 has NO code on the activity page either. You
-# have done the same three steps three times by then - do
-# them once more on your own.
-#
-# The THINK lines are to talk about, not to answer here.
-# The WRITE-UP at the bottom is what gets graded.
+# Libraries and the three data reads are written for you.
+# Every line of statistics you type yourself - the code is
+# on the activity page.
 # ==========================================================
 
 # ---- Libraries -------------------------------------------
-library(janitor)
+library(janitor)            # clean_names()
 library(car)                # Anova()
 library(MASS)               # glm.nb()
-library(performance)        # check_overdispersion()
+library(performance)        # check_overdispersion(), r2()
 library(DHARMa)             # simulateResiduals()
-library(emmeans)
-library(broom)
+library(emmeans)            # emmeans()
+library(broom)              # tidy(), glance()
 library(parameters)         # model_parameters()
 library(pscl)               # pR2()
 library(ResourceSelection)  # hoslem.test()
-library(faraway)            # the gala data
 library(tidyverse)
 
-options(scipen = 999)
+# MASS::select() masks dplyr::select(). If select() misbehaves,
+# write dplyr::select() explicitly.
 
 invisible(NULL)
 
 
 # ---- 1 The data ------------------------------------------
-# gala: 30 Galapagos islands, MacArthur-Wilson island
-# biogeography. One island over 3000 km2 is dropped - it is
-# 20x bigger than anything else and swamps every plot.
-#
-#   spp        number of plant species (a COUNT)
-#   endemics   number of endemic species (a COUNT)
-#   area       island area, km2
-#   elevation  max elevation, m
-#   nearest    distance to the nearest island, km
-#
-# size_cat bins area into three groups so we have a
-# categorical predictor to start from - the same shape of
-# question as the ANOVA designs from week 9.
+# Galapagos plant richness - Gotelli & Ellison. The SAME file
+# you used in week 6. n_species is a count.
 
-g_df <- gala %>%
-  clean_names() %>%
-  rename(spp = species) %>%
-  mutate(
-    size_cat = case_when(
-      area < 1               ~ "small",
-      area >= 1 & area < 100 ~ "medium",
-      area >= 100            ~ "large"
-    ),
-    size_cat = factor(size_cat, levels = c("small", "medium", "large"))
-  ) %>%
-  filter(area < 3000)
+g_df <- read_csv("data/galapagos_species_area.csv")
 
-head(g_df)
+g_df
 
-count(g_df, size_cat)
+g_df %>%
+  summarise(n = n(), min = min(n_species), max = max(n_species))
 
 invisible(NULL)
 
-# THINK: spp is a count - a whole number that cannot go
-# below zero. Name two things that are true of counts but
-# NOT true of the normal distribution.
+
+# ---- 2 Fit a linear model anyway -------------------------
+# Look at the response, fit lm() on purpose, check the two
+# assumptions, then ask it to predict the smallest island.
+# Watch the lower prediction bound.
 
 
-# ---- 2 Why last week's ANOVA will not do -----------------
-# Start by fitting it the week-9 way, on purpose, and let
-# the assumptions fail.
 
-# YOUR CODE: a histogram of spp, and a boxplot of spp by
-# size_cat.
 
 invisible(NULL)
 
-# YOUR CODE: the mean and the variance of spp, side by side.
+
+# ---- 3 You already know one fix --------------------------
+# The week-6 log-log model. It passes its assumptions. Then
+# compare the arithmetic and geometric means of the response
+# to see which quantity the transformation actually gives you.
+
+
+
 
 invisible(NULL)
 
-# YOUR CODE: lm() of spp on size_cat, then Anova(type = 3),
-# then the two assumption tests - normality of residuals
-# and equal variance across groups.
+
+# ---- 4 A Gaussian GLM is the same linear model -----------
+# Sanity check: gaussian + identity link IS lm(). Confirm the
+# coefficients are identical before trusting glm() with a
+# family you cannot check by eye.
+
+
+
 
 invisible(NULL)
 
-# THINK: write down both assumption p-values. Did the ANOVA
-# earn the right to that tiny size_cat p-value?
 
-# THINK: the variance of spp is well over 100x its mean. A
-# normal distribution has a variance that is free to be
-# anything. So which assumption does that actually break?
+# ---- 5 Poisson GLM ---------------------------------------
+# family = poisson(link = "log"). Test with a likelihood
+# ratio test, not F - a Poisson has no free sigma^2 to put in
+# an F-test's denominator.
 
 
-# ---- 3 A Gaussian GLM is the same linear model -----------
-# Before trusting glm() with a new distribution, check it
-# reproduces the one you already know.
 
-# YOUR CODE: glm() of spp on size_cat with
-# family = gaussian(link = "identity"), its summary(), and
-# Anova(type = "III", test = "F").
 
 invisible(NULL)
 
-# THINK: compare the coefficients and the p-value to the
-# lm() in section 2. Identical, or just close? So what IS
-# glm() adding, if a Gaussian GLM is just lm() again?
+
+# ---- 6 Measure the overdispersion ------------------------
+# check_overdispersion() wants a ratio near 1. DHARMa
+# simulates from the fitted model and checks the residuals
+# against their own predicted distribution.
 
 
-# ---- 4 Poisson GLM - the obvious choice, and it fails ----
-# Poisson is THE distribution for counts. It has one
-# parameter, so the mean and the variance are forced to be
-# the same number.
 
-# YOUR CODE: glm() of spp on size_cat with
-# family = poisson(link = "log"), its summary(), and
-# Anova(type = "III", test = "LR").
 
 invisible(NULL)
 
-# YOUR CODE: check_overdispersion() on the Poisson model,
-# then DHARMa - simulateResiduals() and plot().
+
+# ---- 7 Negative binomial ---------------------------------
+# glm.nb() adds theta, letting Var(Y) = mu + mu^2/theta.
+# Compare the slopes, then the standard errors, then the AICs.
+
+
+
 
 invisible(NULL)
 
-# THINK: a Poisson GLM uses a LR chi-square test, not an
-# F-test. Why can it not use an F-test? (What does an
-# F-test need that this model does not estimate?)
 
-# THINK: the dispersion ratio should be about 1. What did
-# you get? Given section 2's mean-vs-variance, is that a
-# surprise?
+# ---- 8 A different count - you write this one ------------
+# Gotelli & Ellison ant species density: 22 New England bogs.
+# Run sections 5-7 again on this. The answer comes out
+# differently, and the reason is the whole point.
 
-# THINK: overdispersion inflates significance. Compare the
-# size_cat LR chi-square here to the one you get in
-# section 5 and see how badly.
+ant_df <- read_csv("data/gotelli_ant_species.csv")
+
+ant_df
 
 
-# ---- 5 Negative binomial - the one that works ------------
-# The negative binomial adds a second parameter, theta, so
-# the variance is allowed to exceed the mean.
 
-# YOUR CODE: glm.nb() of spp on size_cat, its summary(),
-# and Anova(type = "III", test = "LR").
 
 invisible(NULL)
 
-# YOUR CODE: check_overdispersion() and DHARMa on the NB
-# model, then AIC() comparing the Poisson and NB models.
+
+# ---- 9 Logistic regression -------------------------------
+# Whitlock & Schluter guppy cold tolerance: 160 fish, four
+# exposure durations, mortality coded 1 = died / 0 = survived.
+# family = binomial(link = "logit").
+
+guppy_df <- read_csv("data/guppy_cold_death.csv")
+
+guppy_df %>%
+  count(exposure_min, mortality) %>%
+  pivot_wider(names_from = mortality, values_from = n,
+              names_prefix = "mortality_")
+
+# Fit it, LR test against the null model, odds ratio with CI,
+# goodness of fit, the fitted probability curve, and the LD50.
+# NOTE: hoslem.test() needs g <= the number of distinct
+# predictor values. There are 4 here, so use g = 4.
+
+
+
 
 invisible(NULL)
-
-# YOUR CODE: emmeans() on the NB model with
-# type = "response", then pairs() and a letter display.
-
-invisible(NULL)
-
-# THINK: the NB dispersion ratio and p-value - is the
-# overdispersion gone?
-
-# THINK: the AIC gap between Poisson and NB is enormous.
-# Both models used the same data and the same predictor, so
-# where did all that fit come from?
-
-# THINK: type = "response" back-transforms from the log
-# scale. Why are the confidence intervals no longer
-# symmetric around each mean?
-
-
-# ---- 6 Do it again with a continuous predictor -----------
-# YOUR TURN - no code on the activity page for this one.
-# You have now done the same three steps three times.
-#
-# Question: how does plant species richness change with
-# island AREA - a continuous predictor instead of bins?
-#
-#   a) plot spp against area
-#   b) lm(spp ~ area) and check the two assumptions
-#   c) the Poisson version, with an overdispersion check
-#   d) the negative binomial version, with an
-#      overdispersion check, DHARMa, and the LR test
-#   e) one plot of spp vs area with the NB fit on it
-#      (geom_smooth(method = "glm.nb"))
-#   f) decide which of the three you would report
-
-# YOUR CODE:
-
-invisible(NULL)
-
-# THINK: did binning area into three groups in section 1
-# throw away information? Compare what you learned from
-# size_cat to what area tells you.
-
-
-# ---- 7 Logistic regression - a binary response -----------
-# Polis et al. (1998) recorded whether the lizard Uta was
-# present on 19 islands in the Gulf of California, against
-# each island's perimeter-to-area ratio - a measure of how
-# exposed the island's shoreline is.
-#
-#   paratio  perimeter / area ratio
-#   pa       1 = Uta present, 0 = absent
-#
-# Peninsula has no paratio, so it drops out. The read is
-# written for you because of the "." missing-value codes.
-
-polis_df <- read_csv("data/polis.csv", na = c(".", "")) %>%
-  clean_names() %>%
-  drop_na(paratio, pa)
-
-polis_df
-
-count(polis_df, uta)
-
-invisible(NULL)
-
-# YOUR CODE: plot pa against paratio.
-
-invisible(NULL)
-
-# YOUR CODE: glm() of pa on paratio with
-# family = binomial(link = "logit"), and its summary().
-
-invisible(NULL)
-
-# YOUR CODE: the likelihood ratio test - fit an intercept-
-# only model and compare the two with anova(test = "Chisq").
-
-invisible(NULL)
-
-# YOUR CODE: the odds ratio and its CI. Either
-# exp(coef()) / exp(confint()) by hand, or
-# model_parameters(exponentiate = TRUE), or
-# tidy(exponentiate = TRUE, conf.int = TRUE).
-
-invisible(NULL)
-
-# YOUR CODE: goodness of fit - r2(), pR2(), and
-# hoslem.test(model$y, fitted(model), g = 10).
-
-invisible(NULL)
-
-# YOUR CODE: the fitted probability curve. Build a
-# prediction data frame over the range of paratio, use
-# predict(type = "response"), and draw it over the points.
-
-invisible(NULL)
-
-# THINK: the slope is negative and the odds ratio is below
-# 1. Say what that means about Uta and shoreline exposure -
-# in lizards, not in log-odds.
-
-# THINK: for the Hosmer-Lemeshow test you WANT a
-# non-significant p-value. Why is that backwards from every
-# other test you have run this semester?
 
 
 # ==========================================================
-# WRITE-UP - graded
-#
-# Type answers after ANSWER:, every line starting with #
+# WRITE-UP (GRADED) - answer as comments, right here
 # ==========================================================
 
-# ---- 8 Report the count model ----------------------------
-# Use your negative binomial model from section 5.
-
-# Q1. Fill in the three models of spp ~ size_cat:
+# ---- 10 Report the count models --------------------------
+# Fill in both datasets: test, statistic, p, dispersion.
 #
-#       model        test        statistic     p     dispersion
-#       lm/Gaussian  F                               -
-#       Poisson      LR chisq
-#       negative binomial  LR chisq
+#                       test        statistic   p      dispersion
+# GALAPAGOS
+#   lm / Gaussian       F                              -
+#   Poisson             LR chisq
+#   negative binomial   LR chisq
 #
-# ANSWER:
-
-
-# Q2. Two or three sentences reporting the NB result, with
-#     your own statistic, df and p. Say which model you
-#     fitted and why that one.
-# ANSWER:
-
-
-# Q3. Someone reports the Poisson p-value for size_cat.
-#     What have they done wrong, and in which direction is
-#     their answer wrong?
-# ANSWER:
-
-
-# Q4. Section 2's ANOVA also gave a significant size_cat
-#     effect. So did the whole exercise change the
-#     conclusion, or only the honesty of it? Explain.
-# ANSWER:
-
-
-# ---- 9 Report the logistic model -------------------------
-
-# Q5. Slope, odds ratio and its 95% CI, the LR test, and a
-#     pseudo-R2.
-# ANSWER:
-
-
-# Q6. One sentence an ecologist would write: what does
-#     perimeter-to-area ratio do to the chance of finding
-#     Uta on an island?
-# ANSWER:
-
-
-# ---- 10 The final figure ---------------------------------
-# This one gets the full treatment - axis labels, a theme,
-# readable sizing. It is the graded deliverable.
+# ANTS
+#   Poisson             LR chisq
+#   negative binomial   LR chisq
 #
-# Pick ONE: the NB fit of spp on area from section 6, or
-# the logistic curve from section 7. Either way, show the
-# raw data under the fitted line.
-
-# YOUR CODE:
+# Q33 ANSWER:
+#
+#
+# Q34 ANSWER:
+#
+#
+# Q35 ANSWER:
+#
+#
 
 invisible(NULL)
 
-# Q7. Why would a straight line from lm() have been the
-#     wrong shape for the figure you chose?
-# ANSWER:
+
+# ---- 11 Report the logistic model ------------------------
+# Q36 ANSWER: slope, odds ratio + 95% CI, LR test, pseudo-R2, LD50
+#
+#
+# Q37 ANSWER:
+#
+#
+
+invisible(NULL)
 
 
-# ==========================================================
-# Run the whole script top to bottom with
-# Ctrl/Cmd + Shift + Enter. It must run clean.
-# ==========================================================
+# ---- 12 The final figure ---------------------------------
+# Either the NB fit of n_species on area_km2, or the logistic
+# curve. Raw data under the fitted line, real axis labels, a
+# theme. This one is graded on presentation.
+
+
+
+
+# ggsave("figures/15_glm_fit.pdf", width = 7, height = 5)
+
+# Q38 ANSWER:
+#
+#
+
+invisible(NULL)

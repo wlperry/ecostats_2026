@@ -3,7 +3,7 @@ order: 15
 week: 10
 title: "Activity: GLM & Logistic Regression"
 subtitle: "Generalized linear models"
-description: "Hands-on activity: what to do when the ANOVA assumptions fail on count data. Gaussian, Poisson, and negative binomial GLMs on the Galapagos island-biogeography data, then logistic regression on Polis et al.'s Uta lizard presence/absence data."
+description: "Hands-on activity: what to do when a linear model's assumptions fail on count data. Gaussian, Poisson, and negative binomial GLMs on Gotelli & Ellison's Galapagos island-biogeography data, a count where the Poisson actually fits, then logistic regression on Whitlock & Schluter's guppy cold-tolerance data."
 author: "Bill Perry"
 metadata-files:
   - ../../_templates/activities.yml
@@ -16,38 +16,39 @@ format:
 
 ### Today's Objectives
 
-1.  Fit the week-9 ANOVA on count data and watch its assumptions fail
-2.  Say what a GLM's three components are — distribution, predictors, link function
+1.  Fit a linear model to count data and watch it predict something impossible
+2.  Say why the week-6 log transformation is a fix, but not the same model
 3.  Check that a Gaussian GLM reproduces `lm()` exactly
-4.  Fit a Poisson GLM, and find out why the obvious choice for counts still fails
-5.  Measure overdispersion, and say what it does to your *p*-values
-6.  Fit a negative binomial GLM and confirm it fixed the problem
-7.  Run the same escalation on a continuous predictor, on your own
-8.  Fit a logistic regression on a binary response and interpret an odds ratio
+4.  Fit a Poisson GLM, measure overdispersion, and say what it does to your *p*-values
+5.  Fit a negative binomial GLM and confirm it fixed the problem
+6.  Find a count where the Poisson is the **right** model, on your own
+7.  Fit a logistic regression on a binary response and interpret an odds ratio
 
 ::: callout-tip
 ## 📂 Files for today
 
-[📥 Script skeleton (.R)](data/15_glm_logistic_regression.R){.btn .btn-primary download="15_glm_logistic_regression.R"} [📥 Polis lizard data](data/polis.csv){.btn .btn-primary download="polis.csv"}
+[📥 Script skeleton (.R)](data/15_glm_logistic_regression.R){.btn .btn-primary download="15_glm_logistic_regression.R"}
+[📥 Galápagos data](data/galapagos_species_area.csv){.btn .btn-primary download="galapagos_species_area.csv"}
+[📥 Ant data](data/gotelli_ant_species.csv){.btn .btn-primary download="gotelli_ant_species.csv"}
+[📥 Guppy data](data/guppy_cold_death.csv){.btn .btn-primary download="guppy_cold_death.csv"}
 
--   Save the skeleton as `scripts/15_glm_logistic_regression.R`, and `polis.csv` in your `data/` folder.
--   The Galapagos data comes from the `faraway` package — no file needed.
+-   Save the skeleton as `scripts/15_glm_logistic_regression.R`, and the three csv files in your `data/` folder.
 :::
 
 ::: callout-important
 ## What you hand in
 
--   **All of today's code is right here in this activity.** Type it into your script as we go and run it chunk by chunk. The skeleton has the plumbing — libraries and the two data reads — and nothing else. Every line of statistics you type yourself.
--   **Section 6 has no code here either.** By then you will have run the same three steps three times, so you do them once more on your own.
--   The **Q** boxes are **things to think about**, not inline homework. Read them, talk them over, answer them in your head. You do **not** have to type answers into the script, and they are not graded.
--   The **write-up** at the bottom — sections 8, 9, and 10 — *is* graded. Those answers go into the script as `#` comments.
+-   **All of today's code is right here in this activity.** Type it into your script as we go and run it chunk by chunk. The skeleton has the plumbing — libraries and the data reads — and nothing else.
+-   **Section 8 has no code here.** By then you will have run the same chain three times, so you do it once more on your own.
+-   The **Q** boxes are **things to think about**, not inline homework. They are not graded.
+-   The **write-up** at the bottom — sections 9, 10, and 11 — *is* graded. Those answers go into the script as `#` comments.
 -   Hand in `scripts/15_glm_logistic_regression.R`. Run it top to bottom (**Ctrl/Cmd + Shift + Enter**) first — it must run with no errors.
 :::
 
 ::: callout-note
 ## 🔮 Predict before you run
 
-Today is a chain of three models where each one fails for a *different* reason, and the failure is the content. Before each model, say out loud whether you expect it to work — then look at the diagnostic, not the *p*-value.
+Today is a chain of models where each one fails for a *different* reason, and the failure is the content. Before each model, say out loud whether you expect it to work — then look at the diagnostic, not the *p*-value.
 :::
 
 ::: callout-tip
@@ -56,13 +57,13 @@ Today is a chain of three models where each one fails for a *different* reason, 
 Every section ends with `invisible(NULL)`. It is a **bumper**. Press Ctrl/Cmd + Enter on a section's last real line and your cursor jumps to the next line *that has code on it* — without the bumper, that is the next section, way down past the next heading. With it, the cursor stops right there and you keep your place. It does nothing and prints nothing.
 :::
 
-Keep the plots plain today — no labels, colors, or themes. The goal is to **read** them. The one exception is the final figure in section 10, which is the graded deliverable.
+Keep the plots plain today — no labels, colors, or themes. The goal is to **read** them. The one exception is the final figure in section 11, which is the graded deliverable.
 
 ------------------------------------------------------------------------
 
 ## Where this fits
 
-For the last three weeks every model has been a **linear model** — one-way ANOVA, factorial, nested. All of them assume the residuals are normal with constant variance. That is a fine assumption for body mass or algae cover.
+For the last three weeks every model has been a **linear model** — one-way ANOVA, factorial, and the redux. All of them assume the residuals are normal with constant variance. That is a fine assumption for body mass or growth rate.
 
 It is a bad assumption for a **count**. A count is a whole number, it cannot go below zero, and its variance usually grows with its mean. Today is what you do instead.
 
@@ -71,7 +72,7 @@ A **generalized linear model** keeps the linear part and swaps out two things:
 | Component | What it is | Example |
 |------------------|------------------------------|-------------------------|
 | **Random** | the response's distribution | Poisson for counts |
-| **Systematic** | the predictors | `size_cat`, `area` |
+| **Systematic** | the predictors | `log(area_km2)` |
 | **Link** | connects the mean to the predictors | `log` for counts, `logit` for binary |
 
 | Response looks like | Family |
@@ -84,164 +85,174 @@ A **generalized linear model** keeps the linear part and swaps out two things:
 
 ------------------------------------------------------------------------
 
-> ## 🧩 Block 1 — The assumptions fail *(after lecture Part 1)*
+> ## 🧩 Block 1 — The linear model runs out *(after lecture Part 1)*
 >
-> Sections 1–2: meet the count data, then fit last week's model to it on purpose.
+> Sections 1–3: meet the count data, fit a linear model to it on purpose, then try the fix you already know.
 
 # Section 1 · The data
 
 *Written for you in the skeleton — run it and read it.*
 
 ``` r
-# ---- Libraries -------------------------------------------
-library(janitor)
-library(car)                # Anova()
-library(MASS)               # glm.nb()
-library(performance)        # check_overdispersion()
-library(DHARMa)             # simulateResiduals()
-library(emmeans)
-library(broom)
-library(parameters)         # model_parameters()
-library(pscl)               # pR2()
-library(ResourceSelection)  # hoslem.test()
-library(faraway)            # the gala data
-library(tidyverse)
-
-options(scipen = 999)
-```
-
-The `gala` data: 30 Galapagos islands, used to test MacArthur–Wilson island biogeography.
-
-| Column      | What it is                              |
-|-------------|-----------------------------------------|
-| `spp`       | number of plant species — **a count**   |
-| `endemics`  | number of endemic species — **a count** |
-| `area`      | island area, km²                        |
-| `elevation` | maximum elevation, m                    |
-| `nearest`   | distance to the nearest island, km      |
-
-``` r
 # ---- 1 The data ------------------------------------------
-g_df <- gala %>%
-  clean_names() %>%
-  rename(spp = species) %>%
-  mutate(
-    size_cat = case_when(
-      area < 1               ~ "small",
-      area >= 1 & area < 100 ~ "medium",
-      area >= 100            ~ "large"
-    ),
-    size_cat = factor(size_cat, levels = c("small", "medium", "large"))
-  ) %>%
-  filter(area < 3000)
+g_df <- read_csv("data/galapagos_species_area.csv")
 
-head(g_df)
+g_df
 
-count(g_df, size_cat)
+g_df %>%
+  summarise(n = n(), min = min(n_species), max = max(n_species))
 ```
 
-`filter(area < 3000)` drops Isabela, which is about 20× larger than anything else and flattens every plot. `size_cat` bins area into three groups so we start from a **categorical** predictor — the same shape of question as week 9's ANOVA.
+**You have seen this dataset before.** In week 6 you fitted
+$\log_{10}(S) \sim \log_{10}(A)$ to these same 17 islands and used them for
+the influential-point demonstration. Same islands, same question — today the
+response gets treated as what it actually is, a **count**.
 
-✏️ **Q1:** `spp` is a count. Name two things that are true of counts but **not** true of a normal distribution.
-
-✏️ **Q2:** How many islands are in each size category? Is this balanced?
+✏️ **Q1:** `n_species` runs from 7 to 325 and `area_km2` spans four orders of magnitude. Which of the two needs a log more urgently, and why?
 
 ------------------------------------------------------------------------
 
-# Section 2 · Why last week's ANOVA will not do
-
-Fit it the week-9 way, on purpose, and let the assumptions fail.
+# Section 2 · Fit a linear model anyway
 
 **▶ Type this yourself:**
 
 ``` r
-# ---- 2 Why last week's ANOVA will not do -----------------
-ggplot(g_df, aes(x = spp)) +
+# ---- 2 Fit a linear model anyway -------------------------
+ggplot(g_df, aes(x = n_species)) +
   geom_histogram(binwidth = 25)
 
-ggplot(g_df, aes(x = size_cat, y = spp)) +
-  geom_boxplot()
+ggplot(g_df, aes(x = area_km2, y = n_species)) +
+  geom_point()
 ```
 
-> 🔮 **Predict first:** for a normal distribution the variance has nothing to do with the mean. Before you run the next chunk — guess the mean of `spp`, then guess its variance.
+> 🔮 **Predict first:** for a normal distribution the variance has nothing to do with the mean. Before you run the next chunk — guess the mean of `n_species`, then guess its variance.
 
 **▶ Type this yourself:**
 
 ``` r
 g_df %>%
   summarise(
-    mean_spp = mean(spp),
-    var_spp = var(spp),
-    ratio = var_spp / mean_spp
+    mean_spp = mean(n_species),
+    var_spp  = var(n_species),
+    ratio    = var_spp / mean_spp
   )
 ```
 
 **▶ Type this yourself:**
 
 ``` r
-lm_model <- lm(spp ~ size_cat, data = g_df)
-summary(lm_model)
+lm_raw <- lm(n_species ~ area_km2, data = g_df)
+summary(lm_raw)
 
-Anova(lm_model, type = 3)
+shapiro.test(residuals(lm_raw))
 
-shapiro.test(residuals(lm_model))
-
-leveneTest(spp ~ size_cat, data = g_df)
+check_heteroscedasticity(lm_raw)
 ```
 
-✏️ **Q3:** Write down the mean, the variance, and both assumption *p*-values. Did either assumption pass?
+**▶ Type this yourself** — now ask the model to predict the smallest island:
 
-✏️ **Q4:** `Anova()` gave `size_cat` a *p*-value of about 0.0000035. Did this model **earn** the right to that number?
+``` r
+predict(lm_raw,
+        newdata = data.frame(area_km2 = 0.518),
+        interval = "prediction")
+```
 
-✏️ **Q5:** The variance of `spp` is more than 100× its mean. A normal distribution lets the variance be any number it likes, so that ratio on its own is not a violation. Look at the boxplot instead — which assumption is the ratio actually breaking?
+✏️ **Q2:** Write down the mean, the variance, and the ratio. What does a ratio over 100 tell you about the shape of this response?
 
-✏️ **Q6:** Look at the histogram. If you fitted a normal curve to the "small" islands and asked for a 95% interval, what impossible value would it predict?
+✏️ **Q3:** Which assumption **failed**, and which one came back **fine**? Be careful here — do not report a violation the test did not find.
 
-> 💡 **Key idea:** this is the moment the ANOVA toolkit runs out. Nothing is wrong with the *question* — island size probably does drive species richness — but the model being used to answer it is making promises the data does not keep. The rest of today is three attempts to fix that.
+✏️ **Q4:** Look at that prediction interval. What is its lower bound, and what would that mean in the field?
+
+✏️ **Q5:** The *p*-value for `area_km2` is about 0.016. Did this model **earn** the right to that number?
+
+> 💡 **Key idea:** this is the moment the linear-model toolkit runs out — and notice *how* it ran out. The variance was fine. What broke is that the normal distribution has no lower bound, so the model is free to predict −111 plant species. No amount of extra data fixes that; it is the distribution that is wrong.
+
+------------------------------------------------------------------------
+
+# Section 3 · You already know one fix
+
+In week 6 you handled this with logs. Do it again and see how well it works.
+
+**▶ Type this yourself:**
+
+``` r
+# ---- 3 You already know one fix --------------------------
+lm_log <- lm(log10(n_species) ~ log10(area_km2), data = g_df)
+summary(lm_log)
+
+shapiro.test(residuals(lm_log))
+
+check_heteroscedasticity(lm_log)
+```
+
+R² rises from 0.33 to **0.59**, normality goes from *p* = 0.002 to *p* = 0.48, and the slope **0.331** is the species–area exponent *z*. **The transformation works.**
+
+So why is there anything left to teach? Run this:
+
+**▶ Type this yourself:**
+
+``` r
+c(arithmetic = mean(g_df$n_species),
+  geometric  = exp(mean(log(g_df$n_species))))
+```
+
+✏️ **Q6:** Those two numbers are 119.3 and 73.6. `lm()` on a logged response back-transforms to the **second** one. Which of the two did you think you were modelling?
+
+✏️ **Q7:** No island here has zero species. Suppose one did. What does `log10(0)` return, and what would you have to do to the data to carry on?
+
+✏️ **Q8:** A count is a whole number. `log10(n_species)` is not. Is that a problem in practice here — and can you say *why* it is more of a problem for small counts than large ones?
+
+> 💡 **Key idea:** the transformation is not wrong, it is a **different question**. `lm(log(Y) ~ X)` models the mean of the log; a GLM with a log link models the log of the mean. Those back-transform to the geometric and the arithmetic mean — 73.6 against 119.3 here. Hold that thought; it explains a number in section 5.
 
 ------------------------------------------------------------------------
 
 > ## 🧩 Block 2 — Three families, one question *(after lecture Parts 2–4)*
 >
-> Sections 3–5: Gaussian (the sanity check), Poisson (fails), negative binomial (works).
+> Sections 4–7: Gaussian (the sanity check), Poisson (fails), negative binomial (works).
 
-# Section 3 · A Gaussian GLM is the same linear model
+# Section 4 · A Gaussian GLM is the same linear model
 
 Before trusting `glm()` with an unfamiliar distribution, check that it reproduces the one you already know.
 
-> 🔮 **Predict first:** a Gaussian GLM with an identity link *is* a linear model. Will the coefficients be identical to `lm_model`, or just similar?
+> 🔮 **Predict first:** a Gaussian GLM with an identity link *is* a linear model. Will the coefficients be identical, or just similar?
 
 **▶ Type this yourself:**
 
 ``` r
-# ---- 3 A Gaussian GLM is the same linear model -----------
-gauss_model <- glm(spp ~ size_cat, data = g_df,
+# ---- 4 A Gaussian GLM is the same linear model -----------
+lm_model <- lm(n_species ~ log(area_km2), data = g_df)
+
+gauss_model <- glm(n_species ~ log(area_km2), data = g_df,
                    family = gaussian(link = "identity"))
 
-summary(gauss_model)
+round(cbind(lm = coef(lm_model), glm = coef(gauss_model)), 6)
+
+all.equal(coef(lm_model), coef(gauss_model))
 
 Anova(gauss_model, type = "III", test = "F")
 ```
 
-✏️ **Q7:** Compare the coefficients and the `size_cat` *p*-value to section 2. Identical, or just close?
+✏️ **Q9:** Identical, or just close? What did `all.equal()` return?
 
-✏️ **Q8:** So if a Gaussian GLM is just `lm()` again, what is `glm()` actually adding? (What did you have to *name* in the `glm()` call that `lm()` never asked for?)
+✏️ **Q10:** So if a Gaussian GLM is just `lm()` again, what is `glm()` actually adding? (What did you have to *name* in the `glm()` call that `lm()` never asked for?)
+
+✏️ **Q11:** `summary(gauss_model)` reports a **dispersion parameter**. Compare it to the residual mean square from `anova(lm_model)`. What is it?
 
 > 💡 **Key idea:** `lm()` is the special case of `glm()` where the family is Gaussian and the link is the identity. Everything that follows changes exactly those two arguments. You are not learning a new model — you are learning two knobs on the one you already have.
 
 ------------------------------------------------------------------------
 
-# Section 4 · Poisson GLM — the obvious choice, and it fails
+# Section 5 · Poisson GLM — the obvious choice, and it fails
 
-Poisson is **the** distribution for counts. It has only one parameter, which means its mean and its variance are forced to be the same number. Remember the ratio you computed in Q3.
+Poisson is **the** distribution for counts. It has only one parameter, which means its mean and its variance are forced to be the same number. Remember the ratio from Q2.
 
-> 🔮 **Predict first:** the Poisson distribution insists variance = mean. Your data's ratio was over 100. Will the overdispersion check come back clean?
+> 🔮 **Predict first:** the Poisson insists variance = mean. Your ratio was over 100. Will the overdispersion check come back clean?
 
 **▶ Type this yourself:**
 
 ``` r
-# ---- 4 Poisson GLM - the obvious choice, and it fails ----
-poiss_model <- glm(spp ~ size_cat, data = g_df,
+# ---- 5 Poisson GLM - the obvious choice, and it fails ----
+poiss_model <- glm(n_species ~ log(area_km2), data = g_df,
                    family = poisson(link = "log"))
 
 summary(poiss_model)
@@ -249,205 +260,213 @@ summary(poiss_model)
 Anova(poiss_model, type = "III", test = "LR")
 ```
 
-A Poisson GLM cannot use an *F*-test, so we use a **likelihood ratio** test instead — it compares the fit of the full model against a model without the predictor.
+A Poisson GLM cannot use an *F*-test — the variance is pinned to the mean, so there is no $\sigma^2$ to put in the denominator. We use a **likelihood ratio** test instead.
 
-**▶ Type this yourself:**
+✏️ **Q12:** The slope is **0.2875**. In section 3 the log–log slope was **0.331**. Both are "the log slope" and they are different numbers. Which quantity is each one about?
 
-``` r
-check_overdispersion(poiss_model)
-
-sim_poiss <- simulateResiduals(poiss_model, n = 1000)
-plot(sim_poiss)
-testDispersion(sim_poiss)
-```
-
-> ⚠️ **Watch out!** `shapiro.test(residuals(poiss_model))` will **run**, and it will give you a number. The number is meaningless — normality of raw residuals is not a Poisson assumption. R will not stop you from running a test that does not apply. This is why you check the diagnostic that matches the model, not the one you remember.
-
-✏️ **Q9:** Why can a Poisson GLM not use an *F*-test? (What does an *F*-test need in its denominator that this model never estimates?)
-
-✏️ **Q10:** The dispersion ratio should be about 1. What did you get? Given Q3, is that a surprise?
-
-✏️ **Q11:** Overdispersion makes standard errors too small, which makes test statistics too big. Write down the `size_cat` LR chi-square here — you will compare it to section 5's.
-
-✏️ **Q12:** Look at the DHARMa Q-Q plot. Is the problem subtle?
-
-> 💡 **Key idea:** Poisson was the right *instinct* and still the wrong *model*. "It's count data, so use Poisson" is not enough — Poisson makes a second, much stronger claim, that the variance equals the mean. Ecological counts almost never oblige, because real populations cluster.
+✏️ **Q13:** $e^{0.2875} = 1.333$. Finish this sentence: "every e-fold increase in island area multiplies expected richness by …". Now do it for a **doubling** of area ($2^{0.2875}$).
 
 ------------------------------------------------------------------------
 
-# Section 5 · Negative binomial — the one that works
-
-The negative binomial adds a second parameter, **theta**, which lets the variance exceed the mean by however much it needs to.
+# Section 6 · Measure the overdispersion
 
 **▶ Type this yourself:**
 
 ``` r
-# ---- 5 Negative binomial - the one that works ------------
-nb_model <- glm.nb(spp ~ size_cat, data = g_df)
+# ---- 6 Measure the overdispersion ------------------------
+check_overdispersion(poiss_model)
+
+set.seed(123)
+sim_poiss <- simulateResiduals(poiss_model, n = 1000)
+plot(sim_poiss)
+```
+
+✏️ **Q14:** What is the dispersion ratio, and what number was it supposed to be?
+
+✏️ **Q15:** Look at the DHARMa Q-Q plot. Which three tests printed on it are significant?
+
+✏️ **Q16:** `shapiro.test(residuals(poiss_model))` will run and give you a number. Why is that number meaningless?
+
+> 💡 **Key idea:** R will not stop you from running a test that does not apply to the model you fitted. Check the diagnostic that **matches the model**, not the one you learned first.
+
+------------------------------------------------------------------------
+
+# Section 7 · Negative binomial — the one that works
+
+The negative binomial adds a second parameter, **theta** (θ), which lets the variance exceed the mean: $\operatorname{Var}(Y) = \mu + \mu^2/\theta$.
+
+**▶ Type this yourself:**
+
+``` r
+# ---- 7 Negative binomial - the one that works ------------
+nb_model <- glm.nb(n_species ~ log(area_km2), data = g_df)
 
 summary(nb_model)
 
-Anova(nb_model, type = "III", test = "LR")
-```
+c(theta = nb_model$theta)
 
-**▶ Type this yourself:**
-
-``` r
 check_overdispersion(nb_model)
 
-sim_nb <- simulateResiduals(nb_model, n = 1000)
-plot(sim_nb)
+Anova(nb_model, type = "III", test = "LR")
 
 AIC(poiss_model, nb_model)
 ```
 
-**▶ Type this yourself:**
+**▶ Type this yourself** — put the two sets of standard errors side by side:
 
 ``` r
-nb_emm <- emmeans(nb_model, ~ size_cat, type = "response")
-nb_emm
-
-pairs(nb_emm)
-
-multcomp::cld(nb_emm, Letters = letters)
+cbind(estimate   = round(coef(poiss_model), 4),
+      SE_poisson = round(summary(poiss_model)$coefficients[, 2], 4),
+      SE_negbin  = round(summary(nb_model)$coefficients[, 2], 4))
 ```
 
-✏️ **Q13:** The NB dispersion ratio and its *p*-value — is the overdispersion gone?
+✏️ **Q17:** Compare the two **slopes**, then the two **standard errors**. Which barely moved, and which moved six-fold?
 
-✏️ **Q14:** Compare the `size_cat` LR chi-square to the Poisson one from Q11. By what factor was the Poisson version inflated?
+✏️ **Q18:** The Poisson LR χ² was about 979; the negative binomial's is about 24. Did the *conclusion* change? Did the *honesty* of it change?
 
-✏️ **Q15:** The AIC gap between the two models is enormous. Same data, same predictor, same link — so where did all that fit come from?
+✏️ **Q19:** AIC drops by nearly 500. Nothing was added to the model but permission for the variance to be bigger than the mean. What does that tell you about how badly the Poisson was fitting?
 
-✏️ **Q16:** `type = "response"` back-transforms the means from the log scale. Look at the confidence limits: why are they no longer symmetric around each mean?
-
-✏️ **Q17:** Read the letter display. Are all three size categories distinguishable?
-
-> 💡 **Key idea:** you fitted three models to one question and got three different *p*-values, all of them tiny. The number was never the problem. What changed across the three is whether you are entitled to it — and only the third model's diagnostics say yes.
+✏️ **Q20:** Draw the fit: plot `n_species` against `area_km2` on a log x-axis and add the NB fit. Why is the fitted line a **curve** on the raw count scale — the distribution, or the link?
 
 ------------------------------------------------------------------------
 
-> ## 🧩 Block 3 — On your own, then a binary response *(after lecture Part 5)*
+> ## 🧩 Block 3 — Does every count need this? *(after lecture Part 4)*
 >
-> Section 6 is yours with no code at all. Section 7 is a new kind of response.
+> Section 8 is yours with no code at all.
 
-# Section 6 · Do it again with a continuous predictor *(you write this one)*
+# Section 8 · A different count — *you write this one*
 
-**No code on this page.** You have now run the same three steps three times, so run them once more without the script in front of you.
+**No code on this page.** You have now run the chain three times. Run it once more without the script in front of you, on a different dataset.
 
-Binning `area` into three categories threw information away. Use `area` directly.
+Gotelli & Ellison counted **ant species** in 22 New England bogs, and recorded each bog's `latitude` and `elevation_m`.
 
-**Question:** how does plant species richness change with island **area**?
+**Question:** does ant species richness change with latitude and elevation?
 
 Work through:
 
-a.  Plot `spp` against `area`.
-b.  `lm(spp ~ area)` — and check the two assumptions.
-c.  The Poisson version, with an overdispersion check.
-d.  The negative binomial version, with an overdispersion check, DHARMa, and the LR test.
-e.  One plot of `spp` against `area` with the NB fit drawn on it. `geom_smooth(method = "glm.nb")` will do it.
-f.  Decide which of the three you would report.
+a.  Read `data/gotelli_ant_species.csv` and compute the variance-to-mean ratio of `n_ant_species`.
+b.  Fit the Poisson GLM with **both** predictors.
+c.  `check_overdispersion()` on it.
+d.  Fit the negative binomial version too. Look at `theta`, and compare the two AICs.
+e.  Decide which one you would report, and read the latitude coefficient on the count scale.
 
-> 💡 **Hint:** the only things that change from sections 2–5 are the formula and the data column. If you get stuck, go back and read what you typed, not this page.
+> 💡 **Hint:** the only things that change from sections 5–7 are the formula and the data. If you get stuck, read what you typed, not this page.
 
-✏️ **Q18:** Which model did you end up reporting, and what was the single piece of output that decided it?
+✏️ **Q21:** The raw variance-to-mean ratio is about **2.0**. On the Galápagos logic that looks like trouble. What did `check_overdispersion()` actually say once the predictors were in the model?
 
-✏️ **Q19:** Did binning `area` into three groups in section 1 cost you anything? Compare what `size_cat` told you to what `area` tells you.
+✏️ **Q22:** What value of `theta` did `glm.nb()` return, and which direction did the AIC move? What is `glm.nb()` telling you?
 
-✏️ **Q20:** Look at your NB fit on the plot. It is a curve, not a line. Where does the curve come from — the distribution, or the link function?
+✏️ **Q23:** So overdispersion is a property of **what** — the data, or the model? Explain using the fact that the raw ratio was 2.0 and the fitted dispersion was not.
+
+✏️ **Q24:** Rewrite this sentence so it is correct: *"Count data require a negative binomial model."*
+
+✏️ **Q25:** Read the latitude slope as a percentage change per degree ($e^{\beta} - 1$). Which direction does ant richness go as you move north?
 
 ------------------------------------------------------------------------
 
-# Section 7 · Logistic regression — a binary response
+> ## 🧩 Block 4 — A binary response *(after lecture Parts 5–6)*
+
+# Section 9 · Logistic regression
 
 A count was one kind of non-normal response. A **yes/no** is another. Logistic regression models the *probability* of a 1, using the **logit** link to stretch probability (stuck between 0 and 1) onto a scale that runs from −∞ to +∞:
 
 $$\log\left(\frac{\pi}{1-\pi}\right) = \beta_0 + \beta_1 x$$
 
-Polis et al. (1998) recorded whether the lizard *Uta* was present on 19 islands in the Gulf of California, against each island's **perimeter-to-area ratio** — a measure of how exposed the island's shoreline is. These are the real data from the paper, as reproduced in Quinn & Keough Box 13-1.
+Whitlock & Schluter's guppy experiment: **160 guppies** were each held at a cold temperature for one of four durations, and whether the fish died was recorded. `mortality` is 1 for died, 0 for survived; `exposure_min` is the duration in minutes.
 
-*Written for you in the skeleton* — the `"."` missing-value codes need handling, and Peninsula has no `paratio`:
+*Written for you in the skeleton:*
 
 ``` r
-# ---- 7 Logistic regression - a binary response -----------
-polis_df <- read_csv("data/polis.csv", na = c(".", "")) %>%
-  clean_names() %>%
-  drop_na(paratio, pa)
+# ---- 9 Logistic regression -------------------------------
+guppy_df <- read_csv("data/guppy_cold_death.csv")
 
-polis_df
-
-count(polis_df, uta)
+guppy_df %>%
+  count(exposure_min, mortality) %>%
+  pivot_wider(names_from = mortality, values_from = n,
+              names_prefix = "mortality_")
 ```
 
 **▶ Type this yourself:**
 
 ``` r
-ggplot(polis_df, aes(x = paratio, y = pa)) +
-  geom_point()
+ggplot(guppy_df, aes(x = exposure_min, y = mortality)) +
+  geom_jitter(height = 0.03, width = 0.3)
 ```
 
-> 🔮 **Predict first:** exposed shorelines are hard places to be a lizard. Will the slope be positive or negative?
+> 🔮 **Predict first:** longer in the cold is worse for a fish. Will the slope be positive or negative?
 
 **▶ Type this yourself:**
 
 ``` r
-lizard_model <- glm(pa ~ paratio, data = polis_df,
-                    family = binomial(link = "logit"))
+guppy_model <- glm(mortality ~ exposure_min, data = guppy_df,
+                   family = binomial(link = "logit"))
 
-summary(lizard_model)
+summary(guppy_model)
 ```
 
 **▶ Type this yourself** — the likelihood ratio test, against a model with no predictor:
 
 ``` r
-null_model <- glm(pa ~ 1, data = polis_df, family = binomial(link = "logit"))
+null_model <- glm(mortality ~ 1, data = guppy_df,
+                  family = binomial(link = "logit"))
 
-anova(null_model, lizard_model, test = "Chisq")
+anova(null_model, guppy_model, test = "Chisq")
 ```
 
 **▶ Type this yourself** — the odds ratio, three ways:
 
 ``` r
-exp(coef(lizard_model))
-exp(confint(lizard_model, "paratio"))
+exp(coef(guppy_model))
+exp(confint(guppy_model, "exposure_min"))
 
-model_parameters(lizard_model, exponentiate = TRUE)
+model_parameters(guppy_model, exponentiate = TRUE)
 
-tidy(lizard_model, exponentiate = TRUE, conf.int = TRUE)
+tidy(guppy_model, exponentiate = TRUE, conf.int = TRUE)
 ```
 
 **▶ Type this yourself** — goodness of fit:
 
 ``` r
-r2(lizard_model)
+r2(guppy_model)
 
-pR2(lizard_model)
+pR2(guppy_model)
 
-hoslem.test(lizard_model$y, fitted(lizard_model), g = 10)
+hoslem.test(guppy_model$y, fitted(guppy_model), g = 4)
 ```
 
 **▶ Type this yourself** — the fitted probability curve:
 
 ``` r
 pred_df <- data.frame(
-  paratio = seq(min(polis_df$paratio), max(polis_df$paratio), length.out = 100)
+  exposure_min = seq(min(guppy_df$exposure_min),
+                     max(guppy_df$exposure_min), length.out = 100)
 )
 
-pred_df$prob <- predict(lizard_model, newdata = pred_df, type = "response")
+pred_df$prob <- predict(guppy_model, newdata = pred_df, type = "response")
 
 ggplot() +
-  geom_point(data = polis_df, aes(x = paratio, y = pa)) +
-  geom_line(data = pred_df, aes(x = paratio, y = prob))
+  geom_jitter(data = guppy_df, aes(x = exposure_min, y = mortality),
+              height = 0.03, width = 0.3) +
+  geom_line(data = pred_df, aes(x = exposure_min, y = prob))
 ```
 
-✏️ **Q21:** Report the slope and the odds ratio with its CI. Does the CI include 1, and why does that matter more than whether it includes 0?
+**▶ Type this yourself** — the dose at which half the fish die (**LD50**):
 
-✏️ **Q22:** Say what the odds ratio means about *Uta* and shoreline exposure — in lizards, not in log-odds. "For every one-unit increase in perimeter-to-area ratio, the odds of finding *Uta* …"
+``` r
+-coef(guppy_model)[1] / coef(guppy_model)[2]
+```
 
-✏️ **Q23:** For the Hosmer–Lemeshow test you **want** a non-significant *p*-value. Why is that backwards from every other test you have run this semester?
+✏️ **Q26:** Report the slope and the odds ratio with its CI. Does the CI include **1**, and why does that matter more than whether it includes 0?
 
-✏️ **Q24:** `r2()` reports a pseudo-R². Why "pseudo" — what can't you compute here that you could in a regression?
+✏️ **Q27:** Say what the odds ratio means about guppies and cold — in fish, not in log-odds. "For every extra minute of exposure, the odds of dying …"
 
-✏️ **Q25:** Look at your curve. At roughly what perimeter-to-area ratio is *Uta* a coin flip?
+✏️ **Q28:** For the Hosmer–Lemeshow test you **want** a non-significant *p*-value. Why is that backwards from every other test you have run this semester?
+
+✏️ **Q29:** `r2()` reports a pseudo-R². Why "pseudo" — what can't you compute here that you could in a regression?
+
+✏️ **Q30:** Your LD50 should be about **6.9 minutes**. Find that point on your curve and check it against the raw counts at 3 and 8 minutes. Does it look right?
+
+✏️ **Q31:** Every fish was assigned to one of only **four** exposure times. Does that break the model? (It does not — but say what it *does* let you do that a fully continuous predictor would not.)
 
 > 💡 **Key idea:** the link function is doing the work in both halves of today. A `log` link keeps predicted counts above zero; a `logit` link keeps predicted probabilities between 0 and 1. In both cases the *linear* part of the model is unchanged — you are still fitting a straight line, just on a scale where a straight line cannot predict something impossible.
 
@@ -457,40 +476,57 @@ ggplot() +
 
 *These go into the bottom of your script, as `#` comments after `ANSWER:`.*
 
-## Section 8 · Report the count model
+## Section 10 · Report the count models
 
-✏️ **Q26:** Fill in all three models of `spp ~ size_cat`:
+✏️ **Q32:** Fill in both count datasets:
 
 ```
-model               test        statistic    p      dispersion
-lm / Gaussian       F                               -
-Poisson             LR chisq
-negative binomial   LR chisq
+                        test        statistic    p      dispersion
+GALAPAGOS
+  lm / Gaussian         F                               -
+  Poisson               LR chisq
+  negative binomial     LR chisq
+
+ANTS
+  Poisson               LR chisq
+  negative binomial     LR chisq
 ```
 
-✏️ **Q27:** Two or three sentences reporting the negative binomial result, with your own statistic, df, and *p*. Say which model you fitted and why that one.
+✏️ **Q33:** Two or three sentences reporting the Galápagos negative binomial result, with your own statistic, df, and *p*. Say which model you fitted and why that one.
 
-✏️ **Q28:** Someone reports the Poisson *p*-value for `size_cat`. What have they done wrong, and in which **direction** is their answer wrong?
+✏️ **Q34:** Someone reports the Poisson *p*-value for the Galápagos slope. What have they done wrong, and in which **direction** is their answer wrong?
 
-✏️ **Q29:** Section 2's ANOVA also gave a significant `size_cat` effect. So did the whole exercise change the **conclusion**, or only the **honesty** of it? Explain — and say why that still matters.
+✏️ **Q35:** You fitted the same two families to two count datasets and reported a **different** one each time. In one sentence, what was the piece of output that decided it — the same piece of output both times?
 
-## Section 9 · Report the logistic model
+## Section 11 · Report the logistic model
 
-✏️ **Q30:** Slope, odds ratio and its 95% CI, the LR test result, and a pseudo-R².
+✏️ **Q36:** Slope, odds ratio and its 95% CI, the LR test result, a pseudo-R², and the LD50.
 
-✏️ **Q31:** One sentence an ecologist would actually write about perimeter-to-area ratio and the chance of finding *Uta*.
+✏️ **Q37:** One sentence an ecologist would actually write about cold exposure and guppy survival.
 
-## Section 10 · The final figure
+## Section 12 · The final figure
 
-One publication-quality figure. Pick **either** the NB fit of `spp` on `area` from section 6, **or** the logistic curve from section 7. Show the raw data under the fitted line. Proper axis labels, a real theme, readable sizing — this one is graded on presentation. Export it with `ggsave()`.
+One publication-quality figure. Pick **either** the NB fit of `n_species` on `area_km2`, **or** the logistic curve from section 9. Show the raw data under the fitted line. Proper axis labels, a real theme, readable sizing — this one is graded on presentation. Export it with `ggsave()`.
 
 ``` r
-# ---- 10 The final figure ---------------------------------
+# ---- 12 The final figure ---------------------------------
 # ... your plot here, then:
 # ggsave("figures/15_glm_fit.pdf", width = 7, height = 5)
 ```
 
-✏️ **Q32:** Why would a straight line from `lm()` have been the wrong **shape** for the figure you chose? Name the impossible value it would have predicted.
+✏️ **Q38:** Why would a straight line from `lm()` have been the wrong **shape** for the figure you chose? Name the impossible value it would have predicted.
+
+------------------------------------------------------------------------
+
+# Homework
+
+**[Homework 15 — GLM & Logistic Regression](../../homeworks/glm_homework/glm_homework.qmd)**
+
+**Social spider colonies**: 17 communal webs, the number of spiders in each against the web's height above the ground. One count response, one continuous predictor — and three models that give three *different* answers, one of which is "there is no relationship." You decide which model you were entitled to and defend it, then run a sensitivity check on the one colony that is pulling against the trend.
+
+**Data:** [`social_spider_colonies.csv`](../../homeworks/glm_homework/data/social_spider_colonies.csv) — Whitlock & Schluter, *The Analysis of Biological Data*, Ch. 17, practice problem 15.
+
+Start a new script for it — do not add it to `15_glm_logistic_regression.R`.
 
 ------------------------------------------------------------------------
 
@@ -501,12 +537,13 @@ At this point you should be able to:
 -   [ ] Say why a linear model is the wrong tool for counts and for binary data
 -   [ ] Name a GLM's three components, and the family and link for counts and for binary data
 -   [ ] Explain that `lm()` is a Gaussian GLM with an identity link
+-   [ ] Say how `lm(log(Y) ~ X)` and a log-link GLM differ, and which mean each returns
 -   [ ] Fit a Poisson GLM and test it for overdispersion
 -   [ ] Say what overdispersion does to standard errors and *p*-values, and in which direction
 -   [ ] Fit a negative binomial GLM and confirm the overdispersion is gone
+-   [ ] Recognise a count that does **not** need a negative binomial
 -   [ ] Compare families with AIC and with DHARMa residuals
--   [ ] Read back-transformed EMMs and explain their asymmetric CIs
--   [ ] Fit a logistic regression, interpret an odds ratio, and check its fit
+-   [ ] Fit a logistic regression, interpret an odds ratio, and compute an LD50
 
 Run your whole script top to bottom with **Ctrl/Cmd + Shift + Enter**. It must run clean.
 

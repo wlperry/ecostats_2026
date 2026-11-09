@@ -152,7 +152,7 @@ window.Quarto = {
 <meta property="og:description" content="Generalized Linear Models (GLMs) for non-normal response data — Gaussian, Poisson, and negative binomial GLMs for count data, logistic regression for binary responses, odds ratios, model diagnostics, and the connection back to ANOVA.">
 <meta property="og:image" content="https://wlperry.github.io/ecostats_2026/content/glm_logistic_regression/glm_logistic_regression_lecture_files/figure-html/glm-01-1.png">
 <meta property="og:site_name" content="UMD Biostatistics">
-<meta property="og:image:alt" content="Histogram of plant species counts across the Galapagos islands, strongly right-skewed with most islands under 50 species and a long tail out past 400.">
+<meta property="og:image:alt" content="Histogram of plant species counts across the 17 Galapagos islands, strongly right-skewed with most islands under 100 species and a long tail out past 300.">
 <meta property="og:image:height" content="614">
 <meta property="og:image:width" content="691">
 </head>
@@ -491,13 +491,13 @@ window.Quarto = {
 <p>Three weeks of <strong>linear models</strong>:</p>
 <ul>
 <li>One-way ANOVA</li>
-<li>Factorial ANOVA</li>
-<li>Nested ANOVA</li>
+<li>Factorial ANOVA I</li>
+<li>Factorial ANOVA II — the redux</li>
 </ul>
 <p>Every one of them assumed:</p>
 <ul>
 <li><strong>Normality</strong> of the residuals</li>
-<li><strong>Homogeneity of variance</strong> — Levene’s or Bartlett’s</li>
+<li><strong>Homogeneity of variance</strong> — Levene’s or Breusch–Pagan</li>
 <li><strong>Independence</strong> of observations</li>
 </ul>
 </div><div class="column" style="width:45%;">
@@ -521,8 +521,8 @@ Important
 <section id="the-data-galápagos-island-biogeography" class="level2">
 <h2 class="anchored" data-anchor-id="the-data-galápagos-island-biogeography">The Data: Galápagos Island Biogeography</h2>
 <div class="columns">
-<div class="column" style="width:55%;">
-<p>The <code>gala</code> data — 29 Galápagos islands, MacArthur &amp; Wilson’s island biogeography.</p>
+<div class="column" style="width:54%;">
+<p>Gotelli &amp; Ellison’s Galápagos data — <strong>17 islands</strong>, plant species richness against island area.</p>
 <table class="caption-top table">
 <thead>
 <tr class="header">
@@ -532,41 +532,52 @@ Important
 </thead>
 <tbody>
 <tr class="odd">
-<td><code>spp</code></td>
-<td>number of plant species — <strong>a count</strong></td>
+<td><code>island</code></td>
+<td>island name (the historical names)</td>
 </tr>
 <tr class="even">
-<td><code>endemics</code></td>
-<td>number of endemic species — <strong>a count</strong></td>
-</tr>
-<tr class="odd">
-<td><code>area</code></td>
+<td><code>area_km2</code></td>
 <td>island area, km²</td>
 </tr>
-<tr class="even">
-<td><code>elevation</code></td>
-<td>maximum elevation, m</td>
+<tr class="odd">
+<td><code>n_species</code></td>
+<td>number of plant species — <strong>a count</strong></td>
 </tr>
 </tbody>
 </table>
-<p>We bin <code>area</code> into <code>size_cat</code> so the predictor is <strong>categorical</strong> — the same shape of question as week 9.</p>
-<p>Isabela is dropped: at ~4600 km² it is 20× anything else and flattens every plot.</p>
-</div><div class="column" style="width:45%;">
+<div class="callout callout-style-default callout-tip callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Tip
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><strong>You have already analysed this dataset.</strong> In <strong>week 6</strong> you fitted <span class="math inline">\(\log_{10}(S) \sim \log_{10}(A)\)</span> to it and used it for the influential-point demonstration.</p>
+<p>Same islands, same question. Today the response gets treated as what it actually is — a <strong>count</strong>.</p>
+</div>
+</div>
+</div><div class="column" style="width:46%;">
 <div class="cell">
 <div class="cell-output-display">
 <div>
 <figure class="figure">
-<p><img src="glm_logistic_regression_lecture_files/figure-html/glm-01-1.png" class="img-fluid figure-img" alt="Histogram of plant species counts across the Galapagos islands, strongly right-skewed with most islands under 50 species and a long tail out past 400." width="345"></p>
+<p><img src="glm_logistic_regression_lecture_files/figure-html/glm-01-1.png" class="img-fluid figure-img" alt="Histogram of plant species counts across the 17 Galapagos islands, strongly right-skewed with most islands under 100 species and a long tail out past 300." width="345"></p>
 </figure>
 </div>
 </div>
 </div>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">count</span>(g_df, size_cat)</span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="do">##   size_cat  n</span></span>
-<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="do">## 1    small 11</span></span>
-<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="do">## 2   medium 12</span></span>
-<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="do">## 3    large  6</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>g_df <span class="sc">%&gt;%</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">n =</span> <span class="fu">n</span>(),</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>            <span class="at">min =</span> <span class="fu">min</span>(n_species),</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>            <span class="at">max =</span> <span class="fu">max</span>(n_species))</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="do">## # A tibble: 1 × 3</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="do">##       n   min   max</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="do">##   &lt;int&gt; &lt;dbl&gt; &lt;dbl&gt;</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="do">## 1    17     7   325</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 </div>
 </div>
@@ -583,19 +594,21 @@ Important
 </ol>
 <div class="cell">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>g_df <span class="sc">%&gt;%</span></span>
-<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">mean_spp =</span> <span class="fu">mean</span>(spp),</span>
-<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>            <span class="at">var_spp  =</span> <span class="fu">var</span>(spp),</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">mean_spp =</span> <span class="fu">mean</span>(n_species),</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>            <span class="at">var_spp  =</span> <span class="fu">var</span>(n_species),</span>
 <span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>            <span class="at">ratio    =</span> var_spp <span class="sc">/</span> mean_spp)</span>
-<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="do">##   mean_spp  var_spp    ratio</span></span>
-<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="do">## 1  76.2069 11078.46 145.3734</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="do">## # A tibble: 1 × 3</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="do">##   mean_spp var_spp ratio</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="do">##      &lt;dbl&gt;   &lt;dbl&gt; &lt;dbl&gt;</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a><span class="do">## 1     119.  12246.  103.</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
-<p>The variance is <strong>145×</strong> the mean. A normal distribution is free to have any variance it likes, so that ratio is not itself a violation — but look at what it does to the <em>groups</em>.</p>
+<p>The variance is <strong>103×</strong> the mean. A normal distribution is free to have any variance it likes, so that ratio is not itself a violation — but hold on to it. The Poisson will insist it is <strong>1</strong>.</p>
 </div><div class="column" style="width:50%;">
 <div class="cell">
 <div class="cell-output-display">
 <div>
 <figure class="figure">
-<p><img src="glm_logistic_regression_lecture_files/figure-html/glm-04-1.png" class="img-fluid figure-img" alt="Boxplot of plant species counts by island size category, showing the spread of the large-island group is many times wider than the small-island group." width="345"></p>
+<p><img src="glm_logistic_regression_lecture_files/figure-html/glm-04-1.png" class="img-fluid figure-img" alt="Scatterplot of plant species against island area in square kilometres on the raw scale, showing almost all islands crushed against the left axis and one very large island far to the right." width="345"></p>
 </figure>
 </div>
 </div>
@@ -610,7 +623,7 @@ Warning
 </div>
 </div>
 <div class="callout-body-container callout-body">
-<p><strong>The spread grows with the mean.</strong> That is the equal-variance assumption breaking, and it is the signature of count data.</p>
+<p><strong>On the raw scale the relationship is unreadable</strong> — area spans four orders of magnitude. Both axes need logs, which is exactly what you did in week 6.</p>
 </div>
 </div>
 </div>
@@ -621,24 +634,25 @@ Warning
 <div class="columns">
 <div class="column" style="width:50%;">
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>lm_model <span class="ot">&lt;-</span> <span class="fu">lm</span>(spp <span class="sc">~</span> size_cat, <span class="at">data =</span> g_df)</span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>lm_raw <span class="ot">&lt;-</span> <span class="fu">lm</span>(n_species <span class="sc">~</span> area_km2, <span class="at">data =</span> g_df)</span>
 <span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="fu">Anova</span>(lm_model, <span class="at">type =</span> <span class="dv">3</span>)</span>
-<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="do">## Anova Table (Type III tests)</span></span>
-<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="do">## </span></span>
-<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a><span class="do">## Response: spp</span></span>
-<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a><span class="do">##             Sum Sq Df F value     Pr(&gt;F)    </span></span>
-<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a><span class="do">## (Intercept)   2298  1  0.5069     0.4828    </span></span>
-<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a><span class="do">## size_cat    192308  2 21.2064 0.00000345 ***</span></span>
-<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a><span class="do">## Residuals   117889 26                       </span></span>
-<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a><span class="do">## ---</span></span>
-<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a><span class="do">## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="fu">glance</span>(lm_raw) <span class="sc">%&gt;%</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">select</span>(r.squared, p.value)</span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="do">## # A tibble: 1 × 2</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a><span class="do">##   r.squared p.value</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a><span class="do">##       &lt;dbl&gt;   &lt;dbl&gt;</span></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a><span class="do">## 1     0.328  0.0164</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="fu">shapiro.test</span>(<span class="fu">residuals</span>(lm_model))<span class="sc">$</span>p.value</span>
-<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="do">## [1] 0.000240339</span></span>
-<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="fu">leveneTest</span>(spp <span class="sc">~</span> size_cat, <span class="at">data =</span> g_df)<span class="sc">$</span><span class="st">`</span><span class="at">Pr(&gt;F)</span><span class="st">`</span>[<span class="dv">1</span>]</span>
-<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="do">## [1] 0.0005878942</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="fu">shapiro.test</span>(<span class="fu">residuals</span>(lm_raw))<span class="sc">$</span>p.value</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="do">## [1] 0.002419974</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="co"># predict the SMALLEST island</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a><span class="fu">predict</span>(lm_raw,</span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>        <span class="at">newdata =</span> <span class="fu">data.frame</span>(<span class="at">area_km2 =</span> <span class="fl">0.518</span>),</span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>        <span class="at">interval =</span> <span class="st">"prediction"</span>)</span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a><span class="do">##        fit       lwr      upr</span></span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a><span class="do">## 1 95.46759 -110.9501 301.8853</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 </div><div class="column" style="width:50%;">
 <div class="callout callout-style-default callout-important callout-titled">
@@ -651,16 +665,53 @@ Important
 </div>
 </div>
 <div class="callout-body-container callout-body">
-<p><strong>The <em>p</em>-value is 0.0000035. The model did not earn it.</strong></p>
+<p><strong>The model predicts a 95% interval of −111 to 302 species.</strong></p>
+<p>A negative number of plant species is not a wide interval. It is an <strong>impossible</strong> one.</p>
+</div>
+</div>
 <ul>
-<li>Normality of residuals: <strong>p &lt; 0.001</strong></li>
-<li>Equal variance: <strong>p &lt; 0.001</strong></li>
+<li>Normality of residuals: <strong><em>p</em> = 0.002</strong> — it fails</li>
+<li>Equal variance: Breusch–Pagan <em>p</em> = 0.66 — this one is <strong>fine</strong></li>
 </ul>
-<p>Both assumptions fail, and they fail badly — not marginally.</p>
+<p>The question is not wrong. Area almost certainly does drive richness. The <em>model being used to answer it</em> is making promises the data cannot keep — chiefly that the response is free to go negative.</p>
+<p><strong>Say only what the diagnostics say.</strong> Here variance is not the problem; the normal distribution’s unbounded support is.</p>
 </div>
 </div>
-<p>The question is not wrong. Island size almost certainly does drive species richness. The <em>model being used to answer it</em> is making promises the data does not keep.</p>
-<p><strong>A normal 95% interval on the small islands predicts negative species counts.</strong></p>
+</section>
+<section id="you-already-know-one-fix-you-used-it-in-week-6" class="level2 tight-code">
+<h2 class="tight-code anchored" data-anchor-id="you-already-know-one-fix-you-used-it-in-week-6">You Already Know One Fix — You Used It in Week 6</h2>
+<div class="columns">
+<div class="column" style="width:50%;">
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>lm_log <span class="ot">&lt;-</span> <span class="fu">lm</span>(<span class="fu">log10</span>(n_species) <span class="sc">~</span> <span class="fu">log10</span>(area_km2),</span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>             <span class="at">data =</span> g_df)</span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a><span class="fu">glance</span>(lm_log) <span class="sc">%&gt;%</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">select</span>(r.squared, p.value)</span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a><span class="do">## # A tibble: 1 × 2</span></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a><span class="do">##   r.squared  p.value</span></span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a><span class="do">##       &lt;dbl&gt;    &lt;dbl&gt;</span></span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a><span class="do">## 1     0.585 0.000350</span></span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a><span class="fu">shapiro.test</span>(<span class="fu">residuals</span>(lm_log))<span class="sc">$</span>p.value</span>
+<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a><span class="do">## [1] 0.4834353</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>R² rises from 0.33 to <strong>0.59</strong>, normality goes from <em>p</em> = 0.002 to <strong><em>p</em> = 0.48</strong>, and the slope <strong>0.331</strong> is the species–area exponent <em>z</em>.</p>
+<p><strong>The transformation works.</strong> So why is there anything left to teach?</p>
+</div><div class="column" style="width:50%;">
+<p>Three reasons, and each one is a thing a GLM does that a transformation cannot.</p>
+<ol type="1">
+<li><p><strong>A count is discrete.</strong> The log of a count is a continuous variable that the data can never actually take.</p></li>
+<li><p><strong><code>log(0)</code> is undefined.</strong> No island here has zero species, but an island with none is a real observation — and then the transformation needs a fudge (<code>log(y + 1)</code>) that changes the answer.</p></li>
+<li><p><strong>It answers a different question.</strong> <code>lm</code> on logged counts models the mean of the log, which back-transforms to the <strong>geometric</strong> mean.</p></li>
+</ol>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="fu">c</span>(<span class="at">arithmetic =</span> <span class="fu">mean</span>(g_df<span class="sc">$</span>n_species),</span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">geometric  =</span> <span class="fu">exp</span>(<span class="fu">mean</span>(<span class="fu">log</span>(g_df<span class="sc">$</span>n_species))))</span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a><span class="do">## arithmetic  geometric </span></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a><span class="do">##  119.29412   73.56871</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p><strong>119.3 versus 73.6 species.</strong> Two different quantities — and the transformation silently hands you the second one.</p>
 </div>
 </div>
 </section>
@@ -687,7 +738,7 @@ Important
 <tr class="even">
 <td><strong>Systematic</strong></td>
 <td>the predictors</td>
-<td><code>size_cat</code>, <code>area</code></td>
+<td><code>log(area_km2)</code></td>
 </tr>
 <tr class="odd">
 <td><strong>Link</strong></td>
@@ -825,36 +876,38 @@ Note
 <div class="columns">
 <div class="column" style="width:50%;">
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>gauss_model <span class="ot">&lt;-</span> <span class="fu">glm</span>(spp <span class="sc">~</span> size_cat,</span>
-<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>                   <span class="at">data =</span> g_df,</span>
-<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>                   <span class="at">family =</span> <span class="fu">gaussian</span>(<span class="at">link =</span> <span class="st">"identity"</span>))</span>
-<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a><span class="fu">round</span>(<span class="fu">cbind</span>(<span class="at">lm  =</span> <span class="fu">coef</span>(lm_model),</span>
-<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>            <span class="at">glm =</span> <span class="fu">coef</span>(gauss_model)), <span class="dv">6</span>)</span>
-<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a><span class="do">##                       lm       glm</span></span>
-<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a><span class="do">## (Intercept)     14.45454  14.45454</span></span>
-<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a><span class="do">## size_catmedium  40.62879  40.62879</span></span>
-<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a><span class="do">## size_catlarge  217.21212 217.21212</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>lm_model <span class="ot">&lt;-</span> <span class="fu">lm</span>(n_species <span class="sc">~</span> <span class="fu">log</span>(area_km2),</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>               <span class="at">data =</span> g_df)</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>gauss_model <span class="ot">&lt;-</span> <span class="fu">glm</span>(n_species <span class="sc">~</span> <span class="fu">log</span>(area_km2),</span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>                   <span class="at">data =</span> g_df,</span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>                   <span class="at">family =</span> <span class="fu">gaussian</span>(<span class="at">link =</span> <span class="st">"identity"</span>))</span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a><span class="fu">round</span>(<span class="fu">cbind</span>(<span class="at">lm  =</span> <span class="fu">coef</span>(lm_model),</span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a>            <span class="at">glm =</span> <span class="fu">coef</span>(gauss_model)), <span class="dv">6</span>)</span>
+<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a><span class="do">##                     lm      glm</span></span>
+<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a><span class="do">## (Intercept)   -6.96709 -6.96709</span></span>
+<span id="cb7-12"><a href="#cb7-12" aria-hidden="true" tabindex="-1"></a><span class="do">## log(area_km2) 33.14728 33.14728</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="fu">all.equal</span>(<span class="fu">coef</span>(lm_model), <span class="fu">coef</span>(gauss_model))</span>
-<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="do">## [1] TRUE</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="fu">all.equal</span>(<span class="fu">coef</span>(lm_model), <span class="fu">coef</span>(gauss_model))</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="do">## [1] TRUE</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 </div><div class="column" style="width:50%;">
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="fu">Anova</span>(gauss_model, <span class="at">type =</span> <span class="st">"III"</span>, <span class="at">test =</span> <span class="st">"F"</span>)</span>
-<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="do">## Analysis of Deviance Table (Type III tests)</span></span>
-<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a><span class="do">## </span></span>
-<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a><span class="do">## Response: spp</span></span>
-<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a><span class="do">## Error estimate based on Pearson residuals </span></span>
-<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a><span class="do">## </span></span>
-<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a><span class="do">##           Sum Sq Df F values     Pr(&gt;F)    </span></span>
-<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a><span class="do">## size_cat  192308  2   21.206 0.00000345 ***</span></span>
-<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a><span class="do">## Residuals 117889 26                        </span></span>
-<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a><span class="do">## ---</span></span>
-<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a><span class="do">## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="fu">Anova</span>(gauss_model, <span class="at">type =</span> <span class="st">"III"</span>, <span class="at">test =</span> <span class="st">"F"</span>)</span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="do">## Analysis of Deviance Table (Type III tests)</span></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a><span class="do">## </span></span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a><span class="do">## Response: n_species</span></span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a><span class="do">## Error estimate based on Pearson residuals </span></span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a><span class="do">## </span></span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a><span class="do">##               Sum Sq Df F values   Pr(&gt;F)    </span></span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a><span class="do">## log(area_km2) 115567  1   21.567 0.000318 ***</span></span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a><span class="do">## Residuals      80377 15                      </span></span>
+<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a><span class="do">## ---</span></span>
+<span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a><span class="do">## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
-<p>Identical to the <code>Anova()</code> on <code>lm_model</code> from Part 1 — <em>F</em> = 21.21, <em>p</em> = 0.0000035, and identical for the same reason: it <strong>is</strong> that model.</p>
+<p>Identical to <code>Anova()</code> on the <code>lm</code> — identical estimates, identical <em>F</em>, and identical for the same reason: it <strong>is</strong> that model, fitted by a different algorithm.</p>
 </div>
 </div>
 </section>
@@ -864,17 +917,17 @@ Note
 <div class="column" style="width:48%;">
 <div class="cell">
 <pre><code>##       GLM summary says    value       ANOVA calls it
-## 1 Dispersion parameter   4534.2 Residual mean square
-## 2        Null deviance 310196.8             SS total
-## 3    Residual deviance 117889.0          SS residual
-## 4      null - residual 192307.8          SS size_cat</code></pre>
+## 1 Dispersion parameter   5358.4 Residual mean square
+## 2        Null deviance 195943.5             SS total
+## 3    Residual deviance  80376.7          SS residual
+## 4      null - residual 115566.9         SS log(area)</code></pre>
 </div>
 </div><div class="column" style="width:52%;">
 <p>A GLM summary renames three things you already know:</p>
 <ul>
 <li><p><strong>Dispersion parameter</strong> — for a Gaussian GLM this is the <strong>residual variance</strong>, <span class="math inline">\(\sigma^2\)</span>. It is the ANOVA table’s residual mean square.</p></li>
 <li><p><strong>Null deviance</strong> — the error left when you predict every island with the <strong>grand mean</strong> alone. For a Gaussian GLM this is <strong>SS<sub>total</sub></strong>.</p></li>
-<li><p><strong>Residual deviance</strong> — the error left <strong>after</strong> fitting <code>size_cat</code>. For a Gaussian GLM this is <strong>SS<sub>residual</sub></strong>.</p></li>
+<li><p><strong>Residual deviance</strong> — the error left <strong>after</strong> fitting the predictor. For a Gaussian GLM this is <strong>SS<sub>residual</sub></strong>.</p></li>
 </ul>
 <div class="callout callout-style-default callout-important callout-titled">
 <div class="callout-header d-flex align-content-center">
@@ -923,7 +976,7 @@ Warning
 </div>
 </div>
 <div class="callout-body-container callout-body">
-<p><strong>Remember the ratio.</strong> The variance of <code>spp</code> is <strong>145×</strong> its mean.</p>
+<p><strong>Remember the ratio.</strong> The variance of <code>n_species</code> is <strong>103×</strong> its mean.</p>
 <p>Poisson insists that ratio is <strong>1</strong>.</p>
 <p>Fit it anyway — the failure is the content.</p>
 </div>
@@ -949,22 +1002,21 @@ Tip
 <div class="columns">
 <div class="column" style="width:50%;">
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>poiss_model <span class="ot">&lt;-</span> <span class="fu">glm</span>(spp <span class="sc">~</span> size_cat,</span>
-<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>                   <span class="at">data =</span> g_df,</span>
-<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>                   <span class="at">family =</span> <span class="fu">poisson</span>(<span class="at">link =</span> <span class="st">"log"</span>))</span>
-<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a><span class="fu">round</span>(<span class="fu">summary</span>(poiss_model)<span class="sc">$</span>coefficients, <span class="dv">4</span>)</span>
-<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a><span class="do">##                Estimate Std. Error z value Pr(&gt;|z|)</span></span>
-<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a><span class="do">## (Intercept)      2.6710     0.0793 33.6804        0</span></span>
-<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a><span class="do">## size_catmedium   1.3378     0.0883 15.1460        0</span></span>
-<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a><span class="do">## size_catlarge    2.7743     0.0837 33.1387        0</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>poiss_model <span class="ot">&lt;-</span> <span class="fu">glm</span>(n_species <span class="sc">~</span> <span class="fu">log</span>(area_km2),</span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>                   <span class="at">data =</span> g_df,</span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>                   <span class="at">family =</span> <span class="fu">poisson</span>(<span class="at">link =</span> <span class="st">"log"</span>))</span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a><span class="fu">round</span>(<span class="fu">summary</span>(poiss_model)<span class="sc">$</span>coefficients, <span class="dv">4</span>)</span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a><span class="do">##               Estimate Std. Error z value Pr(&gt;|z|)</span></span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a><span class="do">## (Intercept)     3.4334     0.0574 59.7742        0</span></span>
+<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a><span class="do">## log(area_km2)   0.2875     0.0096 30.0050        0</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 </div><div class="column" style="width:50%;">
 <p>The model predicts the <strong>natural log</strong> of the expected count, so exponentiate to read it:</p>
 <ul>
-<li><span class="math inline">\(e^{2.671} = 14.5\)</span> species on a <strong>small</strong> island</li>
-<li><span class="math inline">\(e^{1.338} = 3.81\)</span> — a <strong>medium</strong> island has 3.8× the species of a small one</li>
-<li><span class="math inline">\(e^{2.774} = 16.0\)</span> — a <strong>large</strong> island has 16× the species of a small one</li>
+<li>Slope <strong>0.2875</strong> on the log scale</li>
+<li><span class="math inline">\(e^{0.2875} = 1.333\)</span> — every <strong>e-fold</strong> (2.72×) increase in area multiplies expected richness by <strong>1.33</strong></li>
+<li>Equivalently, a <strong>doubling</strong> of area multiplies richness by <span class="math inline">\(2^{0.2875} = 1.22\)</span> — a 22% gain</li>
 </ul>
 <div class="callout callout-style-default callout-important callout-titled">
 <div class="callout-header d-flex align-content-center">
@@ -979,6 +1031,7 @@ Important
 <p>With a log link, coefficients are <strong>multiplicative</strong>, not additive. A coefficient of β multiplies the mean by <span class="math inline">\(e^{\beta}\)</span>.</p>
 </div>
 </div>
+<p>Compare that 0.2875 with week 6’s log–log slope of <strong>0.331</strong>. Close, but <strong>not the same number</strong> — and the next slide but one says why.</p>
 </div>
 </div>
 </section>
@@ -987,23 +1040,23 @@ Important
 <div class="columns">
 <div class="column" style="width:50%;">
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="fu">Anova</span>(poiss_model, <span class="at">type =</span> <span class="st">"III"</span>, <span class="at">test =</span> <span class="st">"LR"</span>)</span>
-<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="do">## Analysis of Deviance Table (Type III tests)</span></span>
-<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a><span class="do">## </span></span>
-<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a><span class="do">## Response: spp</span></span>
-<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a><span class="do">##          LR Chisq Df            Pr(&gt;Chisq)    </span></span>
-<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a><span class="do">## size_cat   2133.2  2 &lt; 0.00000000000000022 ***</span></span>
-<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a><span class="do">## ---</span></span>
-<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a><span class="do">## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="fu">Anova</span>(poiss_model, <span class="at">type =</span> <span class="st">"III"</span>, <span class="at">test =</span> <span class="st">"LR"</span>)</span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a><span class="do">## Analysis of Deviance Table (Type III tests)</span></span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a><span class="do">## </span></span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a><span class="do">## Response: n_species</span></span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a><span class="do">##               LR Chisq Df            Pr(&gt;Chisq)    </span></span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a><span class="do">## log(area_km2)   978.66  1 &lt; 0.00000000000000022 ***</span></span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a><span class="do">## ---</span></span>
+<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a><span class="do">## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 </div><div class="column" style="width:50%;">
 <ul>
 <li><p>An ANOVA <em>F</em>-test is a <strong>ratio of variances</strong>, and its denominator is the residual mean square — an estimate of <span class="math inline">\(\sigma^2\)</span>.</p></li>
 <li><p>A Poisson GLM <strong>never estimates a <span class="math inline">\(\sigma^2\)</span></strong>. The variance is not a free parameter; it is pinned to the mean. There is nothing to put in the denominator.</p></li>
-<li><p>So we use a <strong>likelihood ratio (LR)</strong> test instead: fit the model with <code>size_cat</code> and the model without it, and compare how much better the full model explains the data.</p></li>
+<li><p>So we use a <strong>likelihood ratio (LR)</strong> test instead: fit the model with the predictor and the model without it, and compare how much better the full model explains the data.</p></li>
 </ul>
 <p><span class="math display">\[\text{LR } \chi^2 = 2(\log L_{full} - \log L_{reduced})\]</span></p>
-<p><strong>Hold on to that 2133.2.</strong> It is about to shrink by a factor of 43.</p>
+<p><strong>Hold on to that χ² of 979.</strong> It is about to shrink to 24.</p>
 </div>
 </div>
 </section>
@@ -1037,7 +1090,7 @@ Important
 <tr class="odd">
 <td><strong>log-log</strong></td>
 <td><code>lm(log(Y) ~ log(X))</code></td>
-<td>A 1% change in X gives a β₁% change in Y</td>
+<td>A 1% change in X gives a β₁% change in Y — <strong>week 6</strong></td>
 </tr>
 </tbody>
 </table>
@@ -1052,9 +1105,10 @@ Important
 </div>
 </div>
 <div class="callout-body-container callout-body">
-<p><strong>These are not the same model.</strong> A GLM with a log link models the log of the mean, <span class="math inline">\(\log(E[Y])\)</span>. Logging the response models the mean of the log, <span class="math inline">\(E[\log(Y)]\)</span> — which back-transforms to a <strong>geometric</strong> mean, not an arithmetic one. The GLM also never has to decide what to do with a zero count.</p>
+<p><strong>These are not the same model.</strong> A GLM with a log link models the log of the mean, <span class="math inline">\(\log(E[Y])\)</span>. Logging the response models the mean of the log, <span class="math inline">\(E[\log(Y)]\)</span> — which back-transforms to a <strong>geometric</strong> mean, not an arithmetic one: <strong>73.6 species, not 119.3</strong>. The GLM also never has to decide what to do with a zero count.</p>
 </div>
 </div>
+<p>That is the whole difference between <strong>0.2875</strong> and <strong>0.331</strong>. Neither is a mistake; they are answers to two different questions.</p>
 </section>
 <section id="part-4-overdispersion-and-the-negative-binomial" class="level2 divider">
 <h2 class="divider anchored" data-anchor-id="part-4-overdispersion-and-the-negative-binomial">Part 4 · Overdispersion and the Negative Binomial</h2>
@@ -1071,12 +1125,12 @@ Important
 <li><strong>&lt; 1</strong> — underdispersion</li>
 </ul>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="fu">check_overdispersion</span>(poiss_model)</span>
-<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a><span class="do">## # Overdispersion test</span></span>
-<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a><span class="do">## </span></span>
-<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a><span class="do">##        dispersion ratio =  33.525</span></span>
-<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a><span class="do">##   Pearson's Chi-Squared = 871.642</span></span>
-<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a><span class="do">##                 p-value = &lt; 0.001</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb13"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="fu">check_overdispersion</span>(poiss_model)</span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a><span class="do">## # Overdispersion test</span></span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a><span class="do">## </span></span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a><span class="do">##        dispersion ratio =  39.723</span></span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a><span class="do">##   Pearson's Chi-Squared = 595.842</span></span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a><span class="do">##                 p-value = &lt; 0.001</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 </div><div class="column" style="width:50%;">
 <div class="callout callout-style-default callout-warning callout-titled">
@@ -1089,8 +1143,8 @@ Warning
 </div>
 </div>
 <div class="callout-body-container callout-body">
-<p><strong>Dispersion ratio 33.5, not 1.</strong></p>
-<p>The model is claiming the variance of a large island’s species count is about 232 — because Poisson forces variance = mean. The data say it is <strong>20,400</strong>.</p>
+<p><strong>Dispersion ratio 39.7, not 1.</strong></p>
+<p>The model claims the variance in richness on the largest island is equal to its mean — about 325. The data say it is far larger.</p>
 </div>
 </div>
 <blockquote class="blockquote">
@@ -1123,33 +1177,34 @@ Warning
 <p><span class="math display">\[\operatorname{Var}(Y) = \mu + \frac{\mu^2}{\theta}\]</span></p>
 <p>As θ → ∞ this collapses back to the Poisson. A <strong>small</strong> θ means a lot of extra spread.</p>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>nb_model <span class="ot">&lt;-</span> <span class="fu">glm.nb</span>(spp <span class="sc">~</span> size_cat, <span class="at">data =</span> g_df)</span>
-<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a><span class="fu">c</span>(<span class="at">theta =</span> nb_model<span class="sc">$</span>theta)</span>
-<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a><span class="do">##    theta </span></span>
-<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a><span class="do">## 1.660219</span></span>
-<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a><span class="fu">check_overdispersion</span>(nb_model)</span>
-<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a><span class="do">## # Overdispersion test (using simulated residuals)</span></span>
-<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a><span class="do">## </span></span>
-<span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a><span class="do">##  dispersion ratio = 0.586</span></span>
-<span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a><span class="do">##           p-value = 0.632</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb14"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>nb_model <span class="ot">&lt;-</span> <span class="fu">glm.nb</span>(n_species <span class="sc">~</span> <span class="fu">log</span>(area_km2),</span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>                   <span class="at">data =</span> g_df)</span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a><span class="fu">c</span>(<span class="at">theta =</span> nb_model<span class="sc">$</span>theta)</span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a><span class="do">##    theta </span></span>
+<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a><span class="do">## 2.669994</span></span>
+<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a><span class="fu">check_overdispersion</span>(nb_model)</span>
+<span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a><span class="do">## # Overdispersion test (using simulated residuals)</span></span>
+<span id="cb14-10"><a href="#cb14-10" aria-hidden="true" tabindex="-1"></a><span class="do">## </span></span>
+<span id="cb14-11"><a href="#cb14-11" aria-hidden="true" tabindex="-1"></a><span class="do">##  dispersion ratio = 0.683</span></span>
+<span id="cb14-12"><a href="#cb14-12" aria-hidden="true" tabindex="-1"></a><span class="do">##           p-value = 0.776</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 </div><div class="column" style="width:50%;">
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb13"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="fu">Anova</span>(nb_model, <span class="at">type =</span> <span class="st">"III"</span>, <span class="at">test =</span> <span class="st">"LR"</span>)</span>
-<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a><span class="do">## Analysis of Deviance Table (Type III tests)</span></span>
-<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a><span class="do">## </span></span>
-<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a><span class="do">## Response: spp</span></span>
-<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a><span class="do">##          LR Chisq Df       Pr(&gt;Chisq)    </span></span>
-<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a><span class="do">## size_cat   49.858  2 0.00000000001491 ***</span></span>
-<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a><span class="do">## ---</span></span>
-<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a><span class="do">## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</span></span>
-<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb13-10"><a href="#cb13-10" aria-hidden="true" tabindex="-1"></a><span class="fu">AIC</span>(poiss_model, nb_model)</span>
-<span id="cb13-11"><a href="#cb13-11" aria-hidden="true" tabindex="-1"></a><span class="do">##             df       AIC</span></span>
-<span id="cb13-12"><a href="#cb13-12" aria-hidden="true" tabindex="-1"></a><span class="do">## poiss_model  3 1057.1686</span></span>
-<span id="cb13-13"><a href="#cb13-13" aria-hidden="true" tabindex="-1"></a><span class="do">## nb_model     4  283.9725</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb15"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="fu">Anova</span>(nb_model, <span class="at">type =</span> <span class="st">"III"</span>, <span class="at">test =</span> <span class="st">"LR"</span>)</span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a><span class="do">## Analysis of Deviance Table (Type III tests)</span></span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a><span class="do">## </span></span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a><span class="do">## Response: n_species</span></span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a><span class="do">##               LR Chisq Df  Pr(&gt;Chisq)    </span></span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a><span class="do">## log(area_km2)   23.817  1 0.000001059 ***</span></span>
+<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a><span class="do">## ---</span></span>
+<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a><span class="do">## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</span></span>
+<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-10"><a href="#cb15-10" aria-hidden="true" tabindex="-1"></a><span class="fu">AIC</span>(poiss_model, nb_model)</span>
+<span id="cb15-11"><a href="#cb15-11" aria-hidden="true" tabindex="-1"></a><span class="do">##             df      AIC</span></span>
+<span id="cb15-12"><a href="#cb15-12" aria-hidden="true" tabindex="-1"></a><span class="do">## poiss_model  2 682.8233</span></span>
+<span id="cb15-13"><a href="#cb15-13" aria-hidden="true" tabindex="-1"></a><span class="do">## nb_model     3 186.9956</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 <div class="callout callout-style-default callout-note callout-titled">
 <div class="callout-header d-flex align-content-center">
@@ -1161,7 +1216,7 @@ Note
 </div>
 </div>
 <div class="callout-body-container callout-body">
-<p>The dispersion is gone, and the AIC drops by <strong>773</strong>. Same data, same predictor, same link — the only thing added was permission for the variance to be larger than the mean.</p>
+<p>The dispersion is gone — 39.7 down to <strong>0.68</strong> — and the AIC drops by <strong>496</strong>. Same data, same predictor, same link. The only thing added was permission for the variance to be larger than the mean.</p>
 </div>
 </div>
 </div>
@@ -1172,10 +1227,9 @@ Note
 <div class="columns">
 <div class="column" style="width:52%;">
 <div class="cell">
-<pre><code>##                estimate SE_poisson SE_negbin
-## (Intercept)      2.6710      0.079     0.247
-## size_catmedium   1.3378      0.088     0.336
-## size_catlarge    2.7743      0.084     0.403</code></pre>
+<pre><code>##               estimate SE_poisson SE_negbin
+## (Intercept)     3.4334     0.0574    0.2802
+## log(area_km2)   0.2875     0.0096    0.0610</code></pre>
 </div>
 <div class="compact-table">
 <table class="caption-top table">
@@ -1188,19 +1242,29 @@ Note
 </thead>
 <tbody>
 <tr class="odd">
-<td><code>size_cat</code> LR χ²</td>
-<td><strong>2133.2</strong></td>
-<td><strong>49.9</strong></td>
+<td>slope</td>
+<td>0.2875</td>
+<td>0.2988</td>
+</tr>
+<tr class="even">
+<td><strong>SE of the slope</strong></td>
+<td><strong>0.0096</strong></td>
+<td><strong>0.0610</strong></td>
+</tr>
+<tr class="odd">
+<td>LR χ²</td>
+<td><strong>979</strong></td>
+<td><strong>23.8</strong></td>
 </tr>
 <tr class="even">
 <td>dispersion ratio</td>
-<td>33.5</td>
-<td>0.59</td>
+<td>39.7</td>
+<td>0.68</td>
 </tr>
 <tr class="odd">
 <td>AIC</td>
-<td>1057.2</td>
-<td>284.0</td>
+<td>682.8</td>
+<td>187.0</td>
 </tr>
 </tbody>
 </table>
@@ -1216,72 +1280,60 @@ Important
 </div>
 </div>
 <div class="callout-body-container callout-body">
-<p><strong>Every coefficient is identical to four decimal places.</strong></p>
-<p>The two models put the means in exactly the same place. What changed is the <strong>standard errors</strong> — the Poisson’s are 3× to 5× too small, and the LR χ² is inflated <strong>43-fold</strong>.</p>
+<p><strong>The slope barely moved — 0.2875 to 0.2988. The standard error moved 6.4-fold.</strong></p>
+<p>The two models put the line in essentially the same place. What changed is how certain they claim to be about it.</p>
 </div>
 </div>
 <p>Overdispersion does not move your estimate. It makes you <strong>far more confident in it than you are entitled to be</strong> — smaller SEs, bigger test statistics, narrower intervals, smaller <em>p</em>-values.</p>
-<p>Both models here say <em>p</em> &lt; 0.001. The conclusion did not change. Only the <strong>honesty</strong> of it did — and that is still worth getting right, because the next dataset will be the one where it flips.</p>
+<p><code>summary(poiss_model)</code> reports <em>p</em> ≈ 10⁻¹⁹⁸ for this slope. That is not a result; it is an arithmetic consequence of an assumption nobody checked.</p>
+<p>Both models here still say <em>p</em> &lt; 0.001. The conclusion did not change. Only the <strong>honesty</strong> of it did — and your homework is the dataset where it very nearly flips.</p>
 </div>
 </div>
 </section>
-<section id="estimated-marginal-means-on-the-count-scale" class="level2 tight-code">
-<h2 class="tight-code anchored" data-anchor-id="estimated-marginal-means-on-the-count-scale">Estimated Marginal Means on the Count Scale</h2>
+<section id="not-every-count-is-overdispersed" class="level2 tight-code">
+<h2 class="tight-code anchored" data-anchor-id="not-every-count-is-overdispersed">Not Every Count Is Overdispersed</h2>
 <div class="columns">
-<div class="column" style="width:52%;">
+<div class="column" style="width:50%;">
+<p>Gotelli &amp; Ellison’s New England <strong>ant species density</strong> — 22 bogs, ant richness against latitude and elevation.</p>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb15"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>nb_emm <span class="ot">&lt;-</span> <span class="fu">emmeans</span>(nb_model, <span class="sc">~</span> size_cat,</span>
-<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>                  <span class="at">type =</span> <span class="st">"response"</span>)</span>
-<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>nb_emm</span>
-<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a><span class="do">##  size_cat response    SE  df asymp.LCL asymp.UCL</span></span>
-<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a><span class="do">##  small        14.5  3.57 Inf      8.91      23.5</span></span>
-<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a><span class="do">##  medium       55.1 12.50 Inf     35.27      86.0</span></span>
-<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a><span class="do">##  large       231.7 73.70 Inf    124.22     432.0</span></span>
-<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a><span class="do">## </span></span>
-<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a><span class="do">## Confidence level used: 0.95 </span></span>
-<span id="cb15-10"><a href="#cb15-10" aria-hidden="true" tabindex="-1"></a><span class="do">## Intervals are back-transformed from the log scale</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb17"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a>ant_df <span class="sc">%&gt;%</span></span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">mean =</span> <span class="fu">mean</span>(n_ant_species),</span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>            <span class="at">var  =</span> <span class="fu">var</span>(n_ant_species),</span>
+<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a>            <span class="at">ratio =</span> var <span class="sc">/</span> mean)</span>
+<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a><span class="do">## # A tibble: 1 × 3</span></span>
+<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a><span class="do">##    mean   var ratio</span></span>
+<span id="cb17-7"><a href="#cb17-7" aria-hidden="true" tabindex="-1"></a><span class="do">##   &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt;</span></span>
+<span id="cb17-8"><a href="#cb17-8" aria-hidden="true" tabindex="-1"></a><span class="do">## 1  9.18  18.5  2.02</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
-<p><code>type = "response"</code> back-transforms from the log scale, which is why the confidence limits are <strong>not symmetric</strong> around each mean — the interval was symmetric on the log scale, and exponentiating stretches the upper half.</p>
-</div><div class="column" style="width:48%;">
+<p>The raw variance-to-mean ratio is <strong>2.02</strong>. On the Galápagos logic, that looks like trouble.</p>
 <div class="cell">
-<pre><code>##  size_cat response    SE  df asymp.LCL asymp.UCL .group
-##  small        14.5  3.57 Inf      8.91      23.5  a    
-##  medium       55.1 12.50 Inf     35.27      86.0   b   
-##  large       231.7 73.70 Inf    124.22     432.0    c  
-## 
-## Confidence level used: 0.95 
-## Intervals are back-transformed from the log scale 
-## P value adjustment: tukey method for comparing a family of 3 estimates 
-## Tests are performed on the log scale 
-## significance level used: alpha = 0.05 
-## NOTE: If two or more means share the same grouping symbol,
-##       then we cannot show them to be different.
-##       But we also did not show them to be the same.</code></pre>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb18"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a>ant_poiss <span class="ot">&lt;-</span> <span class="fu">glm</span>(n_ant_species <span class="sc">~</span> latitude <span class="sc">+</span> elevation_m,</span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>                 <span class="at">data =</span> ant_df,</span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>                 <span class="at">family =</span> <span class="fu">poisson</span>(<span class="at">link =</span> <span class="st">"log"</span>))</span>
+<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a><span class="fu">check_overdispersion</span>(ant_poiss)</span>
+<span id="cb18-6"><a href="#cb18-6" aria-hidden="true" tabindex="-1"></a><span class="do">## # Overdispersion test</span></span>
+<span id="cb18-7"><a href="#cb18-7" aria-hidden="true" tabindex="-1"></a><span class="do">## </span></span>
+<span id="cb18-8"><a href="#cb18-8" aria-hidden="true" tabindex="-1"></a><span class="do">##        dispersion ratio =  0.827</span></span>
+<span id="cb18-9"><a href="#cb18-9" aria-hidden="true" tabindex="-1"></a><span class="do">##   Pearson's Chi-Squared = 15.715</span></span>
+<span id="cb18-10"><a href="#cb18-10" aria-hidden="true" tabindex="-1"></a><span class="do">##                 p-value =  0.676</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</div><div class="column" style="width:50%;">
+<div class="callout callout-style-default callout-important callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Important
 </div>
 </div>
-</div>
-</section>
-<section id="poisson-vs.-negative-binomial-drawn" class="level2">
-<h2 class="anchored" data-anchor-id="poisson-vs.-negative-binomial-drawn">Poisson vs.&nbsp;Negative Binomial, Drawn</h2>
-<div class="columns">
-<div class="column" style="width:58%;">
-<div class="cell">
-<div class="cell-output-display">
-<div>
-<figure class="figure">
-<p><img src="glm_logistic_regression_lecture_files/figure-html/glm-21-1.png" class="img-fluid figure-img" alt="Jittered raw species counts by island size category on a log scale, with Poisson estimated means and intervals in red and negative binomial estimated means and intervals in blue. The two sets of means sit on top of each other while the negative binomial intervals are several times wider." width="441"></p>
-</figure>
+<div class="callout-body-container callout-body">
+<p><strong>Dispersion 0.83, <em>p</em> = 0.68. The Poisson is the right model here.</strong></p>
+<p>Fit the negative binomial anyway and θ comes back at about <strong>184,000</strong> — <code>glm.nb</code> is telling you it found no extra variance to absorb — and the AIC gets <em>worse</em>, 109.6 → 111.6.</p>
 </div>
 </div>
-</div>
-</div><div class="column" style="width:42%;">
-<p>The <strong>means land on top of each other.</strong> Only the intervals differ.</p>
-<p>For the large islands:</p>
-<ul>
-<li>Poisson: 232 (220 – 244)</li>
-<li>Negative binomial: 232 (124 – 432)</li>
-</ul>
-<p>The Poisson interval is 24 species wide and excludes most of the observed data. The negative binomial interval is 308 species wide and actually contains it.</p>
+<p><strong>Overdispersion is a property of the model, not of the data.</strong> The raw ratio of 2.02 was variation <em>between</em> bogs at different latitudes and elevations. Once the predictors account for it, nothing is left over.</p>
 <div class="callout callout-style-default callout-tip callout-titled">
 <div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
@@ -1292,7 +1344,8 @@ Tip
 </div>
 </div>
 <div class="callout-body-container callout-body">
-<p><strong>Report the one whose diagnostics pass</strong>, not the one with the smaller <em>p</em>-value.</p>
+<p><strong>So the lesson is not “counts need a negative binomial.”</strong> It is: fit the Poisson, <strong>check the dispersion</strong>, and only reach for θ when the check tells you to.</p>
+<p>Ant richness falls <strong>21% per degree of latitude</strong> (<em>p</em> = 0.002) — a real result, from the simpler model.</p>
 </div>
 </div>
 </div>
@@ -1343,24 +1396,24 @@ Note
 <div class="column" style="width:50%;">
 <p>Polis et al.&nbsp;(1998) recorded whether the lizard <em>Uta</em> was present on <strong>19 islands</strong> in the Gulf of California, against each island’s <strong>perimeter-to-area ratio</strong> — a measure of how exposed its shoreline is.</p>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb17"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a>polis_df <span class="sc">%&gt;%</span></span>
-<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">select</span>(island, paratio, uta, pa) <span class="sc">%&gt;%</span></span>
-<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">head</span>(<span class="dv">5</span>)</span>
-<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a><span class="do">## # A tibble: 5 × 4</span></span>
-<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a><span class="do">##   island     paratio uta      pa</span></span>
-<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a><span class="do">##   &lt;chr&gt;        &lt;dbl&gt; &lt;chr&gt; &lt;dbl&gt;</span></span>
-<span id="cb17-7"><a href="#cb17-7" aria-hidden="true" tabindex="-1"></a><span class="do">## 1 Bota         15.4  P         1</span></span>
-<span id="cb17-8"><a href="#cb17-8" aria-hidden="true" tabindex="-1"></a><span class="do">## 2 Cabeza        5.63 P         1</span></span>
-<span id="cb17-9"><a href="#cb17-9" aria-hidden="true" tabindex="-1"></a><span class="do">## 3 Cerraja      25.9  P         1</span></span>
-<span id="cb17-10"><a href="#cb17-10" aria-hidden="true" tabindex="-1"></a><span class="do">## 4 Coronadito   15.2  A         0</span></span>
-<span id="cb17-11"><a href="#cb17-11" aria-hidden="true" tabindex="-1"></a><span class="do">## 5 Flecha       13.0  P         1</span></span>
-<span id="cb17-12"><a href="#cb17-12" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb17-13"><a href="#cb17-13" aria-hidden="true" tabindex="-1"></a><span class="fu">count</span>(polis_df, uta)</span>
-<span id="cb17-14"><a href="#cb17-14" aria-hidden="true" tabindex="-1"></a><span class="do">## # A tibble: 2 × 2</span></span>
-<span id="cb17-15"><a href="#cb17-15" aria-hidden="true" tabindex="-1"></a><span class="do">##   uta       n</span></span>
-<span id="cb17-16"><a href="#cb17-16" aria-hidden="true" tabindex="-1"></a><span class="do">##   &lt;chr&gt; &lt;int&gt;</span></span>
-<span id="cb17-17"><a href="#cb17-17" aria-hidden="true" tabindex="-1"></a><span class="do">## 1 A         9</span></span>
-<span id="cb17-18"><a href="#cb17-18" aria-hidden="true" tabindex="-1"></a><span class="do">## 2 P        10</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb19"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a>polis_df <span class="sc">%&gt;%</span></span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">select</span>(island, paratio, uta, pa) <span class="sc">%&gt;%</span></span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">head</span>(<span class="dv">5</span>)</span>
+<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a><span class="do">## # A tibble: 5 × 4</span></span>
+<span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a><span class="do">##   island     paratio uta      pa</span></span>
+<span id="cb19-6"><a href="#cb19-6" aria-hidden="true" tabindex="-1"></a><span class="do">##   &lt;chr&gt;        &lt;dbl&gt; &lt;chr&gt; &lt;dbl&gt;</span></span>
+<span id="cb19-7"><a href="#cb19-7" aria-hidden="true" tabindex="-1"></a><span class="do">## 1 Bota         15.4  P         1</span></span>
+<span id="cb19-8"><a href="#cb19-8" aria-hidden="true" tabindex="-1"></a><span class="do">## 2 Cabeza        5.63 P         1</span></span>
+<span id="cb19-9"><a href="#cb19-9" aria-hidden="true" tabindex="-1"></a><span class="do">## 3 Cerraja      25.9  P         1</span></span>
+<span id="cb19-10"><a href="#cb19-10" aria-hidden="true" tabindex="-1"></a><span class="do">## 4 Coronadito   15.2  A         0</span></span>
+<span id="cb19-11"><a href="#cb19-11" aria-hidden="true" tabindex="-1"></a><span class="do">## 5 Flecha       13.0  P         1</span></span>
+<span id="cb19-12"><a href="#cb19-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-13"><a href="#cb19-13" aria-hidden="true" tabindex="-1"></a><span class="fu">count</span>(polis_df, uta)</span>
+<span id="cb19-14"><a href="#cb19-14" aria-hidden="true" tabindex="-1"></a><span class="do">## # A tibble: 2 × 2</span></span>
+<span id="cb19-15"><a href="#cb19-15" aria-hidden="true" tabindex="-1"></a><span class="do">##   uta       n</span></span>
+<span id="cb19-16"><a href="#cb19-16" aria-hidden="true" tabindex="-1"></a><span class="do">##   &lt;chr&gt; &lt;int&gt;</span></span>
+<span id="cb19-17"><a href="#cb19-17" aria-hidden="true" tabindex="-1"></a><span class="do">## 1 A         9</span></span>
+<span id="cb19-18"><a href="#cb19-18" aria-hidden="true" tabindex="-1"></a><span class="do">## 2 P        10</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 </div><div class="column" style="width:50%;">
 <div class="cell">
@@ -1393,14 +1446,14 @@ Note
 <div class="columns">
 <div class="column" style="width:50%;">
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb18"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a>lizard_model <span class="ot">&lt;-</span> <span class="fu">glm</span>(pa <span class="sc">~</span> paratio,</span>
-<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>                    <span class="at">data =</span> polis_df,</span>
-<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>                    <span class="at">family =</span> <span class="fu">binomial</span>(<span class="at">link =</span> <span class="st">"logit"</span>))</span>
-<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a><span class="fu">round</span>(<span class="fu">summary</span>(lizard_model)<span class="sc">$</span>coefficients, <span class="dv">4</span>)</span>
-<span id="cb18-6"><a href="#cb18-6" aria-hidden="true" tabindex="-1"></a><span class="do">##             Estimate Std. Error z value Pr(&gt;|z|)</span></span>
-<span id="cb18-7"><a href="#cb18-7" aria-hidden="true" tabindex="-1"></a><span class="do">## (Intercept)   3.6061     1.6953  2.1272   0.0334</span></span>
-<span id="cb18-8"><a href="#cb18-8" aria-hidden="true" tabindex="-1"></a><span class="do">## paratio      -0.2196     0.1005 -2.1842   0.0289</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb20"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a>lizard_model <span class="ot">&lt;-</span> <span class="fu">glm</span>(pa <span class="sc">~</span> paratio,</span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a>                    <span class="at">data =</span> polis_df,</span>
+<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a>                    <span class="at">family =</span> <span class="fu">binomial</span>(<span class="at">link =</span> <span class="st">"logit"</span>))</span>
+<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a><span class="fu">round</span>(<span class="fu">summary</span>(lizard_model)<span class="sc">$</span>coefficients, <span class="dv">4</span>)</span>
+<span id="cb20-6"><a href="#cb20-6" aria-hidden="true" tabindex="-1"></a><span class="do">##             Estimate Std. Error z value Pr(&gt;|z|)</span></span>
+<span id="cb20-7"><a href="#cb20-7" aria-hidden="true" tabindex="-1"></a><span class="do">## (Intercept)   3.6061     1.6953  2.1272   0.0334</span></span>
+<span id="cb20-8"><a href="#cb20-8" aria-hidden="true" tabindex="-1"></a><span class="do">## paratio      -0.2196     0.1005 -2.1842   0.0289</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 <p>Two ways to test <span class="math inline">\(H_0: \beta_1 = 0\)</span>:</p>
 <ol type="1">
@@ -1409,19 +1462,19 @@ Note
 </ol>
 </div><div class="column" style="width:50%;">
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb19"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a>null_model <span class="ot">&lt;-</span> <span class="fu">glm</span>(pa <span class="sc">~</span> <span class="dv">1</span>, <span class="at">data =</span> polis_df,</span>
-<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>                  <span class="at">family =</span> <span class="fu">binomial</span>(<span class="at">link =</span> <span class="st">"logit"</span>))</span>
-<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a><span class="fu">anova</span>(null_model, lizard_model, <span class="at">test =</span> <span class="st">"Chisq"</span>)</span>
-<span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a><span class="do">## Analysis of Deviance Table</span></span>
-<span id="cb19-6"><a href="#cb19-6" aria-hidden="true" tabindex="-1"></a><span class="do">## </span></span>
-<span id="cb19-7"><a href="#cb19-7" aria-hidden="true" tabindex="-1"></a><span class="do">## Model 1: pa ~ 1</span></span>
-<span id="cb19-8"><a href="#cb19-8" aria-hidden="true" tabindex="-1"></a><span class="do">## Model 2: pa ~ paratio</span></span>
-<span id="cb19-9"><a href="#cb19-9" aria-hidden="true" tabindex="-1"></a><span class="do">##   Resid. Df Resid. Dev Df Deviance  Pr(&gt;Chi)    </span></span>
-<span id="cb19-10"><a href="#cb19-10" aria-hidden="true" tabindex="-1"></a><span class="do">## 1        18     26.287                          </span></span>
-<span id="cb19-11"><a href="#cb19-11" aria-hidden="true" tabindex="-1"></a><span class="do">## 2        17     14.221  1   12.066 0.0005134 ***</span></span>
-<span id="cb19-12"><a href="#cb19-12" aria-hidden="true" tabindex="-1"></a><span class="do">## ---</span></span>
-<span id="cb19-13"><a href="#cb19-13" aria-hidden="true" tabindex="-1"></a><span class="do">## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb21"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a>null_model <span class="ot">&lt;-</span> <span class="fu">glm</span>(pa <span class="sc">~</span> <span class="dv">1</span>, <span class="at">data =</span> polis_df,</span>
+<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a>                  <span class="at">family =</span> <span class="fu">binomial</span>(<span class="at">link =</span> <span class="st">"logit"</span>))</span>
+<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a><span class="fu">anova</span>(null_model, lizard_model, <span class="at">test =</span> <span class="st">"Chisq"</span>)</span>
+<span id="cb21-5"><a href="#cb21-5" aria-hidden="true" tabindex="-1"></a><span class="do">## Analysis of Deviance Table</span></span>
+<span id="cb21-6"><a href="#cb21-6" aria-hidden="true" tabindex="-1"></a><span class="do">## </span></span>
+<span id="cb21-7"><a href="#cb21-7" aria-hidden="true" tabindex="-1"></a><span class="do">## Model 1: pa ~ 1</span></span>
+<span id="cb21-8"><a href="#cb21-8" aria-hidden="true" tabindex="-1"></a><span class="do">## Model 2: pa ~ paratio</span></span>
+<span id="cb21-9"><a href="#cb21-9" aria-hidden="true" tabindex="-1"></a><span class="do">##   Resid. Df Resid. Dev Df Deviance  Pr(&gt;Chi)    </span></span>
+<span id="cb21-10"><a href="#cb21-10" aria-hidden="true" tabindex="-1"></a><span class="do">## 1        18     26.287                          </span></span>
+<span id="cb21-11"><a href="#cb21-11" aria-hidden="true" tabindex="-1"></a><span class="do">## 2        17     14.221  1   12.066 0.0005134 ***</span></span>
+<span id="cb21-12"><a href="#cb21-12" aria-hidden="true" tabindex="-1"></a><span class="do">## ---</span></span>
+<span id="cb21-13"><a href="#cb21-13" aria-hidden="true" tabindex="-1"></a><span class="do">## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 <p>The LR test is the one to report — it is better behaved at small <em>n</em>, and 19 islands is small.</p>
 </div>
@@ -1465,13 +1518,13 @@ Tip
 <div class="columns">
 <div class="column" style="width:48%;">
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb20"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="fu">exp</span>(<span class="fu">coef</span>(lizard_model))</span>
-<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a><span class="do">## (Intercept)     paratio </span></span>
-<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a><span class="do">##  36.8210344   0.8028734</span></span>
-<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a><span class="fu">exp</span>(<span class="fu">confint</span>(lizard_model, <span class="st">"paratio"</span>))</span>
-<span id="cb20-6"><a href="#cb20-6" aria-hidden="true" tabindex="-1"></a><span class="do">##     2.5 %    97.5 % </span></span>
-<span id="cb20-7"><a href="#cb20-7" aria-hidden="true" tabindex="-1"></a><span class="do">## 0.6157322 0.9356727</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb22"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="fu">exp</span>(<span class="fu">coef</span>(lizard_model))</span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a><span class="do">## (Intercept)     paratio </span></span>
+<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a><span class="do">##  36.8210344   0.8028734</span></span>
+<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a><span class="fu">exp</span>(<span class="fu">confint</span>(lizard_model, <span class="st">"paratio"</span>))</span>
+<span id="cb22-6"><a href="#cb22-6" aria-hidden="true" tabindex="-1"></a><span class="do">##     2.5 %    97.5 % </span></span>
+<span id="cb22-7"><a href="#cb22-7" aria-hidden="true" tabindex="-1"></a><span class="do">## 0.6157322 0.9356727</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 </div><div class="column" style="width:52%;">
 <p><strong>Odds ratio = <span class="math inline">\(e^{\beta_1}\)</span></strong></p>
@@ -1507,22 +1560,22 @@ Important
 <div class="columns">
 <div class="column" style="width:50%;">
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb21"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="co"># McFadden's, by hand</span></span>
-<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a><span class="dv">1</span> <span class="sc">-</span> lizard_model<span class="sc">$</span>deviance <span class="sc">/</span></span>
-<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a>      lizard_model<span class="sc">$</span>null.deviance</span>
-<span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a><span class="do">## [1] 0.4590197</span></span>
-<span id="cb21-5"><a href="#cb21-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb21-6"><a href="#cb21-6" aria-hidden="true" tabindex="-1"></a><span class="fu">r2</span>(lizard_model)   <span class="co"># performance's default</span></span>
-<span id="cb21-7"><a href="#cb21-7" aria-hidden="true" tabindex="-1"></a><span class="do">## # R2 for Logistic Regression</span></span>
-<span id="cb21-8"><a href="#cb21-8" aria-hidden="true" tabindex="-1"></a><span class="do">##   Tjur's R2: 0.521</span></span>
-<span id="cb21-9"><a href="#cb21-9" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb21-10"><a href="#cb21-10" aria-hidden="true" tabindex="-1"></a><span class="fu">hoslem.test</span>(lizard_model<span class="sc">$</span>y,</span>
-<span id="cb21-11"><a href="#cb21-11" aria-hidden="true" tabindex="-1"></a>            <span class="fu">fitted</span>(lizard_model), <span class="at">g =</span> <span class="dv">10</span>)</span>
-<span id="cb21-12"><a href="#cb21-12" aria-hidden="true" tabindex="-1"></a><span class="do">## </span></span>
-<span id="cb21-13"><a href="#cb21-13" aria-hidden="true" tabindex="-1"></a><span class="do">##  Hosmer and Lemeshow goodness of fit (GOF) test</span></span>
-<span id="cb21-14"><a href="#cb21-14" aria-hidden="true" tabindex="-1"></a><span class="do">## </span></span>
-<span id="cb21-15"><a href="#cb21-15" aria-hidden="true" tabindex="-1"></a><span class="do">## data:  lizard_model$y, fitted(lizard_model)</span></span>
-<span id="cb21-16"><a href="#cb21-16" aria-hidden="true" tabindex="-1"></a><span class="do">## X-squared = 7.898, df = 8, p-value = 0.4435</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb23"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="co"># McFadden's, by hand</span></span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a><span class="dv">1</span> <span class="sc">-</span> lizard_model<span class="sc">$</span>deviance <span class="sc">/</span></span>
+<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a>      lizard_model<span class="sc">$</span>null.deviance</span>
+<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a><span class="do">## [1] 0.4590197</span></span>
+<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a><span class="fu">r2</span>(lizard_model)   <span class="co"># performance's default</span></span>
+<span id="cb23-7"><a href="#cb23-7" aria-hidden="true" tabindex="-1"></a><span class="do">## # R2 for Logistic Regression</span></span>
+<span id="cb23-8"><a href="#cb23-8" aria-hidden="true" tabindex="-1"></a><span class="do">##   Tjur's R2: 0.521</span></span>
+<span id="cb23-9"><a href="#cb23-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-10"><a href="#cb23-10" aria-hidden="true" tabindex="-1"></a><span class="fu">hoslem.test</span>(lizard_model<span class="sc">$</span>y,</span>
+<span id="cb23-11"><a href="#cb23-11" aria-hidden="true" tabindex="-1"></a>            <span class="fu">fitted</span>(lizard_model), <span class="at">g =</span> <span class="dv">10</span>)</span>
+<span id="cb23-12"><a href="#cb23-12" aria-hidden="true" tabindex="-1"></a><span class="do">## </span></span>
+<span id="cb23-13"><a href="#cb23-13" aria-hidden="true" tabindex="-1"></a><span class="do">##  Hosmer and Lemeshow goodness of fit (GOF) test</span></span>
+<span id="cb23-14"><a href="#cb23-14" aria-hidden="true" tabindex="-1"></a><span class="do">## </span></span>
+<span id="cb23-15"><a href="#cb23-15" aria-hidden="true" tabindex="-1"></a><span class="do">## data:  lizard_model$y, fitted(lizard_model)</span></span>
+<span id="cb23-16"><a href="#cb23-16" aria-hidden="true" tabindex="-1"></a><span class="do">## X-squared = 7.898, df = 8, p-value = 0.4435</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 </div><div class="column" style="width:50%;">
 <p><strong>McFadden’s pseudo-R²</strong> = <span class="math inline">\(1 - \dfrac{D_{resid}}{D_{null}}\)</span> = <strong>0.459</strong>. <code>performance::r2()</code> instead reports <strong>Tjur’s R² = 0.521</strong>.</p>
@@ -1584,17 +1637,17 @@ Warning
 </div>
 </div><div class="column" style="width:50%;">
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb22"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a>rodent_model <span class="ot">&lt;-</span> <span class="fu">glm</span>(</span>
-<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>  rodentsp <span class="sc">~</span> distx <span class="sc">+</span> age <span class="sc">+</span> pershrub,</span>
-<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">data =</span> bolger_df,</span>
-<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">family =</span> <span class="fu">binomial</span>(<span class="at">link =</span> <span class="st">"logit"</span>))</span>
-<span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-6"><a href="#cb22-6" aria-hidden="true" tabindex="-1"></a><span class="fu">round</span>(<span class="fu">summary</span>(rodent_model)<span class="sc">$</span>coefficients, <span class="dv">4</span>)</span>
-<span id="cb22-7"><a href="#cb22-7" aria-hidden="true" tabindex="-1"></a><span class="do">##             Estimate Std. Error z value Pr(&gt;|z|)</span></span>
-<span id="cb22-8"><a href="#cb22-8" aria-hidden="true" tabindex="-1"></a><span class="do">## (Intercept)  -5.9099     3.1125 -1.8987   0.0576</span></span>
-<span id="cb22-9"><a href="#cb22-9" aria-hidden="true" tabindex="-1"></a><span class="do">## distx         0.0003     0.0008  0.3988   0.6900</span></span>
-<span id="cb22-10"><a href="#cb22-10" aria-hidden="true" tabindex="-1"></a><span class="do">## age           0.0250     0.0377  0.6640   0.5067</span></span>
-<span id="cb22-11"><a href="#cb22-11" aria-hidden="true" tabindex="-1"></a><span class="do">## pershrub      0.0959     0.0406  2.3606   0.0182</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb24"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a>rodent_model <span class="ot">&lt;-</span> <span class="fu">glm</span>(</span>
+<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a>  rodentsp <span class="sc">~</span> distx <span class="sc">+</span> age <span class="sc">+</span> pershrub,</span>
+<span id="cb24-3"><a href="#cb24-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">data =</span> bolger_df,</span>
+<span id="cb24-4"><a href="#cb24-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">family =</span> <span class="fu">binomial</span>(<span class="at">link =</span> <span class="st">"logit"</span>))</span>
+<span id="cb24-5"><a href="#cb24-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-6"><a href="#cb24-6" aria-hidden="true" tabindex="-1"></a><span class="fu">round</span>(<span class="fu">summary</span>(rodent_model)<span class="sc">$</span>coefficients, <span class="dv">4</span>)</span>
+<span id="cb24-7"><a href="#cb24-7" aria-hidden="true" tabindex="-1"></a><span class="do">##             Estimate Std. Error z value Pr(&gt;|z|)</span></span>
+<span id="cb24-8"><a href="#cb24-8" aria-hidden="true" tabindex="-1"></a><span class="do">## (Intercept)  -5.9099     3.1125 -1.8987   0.0576</span></span>
+<span id="cb24-9"><a href="#cb24-9" aria-hidden="true" tabindex="-1"></a><span class="do">## distx         0.0003     0.0008  0.3988   0.6900</span></span>
+<span id="cb24-10"><a href="#cb24-10" aria-hidden="true" tabindex="-1"></a><span class="do">## age           0.0250     0.0377  0.6640   0.5067</span></span>
+<span id="cb24-11"><a href="#cb24-11" aria-hidden="true" tabindex="-1"></a><span class="do">## pershrub      0.0959     0.0406  2.3606   0.0182</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 <div class="callout callout-style-default callout-note callout-titled">
 <div class="callout-header d-flex align-content-center">
@@ -1617,16 +1670,16 @@ Note
 <div class="columns">
 <div class="column" style="width:50%;">
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb23"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="fu">Anova</span>(rodent_model, <span class="at">type =</span> <span class="st">"II"</span>, <span class="at">test =</span> <span class="st">"LR"</span>)</span>
-<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a><span class="do">## Analysis of Deviance Table (Type II tests)</span></span>
-<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a><span class="do">## </span></span>
-<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a><span class="do">## Response: rodentsp</span></span>
-<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a><span class="do">##          LR Chisq Df Pr(&gt;Chisq)   </span></span>
-<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a><span class="do">## distx      0.1559  1   0.692943   </span></span>
-<span id="cb23-7"><a href="#cb23-7" aria-hidden="true" tabindex="-1"></a><span class="do">## age        0.4446  1   0.504906   </span></span>
-<span id="cb23-8"><a href="#cb23-8" aria-hidden="true" tabindex="-1"></a><span class="do">## pershrub   9.5577  1   0.001991 **</span></span>
-<span id="cb23-9"><a href="#cb23-9" aria-hidden="true" tabindex="-1"></a><span class="do">## ---</span></span>
-<span id="cb23-10"><a href="#cb23-10" aria-hidden="true" tabindex="-1"></a><span class="do">## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb25"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="fu">Anova</span>(rodent_model, <span class="at">type =</span> <span class="st">"II"</span>, <span class="at">test =</span> <span class="st">"LR"</span>)</span>
+<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a><span class="do">## Analysis of Deviance Table (Type II tests)</span></span>
+<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a><span class="do">## </span></span>
+<span id="cb25-4"><a href="#cb25-4" aria-hidden="true" tabindex="-1"></a><span class="do">## Response: rodentsp</span></span>
+<span id="cb25-5"><a href="#cb25-5" aria-hidden="true" tabindex="-1"></a><span class="do">##          LR Chisq Df Pr(&gt;Chisq)   </span></span>
+<span id="cb25-6"><a href="#cb25-6" aria-hidden="true" tabindex="-1"></a><span class="do">## distx      0.1559  1   0.692943   </span></span>
+<span id="cb25-7"><a href="#cb25-7" aria-hidden="true" tabindex="-1"></a><span class="do">## age        0.4446  1   0.504906   </span></span>
+<span id="cb25-8"><a href="#cb25-8" aria-hidden="true" tabindex="-1"></a><span class="do">## pershrub   9.5577  1   0.001991 **</span></span>
+<span id="cb25-9"><a href="#cb25-9" aria-hidden="true" tabindex="-1"></a><span class="do">## ---</span></span>
+<span id="cb25-10"><a href="#cb25-10" aria-hidden="true" tabindex="-1"></a><span class="do">## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 <p>Each row drops <strong>one</strong> predictor and compares the two models by likelihood ratio — the multi-predictor version of what we did to the lizard model.</p>
 </div><div class="column" style="width:50%;">
@@ -1708,22 +1761,22 @@ Note
 <div class="columns">
 <div class="column" style="width:50%;">
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb26"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a>pred_prob  <span class="ot">&lt;-</span> <span class="fu">predict</span>(rodent_model, <span class="at">type =</span> <span class="st">"response"</span>)</span>
-<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a>pred_class <span class="ot">&lt;-</span> <span class="fu">ifelse</span>(pred_prob <span class="sc">&gt;</span> <span class="fl">0.5</span>, <span class="dv">1</span>, <span class="dv">0</span>)</span>
-<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb26-4"><a href="#cb26-4" aria-hidden="true" tabindex="-1"></a>cm <span class="ot">&lt;-</span> <span class="fu">table</span>(<span class="at">Predicted =</span> pred_class,</span>
-<span id="cb26-5"><a href="#cb26-5" aria-hidden="true" tabindex="-1"></a>            <span class="at">Actual =</span> bolger_df<span class="sc">$</span>rodentsp)</span>
-<span id="cb26-6"><a href="#cb26-6" aria-hidden="true" tabindex="-1"></a>cm</span>
-<span id="cb26-7"><a href="#cb26-7" aria-hidden="true" tabindex="-1"></a><span class="do">##          Actual</span></span>
-<span id="cb26-8"><a href="#cb26-8" aria-hidden="true" tabindex="-1"></a><span class="do">## Predicted  0  1</span></span>
-<span id="cb26-9"><a href="#cb26-9" aria-hidden="true" tabindex="-1"></a><span class="do">##         0 11  3</span></span>
-<span id="cb26-10"><a href="#cb26-10" aria-hidden="true" tabindex="-1"></a><span class="do">##         1  2  9</span></span>
-<span id="cb26-11"><a href="#cb26-11" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb26-12"><a href="#cb26-12" aria-hidden="true" tabindex="-1"></a><span class="fu">round</span>(<span class="fu">c</span>(<span class="at">accuracy    =</span> <span class="fu">sum</span>(<span class="fu">diag</span>(cm)) <span class="sc">/</span> <span class="fu">sum</span>(cm),</span>
-<span id="cb26-13"><a href="#cb26-13" aria-hidden="true" tabindex="-1"></a>        <span class="at">sensitivity =</span> cm[<span class="st">"1"</span>,<span class="st">"1"</span>] <span class="sc">/</span> <span class="fu">sum</span>(cm[, <span class="st">"1"</span>]),</span>
-<span id="cb26-14"><a href="#cb26-14" aria-hidden="true" tabindex="-1"></a>        <span class="at">specificity =</span> cm[<span class="st">"0"</span>,<span class="st">"0"</span>] <span class="sc">/</span> <span class="fu">sum</span>(cm[, <span class="st">"0"</span>])), <span class="dv">3</span>)</span>
-<span id="cb26-15"><a href="#cb26-15" aria-hidden="true" tabindex="-1"></a><span class="do">##    accuracy sensitivity specificity </span></span>
-<span id="cb26-16"><a href="#cb26-16" aria-hidden="true" tabindex="-1"></a><span class="do">##       0.800       0.750       0.846</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb28"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a>pred_prob  <span class="ot">&lt;-</span> <span class="fu">predict</span>(rodent_model, <span class="at">type =</span> <span class="st">"response"</span>)</span>
+<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a>pred_class <span class="ot">&lt;-</span> <span class="fu">ifelse</span>(pred_prob <span class="sc">&gt;</span> <span class="fl">0.5</span>, <span class="dv">1</span>, <span class="dv">0</span>)</span>
+<span id="cb28-3"><a href="#cb28-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb28-4"><a href="#cb28-4" aria-hidden="true" tabindex="-1"></a>cm <span class="ot">&lt;-</span> <span class="fu">table</span>(<span class="at">Predicted =</span> pred_class,</span>
+<span id="cb28-5"><a href="#cb28-5" aria-hidden="true" tabindex="-1"></a>            <span class="at">Actual =</span> bolger_df<span class="sc">$</span>rodentsp)</span>
+<span id="cb28-6"><a href="#cb28-6" aria-hidden="true" tabindex="-1"></a>cm</span>
+<span id="cb28-7"><a href="#cb28-7" aria-hidden="true" tabindex="-1"></a><span class="do">##          Actual</span></span>
+<span id="cb28-8"><a href="#cb28-8" aria-hidden="true" tabindex="-1"></a><span class="do">## Predicted  0  1</span></span>
+<span id="cb28-9"><a href="#cb28-9" aria-hidden="true" tabindex="-1"></a><span class="do">##         0 11  3</span></span>
+<span id="cb28-10"><a href="#cb28-10" aria-hidden="true" tabindex="-1"></a><span class="do">##         1  2  9</span></span>
+<span id="cb28-11"><a href="#cb28-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb28-12"><a href="#cb28-12" aria-hidden="true" tabindex="-1"></a><span class="fu">round</span>(<span class="fu">c</span>(<span class="at">accuracy    =</span> <span class="fu">sum</span>(<span class="fu">diag</span>(cm)) <span class="sc">/</span> <span class="fu">sum</span>(cm),</span>
+<span id="cb28-13"><a href="#cb28-13" aria-hidden="true" tabindex="-1"></a>        <span class="at">sensitivity =</span> cm[<span class="st">"1"</span>,<span class="st">"1"</span>] <span class="sc">/</span> <span class="fu">sum</span>(cm[, <span class="st">"1"</span>]),</span>
+<span id="cb28-14"><a href="#cb28-14" aria-hidden="true" tabindex="-1"></a>        <span class="at">specificity =</span> cm[<span class="st">"0"</span>,<span class="st">"0"</span>] <span class="sc">/</span> <span class="fu">sum</span>(cm[, <span class="st">"0"</span>])), <span class="dv">3</span>)</span>
+<span id="cb28-15"><a href="#cb28-15" aria-hidden="true" tabindex="-1"></a><span class="do">##    accuracy sensitivity specificity </span></span>
+<span id="cb28-16"><a href="#cb28-16" aria-hidden="true" tabindex="-1"></a><span class="do">##       0.800       0.750       0.846</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 </div><div class="column" style="width:50%;">
 <ul>
@@ -1920,26 +1973,26 @@ Important
 <li>The link is the <strong>identity</strong></li>
 </ol>
 <p>So a one-way ANOVA, a linear regression on a categorical predictor, and a Gaussian GLM are <strong>three names for one fit</strong>.</p>
+<p>Here on <strong>last week’s crayfish</strong> — a genuine two-level factor:</p>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb27"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a>aov_fit  <span class="ot">&lt;-</span> <span class="fu">aov</span>(spp <span class="sc">~</span> size_cat, <span class="at">data =</span> g_df)</span>
-<span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a>lm_fit   <span class="ot">&lt;-</span> <span class="fu">lm</span>(spp <span class="sc">~</span> size_cat, <span class="at">data =</span> g_df)</span>
-<span id="cb27-3"><a href="#cb27-3" aria-hidden="true" tabindex="-1"></a>glm_fit  <span class="ot">&lt;-</span> <span class="fu">glm</span>(spp <span class="sc">~</span> size_cat, <span class="at">data =</span> g_df,</span>
-<span id="cb27-4"><a href="#cb27-4" aria-hidden="true" tabindex="-1"></a>                <span class="at">family =</span> <span class="fu">gaussian</span>(<span class="at">link =</span> <span class="st">"identity"</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb29"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a>aov_fit <span class="ot">&lt;-</span> <span class="fu">aov</span>(growth_per_day <span class="sc">~</span> range, <span class="at">data =</span> cray_df)</span>
+<span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a>lm_fit  <span class="ot">&lt;-</span> <span class="fu">lm</span>(growth_per_day <span class="sc">~</span> range, <span class="at">data =</span> cray_df)</span>
+<span id="cb29-3"><a href="#cb29-3" aria-hidden="true" tabindex="-1"></a>glm_fit <span class="ot">&lt;-</span> <span class="fu">glm</span>(growth_per_day <span class="sc">~</span> range, <span class="at">data =</span> cray_df,</span>
+<span id="cb29-4"><a href="#cb29-4" aria-hidden="true" tabindex="-1"></a>               <span class="at">family =</span> <span class="fu">gaussian</span>(<span class="at">link =</span> <span class="st">"identity"</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 </div><div class="column" style="width:50%;">
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb28"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a><span class="fu">round</span>(<span class="fu">cbind</span>(<span class="at">aov =</span> <span class="fu">coef</span>(aov_fit),</span>
-<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a>            <span class="at">lm  =</span> <span class="fu">coef</span>(lm_fit),</span>
-<span id="cb28-3"><a href="#cb28-3" aria-hidden="true" tabindex="-1"></a>            <span class="at">glm =</span> <span class="fu">coef</span>(glm_fit)), <span class="dv">4</span>)</span>
-<span id="cb28-4"><a href="#cb28-4" aria-hidden="true" tabindex="-1"></a><span class="do">##                     aov       lm      glm</span></span>
-<span id="cb28-5"><a href="#cb28-5" aria-hidden="true" tabindex="-1"></a><span class="do">## (Intercept)     14.4545  14.4545  14.4545</span></span>
-<span id="cb28-6"><a href="#cb28-6" aria-hidden="true" tabindex="-1"></a><span class="do">## size_catmedium  40.6288  40.6288  40.6288</span></span>
-<span id="cb28-7"><a href="#cb28-7" aria-hidden="true" tabindex="-1"></a><span class="do">## size_catlarge  217.2121 217.2121 217.2121</span></span>
-<span id="cb28-8"><a href="#cb28-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb28-9"><a href="#cb28-9" aria-hidden="true" tabindex="-1"></a><span class="fu">c</span>(<span class="at">aov =</span> <span class="fu">summary</span>(aov_fit)[[<span class="dv">1</span>]][<span class="dv">1</span>, <span class="st">"F value"</span>],</span>
-<span id="cb28-10"><a href="#cb28-10" aria-hidden="true" tabindex="-1"></a>  <span class="at">lm  =</span> <span class="fu">anova</span>(lm_fit)[<span class="dv">1</span>, <span class="st">"F value"</span>])</span>
-<span id="cb28-11"><a href="#cb28-11" aria-hidden="true" tabindex="-1"></a><span class="do">##     aov      lm </span></span>
-<span id="cb28-12"><a href="#cb28-12" aria-hidden="true" tabindex="-1"></a><span class="do">## 21.2064 21.2064</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb30"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a><span class="fu">round</span>(<span class="fu">cbind</span>(<span class="at">aov =</span> <span class="fu">coef</span>(aov_fit),</span>
+<span id="cb30-2"><a href="#cb30-2" aria-hidden="true" tabindex="-1"></a>            <span class="at">lm  =</span> <span class="fu">coef</span>(lm_fit),</span>
+<span id="cb30-3"><a href="#cb30-3" aria-hidden="true" tabindex="-1"></a>            <span class="at">glm =</span> <span class="fu">coef</span>(glm_fit)), <span class="dv">4</span>)</span>
+<span id="cb30-4"><a href="#cb30-4" aria-hidden="true" tabindex="-1"></a><span class="do">##                  aov     lm    glm</span></span>
+<span id="cb30-5"><a href="#cb30-5" aria-hidden="true" tabindex="-1"></a><span class="do">## (Intercept)   0.2277 0.2277 0.2277</span></span>
+<span id="cb30-6"><a href="#cb30-6" aria-hidden="true" tabindex="-1"></a><span class="do">## rangeInvasive 0.0427 0.0427 0.0427</span></span>
+<span id="cb30-7"><a href="#cb30-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb30-8"><a href="#cb30-8" aria-hidden="true" tabindex="-1"></a><span class="fu">c</span>(<span class="at">aov =</span> <span class="fu">summary</span>(aov_fit)[[<span class="dv">1</span>]][<span class="dv">1</span>, <span class="st">"F value"</span>],</span>
+<span id="cb30-9"><a href="#cb30-9" aria-hidden="true" tabindex="-1"></a>  <span class="at">lm  =</span> <span class="fu">anova</span>(lm_fit)[<span class="dv">1</span>, <span class="st">"F value"</span>])</span>
+<span id="cb30-10"><a href="#cb30-10" aria-hidden="true" tabindex="-1"></a><span class="do">##      aov       lm </span></span>
+<span id="cb30-11"><a href="#cb30-11" aria-hidden="true" tabindex="-1"></a><span class="do">## 8.609367 8.609367</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 <div class="callout callout-style-default callout-note callout-titled">
 <div class="callout-header d-flex align-content-center">
@@ -1964,7 +2017,7 @@ Note
 <ol type="1">
 <li><strong>Gaussian</strong> + identity link = the linear model and ANOVA you already know</li>
 <li><strong>Poisson</strong> + log link = counts — and always check the dispersion</li>
-<li><strong>Negative binomial</strong> = counts whose variance exceeds the mean, which in ecology is most of them</li>
+<li><strong>Negative binomial</strong> = counts whose variance exceeds the mean — common in ecology, but <strong>check</strong> rather than assume (the ants did not need it)</li>
 <li><strong>Binomial</strong> + logit link = binary responses, read as odds ratios</li>
 </ol>
 <p>What they share: the linear predictor is unchanged. You are still fitting a straight line — just on a scale where a straight line cannot predict something impossible.</p>
@@ -1981,7 +2034,7 @@ Important
 <div class="callout-body-container callout-body">
 <p><strong>The method, not the models</strong></p>
 <p>Fit it → check the diagnostic that matches the model → change one assumption → refit.</p>
-<p>Today that chain ran three times on one question and gave three different <em>p</em>-values, all of them tiny. The number was never the problem. What changed was whether you were entitled to it.</p>
+<p>Today that chain ran on one question and gave <em>p</em>-values from 10⁻¹⁹⁸ to 10⁻⁷, all of them tiny. The number was never the problem. What changed was whether you were entitled to it.</p>
 </div>
 </div>
 <div class="callout callout-style-default callout-note callout-titled">
@@ -2034,7 +2087,7 @@ Note
 </div>
 <div class="callout-body-container callout-body">
 <p><strong>📖 On the datasets</strong></p>
-<p>The <em>Uta</em> lizard data are Polis et al.’s, reproduced in Quinn &amp; Keough <strong>Box 13-1</strong>. The canyon rodent data are Bolger et al.’s, reproduced in <strong>Box 13-2</strong>. The Galápagos data ship with the <code>faraway</code> package.</p>
+<p>The <em>Uta</em> lizard data are Polis et al.’s, reproduced in Quinn &amp; Keough <strong>Box 13-1</strong>. The canyon rodent data are Bolger et al.’s, reproduced in <strong>Box 13-2</strong>. The Galápagos and New England ant data are <strong>Gotelli &amp; Ellison</strong>’s, from <em>A Primer of Ecological Statistics</em> (Ch. 8 and Ch. 9) — the Galápagos file is the same one you used in week 6.</p>
 <p>The textbook PDFs are on Canvas.</p>
 </div>
 </div>
