@@ -5,14 +5,16 @@
 #
 # Save as scripts/16_linear_mixed_models.R
 #
-# Only the plumbing is written for you - libraries and the
-# data read. Every line of statistics you type yourself.
+# Only the plumbing is written for you - libraries, the
+# data reads, and the plots in sections 9-10. Every line of
+# statistics you type yourself.
 # The code is on the activity page.
 #
 # Section 6 has NO code on the activity page either.
 #
 # The THINK lines are to talk about, not to answer here.
-# The WRITE-UP at the bottom is what gets graded.
+# The WRITE-UP (sections 7-8) is what gets graded.
+# Sections 9-10 after it are two more designs, not graded.
 # ==========================================================
 
 # ---- Libraries -------------------------------------------
@@ -137,13 +139,16 @@ invisible(NULL)
 
 # ---- 4b Where that variance came from, the old way -------
 # lmer() never computed a sum of squares. Part 1 did
-# nothing else. Code is on the activity page.
-#
-#   a) the week-9 table: aov(algae ~ treat + treat:patch)
-#   b) pull MS_patch and MS_within out of it
-#   c) (MS_patch - MS_within) / 5
+# nothing else. The table and the two mean squares are
+# pulled out for you.
 
-# YOUR CODE:
+a_tab <- summary(aov(algae ~ treat + treat:patch, data = u_df))[[1]]
+a_tab
+
+MS_patch  <- a_tab[2, "Mean Sq"]
+MS_within <- a_tab[3, "Mean Sq"]
+
+# YOUR CODE: (MS_patch - MS_within) / 5
 
 invisible(NULL)
 
@@ -269,6 +274,97 @@ invisible(NULL)
 #     within a treatment, and among treatments. Which one
 #     is bigger, and which one does the p-value care about?
 # ANSWER:
+
+
+# ==========================================================
+# TWO MORE DESIGNS - after lecture Part 8. Not graded.
+#
+# The data prep and the plots are written for you.
+# You type the models.
+# ==========================================================
+
+# ---- 9 Animals through time - chick growth ---------------
+# ChickWeight ships with R: 50 chicks, 4 diets, each chick
+# weighed up to 12 times over 21 days.
+
+ck_df <- as_tibble(ChickWeight) %>%
+  clean_names() %>%
+  mutate(chick = factor(chick, ordered = FALSE))
+
+ggplot(ck_df, aes(x = time, y = weight, group = chick)) +
+  geom_line() +
+  facet_wrap(~ diet)
+
+invisible(NULL)
+
+# YOUR CODE: weight ~ time * diet, three ways. Name them
+# ck_lm, ck_ri and ck_rs.
+#   lm()                              no chick
+#   lmer( ... + (1 | chick))          random intercept
+#   lmer( ... + (1 + time | chick))   random slope
+# Then Anova(ck_lm, type = 3), anova(ck_ri), anova(ck_rs).
+
+invisible(NULL)
+
+# THINK: denominator df for time:diet in each. Which one is
+# close to the number of chicks?
+
+# YOUR CODE: VarCorr(ck_rs), then
+# emtrends(ck_rs, ~ diet, var = "time").
+
+invisible(NULL)
+
+# THINK: the SD in the time row is grams per day. What does
+# it say about chicks on the SAME diet?
+
+
+# ---- 10 A treatment blocked by stream --------------------
+# SIMULATED data. 3 streams; in each a reference reach, a
+# crack willow reach, and a reach where willow was removed.
+# 15 samples per reach. Built-in truth: willow = 30% fewer.
+
+w_df <- read_csv("data/willow_streams_simulated.csv") %>%
+  mutate(
+    reach = factor(reach, levels = c("reference", "willow", "removed")),
+    stream = factor(stream),
+    log_insects = log(insects)
+  )
+
+w_means <- w_df %>%
+  group_by(stream, reach) %>%
+  summarise(log_insects = mean(log_insects), .groups = "drop")
+
+ggplot(w_df, aes(x = reach, y = log_insects)) +
+  geom_point() +
+  geom_line(data = w_means, aes(group = stream)) +
+  facet_wrap(~ stream)
+
+invisible(NULL)
+
+# THINK: what was the treatment applied to? How many of
+# each kind are there?
+
+# YOUR CODE: log_insects three ways, then anova() on each.
+# Name them w_naive, w_fixed and w_mixed.
+#   lm( ~ reach)
+#   lm( ~ reach * stream)
+#   lmer( ~ reach + (1 | stream) + (1 | stream:reach))
+# Add control = lmerControl(calc.derivs = FALSE) to the lmer.
+
+invisible(NULL)
+
+# THINK: which term makes w_mixed right and the other two
+# wrong?
+
+# YOUR CODE: stream as a FIXED block, and the old way on
+# the 9 reach means. anova() on both.
+#   w_block: lmer( ~ reach + stream + (1 | stream:reach))
+#   w_rcb:   lm( ~ reach + stream, data = w_means)
+
+invisible(NULL)
+
+# THINK: did fixed-or-random stream change the reach test?
+# With 3 streams, which would you report?
 
 
 # ==========================================================

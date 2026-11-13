@@ -3,7 +3,7 @@ metadata-files:
   - ../../_templates/_lectures.yml
 title: "Lecture: Linear Mixed Models"
 subtitle: "Random effects for nested and hierarchical data"
-description: "The modern mixed-model (lmer) alternative to a traditional nested ANOVA: how REML estimates variance components instead of partitioning sums of squares, F vs. Chi-square denominator df, the ICC and partial pooling, diagnostics and post-hoc comparisons — on the sea urchin grazing / algae cover dataset."
+description: "The modern mixed-model (lmer) alternative to a traditional nested ANOVA: how REML estimates variance components instead of partitioning sums of squares, F vs. Chi-square denominator df, the ICC and partial pooling, diagnostics and post-hoc comparisons — on the sea urchin grazing / algae cover dataset. Then the Sargent & Lodge crayfish return: the same lake factor fitted fixed and random, summary() read line by line, and random intercepts vs random slopes as the interaction in disguise. Finally two designs students run themselves: chick growth through time (random slopes per animal) and a simulated stream experiment blocked by stream."
 categories: [ANOVA, Mixed Models]
 order: 16
 week: 11
@@ -89,7 +89,10 @@ And from the ANOVA weeks — **factorial designs**:
 - Estimated marginal means, and simple effects
 
 Today the second factor is **not** crossed with the first, and we do not
-care about its levels at all.
+care about its levels at all. In Part 7 the **crayfish come back**, and
+`lake` gets fitted both ways. Part 8 adds the two designs you are most
+likely to run yourself: **animals followed through time**, and
+**treatments blocked by stream**.
 ::::
 
 ::: {.column width="42%"}
@@ -193,6 +196,59 @@ subsamples.
 :::
 :::::
 
+## Three Levels in One Picture
+
+::::: columns
+::: {.column width="60%"}
+```{r lmm-levels-01}
+#| echo: false
+#| message: false
+#| warning: false
+#| fig-width: 5.4
+#| fig-height: 3.5
+#| fig-alt: "Algae cover plotted for each of the sixteen patches, grouped into four panels by urchin density. Grey dots are the eighty quadrats, blue diamonds are the sixteen patch means, and an orange horizontal line in each panel is the treatment mean. Patch means scatter widely around their treatment line."
+lv_patch <- u_df %>%
+  group_by(treat, patch) %>%
+  summarise(patch_mean = mean(algae), .groups = "drop")
+
+lv_treat <- lv_patch %>%
+  group_by(treat) %>%
+  summarise(treat_mean = mean(patch_mean), .groups = "drop")
+
+ggplot(u_df, aes(patch, algae)) +
+  geom_point(colour = "grey55", alpha = 0.7, size = 1.2,
+             position = position_jitter(width = 0.12, height = 0, seed = 1)) +
+  geom_point(data = lv_patch, aes(y = patch_mean),
+             colour = "#0072B2", size = 3, shape = 18) +
+  geom_hline(data = lv_treat, aes(yintercept = treat_mean),
+             colour = "#D55E00", linewidth = 0.9) +
+  facet_grid(. ~ treat, scales = "free_x", switch = "x") +
+  labs(x = "Patch, grouped by urchin density", y = "Algae cover (%)") +
+  theme_classic(base_size = 10) +
+  theme(strip.background = element_blank(),
+        strip.text = element_text(face = "bold"))
+```
+:::
+
+::: {.column width="40%"}
+Every quadrat's algae cover is three things added together:
+
+1. its **treatment mean** — the [orange line]{style="color:#D55E00"}
+2. how far its **patch** sits from that line — orange to
+   [blue diamond]{style="color:#0072B2"}
+3. how far the **quadrat** sits from its patch — diamond to grey dot
+
+::: callout-important
+**That sentence is the whole model**
+
+Everything today is about pieces 2 and 3: **how big each kind of
+scatter is**, and which one the treatment has to beat.
+
+The treatment was applied to patches, so it has to beat piece 2.
+:::
+:::
+:::::
+
 ## Pseudoreplication, Priced {.tight-code}
 
 ::::: columns
@@ -235,6 +291,66 @@ aov(algae ~ treat + Error(patch), data = u_df)
 ```
 
 **That is what the rest of this lecture replaces.**
+:::
+:::::
+
+## What If Urchins Did Nothing at All?
+
+::::: columns
+::: {.column width="58%"}
+```{r lmm-sim-01}
+#| echo: false
+#| message: false
+#| warning: false
+#| fig-width: 5.2
+#| fig-height: 3.3
+#| fig-alt: "Two histograms of p-values from one thousand simulated experiments with no treatment effect. Ignoring patch, the leftmost bar below 0.05 holds about half of all experiments. With the mixed model the histogram is flat and the bar below 0.05 holds about five percent."
+set.seed(2026)
+sim_reef <- function() {
+  d <- expand_grid(treat = factor(1:4), p = 1:4, q = 1:5) %>%
+    mutate(patch = interaction(treat, p))
+  d$y <- 30 + rnorm(16, 0, 17)[as.integer(d$patch)] + rnorm(80, 0, 17)
+  c(naive = anova(lm(y ~ treat, data = d))[1, "Pr(>F)"],
+    mixed = suppressMessages(suppressWarnings(
+      anova(lmer(y ~ treat + (1 | patch), data = d))[1, "Pr(>F)"])))
+}
+sim_p  <- as_tibble(t(replicate(1000, sim_reef())))
+sim_fp <- round(100 * colMeans(sim_p < 0.05))
+
+sim_p %>%
+  pivot_longer(everything(), names_to = "model", values_to = "p") %>%
+  mutate(model = if_else(
+    model == "naive",
+    paste0("Ignore patch: ", sim_fp["naive"], "% false alarms"),
+    paste0("Mixed model: ", sim_fp["mixed"], "% false alarms"))) %>%
+  ggplot(aes(p)) +
+  geom_histogram(aes(fill = p < 0.05), breaks = seq(0, 1, 0.05),
+                 colour = "white") +
+  scale_fill_manual(values = c("grey70", "#D55E00"), guide = "none") +
+  facet_wrap(~ model) +
+  labs(x = "p-value for treatment", y = "Simulated experiments") +
+  theme_classic(base_size = 10) +
+  theme(strip.background = element_blank(),
+        strip.text = element_text(face = "bold"))
+```
+:::
+
+::: {.column width="42%"}
+1000 made-up reefs, laid out like the real one — 4 treatments, 4
+patches each, 5 quadrats each, and the same patch and quadrat scatter
+as the real data. **The treatment does nothing in any of them.**
+
+A fair test cries wolf 5% of the time.
+
+::: callout-important
+**Ignoring patch cries wolf about half the time**
+
+With no effect at all, four treatment means still differ — each is an
+average of only **4 patches**, and patches differ a lot. Judge that
+against quadrat noise and it looks far too big to be chance.
+:::
+
+The mixed model in the right panel is what Parts 2–6 build.
 :::
 :::::
 
@@ -437,7 +553,8 @@ about patch 7 in particular. **Random.**
 Estimating a variance from **fewer than ~5 levels** is unreliable. With
 2 or 3 groups, fit them as fixed effects instead.
 
-We have 16 patches — comfortably enough.
+We have 16 patches — comfortably enough. Parts 7 and 8 use **3 lakes**
+and **3 streams**, and show what that costs.
 :::
 ::::
 :::::::
@@ -454,9 +571,9 @@ $$(\ \text{what varies}\ \mid\ \text{across what}\ )$$
   own baseline algae cover.
 - **`(1|treat:patch)`** — the same thing, just naming the group as the
   treatment-patch combination. Still intercept-only.
-- **`(1 + depth|patch)`** — *this* is a random **slope**: each patch gets
-  its own intercept **and** its own slope for `depth`. (There is no
-  `depth` in this dataset — it is what one would look like.)
+- **`(1 + range|lake)`** — *this* is a random **slope**: each lake gets
+  its own intercept **and** its own `range` effect. Part 7 fits it on
+  the crayfish, where it turns out to be the interaction in disguise.
 :::
 
 ::: {.column width="48%"}
@@ -1012,6 +1129,10 @@ round(c(among_patches  = v_patch,
         ICC = v_patch / (v_patch + v_resid)), 3)
 ```
 
+Take square roots to get units you can picture: two patches given the
+**same** treatment typically differ by **17 points of cover**, and so do
+two quadrats in one patch.
+
 The **ICC** is the share of variance living *between* groups —
 equivalently, **how strongly two quadrats in the same patch resemble
 each other**.
@@ -1039,6 +1160,49 @@ told you that.
 :::
 ::::
 :::::::
+
+## Price the Next Experiment {.tight-code}
+
+::::: columns
+::: {.column width="55%"}
+The two variances give the standard error of a treatment mean for
+**any** design, before you get wet:
+
+$$SE = \sqrt{\frac{\sigma^2_{patch}}{\text{patches}} + \frac{\sigma^2_{within}}{\text{patches} \times \text{quadrats}}}$$
+
+```{r lmm-design-01}
+#| echo: true
+#| message: false
+#| warning: false
+#| collapse: true
+se_mean <- function(patches, quads) {
+  sqrt(v_patch / patches + v_resid / (patches * quads))
+}
+
+round(c(done_4x5    = se_mean(4, 5),
+        quads_4x20  = se_mean(4, 20),
+        patch_8x5   = se_mean(8, 5)), 2)
+```
+:::
+
+::: {.column width="45%"}
+::: callout-important
+**More quadrats: 9.41 → 8.79. More patches: 9.41 → 6.65.**
+
+Four times the quadrat work buys almost nothing. Twice the patches —
+with *half* that work — buys a lot. With 4 patches you can never get
+below $\sqrt{294.3 / 4}$ = 8.58, however many quadrats you count.
+:::
+
+::: callout-note
+**📖 This is what *p* = 0.091 meant**
+
+**83%** of the uncertainty in a treatment mean came from having only
+four patches. The experiment was not short of data. It was short of
+**patches**.
+:::
+:::
+:::::
 
 ## Partial Pooling — What Happens to Each Patch
 
@@ -1473,7 +1637,829 @@ it is why the red intervals are so wide.
 :::
 :::::
 
-## Part 7 · Wrap-Up {.divider}
+## Part 7 · The Same Factor, Fixed or Random — the Crayfish {.divider}
+
+## Back to the Crayfish {.tight-code}
+
+```{r lmm-cray-01}
+#| echo: false
+#| message: false
+#| warning: false
+cray_df <- read_csv("data/sargent_lodge_crayfish.csv",
+                    show_col_types = FALSE) %>%
+  clean_names() %>%
+  mutate(range = factor(range, levels = c("Native", "Invasive")),
+         lake  = factor(lake,  levels = c("Big", "High", "Papoose")))
+
+cray_cells <- cray_df %>%
+  group_by(lake, range) %>%
+  summarise(n = n(), mean = mean(growth_per_day), .groups = "drop")
+
+cray_fixed <- lm(growth_per_day ~ range * lake, data = cray_df)
+cray_add   <- lm(growth_per_day ~ range + lake, data = cray_df)
+cray_ri    <- lmer(growth_per_day ~ range + (1 | lake), data = cray_df)
+cray_rs    <- lmer(growth_per_day ~ range + (1 | lake) + (1 | lake:range),
+                   data = cray_df)
+```
+
+::::: columns
+::: {.column width="50%"}
+Sargent & Lodge (2014). Young-of-year rusty crayfish from the **Native**
+(Ohio) and **Invasive** (Wisconsin) range, grown in enclosures in three
+Wisconsin lakes. Response: `growth_per_day` (mm/day).
+
+In the factorial weeks `lake` was a **fixed** factor, and the
+two-way ANOVA said:
+
+```{r lmm-cray-02}
+#| echo: true
+#| collapse: true
+Anova(cray_fixed, type = 3)[2:4, ]
+```
+:::
+
+::: {.column width="50%"}
+```{r lmm-cray-03}
+#| echo: false
+#| collapse: true
+cray_cells %>%
+  dplyr::select(-n) %>%
+  pivot_wider(names_from = range, values_from = mean) %>%
+  mutate(advantage = Invasive - Native) %>%
+  mutate(across(where(is.numeric), \(x) round(x, 3)))
+```
+
+::: callout-important
+**The result you already know**
+
+Invasive crayfish grew **+0.070** mm/day faster in Big, **+0.072** in
+High, and **−0.003** in Papoose. The interaction (*p* = 0.000017) *is*
+the finding: the advantage is real in two lakes and absent in the third.
+
+Hold on to that. Today's question is what happens to it when `lake`
+becomes random.
+:::
+:::
+:::::
+
+## Fixed Lake or Random Lake? Two Different Questions
+
+::::::: columns
+:::: {.column width="58%"}
+::: {.compact-table}
+| | `lake` **fixed** (factorial weeks) | `lake` **random** (today) |
+|------------------|------------------------|------------------------|
+| The question | do **Big, High, Papoose** differ? | how much do **lakes** vary? |
+| What R estimates | a mean for each lake (2 parameters) | one variance, σ²~lake~ (1 parameter) |
+| Post-hoc | Tukey: Big vs Papoose, etc. | **none** — no levels to compare |
+| Inference is about | **these three lakes** | lakes **in general**, these three being a sample |
+| The interaction | `range:lake`, 2 df, tested | **gone** unless you ask for it (two slides on) |
+| `lake` gets a | *p*-value | **variance** and a **standard deviation** |
+:::
+
+Neither is "the correct model". They answer different questions, and
+the right one is whichever matches the question you would write in the
+Discussion.
+::::
+
+:::: {.column width="42%"}
+::: callout-tip
+**🖐 Which did the authors mean?**
+
+Sargent & Lodge did not care whether Big Lake differs from High Lake.
+They wanted to know whether the invasive-range advantage holds in
+Wisconsin lakes **generally** — that is a random-effect question.
+
+The catch: they only had **three** lakes. Keep that number in view for
+the rest of this part.
+:::
+
+::: callout-note
+**📖 Same data, same `options()`**
+
+`contr.sum` is still set from the start of the lecture, so every
+coefficient reads the same way it did in the factorial weeks.
+:::
+::::
+:::::::
+
+## `summary()` Line by Line — the Top Half {.tight-code}
+
+::::: columns
+::: {.column width="48%"}
+```{r lmm-cray-04}
+#| echo: true
+#| collapse: true
+cray_ri <- lmer(
+  growth_per_day ~ range + (1 | lake),
+  data = cray_df)
+
+summary(cray_ri)
+```
+:::
+
+::: {.column width="52%"}
+- **`fit by REML`** — the variances came from the restricted likelihood
+  of Part 4, not from a sums-of-squares table. **`Satterthwaite's
+  method`** is how the *t*-test df below were approximated.
+- **`REML criterion at convergence: −297.6`** — minus twice the
+  restricted log-likelihood at the peak. It is not an *R*². Lower is
+  better, and it is only comparable between models with the **same
+  fixed effects**.
+- **`Scaled residuals`** — residuals divided by the residual SD. Centred
+  near 0, roughly symmetric; the **Max of 3.64** is the one crayfish
+  that grew from 9 to 40 mm — the factorial weeks' outlier, still here.
+- **`Random effects`** — the new block. Two rows, no *p*-values: see the
+  next slide.
+- **`Number of obs: 84, groups: lake, 3`** — the replication for
+  anything that varies **between** lakes is 3, not 84.
+:::
+:::::
+
+## `summary()` Line by Line — the Bottom Half {.tight-code}
+
+::::: columns
+::: {.column width="48%"}
+```{r lmm-cray-05}
+#| echo: true
+#| collapse: true
+print(VarCorr(cray_ri),
+      comp = c("Variance", "Std.Dev."))
+
+round(coef(summary(cray_ri)), 4)
+```
+
+```{r lmm-cray-06}
+#| echo: true
+#| collapse: true
+emmeans(cray_ri, pairwise ~ range)$contrasts
+```
+:::
+
+::: {.column width="52%"}
+**Random effects.** `lake (Intercept)` Variance **0.00396**, Std.Dev.
+**0.063**; `Residual` Variance 0.00125, Std.Dev. 0.035. Read the SDs —
+they are in **mm/day**: lakes typically sit ±0.063 from the average
+lake, and crayfish within a lake scatter ±0.035. ICC =
+0.00396 / (0.00396 + 0.00125) = **0.76**. There is **no *F*, no df, no
+*p*** on this row: `lake` is *described*, not tested.
+
+**`(Intercept)` 0.2529.** Under `contr.sum`, the mean of the two range
+means — not the mean of the 84 crayfish (0.255). Its df is **2.0** and
+its SE 0.037 is enormous: where "the average lake" sits is known only
+from three lakes.
+
+**`range1` −0.0215.** Native's distance from that centre; Invasive sits
++0.0215 the other side, so **Invasive − Native = 0.043 mm/day** — the
+contrast confirms it. Its df is **80**: `range` varies *within* every
+lake, so every crayfish counts (84 − 1 − 3 = 80).
+
+**`Correlation of Fixed Effects`.** Between the *estimates*, not the
+data. Ignore it unless it is near ±1.
+:::
+:::::
+
+## Three Models, One Row Each {.tight-code}
+
+::::: columns
+::: {.column width="50%"}
+```{r lmm-cray-07}
+#| echo: true
+#| collapse: true
+a_int <- Anova(cray_fixed, type = 3)["range", ]
+a_add <- Anova(cray_add,   type = 3)["range", ]
+a_ri  <- Anova(cray_ri, type = 3,
+               test.statistic = "F")["range", ]
+
+tibble(
+  model = c("range * lake, fixed",
+            "range + lake, fixed",
+            "range + (1 | lake)"),
+  F     = c(a_int$`F value`, a_add$`F value`, a_ri$F),
+  df2   = c(df.residual(cray_fixed),
+            df.residual(cray_add), a_ri$Df.res),
+  p     = c(a_int$`Pr(>F)`, a_add$`Pr(>F)`,
+            a_ri$`Pr(>F)`))
+```
+:::
+
+::: {.column width="50%"}
+::: callout-important
+**The random intercept changed nothing about `range`**
+
+The additive fixed model and the random-intercept model give
+***F* = 27.6 on 1 and 80 df** — the same test, to the second decimal.
+Making `lake` random did not buy a better *p*-value. It changed **how
+`lake` is reported** (one variance instead of two means) and **what you
+may generalise to**.
+:::
+
+::: callout-warning
+**⚠️ And it quietly dropped a row**
+
+The top model has an interaction. The other two do not. The
+random-intercept model is **the additive model** — it assumes the
+invasive advantage is the same in every lake.
+
+The factorial weeks showed that assumption is **false** (*p* =
+0.000017).
+:::
+:::
+:::::
+
+## Where Did the Interaction Go?
+
+::::::: columns
+:::: {.column width="55%"}
+```{r lmm-cray-08}
+#| echo: false
+#| message: false
+#| warning: false
+#| fig-width: 5.4
+#| fig-height: 3.9
+#| fig-alt: "Two panels of growth per day against range with one line per lake. Left, random intercept only: three parallel lines. Right, random intercept and slope: Big and High rise steeply while Papoose is flat. Observed cell means are overlaid as points in both panels."
+nd <- expand.grid(range = levels(cray_df$range),
+                  lake  = levels(cray_df$lake))
+nd$`(1 | lake)`               <- predict(cray_ri, newdata = nd)
+nd$`(1 | lake) + (1 | lake:range)` <- predict(cray_rs, newdata = nd)
+
+nd %>%
+  pivot_longer(-c(range, lake), names_to = "model", values_to = "fit") %>%
+  mutate(model = factor(model, c("(1 | lake)",
+                                 "(1 | lake) + (1 | lake:range)"))) %>%
+  ggplot(aes(range, fit, group = lake, color = lake)) +
+  geom_line(linewidth = 0.9) +
+  geom_point(data = cray_cells %>%
+               tidyr::crossing(model = factor(c("(1 | lake)",
+                                 "(1 | lake) + (1 | lake:range)"))),
+             aes(y = mean), shape = 1, size = 2.2) +
+  facet_wrap(~ model) +
+  labs(x = NULL, y = "Growth (mm/day)", color = "Lake") +
+  theme_minimal(base_size = 9) +
+  theme(legend.position = "bottom")
+```
+
+Open circles are the observed cell means. The left model cannot reach
+Papoose's two points: it is only allowed to move each lake **up or
+down**, so the invasive advantage is forced to be the same everywhere.
+::::
+
+:::: {.column width="45%"}
+::: callout-important
+**`(1 | lake)` = parallel lines**
+
+A random **intercept** gives every lake its own baseline and **nothing
+else**. That is exactly "no interaction".
+:::
+
+::: callout-warning
+**⚠️ Pseudoreplication, in a new costume**
+
+The thing we want to generalise is *the invasive advantage in a lake*.
+That is observed **three times**. Yet the random-intercept model tests
+`range` on **80 df**, as if every crayfish were an independent
+replicate of it — the same mistake Part 1 priced at *F* = 16.11 instead
+of 2.72.
+:::
+::::
+:::::::
+
+## Random Intercepts *and* Random Slopes {.tight-code}
+
+::::: columns
+::: {.column width="50%"}
+```{r lmm-cray-09}
+#| echo: true
+#| collapse: true
+cray_rs <- lmer(
+  growth_per_day ~ range +
+    (1 | lake) + (1 | lake:range),
+  data = cray_df)
+
+VarCorr(cray_rs)
+
+Anova(cray_rs, type = 3,
+      test.statistic = "F")["range", ]
+
+emmeans(cray_rs, pairwise ~ range)$contrasts
+```
+:::
+
+::: {.column width="50%"}
+`(1 | lake:range)` gives **each lake its own range effect** — a random
+*slope* for `range`, spelled as a random intercept on the six
+lake-by-range cells. The right-hand panel of the previous slide.
+
+- **`lake:range` SD 0.030 mm/day** — how much the invasive advantage
+  wobbles from lake to lake. The interaction row, as a variance.
+- ***F*~1,2~ = 3.3, *p* = 0.21.** The estimate is still **0.046**, but
+  the SE went from 0.008 to **0.025** and the df from 80 to **2**.
+
+::: callout-important
+**The yardstick changed**
+
+`range` is now tested against **lake-to-lake disagreement about the
+advantage**, on 3 − 1 = 2 df. One lake in three dissents, so the
+advantage is not reliably general. That is the honest answer to the
+general question.
+:::
+:::
+:::::
+
+## The Other Spelling: `(1 + range | lake)` {.tight-code}
+
+::::: columns
+::: {.column width="50%"}
+```{r lmm-cray-10}
+#| echo: true
+#| collapse: true
+#| warning: true
+cray_rs_corr <- lmer(
+  growth_per_day ~ range + (1 + range | lake),
+  data = cray_df)
+
+VarCorr(cray_rs_corr)
+
+Anova(cray_rs_corr, type = 3,
+      test.statistic = "F")["range", ]
+```
+:::
+
+::: {.column width="50%"}
+This is the textbook random-slope formula, and it is the same idea with
+one extra parameter: the **correlation** between a lake's intercept and
+its slope (do high-growth lakes also show a bigger advantage?).
+
+- Same ***F* ≈ 3.2 on 2 df, *p* ≈ 0.22** — the conclusion does not move.
+- But the correlation is **−1.00** and R warns **`boundary (singular)
+  fit`**. Three lakes cannot estimate a correlation; the optimiser hit
+  the edge, exactly as in Part 4.
+
+::: callout-tip
+**🖐 The rule**
+
+Reach for `(1 + x | g)` when `x` is **continuous** or you have many
+groups. For a factor with few groups, `(1 | g) + (1 | g:x)` asks the
+same question with one fewer parameter and no singular fit. The
+[Mixed Model Structures](../../vignettes/22_mixed_models_vignette/mixed_model_structures.qmd)
+page works through both.
+:::
+:::
+:::::
+
+## Which Analysis Is Right? Whichever Matches the Question
+
+::: {.compact-table}
++----------------------------------+------------------+------------------------------------------------------------+
+| Model                            | `range` *p*      | What you may write in the Discussion                       |
++==================================+==================+============================================================+
+| `range * lake`, all fixed        | < 0.0001, **but  | "In Big and High Lake invasive crayfish grew ~0.07 mm/day  |
+|                                  | the interaction  | faster; in Papoose they did not." Strong, specific, true — |
+|                                  | rules**          | **about these three lakes.**                               |
++----------------------------------+------------------+------------------------------------------------------------+
+| `range + (1 | lake)`             | 0.000001         | "Invasive crayfish grow faster in lakes generally" —       |
+|                                  |                  | **only by assuming the advantage is the same in every      |
+|                                  |                  | lake**, which the data contradict. Do not write this.      |
++----------------------------------+------------------+------------------------------------------------------------+
+| `range + (1 | lake) +`           | 0.21             | "Across lakes generally, we cannot say the advantage       |
+| `(1 | lake:range)`               |                  | holds: it appeared in two of three lakes." Honest, weak —  |
+|                                  |                  | because **three lakes is three replicates.**               |
++----------------------------------+------------------+------------------------------------------------------------+
+:::
+
+::::: columns
+::: {.column width="50%"}
+::: callout-important
+**The advantage of the mixed model is not a smaller *p***
+
+It is that it makes you **say what you are generalising to**, and then
+prices it. The fixed model answers the within-study question perfectly.
+The random-slope model answers the general question honestly: *not yet
+known*.
+:::
+:::
+
+::: {.column width="50%"}
+::: callout-warning
+**⚠️ What "three levels is too few" looks like**
+
+`confint(cray_ri)` puts σ~lake~ between **0.027 and 0.152** — a
+six-fold range. The variance you are reporting is barely estimated.
+With 16 patches (Parts 1–6) the random effect was the right tool. With
+3 lakes it is a demonstration, and the fixed model is the one to report.
+:::
+:::
+:::::
+
+## Part 7 — The Short Version
+
+::::: columns
+::: {.column width="55%"}
+1. A fixed factor gives you **its levels**; a random factor gives you
+   **a variance**. Choose by the question, not by the data.
+2. `(1 | g)` is **parallel lines** — a random intercept assumes the
+   treatment effect is identical in every group. That is the additive
+   model, and it tests the treatment on within-group df.
+3. A random **slope** — `(1 | g) + (1 | g:x)` or `(1 + x | g)` — lets
+   the treatment effect vary by group. It is the interaction, as a
+   variance, and it tests the treatment on **group** df.
+4. Few groups → the variance is poorly estimated, the random slope has
+   almost no df, and `(1 + x | g)` goes singular. **Below ~5 levels,
+   fit the factor as fixed** and say the generalisation rests on *k*
+   groups.
+:::
+
+::: {.column width="45%"}
+::: callout-note
+**📖 In one sentence**
+
+The mixed model did not change the crayfish result. It changed **who
+the result is about** — and showed that the general claim is carried by
+three lakes, two of which agree.
+:::
+:::
+:::::
+
+## Part 8 · Two Designs You Will Actually Run {.divider}
+
+## Animals Followed Through Time — Chick Growth
+
+::::: columns
+::: {.column width="56%"}
+```{r lmm-chick-01}
+#| echo: false
+#| message: false
+#| warning: false
+#| fig-width: 5.2
+#| fig-height: 3.4
+#| fig-alt: "Body weight against age in days for fifty chicks, one line per chick, in four panels by diet. Lines start close together near forty grams and fan out with age; diet 3 chicks reach the highest weights."
+ck_df <- as_tibble(ChickWeight) %>%
+  clean_names() %>%
+  mutate(chick = factor(chick, ordered = FALSE))
+
+ggplot(ck_df, aes(time, weight, group = chick)) +
+  geom_line(colour = "#0072B2", alpha = 0.6) +
+  facet_wrap(~ diet, nrow = 1, labeller = label_both) +
+  labs(x = "Age (days)", y = "Body weight (g)") +
+  theme_classic(base_size = 10) +
+  theme(strip.background = element_blank(),
+        strip.text = element_text(face = "bold"))
+```
+
+`ChickWeight` ships with R: **50 chicks** on **4 diets**, each weighed
+up to **12 times** over 21 days — 578 weighings.
+:::
+
+::: {.column width="44%"}
+Same structure as the urchins, turned on its side:
+
+::: {.compact-table}
+| Urchins | Chicks |
+|------------------|------------------|
+| treatment → patch | diet → chick |
+| 5 quadrats per patch | 12 weighings per chick |
+| 16 patches | 50 chicks |
+:::
+
+The diet was given to the **chick**. Twelve weighings of one chick are
+not twelve chicks.
+
+::: callout-note
+**📖 What is new**
+
+Time is a predictor **inside** each chick, so each chick has its own
+**line** — its own starting weight and its own growth rate. That is a
+random intercept **and** a random slope:
+
+`weight ~ time * diet + (1 + time | chick)`
+:::
+:::
+:::::
+
+## Each Chick Gets Its Own Growth Line {.tight-code}
+
+::::: columns
+::: {.column width="54%"}
+The question is `time:diet` — **do chicks grow at different rates on
+different diets?**
+
+```{r lmm-chick-02}
+#| echo: true
+#| message: false
+#| warning: false
+#| collapse: true
+ck_lm <- lm(weight ~ time * diet, data = ck_df)
+ck_ri <- lmer(weight ~ time * diet + (1 | chick),
+              data = ck_df)
+ck_rs <- lmer(weight ~ time * diet + (1 + time | chick),
+              data = ck_df)
+```
+
+```{r lmm-chick-03}
+#| echo: false
+#| message: false
+#| warning: false
+#| collapse: true
+a_lm <- car::Anova(ck_lm, type = 3)
+a_ri <- anova(ck_ri)
+a_rs <- anova(ck_rs)
+
+data.frame(
+  model   = c("lm, no chick", "(1 | chick)", "(1 + time | chick)"),
+  F_value = round(c(a_lm["time:diet", "F value"],
+                    a_ri["time:diet", "F value"],
+                    a_rs["time:diet", "F value"]), 1),
+  den_df  = round(c(a_lm["Residuals", "Df"],
+                    a_ri["time:diet", "DenDF"],
+                    a_rs["time:diet", "DenDF"])))
+```
+:::
+
+::: {.column width="46%"}
+::: callout-important
+**570 → 527 → 46**
+
+Only the last row knows there are **50 chicks**. The first two test a
+growth-rate difference against the wobble of single weighings.
+
+Growth rate belongs to a chick, so it must be tested against
+**chick-to-chick variation in growth rate**. Diet still matters
+(*p* = 0.002) — on honest df.
+:::
+
+::: callout-warning
+**⚠️ The random intercept made it worse**
+
+`(1 | chick)` gave the **largest** *F*. It removed the differences
+between chicks from the noise, while still assuming every chick on a
+diet grows at the same rate.
+
+If the effect of a predictor can differ among your animals, it needs
+the **random slope**.
+:::
+:::
+:::::
+
+## What the Chick Model Says {.tight-code}
+
+::::: columns
+::: {.column width="52%"}
+```{r lmm-chick-04}
+#| echo: true
+#| message: false
+#| warning: false
+#| collapse: true
+VarCorr(ck_rs)
+
+emtrends(ck_rs, ~ diet, var = "time") %>%
+  as.data.frame() %>%
+  dplyr::select(diet, time.trend, SE, df) %>%
+  mutate(across(where(is.numeric), \(x) round(x, 2)))
+```
+:::
+
+::: {.column width="48%"}
+Read the random effects as biology:
+
+- **`time` SD 3.3** — chicks on the *same* diet differ in growth rate
+  by about 3.3 g/day. Against a mean of 6–11 g/day, individuals vary a
+  lot.
+- **Residual 12.8** — one weighing sits about 13 g off that chick's own
+  line.
+- **Corr −0.98** — do not interpret it. Growth curves upward, so a
+  straight line through a fast grower starts too low.
+
+::: callout-note
+**📖 `emtrends()` is `emmeans()` for slopes**
+
+Growth is **6.3 g/day** on diet 1 and **11.4** on diet 3. Each SE rests
+on about 45 df — the chicks.
+:::
+
+**Your own time series** — tagged fish, resurveyed plots, repeat blood
+samples — is the same model: `(1 + time | id)`.
+:::
+:::::
+
+## A Treatment Blocked by Stream
+
+::::: columns
+::: {.column width="55%"}
+```{r lmm-stream-01}
+#| echo: false
+#| message: false
+#| warning: false
+#| fig-width: 5.2
+#| fig-height: 3.5
+#| fig-alt: "Insects per sample on a log scale for three reach types, reference, willow and removed, in three panels, one per stream. Grey dots are the fifteen samples in each reach and blue diamonds joined by a line are the nine reach means. All three streams drop from reference to willow, but the streams sit at different overall levels."
+w_df <- read_csv("data/willow_streams_simulated.csv",
+                 show_col_types = FALSE) %>%
+  mutate(reach  = factor(reach, levels = c("reference", "willow", "removed")),
+         stream = factor(stream),
+         log_insects = log(insects))
+
+w_means <- w_df %>%
+  group_by(stream, reach) %>%
+  summarise(log_insects = mean(log_insects), .groups = "drop")
+
+ggplot(w_df, aes(reach, log_insects)) +
+  geom_point(colour = "grey55", alpha = 0.6, size = 1,
+             position = position_jitter(width = 0.12, height = 0, seed = 1)) +
+  geom_line(data = w_means, aes(group = stream), colour = "#0072B2") +
+  geom_point(data = w_means, colour = "#0072B2", size = 3, shape = 18) +
+  facet_wrap(~ stream, labeller = label_both) +
+  labs(x = NULL, y = "log(insects per sample)") +
+  theme_classic(base_size = 10) +
+  theme(strip.background = element_blank(),
+        strip.text = element_text(face = "bold"),
+        axis.text.x = element_text(angle = 30, hjust = 1))
+```
+:::
+
+::: {.column width="45%"}
+**3 streams.** In each: a **reference** reach, a reach with **crack
+willow**, and a reach where willow was **removed**. **15 benthic
+samples** per reach — 135 in all.
+
+::: callout-warning
+**⚠️ These data are simulated**
+
+The layout is a real student project; the numbers are invented, so we
+know the truth: willow cuts insects by 30%.
+:::
+
+::: callout-important
+**Ask the giveaway question again**
+
+*What was the treatment applied to?* A **reach**. There are **9**
+reaches — the blue diamonds — and only **3 of each kind**, one per
+stream.
+
+The 15 samples are the quadrats. The stream is a **block**.
+:::
+:::
+:::::
+
+## Three Analyses of the Same 135 Samples {.tight-code}
+
+::::: columns
+::: {.column width="55%"}
+```{r lmm-stream-02}
+#| echo: true
+#| message: false
+#| warning: false
+#| collapse: true
+w_naive <- lm(log_insects ~ reach, data = w_df)
+w_fixed <- lm(log_insects ~ reach * stream, data = w_df)
+w_mixed <- lmer(
+  log_insects ~ reach + (1 | stream) + (1 | stream:reach),
+  data = w_df,
+  control = lmerControl(calc.derivs = FALSE))
+```
+
+```{r lmm-stream-03}
+#| echo: false
+#| message: false
+#| warning: false
+#| collapse: true
+w_a1 <- anova(w_naive)
+w_a2 <- anova(w_fixed)
+w_a3 <- anova(w_mixed)
+
+data.frame(
+  model   = c("reach only", "reach * stream, fixed", "mixed"),
+  F_value = round(c(w_a1["reach", "F value"], w_a2["reach", "F value"],
+                    w_a3["reach", "F value"]), 2),
+  den_df  = round(c(w_a1["Residuals", "Df"], w_a2["Residuals", "Df"],
+                    w_a3["reach", "DenDF"])),
+  p       = format.pval(c(w_a1["reach", "Pr(>F)"], w_a2["reach", "Pr(>F)"],
+                          w_a3["reach", "Pr(>F)"]), digits = 1, eps = 0.0001))
+```
+
+**The effect was real.** We built in a 30% drop and got *p* = 0.10.
+Three streams is three replicates; more samples per reach would not
+have helped.
+:::
+
+::: {.column width="45%"}
+::: callout-important
+**4 denominator df, not 132**
+
+`(1 | stream:reach)` gives each of the 9 reaches its own offset — it is
+the urchin `(1 | patch)`. `(1 | stream)` is the block.
+
+Reach is then tested against how much the willow effect **changes from
+stream to stream**: (3 − 1) × (3 − 1) = 4 df.
+:::
+
+::: callout-warning
+**⚠️ All-fixed is the worst of the three**
+
+`reach * stream` looks careful, and gives the biggest *F*. It tests
+reach against sample noise, so it only speaks about **these 9 reaches**.
+:::
+:::
+:::::
+
+## Stream: Fixed Block or Random Block? {.tight-code}
+
+::::: columns
+::: {.column width="55%"}
+```{r lmm-stream-04}
+#| echo: true
+#| message: false
+#| warning: false
+#| collapse: true
+# stream as a FIXED block, reach-in-stream still random
+w_block <- lmer(
+  log_insects ~ reach + stream + (1 | stream:reach),
+  data = w_df)
+
+# the 1960s way: collapse to the 9 reach means
+w_rcb <- lm(log_insects ~ reach + stream, data = w_means)
+```
+
+```{r lmm-stream-05}
+#| echo: false
+#| message: false
+#| warning: false
+#| collapse: true
+w_a4 <- anova(w_block)
+w_a5 <- anova(w_rcb)
+
+data.frame(
+  model   = c("stream random", "stream fixed block", "9 reach means"),
+  F_value = round(c(w_a3["reach", "F value"], w_a4["reach", "F value"],
+                    w_a5["reach", "F value"]), 2),
+  den_df  = round(c(w_a3["reach", "DenDF"], w_a4["reach", "DenDF"],
+                    w_a5["Residuals", "Df"])),
+  p       = round(c(w_a3["reach", "Pr(>F)"], w_a4["reach", "Pr(>F)"],
+                    w_a5["reach", "Pr(>F)"]), 3))
+```
+
+Identical. For the **reach** test on a balanced design it does not
+matter whether the block is fixed or random.
+:::
+
+::: {.column width="45%"}
+::: callout-important
+**What is not optional is `(1 | stream:reach)`**
+
+Drop it and the 15 samples become replicates again. Whatever you call
+the stream, the **reach** must be in the model as a random term — or
+you analyse the 9 reach means.
+:::
+
+::: callout-tip
+**🖐 Which to report with 3 streams**
+
+Same answer as the crayfish: **stream as a fixed block**. Three streams
+cannot pin down a variance — `confint()` puts σ~stream~ between 0.08
+and 0.88 — and a random block often comes back as exactly 0 with a
+*singular fit* warning.
+
+With 6 or more streams, make it random and report the variance.
+:::
+:::
+:::::
+
+## Part 8 — The Short Version
+
+::::: columns
+::: {.column width="55%"}
+1. **Repeated measures on an animal** are subsamples of that animal.
+   Put the animal in the random part, and put **time on the left of the
+   bar** if animals can differ in their rate of change.
+2. A random **intercept alone** can make things worse: it shrinks the
+   noise but still treats every measurement as a replicate of the slope.
+3. **Blocked treatments with subsamples** need the experimental unit as
+   a random term — `(1 | stream:reach)` — whatever you do with the
+   block.
+4. Fixed block and random block give the **same treatment test** on a
+   balanced design. With fewer than about 5 blocks, fit the block as
+   **fixed**.
+:::
+
+::: {.column width="45%"}
+::: callout-note
+**📖 In one sentence**
+
+Before fitting anything, ask **what the treatment was applied to** and
+count those. That number, not the number of rows, sets the denominator
+df — and `lmer()` will get it right only if that unit is in the model.
+:::
+
+::: callout-tip
+**🖐 Counts, not logs**
+
+Insect counts really want a Poisson or negative binomial response:
+`glmer.nb(insects ~ reach + stream + (1 | stream:reach))`. Same random
+part; last week's distribution.
+:::
+:::
+:::::
+
+## Part 9 · Wrap-Up {.divider}
 
 ## The `lmer` Formula Cheat-Sheet
 
@@ -1491,8 +2477,8 @@ Read every random term as **`( what varies | across what )`**.
 | `y ~ x + (1|a/b)` | b **nested** in a — shorthand for `(1|a) + (1|a:b)` |
 :::
 
-Random **slopes** and time-series error structures get their own
-reference page:
+Random slopes were Parts 7 and 8; time-series error structures and the full
+set of random-slope spellings get their own reference page:
 [Mixed Model Structures](../../vignettes/22_mixed_models_vignette/mixed_model_structures.qmd).
 
 ::: callout-important
@@ -1535,15 +2521,19 @@ Today you:
 
 - Decided **fixed vs random** by asking whether you care about *these*
   levels or about *how much they vary*
-- Learned a random factor costs **one parameter** where a fixed one
-  costs *k* − 1
-- Read `(1|group)` correctly, and saw it is **not** a random slope
+- Learned a random factor costs **one parameter**, and that
+  `(1|group)` is **not** a random slope
 - Chose between the ***F*-test (*p* = 0.091)** and the **Wald χ²
   (*p* = 0.043)** — and learned why the *F*-test is right at 16 groups
 - Saw **where the variance components come from**: a search over a
   restricted likelihood, not a partition of sums of squares
 - Got **ICC = 0.50**, and saw **partial pooling** shrink each patch
   estimate toward its treatment mean
+- Fitted the crayfish `lake` **fixed and random**, read `summary()`
+  line by line, and saw a random **slope** turn the interaction into a
+  variance — and the `range` test from 80 df to **2**
+- Gave each chick its **own growth line**, and tested a stream
+  treatment against **3 streams**, not 135 samples
 ::::
 
 :::: {.column width="42%"}
@@ -1612,9 +2602,9 @@ which is why the collapsed 8-value analysis is the defensible one.
 ::::::: columns
 :::: {.column width="55%"}
 - **Gotelli & Ellison**, Ch. 10 — The Analysis of Variance, for the random-effects and variance-component material this lecture rebuilds.
-- Hurlbert, S. H. (1984). Pseudoreplication and the design of ecological field experiments. *Ecological Monographs, 54*(2), 187–211. The Part 1 reference, and still worth reading in full.
+- Hurlbert, S. H. (1984). Pseudoreplication and the design of ecological field experiments. *Ecological Monographs, 54*(2), 187–211. The Part 1 reference.
 - **Quinn & Keough** (2002), *Experimental Design and Data Analysis for Biologists*, Ch. 9 §9.1 — nested designs and expected mean squares. This is the source of today's worked example.
-- Zuur, A. F., Ieno, E. N., Walker, N. J., Saveliev, A. A., & Smith, G. M. (2009). *Mixed Effects Models and Extensions in Ecology with R*. Springer. Ch. 5 is the standard ecological treatment of REML.
+- Zuur, A. F., et al. (2009). *Mixed Effects Models and Extensions in Ecology with R*. Springer. Ch. 5 is the standard ecological treatment of REML.
 - Bates, D., Mächler, M., Bolker, B., & Walker, S. (2015). Fitting linear mixed-effects models using lme4. *Journal of Statistical Software*, 67(1), 1–48.
 ::::
 
@@ -1623,7 +2613,10 @@ which is why the collapsed 8-value analysis is the defensible one.
 **📖 On the dataset**
 
 The sea urchin grazing data are Andrew & Underwood's, as analysed in
-Quinn & Keough Ch. 9. The textbook PDFs are on Canvas.
+Quinn & Keough Ch. 9. The Part 7 crayfish are Sargent & Lodge (2014),
+*Evolutionary Applications* 7: 949–961 — the factorial weeks' file.
+`ChickWeight` ships with R (Crowder & Hand 1990). The willow stream
+data are **simulated** for this lecture. Textbook PDFs are on Canvas.
 :::
 
 ::: callout-tip

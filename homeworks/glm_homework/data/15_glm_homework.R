@@ -5,7 +5,7 @@
 # Name:
 # Date:
 #
-# Save as scripts/16_glm_homework.R
+# Save as scripts/15_glm_homework.R
 #
 # HOW THIS SCRIPT IS LAID OUT
 # Each section starts with its QUESTION and the ANSWER you
@@ -279,7 +279,7 @@ invisible(NULL)
 
 
 
-# ggsave("figures/16_glm_homework_fig.pdf", width = 7, height = 5)
+# ggsave("figures/15_glm_homework_fig.pdf", width = 7, height = 5)
 
 invisible(NULL)
 

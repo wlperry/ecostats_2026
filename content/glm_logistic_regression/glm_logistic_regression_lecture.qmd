@@ -84,23 +84,25 @@ bolger_df <- read_csv("data/bolger.csv", show_col_types = FALSE) %>%
 ## Where We Left Off
 
 :::::: columns
-:::: {.column width="55%"}
+::: {.column width="55%"}
 Three weeks of **linear models**:
 
--   One-way ANOVA
--   Factorial ANOVA I
--   Factorial ANOVA II — the redux
+- One-way ANOVA
+- Factorial ANOVA I
+- Factorial ANOVA II — the redux
 
 Every one of them assumed:
 
--   **Normality** of the residuals
--   **Homogeneity of variance** — Levene's or Breusch–Pagan
--   **Independence** of observations
-::::
+- **Normality** of the residuals
+- **Homogeneity of variance** — Levene's or Breusch–Pagan
+- **Independence** of observations
+:::
 
 :::: {.column width="45%"}
 ::: callout-important
-**Those assumptions are about the residuals, not the raw data** — but when the response is a *count* or a *yes/no*, they fail in a way no transformation fully repairs.
+**Those assumptions are about the residuals, not the raw data** — but
+when the response is a *count* or a *yes/no*, they fail in a way no
+transformation fully repairs.
 
 Today: keep the linear part, change the distribution.
 :::
@@ -109,15 +111,15 @@ Today: keep the linear part, change the distribution.
 
 ## The Data: Galápagos Island Biogeography
 
-::::: columns
-::: {.column width="54%"}
+:::::: columns
+:::: {.column width="54%"}
 Gotelli & Ellison's Galápagos data — **17 islands**, plant species
 richness against island area.
 
-| Column | What it is |
-|-------------|------------------------------------|
-| `island` | island name (the historical names) |
-| `area_km2` | island area, km² |
+| Column      | What it is                            |
+|-------------|---------------------------------------|
+| `island`    | island name (the historical names)    |
+| `area_km2`  | island area, km²                      |
 | `n_species` | number of plant species — **a count** |
 
 ::: callout-tip
@@ -128,7 +130,7 @@ influential-point demonstration.
 Same islands, same question. Today the response gets treated as what it
 actually is — a **count**.
 :::
-:::
+::::
 
 ::: {.column width="46%"}
 ```{r glm-01}
@@ -155,11 +157,11 @@ g_df %>%
             max = max(n_species))
 ```
 :::
-:::::
+::::::
 
 ## A Count Is Not a Normal Variable {.tight-code}
 
-::::: columns
+:::::: columns
 ::: {.column width="50%"}
 A count has three properties a normal distribution does not:
 
@@ -182,7 +184,7 @@ any variance it likes, so that ratio is not itself a violation — but
 hold on to it. The Poisson will insist it is **1**.
 :::
 
-::: {.column width="50%"}
+:::: {.column width="50%"}
 ```{r glm-04}
 #| echo: false
 #| message: false
@@ -202,12 +204,12 @@ ggplot(g_df, aes(x = area_km2, y = n_species)) +
 orders of magnitude. Both axes need logs, which is exactly what you did
 in week 6.
 :::
-:::
-:::::
+::::
+::::::
 
 ## Fit Last Week's Model Anyway — and Watch It Fail {.tight-code}
 
-::::: columns
+:::::: columns
 ::: {.column width="50%"}
 ```{r glm-05}
 #| echo: true
@@ -232,7 +234,7 @@ predict(lm_raw,
 ```
 :::
 
-::: {.column width="50%"}
+:::: {.column width="50%"}
 ::: callout-important
 **The model predicts a 95% interval of −111 to 302 species.**
 
@@ -240,8 +242,8 @@ A negative number of plant species is not a wide interval. It is an
 **impossible** one.
 :::
 
--   Normality of residuals: ***p* = 0.002** — it fails
--   Equal variance: Breusch–Pagan *p* = 0.66 — this one is **fine**
+- Normality of residuals: ***p*** **= 0.002** — it fails
+- Equal variance: Breusch–Pagan *p* = 0.66 — this one is **fine**
 
 The question is not wrong. Area almost certainly does drive richness.
 The *model being used to answer it* is making promises the data cannot
@@ -249,8 +251,8 @@ keep — chiefly that the response is free to go negative.
 
 **Say only what the diagnostics say.** Here variance is not the problem;
 the normal distribution's unbounded support is.
-:::
-:::::
+::::
+::::::
 
 ## You Already Know One Fix — You Used It in Week 6 {.tight-code}
 
@@ -270,7 +272,8 @@ shapiro.test(residuals(lm_log))$p.value
 ```
 
 R² rises from 0.33 to **0.59**, normality goes from *p* = 0.002 to
-***p* = 0.48**, and the slope **0.331** is the species–area exponent *z*.
+***p*** **= 0.48**, and the slope **0.331** is the species–area exponent
+*z*.
 
 **The transformation works.** So why is there anything left to teach?
 :::
@@ -310,11 +313,11 @@ transformation silently hands you the second one.
 A **generalized linear model** keeps the linear part — $\beta_0 +
 \beta_1 X_1 + \dots$ — and swaps out two things.
 
-| Component | What it is | Example |
-|------------------|------------------------|---------------|
-| **Random** | the response's distribution | Poisson for counts |
-| **Systematic** | the predictors | `log(area_km2)` |
-| **Link** | connects the mean to the predictors | `log` for counts |
+| Component      | What it is                          | Example            |
+|----------------|-------------------------------------|--------------------|
+| **Random**     | the response's distribution         | Poisson for counts |
+| **Systematic** | the predictors                      | `log(area_km2)`    |
+| **Link**       | connects the mean to the predictors | `log` for counts   |
 
 $$g(\mu) = \beta_0 + \beta_1X_1 + \beta_2X_2 \dots$$
 
@@ -356,36 +359,36 @@ p3 <- ggplot(data.frame(x = 0:10, y = dbinom(0:10, 10, 0.3)), aes(x, y)) +
 
 ## Choosing the Family and the Link
 
-::::: columns
+:::::: columns
 ::: {.column width="52%"}
 ### What the response looks like
 
-| Response | Family |
-|-------------------------------|-------------------------|
-| continuous, symmetric | `gaussian` — this is `lm()` |
-| counts | `poisson` |
-| counts, variance > mean | negative binomial (`glm.nb`) |
-| binary — present/absent | `binomial(link = "logit")` |
-| positive, continuous, skewed | `Gamma` |
+| Response                     | Family                       |
+|------------------------------|------------------------------|
+| continuous, symmetric        | `gaussian` — this is `lm()`  |
+| counts                       | `poisson`                    |
+| counts, variance \> mean     | negative binomial (`glm.nb`) |
+| binary — present/absent      | `binomial(link = "logit")`   |
+| positive, continuous, skewed | `Gamma`                      |
 :::
 
-::: {.column width="48%"}
+:::: {.column width="48%"}
 ### The link function
 
-| Distribution | Link | Formula |
+| Distribution | Link     | Formula                      |
 |--------------|----------|------------------------------|
-| Normal | Identity | $g(\mu) = \mu$ |
-| Poisson | Log | $g(\mu) = \log(\mu)$ |
-| Binomial | Logit | $g(\mu) = \log[\mu/(1-\mu)]$ |
-| Gamma | Log | $g(\mu) = \log(\mu)$ |
+| Normal       | Identity | $g(\mu) = \mu$               |
+| Poisson      | Log      | $g(\mu) = \log(\mu)$         |
+| Binomial     | Logit    | $g(\mu) = \log[\mu/(1-\mu)]$ |
+| Gamma        | Log      | $g(\mu) = \log(\mu)$         |
 
 ::: callout-tip
 **The link is what keeps predictions possible.** A `log` link cannot
 predict a negative count. A `logit` link cannot predict a probability
 above 1.
 :::
-:::
-:::::
+::::
+::::::
 
 ## Part 2 · Gaussian GLMs — the Sanity Check {.divider}
 
@@ -439,15 +442,15 @@ all.equal(coef(lm_model), coef(gauss_model))
 Anova(gauss_model, type = "III", test = "F")
 ```
 
-Identical to `Anova()` on the `lm` — identical estimates, identical
-*F*, and identical for the same reason: it **is** that model, fitted by
-a different algorithm.
+Identical to `Anova()` on the `lm` — identical estimates, identical *F*,
+and identical for the same reason: it **is** that model, fitted by a
+different algorithm.
 :::
 :::::
 
 ## Gaussian GLM — Reading the New Vocabulary {.tight-code}
 
-::::: columns
+:::::: columns
 ::: {.column width="48%"}
 ```{r glm-11}
 #| echo: false
@@ -470,51 +473,49 @@ data.frame(
 ```
 :::
 
-::: {.column width="52%"}
+:::: {.column width="52%"}
 A GLM summary renames three things you already know:
 
--   **Dispersion parameter** — for a Gaussian GLM this is the
-    **residual variance**, $\sigma^2$. It is the ANOVA table's residual
-    mean square.
+- **Dispersion parameter** — for a Gaussian GLM this is the **residual
+  variance**, $\sigma^2$. It is the ANOVA table's residual mean square.
 
--   **Null deviance** — the error left when you predict every island
-    with the **grand mean** alone. For a Gaussian GLM this is
-    **SS~total~**.
+- **Null deviance** — the error left when you predict every island with
+  the **grand mean** alone. For a Gaussian GLM this is **SS~total~**.
 
--   **Residual deviance** — the error left **after** fitting the
-    predictor. For a Gaussian GLM this is **SS~residual~**.
+- **Residual deviance** — the error left **after** fitting the
+  predictor. For a Gaussian GLM this is **SS~residual~**.
 
 ::: callout-important
 Null deviance − residual deviance = the **model** sum of squares. The
 residual deviance is the part your predictor did *not* explain.
 :::
-:::
-:::::
+::::
+::::::
 
 ## Part 3 · Poisson GLMs for Count Data {.divider}
 
 ## The Poisson Distribution and Its One Strong Claim
 
-::::: columns
+::::::: columns
 ::: {.column width="55%"}
 **Poisson** is *the* distribution for counts:
 
--   Number of species on an island
--   Number of parasites in a host
--   Number of nests in a plot
+- Number of species on an island
+- Number of parasites in a host
+- Number of nests in a plot
 
 It assumes:
 
--   Counts are non-negative integers
--   Events occur **independently**
--   **The mean equals the variance**
+- Counts are non-negative integers
+- Events occur **independently**
+- **The mean equals the variance**
 
 That third one is not a convenience. Poisson has only **one** parameter,
 λ, which is simultaneously its mean and its variance. You do not get to
 set them separately.
 :::
 
-::: {.column width="45%"}
+::::: {.column width="45%"}
 ::: callout-warning
 **Remember the ratio.** The variance of `n_species` is **103×** its
 mean.
@@ -529,12 +530,12 @@ Fit it anyway — the failure is the content.
 predictor can be any number at all and $\mu = e^{\eta}$ is still
 positive. Counts can never come out negative.
 :::
-:::
 :::::
+:::::::
 
 ## Fitting the Poisson GLM {.tight-code}
 
-::::: columns
+:::::: columns
 ::: {.column width="50%"}
 ```{r glm-12}
 #| echo: true
@@ -548,15 +549,15 @@ round(summary(poiss_model)$coefficients, 4)
 ```
 :::
 
-::: {.column width="50%"}
+:::: {.column width="50%"}
 The model predicts the **natural log** of the expected count, so
 exponentiate to read it:
 
--   Slope **0.2875** on the log scale
--   $e^{0.2875} = 1.333$ — every **e-fold** (2.72×) increase in area
-    multiplies expected richness by **1.33**
--   Equivalently, a **doubling** of area multiplies richness by
-    $2^{0.2875} = 1.22$ — a 22% gain
+- Slope **0.2875** on the log scale
+- $e^{0.2875} = 1.333$ — every **e-fold** (2.72×) increase in area
+  multiplies expected richness by **1.33**
+- Equivalently, a **doubling** of area multiplies richness by
+  $2^{0.2875} = 1.22$ — a 22% gain
 
 ::: callout-important
 With a log link, coefficients are **multiplicative**, not additive. A
@@ -565,8 +566,8 @@ coefficient of β multiplies the mean by $e^{\beta}$.
 
 Compare that 0.2875 with week 6's log–log slope of **0.331**. Close, but
 **not the same number** — and the next slide but one says why.
-:::
-:::::
+::::
+::::::
 
 ## Testing the Effect — Why LR and Not *F* {.tight-code}
 
@@ -581,16 +582,16 @@ Anova(poiss_model, type = "III", test = "LR")
 :::
 
 ::: {.column width="50%"}
--   An ANOVA *F*-test is a **ratio of variances**, and its denominator
-    is the residual mean square — an estimate of $\sigma^2$.
+- An ANOVA *F*-test is a **ratio of variances**, and its denominator is
+  the residual mean square — an estimate of $\sigma^2$.
 
--   A Poisson GLM **never estimates a $\sigma^2$**. The variance is not
-    a free parameter; it is pinned to the mean. There is nothing to put
-    in the denominator.
+- A Poisson GLM **never estimates a** $\sigma^2$. The variance is not a
+  free parameter; it is pinned to the mean. There is nothing to put in
+  the denominator.
 
--   So we use a **likelihood ratio (LR)** test instead: fit the model
-    with the predictor and the model without it, and compare how much
-    better the full model explains the data.
+- So we use a **likelihood ratio (LR)** test instead: fit the model with
+  the predictor and the model without it, and compare how much better
+  the full model explains the data.
 
 $$\text{LR } \chi^2 = 2(\log L_{full} - \log L_{reduced})$$
 
@@ -600,9 +601,9 @@ $$\text{LR } \chi^2 = 2(\log L_{full} - \log L_{reduced})$$
 
 ## Three Ways to Say "Log" — and Why They Differ
 
-::: {.compact-table}
+::: compact-table
 | Model | R code | Interpretation of β₁ |
-|--------------|------------------------|---------------------------------|
+|-------------|-------------------|-------------------------------|
 | **GLM, log link** | `glm(Y ~ X, family = poisson)` | A 1-unit change in X multiplies the **mean** of Y by $e^{\beta_1}$ |
 | **lm on logged Y** | `lm(log(Y) ~ X)` | A 1-unit change in X multiplies the **median** of Y by $e^{\beta_1}$ |
 | **log-log** | `lm(log(Y) ~ log(X))` | A 1% change in X gives a β₁% change in Y — **week 6** |
@@ -623,16 +624,16 @@ is a mistake; they are answers to two different questions.
 
 ## Checking Dispersion — the Test That Matters {.tight-code}
 
-::::: columns
+:::::: columns
 ::: {.column width="50%"}
 The **dispersion parameter** is observed variance over expected
 variance:
 
 $$\hat\phi = \frac{\sum \text{(Pearson residual)}^2}{\text{residual df}}$$
 
--   **≈ 1** — good fit, variance = mean
--   **> 1** — **overdispersion**, variance > mean
--   **< 1** — underdispersion
+- **≈ 1** — good fit, variance = mean
+- **\> 1** — **overdispersion**, variance \> mean
+- **\< 1** — underdispersion
 
 ```{r glm-14}
 #| echo: true
@@ -642,7 +643,7 @@ check_overdispersion(poiss_model)
 ```
 :::
 
-::: {.column width="50%"}
+:::: {.column width="50%"}
 ::: callout-warning
 **Dispersion ratio 39.7, not 1.**
 
@@ -656,8 +657,8 @@ to its mean — about 325. The data say it is far larger.
 >
 > **R will not stop you running a test that does not apply.** Check the
 > diagnostic that matches the model, not the one you remember.
-:::
-:::::
+::::
+::::::
 
 ## The DHARMa Residual Check
 
@@ -683,7 +684,7 @@ not, and the problem is not subtle.
 
 ## The Negative Binomial — a Second Parameter {.tight-code}
 
-::::: columns
+:::::: columns
 ::: {.column width="50%"}
 The negative binomial adds **theta** (θ), which lets the variance exceed
 the mean by as much as it needs to:
@@ -706,7 +707,7 @@ check_overdispersion(nb_model)
 ```
 :::
 
-::: {.column width="50%"}
+:::: {.column width="50%"}
 ```{r glm-17}
 #| echo: true
 #| message: false
@@ -721,13 +722,13 @@ The dispersion is gone — 39.7 down to **0.68** — and the AIC drops by
 **496**. Same data, same predictor, same link. The only thing added was
 permission for the variance to be larger than the mean.
 :::
-:::
-:::::
+::::
+::::::
 
 ## What Overdispersion Did to Your *p*-Value {.tight-code}
 
-::::: columns
-::: {.column width="52%"}
+::::::: columns
+:::: {.column width="52%"}
 ```{r glm-18}
 #| echo: false
 #| message: false
@@ -737,18 +738,18 @@ cbind(estimate = round(coef(poiss_model), 4),
       SE_negbin  = round(summary(nb_model)$coefficients[, 2], 4))
 ```
 
-::: {.compact-table}
-| | Poisson | Negative binomial |
-|------------------------|------------|------------------|
-| slope | 0.2875 | 0.2988 |
-| **SE of the slope** | **0.0096** | **0.0610** |
-| LR χ² | **979** | **23.8** |
-| dispersion ratio | 39.7 | 0.68 |
-| AIC | 682.8 | 187.0 |
+::: compact-table
+|                     | Poisson    | Negative binomial |
+|---------------------|------------|-------------------|
+| slope               | 0.2875     | 0.2988            |
+| **SE of the slope** | **0.0096** | **0.0610**        |
+| LR χ²               | **979**    | **23.8**          |
+| dispersion ratio    | 39.7       | 0.68              |
+| AIC                 | 682.8      | 187.0             |
 :::
-:::
+::::
 
-::: {.column width="48%"}
+:::: {.column width="48%"}
 ::: callout-important
 **The slope barely moved — 0.2875 to 0.2988. The standard error moved
 6.4-fold.**
@@ -761,18 +762,19 @@ Overdispersion does not move your estimate. It makes you **far more
 confident in it than you are entitled to be** — smaller SEs, bigger test
 statistics, narrower intervals, smaller *p*-values.
 
-`summary(poiss_model)` reports *p* ≈ 10⁻¹⁹⁸ for this slope. That is not a
-result; it is an arithmetic consequence of an assumption nobody checked.
+`summary(poiss_model)` reports *p* ≈ 10⁻¹⁹⁸ for this slope. That is not
+a result; it is an arithmetic consequence of an assumption nobody
+checked.
 
-Both models here still say *p* < 0.001. The conclusion did not change.
+Both models here still say *p* \< 0.001. The conclusion did not change.
 Only the **honesty** of it did — and your homework is the dataset where
 it very nearly flips.
-:::
-:::::
+::::
+:::::::
 
 ## Not Every Count Is Overdispersed {.tight-code}
 
-::::: columns
+::::::: columns
 ::: {.column width="50%"}
 Gotelli & Ellison's New England **ant species density** — 22 bogs, ant
 richness against latitude and elevation.
@@ -802,7 +804,7 @@ check_overdispersion(ant_poiss)
 ```
 :::
 
-::: {.column width="50%"}
+::::: {.column width="50%"}
 ::: callout-important
 **Dispersion 0.83, *p* = 0.68. The Poisson is the right model here.**
 
@@ -823,9 +825,8 @@ check tells you to.
 Ant richness falls **21% per degree of latitude** (*p* = 0.002) — a real
 result, from the simpler model.
 :::
-:::
 :::::
-
+:::::::
 
 ## Part 5 · Logistic Regression {.divider}
 
@@ -879,7 +880,7 @@ ggplot(sig, aes(x, p)) +
 
 ## The Polis Lizard Data {.tight-code}
 
-::::: columns
+:::::: columns
 ::: {.column width="50%"}
 Polis et al. (1998) recorded whether the lizard *Uta* was present on
 **19 islands** in the Gulf of California, against each island's
@@ -897,7 +898,7 @@ count(polis_df, uta)
 ```
 :::
 
-::: {.column width="50%"}
+:::: {.column width="50%"}
 ```{r glm-24}
 #| echo: false
 #| message: false
@@ -913,11 +914,11 @@ ggplot(polis_df, aes(paratio, pa)) +
 ```
 
 ::: callout-note
-These are the data from the paper, as reproduced in **Quinn & Keough
-Box 13-1** — the same file the activity uses.
+These are the data from the paper, as reproduced in **Quinn & Keough Box
+13-1** — the same file the activity uses.
 :::
-:::
-:::::
+::::
+::::::
 
 ## Fitting the Logistic Model {.tight-code}
 
@@ -959,7 +960,7 @@ and 19 islands is small.
 
 ## The Fitted Probability Curve
 
-::::: columns
+:::::: columns
 ::: {.column width="55%"}
 ```{r glm-27}
 #| echo: false
@@ -990,7 +991,7 @@ ggplot() +
 ```
 :::
 
-::: {.column width="45%"}
+:::: {.column width="45%"}
 The curve crosses **p = 0.5** at a perimeter-to-area ratio of
 
 $$-\frac{\beta_0}{\beta_1} = -\frac{3.606}{-0.2196} = 16.4$$
@@ -1003,12 +1004,12 @@ likely absent.
 crossed below zero on the right of this plot and predicted a negative
 probability.
 :::
-:::
-:::::
+::::
+::::::
 
 ## Interpreting the Odds Ratio {.tight-code}
 
-::::: columns
+:::::: columns
 ::: {.column width="48%"}
 ```{r glm-28}
 #| echo: true
@@ -1020,31 +1021,31 @@ exp(confint(lizard_model, "paratio"))
 ```
 :::
 
-::: {.column width="52%"}
-**Odds ratio = $e^{\beta_1}$**
+:::: {.column width="52%"}
+**Odds ratio =** $e^{\beta_1}$
 
--   **> 1** — raising the predictor raises the odds
--   **< 1** — raising the predictor lowers the odds
--   **= 1** — no effect
+- **\> 1** — raising the predictor raises the odds
+- **\< 1** — raising the predictor lowers the odds
+- **= 1** — no effect
 
 Here the odds ratio is **0.803**:
 
--   One extra unit of perimeter-to-area ratio multiplies the odds of
-    finding *Uta* by **0.80**
--   That is a **19.7%** drop in the odds per unit (1 − 0.803)
--   The CI is **0.616 to 0.936** — entirely below 1, so the relationship
-    is negative
+- One extra unit of perimeter-to-area ratio multiplies the odds of
+  finding *Uta* by **0.80**
+- That is a **19.7%** drop in the odds per unit (1 − 0.803)
+- The CI is **0.616 to 0.936** — entirely below 1, so the relationship
+  is negative
 
 ::: callout-important
 For an odds ratio the null value is **1, not 0** — it lives on a
 multiplicative scale. A CI that excludes 1 is the significant one.
 :::
-:::
-:::::
+::::
+::::::
 
 ## Assessing Model Fit {.tight-code}
 
-::::: columns
+:::::: columns
 ::: {.column width="50%"}
 ```{r glm-29}
 #| echo: true
@@ -1061,15 +1062,15 @@ hoslem.test(lizard_model$y,
 ```
 :::
 
-::: {.column width="50%"}
-**McFadden's pseudo-R²** = $1 - \dfrac{D_{resid}}{D_{null}}$ = **0.459**.
-`performance::r2()` instead reports **Tjur's R² = 0.521**.
+:::: {.column width="50%"}
+**McFadden's pseudo-R²** = $1 - \dfrac{D_{resid}}{D_{null}}$ =
+**0.459**. `performance::r2()` instead reports **Tjur's R² = 0.521**.
 
 Both are "pseudo" because there is no residual variance to partition —
 the response is 0 or 1, so "proportion of variance explained" has
-nothing to be a proportion *of*. They are different quantities, so
-**say which one you report**. For McFadden's, treat 0.2–0.4 as a strong
-model, not the 0.7 you would want from a regression.
+nothing to be a proportion *of*. They are different quantities, so **say
+which one you report**. For McFadden's, treat 0.2–0.4 as a strong model,
+not the 0.7 you would want from a regression.
 
 ::: callout-warning
 **Hosmer–Lemeshow runs backwards.** Its null hypothesis is that the
@@ -1079,15 +1080,15 @@ evidence of poor fit.
 That is the opposite of every test you have run this semester — and it
 is why a "non-significant" result is not always bad news.
 :::
-:::
-:::::
+::::
+::::::
 
 ## Part 6 · Multiple Logistic Regression {.divider}
 
 ## The Bolger Canyon Fragment Data {.tight-code}
 
-::::: columns
-::: {.column width="50%"}
+::::::: columns
+:::: {.column width="50%"}
 Logistic regression extends to several predictors exactly as regression
 does:
 
@@ -1097,17 +1098,17 @@ Bolger et al. (1997) recorded whether **native rodents** were present in
 **25 canyon fragments** in coastal southern California, against three
 predictors.
 
-::: {.compact-table}
-| Column | What it is |
-|------------|--------------------------------|
+::: compact-table
+| Column     | What it is                      |
+|------------|---------------------------------|
 | `rodentsp` | 1 = rodents present, 0 = absent |
-| `pershrub` | % shrub cover |
-| `distx` | distance to source canyon, m |
-| `age` | years since isolation |
+| `pershrub` | \% shrub cover                  |
+| `distx`    | distance to source canyon, m    |
+| `age`      | years since isolation           |
 :::
-:::
+::::
 
-::: {.column width="50%"}
+:::: {.column width="50%"}
 ```{r glm-30}
 #| echo: true
 #| message: false
@@ -1124,12 +1125,12 @@ round(summary(rodent_model)$coefficients, 4)
 Quinn & Keough **Box 13-2**. Two predictors measure **isolation**
 (`distx`, `age`); one measures **habitat quality** (`pershrub`).
 :::
-:::
-:::::
+::::
+:::::::
 
 ## Testing Each Predictor {.tight-code}
 
-::::: columns
+:::::: columns
 ::: {.column width="50%"}
 ```{r glm-31}
 #| echo: true
@@ -1143,7 +1144,7 @@ likelihood ratio — the multi-predictor version of what we did to the
 lizard model.
 :::
 
-::: {.column width="50%"}
+:::: {.column width="50%"}
 ```{r glm-32}
 #| echo: false
 #| message: false
@@ -1159,8 +1160,8 @@ point of shrub cover multiplies the odds of rodent presence by **1.10**
 
 Neither isolation measure comes close — and both of their CIs bracket 1.
 :::
-:::
-:::::
+::::
+::::::
 
 ## Visualizing Each Effect
 
@@ -1206,7 +1207,7 @@ from near 0 to near 1.
 
 ## Model Comparison and Selection {.tight-code}
 
-::::: columns
+:::::: columns
 ::: {.column width="50%"}
 ```{r glm-34}
 #| echo: false
@@ -1229,24 +1230,24 @@ data.frame(Model = names(mods),
 ```
 :::
 
-::: {.column width="50%"}
--   **Likelihood ratio tests** compare *nested* models — one must be a
-    special case of the other
--   **AIC / BIC** compare any models fitted to the same data, nested or
-    not
--   AIC rewards fit and penalises parameters: $AIC = -2\log L + 2k$
+:::: {.column width="50%"}
+- **Likelihood ratio tests** compare *nested* models — one must be a
+  special case of the other
+- **AIC / BIC** compare any models fitted to the same data, nested or
+  not
+- AIC rewards fit and penalises parameters: $AIC = -2\log L + 2k$
 
 ::: callout-note
 Dropping `distx` or `age` **improves** the AIC — they were costing a
 parameter each and buying almost nothing. Dropping `pershrub` makes it
 far worse.
 :::
-:::
-:::::
+::::
+::::::
 
 ## How Well Does It Classify? {.tight-code}
 
-::::: columns
+:::::: columns
 ::: {.column width="50%"}
 ```{r glm-35}
 #| echo: true
@@ -1265,21 +1266,21 @@ round(c(accuracy    = sum(diag(cm)) / sum(cm),
 ```
 :::
 
-::: {.column width="50%"}
--   **Accuracy** — fraction of fragments called correctly
--   **Sensitivity** — of the fragments that *had* rodents, how many did
-    we catch?
--   **Specificity** — of the fragments that did *not*, how many did we
-    correctly rule out?
+:::: {.column width="50%"}
+- **Accuracy** — fraction of fragments called correctly
+- **Sensitivity** — of the fragments that *had* rodents, how many did we
+  catch?
+- **Specificity** — of the fragments that did *not*, how many did we
+  correctly rule out?
 
 ::: callout-warning
 **The 0.5 cut-off is a choice, not a result.** Move it and sensitivity
 and specificity trade against each other. Classification accuracy is
-also optimistic here — we are scoring the model on the same 25
-fragments we fitted it to.
+also optimistic here — we are scoring the model on the same 25 fragments
+we fitted it to.
 :::
-:::
-:::::
+::::
+::::::
 
 ## Publication-Quality Figure
 
@@ -1319,13 +1320,13 @@ ggplot() +
 ::: {.column width="45%"}
 What makes this publishable rather than exploratory:
 
--   The **raw data** are visible under the fit, jittered just enough to
-    separate ties
--   The **confidence band** is on the probability scale, computed on the
-    link scale and back-transformed — so it can never leave [0, 1]
--   Axis labels name the **units**, not the column names
--   The other two predictors are held at their means, and the caption
-    must say so
+- The **raw data** are visible under the fit, jittered just enough to
+  separate ties
+- The **confidence band** is on the probability scale, computed on the
+  link scale and back-transformed — so it can never leave \[0, 1\]
+- Axis labels name the **units**, not the column names
+- The other two predictors are held at their means, and the caption must
+  say so
 
 This is the shape of the graded figure in section 10 of the activity.
 :::
@@ -1340,19 +1341,19 @@ The presence of native rodents in 25 canyon fragments was modelled by
 multiple logistic regression with three predictors: distance to the
 nearest source canyon, years since isolation, and percentage shrub
 cover. The three predictors together improved substantially on the null
-model (likelihood-ratio χ² = 15.26, df = 3, *p* = 0.002; McFadden's
-R² = 0.44).
+model (likelihood-ratio χ² = 15.26, df = 3, *p* = 0.002; McFadden's R² =
+0.44).
 
-**Shrub cover was the only predictor with a detectable effect**
-(β = 0.096, SE = 0.041, LR χ² = 9.56, df = 1, *p* = 0.002). Each
-additional percentage point of shrub cover multiplied the odds of rodent
-presence by 1.10 (95% CI 1.03–1.22). Neither distance to the source
-canyon (LR χ² = 0.16, *p* = 0.69) nor years since isolation
-(LR χ² = 0.44, *p* = 0.50) was distinguishable from zero.
+**Shrub cover was the only predictor with a detectable effect** (β =
+0.096, SE = 0.041, LR χ² = 9.56, df = 1, *p* = 0.002). Each additional
+percentage point of shrub cover multiplied the odds of rodent presence
+by 1.10 (95% CI 1.03–1.22). Neither distance to the source canyon (LR χ²
+= 0.16, *p* = 0.69) nor years since isolation (LR χ² = 0.44, *p* = 0.50)
+was distinguishable from zero.
 
 The model classified 80% of fragments correctly (sensitivity 0.75,
-specificity 0.85) and showed no evidence of lack of fit
-(Hosmer–Lemeshow χ² = 6.04, df = 8, *p* = 0.64).
+specificity 0.85) and showed no evidence of lack of fit (Hosmer–Lemeshow
+χ² = 6.04, df = 8, *p* = 0.64).
 :::
 
 ## Scientific Write-Up — Discussion
@@ -1379,8 +1380,8 @@ dominates.
 
 ## Assumptions of Logistic Regression {.tight-code}
 
-::::: columns
-::: {.column width="45%"}
+:::::: columns
+:::: {.column width="45%"}
 1.  **Independence** of observations
 2.  **Linearity** between each predictor and the **log odds** — not the
     probability
@@ -1394,7 +1395,7 @@ Assumption 2 is the one people forget. Logistic regression does **not**
 assume a linear relationship with the probability — the curve is
 S-shaped by construction. It assumes linearity on the **logit** scale.
 :::
-:::
+::::
 
 ::: {.column width="55%"}
 ```{r glm-37}
@@ -1428,13 +1429,13 @@ Bin each predictor, compute the empirical log-odds in each bin, and look
 for a straight line. Shrub cover is close to one; with 25 fragments
 these are rough.
 :::
-:::::
+::::::
 
 ## Which Diagnostic for Which Family
 
-::: {.compact-table}
+::: compact-table
 | Family | What it assumes | What to check |
-|------------|-----------------------------|---------------------------|
+|---------------|----------------------------|--------------------------|
 | **All GLMs** | Independence; correct link; no extreme leverage | DHARMa residuals, Cook's distance, VIF |
 | **Gaussian** | Normal residuals, equal variance | `shapiro.test()`, Levene's, residual plots |
 | **Poisson** | Counts; **variance = mean** | `check_overdispersion()`, `testDispersion()` |
@@ -1452,7 +1453,7 @@ number, and the number will mean nothing.
 
 ## One-Way ANOVA Is a Gaussian GLM {.tight-code}
 
-::::: columns
+:::::: columns
 ::: {.column width="50%"}
 Every linear model you have fitted this semester is the special case of
 a GLM where:
@@ -1476,7 +1477,7 @@ glm_fit <- glm(growth_per_day ~ range, data = cray_df,
 ```
 :::
 
-::: {.column width="50%"}
+:::: {.column width="50%"}
 ```{r glm-39}
 #| echo: true
 #| message: false
@@ -1493,12 +1494,12 @@ c(aov = summary(aov_fit)[[1]][1, "F value"],
 Identical coefficients, identical *F*. GLMs did not replace the ANOVA —
 they contain it.
 :::
-:::
-:::::
+::::
+::::::
 
 ## Summary — What a GLM Gives You
 
-::::: columns
+::::::: columns
 ::: {.column width="55%"}
 1.  **Gaussian** + identity link = the linear model and ANOVA you
     already know
@@ -1513,7 +1514,7 @@ fitting a straight line — just on a scale where a straight line cannot
 predict something impossible.
 :::
 
-::: {.column width="45%"}
+::::: {.column width="45%"}
 ::: callout-important
 **The method, not the models**
 
@@ -1529,11 +1530,10 @@ was whether you were entitled to it.
 **Up next — Linear Mixed Models**
 
 The thing you change next week is not the distribution but the **error
-structure**: random effects, and hierarchical designs done
-properly.
-:::
+structure**: random effects, and hierarchical designs done properly.
 :::
 :::::
+:::::::
 
 ## Summary — Choosing a Distribution and Link
 
@@ -1551,18 +1551,27 @@ properly.
 ## Readings
 
 ::::::: columns
-:::: {.column width="55%"}
-- **Gotelli & Ellison**, Ch. 9 — Regression, for extending the linear model beyond ordinary least squares.
-- **Gotelli & Ellison**, Ch. 11 — The Analysis of Categorical Data, for logistic regression and binomial GLMs.
-- **Whitlock & Schluter**, Ch. 17 — Regression, §"Logistic regression", for the binary-response case.
-- **Quinn & Keough** (2002), *Experimental Design and Data Analysis for Biologists*, Ch. 13 — Generalized Linear Models and Logistic Regression. This is the source of both worked examples today.
-::::
+::: {.column width="55%"}
+- **Gotelli & Ellison**, Ch. 9 — Regression, for extending the linear
+  model beyond ordinary least squares.
+- **Gotelli & Ellison**, Ch. 11 — The Analysis of Categorical Data, for
+  logistic regression and binomial GLMs.
+- **Whitlock & Schluter**, Ch. 17 — Regression, §"Logistic regression",
+  for the binary-response case.
+- **Quinn & Keough** (2002), *Experimental Design and Data Analysis for
+  Biologists*, Ch. 13 — Generalized Linear Models and Logistic
+  Regression. This is the source of both worked examples today.
+:::
 
-:::: {.column width="45%"}
+::::: {.column width="45%"}
 ::: callout-note
 **📖 On the datasets**
 
-The *Uta* lizard data are Polis et al.'s, reproduced in Quinn & Keough **Box 13-1**. The canyon rodent data are Bolger et al.'s, reproduced in **Box 13-2**. The Galápagos and New England ant data are **Gotelli & Ellison**'s, from *A Primer of Ecological Statistics* (Ch. 8 and Ch. 9) — the Galápagos file is the same one you used in week 6.
+The *Uta* lizard data are Polis et al.'s, reproduced in Quinn & Keough
+**Box 13-1**. The canyon rodent data are Bolger et al.'s, reproduced in
+**Box 13-2**. The Galápagos and New England ant data are **Gotelli &
+Ellison**'s, from *A Primer of Ecological Statistics* (Ch. 8 and Ch. 9)
+— the Galápagos file is the same one you used in week 6.
 
 The textbook PDFs are on Canvas.
 :::
@@ -1570,17 +1579,27 @@ The textbook PDFs are on Canvas.
 ::: callout-tip
 **🖐 Beyond the books**
 
-Zuur et al. (2009), *Mixed Effects Models and Extensions in Ecology with R*, Ch. 9, is the standard ecological reference for overdispersion and the negative binomial.
+Zuur et al. (2009), *Mixed Effects Models and Extensions in Ecology with
+R*, Ch. 9, is the standard ecological reference for overdispersion and
+the negative binomial.
 :::
-::::
+:::::
 :::::::
 
 ## References
 
-::: {.compact-table}
-- Bolger, D. T., Alberts, A. C., Sauvajot, R. M., Potenza, P., McCalvin, C., Tran, D., Mazzoni, S., & Soulé, M. E. (1997). Response of rodents to habitat fragmentation in coastal southern California. *Ecological Applications*, 7(2), 552–563.
-- Hosmer, D. W., & Lemeshow, S. (2000). *Applied Logistic Regression* (2nd ed.). Wiley, New York.
-- McCullagh, P., & Nelder, J. A. (1989). *Generalized Linear Models* (2nd ed.). Chapman and Hall, London.
-- Polis, G. A., Hurd, S. D., Jackson, C. T., & Piñero, F. S. (1998). Multifactor analysis of ecosystem patterns on islands in the Gulf of California. *Ecological Monographs*, 68, 490–502.
-- Quinn, G. P., & Keough, M. J. (2002). *Experimental Design and Data Analysis for Biologists*. Cambridge University Press.
+::: compact-table
+- Bolger, D. T., Alberts, A. C., Sauvajot, R. M., Potenza, P., McCalvin,
+  C., Tran, D., Mazzoni, S., & Soulé, M. E. (1997). Response of rodents
+  to habitat fragmentation in coastal southern California. *Ecological
+  Applications*, 7(2), 552–563.
+- Hosmer, D. W., & Lemeshow, S. (2000). *Applied Logistic Regression*
+  (2nd ed.). Wiley, New York.
+- McCullagh, P., & Nelder, J. A. (1989). *Generalized Linear Models*
+  (2nd ed.). Chapman and Hall, London.
+- Polis, G. A., Hurd, S. D., Jackson, C. T., & Piñero, F. S. (1998).
+  Multifactor analysis of ecosystem patterns on islands in the Gulf of
+  California. *Ecological Monographs*, 68, 490–502.
+- Quinn, G. P., & Keough, M. J. (2002). *Experimental Design and Data
+  Analysis for Biologists*. Cambridge University Press.
 :::

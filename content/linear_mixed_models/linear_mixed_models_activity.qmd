@@ -3,7 +3,7 @@ order: 16
 week: 11
 title: "Activity: Linear Mixed Models"
 subtitle: "Random effects for nested data"
-description: "Hands-on activity: refitting the sea urchin nested design with lme4::lmer(), choosing between the F-test and the Chi-square test when they disagree, reading variance components and the ICC, and proving the mixed model reproduces the traditional nested ANOVA."
+description: "Hands-on activity: refitting the sea urchin nested design with lme4::lmer(), choosing between the F-test and the Chi-square test when they disagree, reading variance components and the ICC, and proving the mixed model reproduces the traditional nested ANOVA. Then two more designs: chick growth through time with random slopes, and a simulated stream experiment blocked by stream."
 author: "Bill Perry"
 metadata-files:
   - ../../_templates/activities.yml
@@ -25,23 +25,27 @@ format:
 7.  Reproduce the patch variance from the nested ANOVA's mean squares, and say why REML does not need to
 8.  Run DHARMa diagnostics on a mixed model
 9.  Prove `lmer()` reproduces `aov(... + Error())` on a balanced design
+10. Give each animal its own line through time with a random slope
+11. Find the real replicate in a treatment blocked by stream
 
 ::: callout-tip
 ## 📂 Files for today
 
-[📥 Urchin data](data/andrew.csv){.btn .btn-primary download="andrew.csv"} [📥 Script skeleton (.R)](data/16_linear_mixed_models.R){.btn .btn-primary download="16_linear_mixed_models.R"}
+[📥 Urchin data](data/andrew.csv){.btn .btn-primary download="andrew.csv"} [📥 Stream data (simulated)](data/willow_streams_simulated.csv){.btn .btn-primary download="willow_streams_simulated.csv"} [📥 Script skeleton (.R)](data/16_linear_mixed_models.R){.btn .btn-primary download="16_linear_mixed_models.R"}
 
--   Save the skeleton as `scripts/16_linear_mixed_models.R`, and `andrew.csv` in your `data/` folder.
+-   Save the skeleton as `scripts/16_linear_mixed_models.R`, and both `.csv` files in your `data/` folder.
+-   The stream data are for sections 9–10 at the end. They are **simulated**, not a real study.
 -   Same data the lecture used in Part 1, where the traditional nested analysis was built.
 :::
 
 ::: callout-important
 ## What you hand in
 
--   **All of today's code is right here in this activity.** Type it into your script as we go and run it chunk by chunk. The skeleton has the plumbing — libraries and the data read — and nothing else. Every line of statistics you type yourself.
+-   **All of today's code is right here in this activity.** Type it into your script as we go and run it chunk by chunk. The skeleton has the plumbing — libraries, the data reads, the mean-squares table in section 4, and the plots in sections 9–10 — and nothing else. Every line of statistics you type yourself.
 -   **Section 6 has no code here either.** It is a comparison against the traditional `aov(Error())` analysis from lecture Part 1 — three lines you have the pieces for.
 -   The **Q** boxes are **things to think about**, not inline homework. Read them, talk them over, answer them in your head. You do **not** have to type answers into the script, and they are not graded.
--   The **write-up** at the bottom — sections 7 and 8 — *is* graded. Those answers go into the script as `#` comments.
+-   The **write-up** — sections 7 and 8 — *is* graded.
+-   **Sections 9 and 10** are two more designs, after the write-up. Same rules as the Q boxes: do them, talk about them, not graded. Those answers go into the script as `#` comments.
 -   Hand in `scripts/16_linear_mixed_models.R`. Run it top to bottom (**Ctrl/Cmd + Shift + Enter**) first — it must run with no errors.
 :::
 
@@ -228,7 +232,7 @@ icc(mixed_model)
 
 ✏️ **Q13:** The nested ANOVA gave you a *p*-value and an effect size, and nothing else. Name the practical decision you could make with the ICC that you could not make with either of those. (Think about designing the *next* experiment.)
 
-**▶ Type this yourself** — where that patch variance came from, the *old* way:
+Where that patch variance came from, the *old* way. *The table and the two mean squares are written for you in the skeleton:*
 
 ``` r
 a_tab <- summary(aov(algae ~ treat + treat:patch, data = u_df))[[1]]
@@ -236,7 +240,11 @@ a_tab
 
 MS_patch  <- a_tab[2, "Mean Sq"]
 MS_within <- a_tab[3, "Mean Sq"]
+```
 
+**▶ Type this yourself** — one line of arithmetic:
+
+``` r
 (MS_patch - MS_within) / 5
 ```
 
@@ -326,7 +334,7 @@ d.  Three rows, one table. Decide which numbers match and which do not.
 
 **[Homework 16 — Linear Mixed Models](../../homeworks/lmm_homework/lmm_homework.qmd)**
 
-The **rusty crayfish** growth experiment — but now `lake` is a **random** effect rather than a fixed factor. Same data as Homework 13, deliberately: the comparison between the two analyses *is* the assignment.
+The **rusty crayfish** growth experiment — but now `lake` is a **random** effect rather than a fixed factor. Same data as Homework 13, deliberately: the comparison between the two analyses *is* the assignment. Lecture Part 7 walked the comparison — fixed vs random intercept vs random slope — and read `summary()` line by line; the homework asks you to do it yourself and say what each version lets you claim.
 
 **Data:** [`sargent_lodge_crayfish.csv`](../../homeworks/lmm_homework/data/sargent_lodge_crayfish.csv) — Sargent & Lodge (2014), *Evolutionary Applications* 7: 949–961.
 
@@ -372,6 +380,133 @@ One publication-quality figure showing **both** levels of variation: the treatme
 
 ------------------------------------------------------------------------
 
+> ## 🧩 Block 4 — Two designs you will actually run *(after lecture Part 8)*
+>
+> Sections 9–10: animals followed through time, then a treatment blocked by stream. Not graded.
+
+# Section 9 · Animals through time — chick growth
+
+`ChickWeight` ships with R, so there is nothing to download: 50 chicks on 4 diets, each weighed up to 12 times over 21 days.
+
+*Written for you in the skeleton — run it and look at the plot.*
+
+``` r
+# ---- 9 Animals through time - chick growth ---------------
+ck_df <- as_tibble(ChickWeight) %>%
+  clean_names() %>%
+  mutate(chick = factor(chick, ordered = FALSE))
+
+ggplot(ck_df, aes(x = time, y = weight, group = chick)) +
+  geom_line() +
+  facet_wrap(~ diet)
+```
+
+✏️ **Q27:** The diet was given to a chick. How many chicks are there, and how many rows? Which of those two numbers is the replication for a diet effect?
+
+> 🔮 **Predict first:** the question is whether chicks **grow at different rates** on different diets — the `time:diet` term. You are about to fit it three ways. Which will give the biggest *F*?
+
+**▶ Type this yourself:**
+
+``` r
+ck_lm <- lm(weight ~ time * diet, data = ck_df)
+ck_ri <- lmer(weight ~ time * diet + (1 | chick), data = ck_df)
+ck_rs <- lmer(weight ~ time * diet + (1 + time | chick), data = ck_df)
+
+Anova(ck_lm, type = 3)
+anova(ck_ri)
+anova(ck_rs)
+```
+
+✏️ **Q28:** Write down *F* and the denominator df for `time:diet` in all three. Which one has df close to the number of chicks?
+
+✏️ **Q29:** The random-**intercept** model gave the *largest* *F* — bigger than ignoring chick altogether. It removed chick-to-chick differences in size from the noise. What is it still assuming about every chick on the same diet?
+
+**▶ Type this yourself:**
+
+``` r
+VarCorr(ck_rs)
+
+emtrends(ck_rs, ~ diet, var = "time")
+```
+
+✏️ **Q30:** Find the `time` row in the random effects. That SD is in grams per day. Say what it means in one sentence about chicks on the **same** diet.
+
+✏️ **Q31:** `emtrends()` is `emmeans()` for slopes. What is the growth rate on diet 1 and on diet 3? What df do those standard errors rest on?
+
+✏️ **Q32:** You tag 30 fish and re-measure each one every summer for five years. Write the `lmer()` formula for growth. What goes on the left of the bar, and what on the right?
+
+> 💡 **Key idea:** repeated measurements on one animal are subsamples of that animal, exactly as quadrats were subsamples of a patch. If the thing you care about is a **rate**, each animal needs its own rate in the model — a random slope.
+
+------------------------------------------------------------------------
+
+# Section 10 · A treatment blocked by stream
+
+**These data are simulated.** The layout is a real project: 3 streams, and in each one a **reference** reach, a reach with **crack willow**, and a reach where willow was **removed**. 15 benthic samples per reach. Because the numbers were made up, the truth is known: willow cuts insect numbers by 30%.
+
+*Written for you in the skeleton — run it and look at the plot.*
+
+``` r
+# ---- 10 A treatment blocked by stream --------------------
+w_df <- read_csv("data/willow_streams_simulated.csv") %>%
+  mutate(
+    reach = factor(reach, levels = c("reference", "willow", "removed")),
+    stream = factor(stream),
+    log_insects = log(insects)
+  )
+
+w_means <- w_df %>%
+  group_by(stream, reach) %>%
+  summarise(log_insects = mean(log_insects), .groups = "drop")
+
+ggplot(w_df, aes(x = reach, y = log_insects)) +
+  geom_point() +
+  geom_line(data = w_means, aes(group = stream)) +
+  facet_wrap(~ stream)
+```
+
+✏️ **Q33:** What was the treatment applied to — a sample, a reach, or a stream? How many of those are there in total, and how many **of each kind**?
+
+> 🔮 **Predict first:** 135 samples, and a real 30% effect built in. Will the correct analysis find it?
+
+**▶ Type this yourself** — three analyses of the same 135 samples:
+
+``` r
+w_naive <- lm(log_insects ~ reach, data = w_df)
+w_fixed <- lm(log_insects ~ reach * stream, data = w_df)
+w_mixed <- lmer(log_insects ~ reach + (1 | stream) + (1 | stream:reach),
+                data = w_df,
+                control = lmerControl(calc.derivs = FALSE))
+
+anova(w_naive)
+anova(w_fixed)
+anova(w_mixed)
+```
+
+✏️ **Q34:** *F*, denominator df and *p* for `reach` in each. `reach * stream` with everything fixed looks like the careful analysis. What is it testing reach against, and why is that the wrong yardstick?
+
+✏️ **Q35:** `(1 | stream:reach)` is the urchin `(1 | patch)` under another name. Explain why, in one sentence.
+
+**▶ Type this yourself** — stream as a fixed block, and the old way on reach means:
+
+``` r
+w_block <- lmer(log_insects ~ reach + stream + (1 | stream:reach),
+                data = w_df)
+w_rcb <- lm(log_insects ~ reach + stream, data = w_means)
+
+anova(w_block)
+anova(w_rcb)
+```
+
+✏️ **Q36:** Compare the `reach` row in `w_mixed`, `w_block` and `w_rcb`. Did it matter whether stream was fixed or random? Which term did all three have in common that the two wrong models lacked?
+
+✏️ **Q37:** The effect was real and you got *p* ≈ 0.10. A lab-mate suggests taking 30 samples per reach next year instead of 15. Is that the right fix? What would you do instead?
+
+✏️ **Q38:** With only 3 streams, which would you report — stream fixed or stream random — and what does that choice let you claim? (Think about the crayfish and their 3 lakes.)
+
+> 💡 **Key idea:** fixed block or random block is a question about what you want to **claim**. Whether the reach is in the model as its own random term is a question about whether the test is **right**. Get the second one right first.
+
+------------------------------------------------------------------------
+
 # Review and checkpoint
 
 At this point you should be able to:
@@ -386,6 +521,8 @@ At this point you should be able to:
 -   [ ] Use the ICC to plan a better experiment
 -   [ ] Run DHARMa diagnostics on a mixed model
 -   [ ] Show that `lmer()` reproduces `aov(... + Error())` on a balanced design, and say where they diverge
+-   [ ] Fit a random slope for animals measured through time, and read its SD as a rate
+-   [ ] Name the experimental unit in a blocked design with subsamples, and put it in the model
 
 Run your whole script top to bottom with **Ctrl/Cmd + Shift + Enter**. It must run clean.
 
