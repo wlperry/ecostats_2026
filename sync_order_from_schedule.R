@@ -19,11 +19,17 @@ sched <- yaml::read_yaml("_schedule.yml")
 for (wk in sched$weeks) for (mod in wk$modules) {
   ord <- as.integer(mod$number)
   for (key in c("lecture", "activity", "homework", "vignette")) {
-    p <- mod[[key]]
-    if (!is.null(p) && file.exists(p)) {
+    # `vignette:` may be a single path or a YAML list of paths. With several
+    # vignettes in one module they get order 10, 10.1, 10.2 ... so the
+    # Vignettes listing keeps them in the order they are listed here.
+    paths <- unlist(mod[[key]])
+    for (i in seq_along(paths)) {
+      p <- paths[i]
+      if (!file.exists(p)) next
+      o <- ord + (i - 1) / 10
       l <- readLines(p, warn = FALSE)
-      l <- update_fm(l, "week", wk$week); l <- update_fm(l, "order", ord)
-      writeLines(l, p); cat(sprintf("synced %s -> week=%s order=%d\n", p, wk$week, ord))
+      l <- update_fm(l, "week", wk$week); l <- update_fm(l, "order", o)
+      writeLines(l, p); cat(sprintf("synced %s -> week=%s order=%s\n", p, wk$week, o))
     }
   }
 }

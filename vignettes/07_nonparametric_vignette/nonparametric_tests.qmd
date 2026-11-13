@@ -1,0 +1,180 @@
+---
+order: 7
+week: 4
+title: "Non-Parametric Two-Group Tests"
+subtitle: "Mann-Whitney U, Wilcoxon signed-rank, permutation"
+description: "Rank-based and permutation alternatives to the t-test, using the pine needle and lake trout data from lecture."
+resources: ["nonparametric_tests.R", "data/pine_data.csv", "data/lake_trout.csv"]
+author: "Bill Perry"
+---
+
+[📥 Download the R script](nonparametric_tests.R){.btn .btn-primary download="nonparametric_tests.R"}
+[📊 pine_data.csv](data/pine_data.csv){.btn .btn-secondary download="pine_data.csv"}
+[📊 lake_trout.csv](data/lake_trout.csv){.btn .btn-secondary download="lake_trout.csv"}
+
+## What these tests do
+
+When the data are badly skewed, have outliers, or variances differ a lot, the t-test's assumptions fail. Non-parametric tests drop the normality assumption by working on **ranks** (or by shuffling the data) instead of the raw values.
+
+| Parametric test | Non-parametric partner | R call |
+|----|----|----|
+| Two-sample t-test | Mann-Whitney U (Wilcoxon rank-sum) | `wilcox.test(y ~ group)` |
+| Paired t-test | Wilcoxon signed-rank | `wilcox.test(a, b, paired = TRUE)` |
+| Either | Permutation test | `perm::permTS(y ~ group)` |
+
+$H_0$: the two groups have the same distribution. $H_A$: one group tends to have larger values.
+
+Non-parametric is **not** assumption-free: observations must still be independent, and the Mann-Whitney test assumes the two distributions have a similar shape.
+
+## Step 1: Load packages and data
+
+```{r}
+#| label: step-1-load
+#| message: false
+library(tidyverse)
+library(car)          # leveneTest()
+library(perm)         # permTS() permutation test
+library(effectsize)   # cohens_d()
+
+pine_df <- read_csv("data/pine_data.csv")
+lt_df   <- read_csv("data/lake_trout.csv")
+```
+
+## Step 2: Ranks are all these tests see
+
+Rank the pine data (one value per tree-side, as in the t-test vignette):
+
+```{r}
+#| label: step-2-ranks
+p_df <- pine_df %>%
+  group_by(team, side) %>%
+  summarise(needle_length_mm = mean(needle_length_mm, na.rm = TRUE),
+            .groups = "drop")
+
+p_df %>%
+  mutate(rank = rank(needle_length_mm)) %>%
+  arrange(rank)
+```
+
+If one side holds most of the high ranks, the test will find a difference.
+
+## Step 3: Mann-Whitney U and Wilcoxon signed-rank (pine data)
+
+```{r}
+#| label: step-3a-mann-whitney
+#| warning: false
+# Unpaired: Mann-Whitney U (partner of the two-sample t-test)
+wilcox.test(needle_length_mm ~ side, data = p_df)
+```
+
+```{r}
+#| label: step-3b-signed-rank
+#| warning: false
+p_wide_df <- p_df %>%
+  pivot_wider(names_from = side, values_from = needle_length_mm)
+
+# Paired: Wilcoxon signed-rank (partner of the paired t-test)
+wilcox.test(p_wide_df$shady, p_wide_df$sunny, paired = TRUE)
+```
+
+With only 4 pairs, the smallest possible two-sided p is `2 / 2^4` = `r 2 / 2^4`. **The test cannot reach p < 0.05** no matter how big the effect. Rank tests need more data than t-tests.
+
+## Step 4: Effect size (Cohen's d)
+
+A p-value says *whether*; an effect size says *how big*.
+
+```{r}
+#| label: step-4-effect-size
+cohens_d(p_wide_df$shady, p_wide_df$sunny, paired = TRUE)
+```
+
+Rough guide: 0.2 small, 0.5 medium, 0.8 large.
+
+## Step 5: A real skewed example (lake trout mass)
+
+Compare trout mass in NE 12 and Island Lake.
+
+```{r}
+#| label: step-5a-subset
+isl_ne12_df <- lt_df %>%
+  filter(lake %in% c("NE 12", "Island Lake")) %>%
+  filter(!is.na(mass_g))
+
+isl_ne12_df %>%
+  group_by(lake) %>%
+  summarize(n = n(),
+            median = median(mass_g),
+            mean = mean(mass_g),
+            sd = sd(mass_g))
+```
+
+```{r}
+#| label: step-5b-plots
+#| fig-width: 3.4
+#| fig-height: 2.8
+isl_ne12_df %>%
+  ggplot(aes(lake, mass_g)) +
+  geom_boxplot() +
+  theme_bw()
+
+isl_ne12_df %>%
+  ggplot(aes(sample = mass_g, color = lake)) +
+  stat_qq() +
+  stat_qq_line() +
+  theme_bw()
+```
+
+## Step 6: Check the t-test assumptions
+
+```{r}
+#| label: step-6-assumptions
+#| warning: false
+shapiro.test(isl_ne12_df$mass_g[isl_ne12_df$lake == "NE 12"])
+
+leveneTest(mass_g ~ factor(lake), data = isl_ne12_df)
+```
+
+NE 12 is strongly right-skewed and the variances are very unequal, and the sample sizes are very unbalanced (`r sum(isl_ne12_df$lake == "NE 12")` vs `r sum(isl_ne12_df$lake == "Island Lake")`). A transformation is one fix; a non-parametric test is another.
+
+```{r}
+#| label: step-6b-log
+#| warning: false
+# Does a log transformation fix the variances?
+leveneTest(log10(mass_g) ~ factor(lake), data = isl_ne12_df)
+```
+
+## Step 7: Mann-Whitney U on the trout
+
+```{r}
+#| label: step-7-wilcox
+#| warning: false
+wilcox_test_result <- wilcox.test(mass_g ~ lake, data = isl_ne12_df)
+wilcox_test_result
+```
+
+**W** is the Mann-Whitney U statistic: how many times an Island Lake fish outweighs an NE 12 fish. The warning about ties just means some fish had the same mass, so R uses a normal approximation.
+
+## Step 8: Permutation test
+
+A permutation test shuffles the group labels thousands of times and asks how often a shuffled difference is as big as the real one. It works on the actual means, not ranks. We balance the design first by sampling 10 NE 12 fish.
+
+```{r}
+#| label: step-8-permutation
+set.seed(123)
+perm_df <- bind_rows(
+  isl_ne12_df %>% filter(lake == "NE 12") %>% slice_sample(n = 10),
+  isl_ne12_df %>% filter(lake == "Island Lake")
+)
+
+permTS(mass_g ~ lake,
+       data = perm_df,
+       alternative = "two.sided",
+       method = "exact.mc",
+       control = permControl(nmc = 10000))
+```
+
+## Step 9: Write it up
+
+> Lake trout from Island Lake were heavier than those from NE 12 (median `r median(isl_ne12_df$mass_g[isl_ne12_df$lake == "Island Lake"])` g vs. `r median(isl_ne12_df$mass_g[isl_ne12_df$lake == "NE 12"])` g; Mann-Whitney U test: W = `r wilcox_test_result$statistic`, p < 0.001, n = `r sum(isl_ne12_df$lake == "Island Lake")` and `r sum(isl_ne12_df$lake == "NE 12")`).
+
+For rank tests, report **medians** (not means), the test statistic, p, and both sample sizes.

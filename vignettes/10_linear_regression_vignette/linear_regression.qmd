@@ -1,0 +1,135 @@
+---
+order: 10.1
+week: 6
+title: "Simple Linear Regression"
+subtitle: "Regression with one predictor"
+description: "Fitting, testing, checking, and predicting from a simple linear regression on the lion nose data from lecture."
+resources: ["linear_regression.R", "data/lion_noses.csv"]
+author: "Bill Perry"
+---
+
+[📥 Download the R script](linear_regression.R){.btn .btn-primary download="linear_regression.R"}
+[📊 Download the data](data/lion_noses.csv){.btn .btn-secondary download="lion_noses.csv"}
+
+## What regression does
+
+Regression fits a straight line that **predicts** a response (Y) from a predictor (X). Unlike correlation, the roles matter: X explains Y.
+
+$$Y = \beta_0 + \beta_1 X + \varepsilon$$
+
+- $\beta_0$ — the intercept: predicted Y when X = 0
+- $\beta_1$ — the slope: change in Y for a one-unit increase in X
+- $\varepsilon$ — the residual: what the line misses
+
+$H_0: \beta_1 = 0$ (X does not predict Y) vs. $H_A: \beta_1 \neq 0$
+
+**Data:** the proportion of black pigment on a lion's nose and its age in years. Can we age a lion from its nose?
+
+**Assumptions** (checked on the residuals, after fitting): linearity, normality, equal variance, independence.
+
+## Step 1: Load packages and data
+
+```{r}
+#| label: step-1-load
+#| message: false
+library(tidyverse)
+library(car)   # Anova()
+
+lion_df <- read_csv("data/lion_noses.csv")
+
+lion_df
+```
+
+## Step 2: Plot it
+
+```{r}
+#| label: step-2-plot
+#| fig-width: 3.4
+#| fig-height: 3
+#| message: false
+lion_df %>%
+  ggplot(aes(proportion_black, age_years)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  labs(x = "Proportion of black on nose", y = "Age (years)") +
+  theme_bw()
+```
+
+## Step 3: Fit the model
+
+```{r}
+#| label: step-3-fit
+lion_model <- lm(age_years ~ proportion_black, data = lion_df)
+
+coef(lion_model)
+```
+
+The fitted line is: age = `r round(coef(lion_model)[1], 2)` + `r round(coef(lion_model)[2], 2)` × proportion black.
+
+## Step 4: Check the assumptions
+
+Check these **before** trusting any p-value.
+
+```{r}
+#| label: step-4-diagnostics
+#| fig-width: 6
+#| fig-height: 6
+par(mfrow = c(2, 2))
+plot(lion_model)
+par(mfrow = c(1, 1))
+```
+
+- **Residuals vs Fitted**: no curve, no funnel shape → linear, equal variance.
+- **Q-Q Residuals**: points near the line → normal residuals.
+- **Scale-Location**: flat red line → equal variance.
+- **Residuals vs Leverage**: no points beyond the dashed Cook's distance lines → no single point controls the fit.
+
+```{r}
+#| label: step-4b-shapiro
+shapiro.test(residuals(lion_model))
+```
+
+## Step 5: Test the slope
+
+```{r}
+#| label: step-5-summary
+summary(lion_model)
+```
+
+**Reading the output:**
+
+- **Estimate** for `proportion_black`: the slope. Each +0.1 in proportion black adds about `r round(coef(lion_model)[2] / 10, 2)` years.
+- **Std. Error, t value, Pr(>\|t\|)**: the test of $H_0: \beta_1 = 0$.
+- **Multiple R-squared**: the share of variation in age explained by the nose (`r round(summary(lion_model)$r.squared, 2)`).
+- **F-statistic**: the same test as the slope's t (F = t²) with one predictor.
+
+The ANOVA table splits the variation into the part the line explains and the residual:
+
+```{r}
+#| label: step-5b-anova
+anova(lion_model)
+```
+
+## Step 6: Predict
+
+Predict the age of a lion whose nose is 50% black. A **confidence** interval is for the *mean* age of all such lions; a **prediction** interval is for *one* lion, so it is wider.
+
+```{r}
+#| label: step-6-predict
+new_lion <- tibble(proportion_black = 0.50)
+
+predict(lion_model, new_lion, interval = "confidence")
+predict(lion_model, new_lion, interval = "prediction")
+```
+
+## Step 7: Write it up
+
+```{r}
+#| label: step-7-numbers
+lion_sum <- summary(lion_model)
+lion_f   <- lion_sum$fstatistic
+```
+
+> Lion age increased with the proportion of black on the nose (age = `r round(coef(lion_model)[1], 2)` + `r round(coef(lion_model)[2], 2)` × proportion black; F~1,`r lion_f[3]`~ = `r round(lion_f[1], 1)`, p < 0.001, R² = `r round(lion_sum$r.squared, 2)`).
+
+Report the equation, F (or t) with df, p, and R². Show the scatterplot with the fitted line.

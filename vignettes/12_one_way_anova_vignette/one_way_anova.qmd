@@ -1,0 +1,173 @@
+---
+order: 12
+week: 8
+title: "One-Way ANOVA"
+subtitle: "One-way ANOVA and Kruskal-Wallis"
+description: "One-way ANOVA as a linear model, assumption checks, Tukey post-hoc tests with emmeans, and the Kruskal-Wallis alternative, using the fiddler crab and nematode data from lecture."
+resources: ["one_way_anova.R", "data/fiddler_crabs.csv", "data/nematode_lifespan.csv"]
+author: "Bill Perry"
+---
+
+[📥 Download the R script](one_way_anova.R){.btn .btn-primary download="one_way_anova.R"}
+[📊 fiddler_crabs.csv](data/fiddler_crabs.csv){.btn .btn-secondary download="fiddler_crabs.csv"}
+[📊 nematode_lifespan.csv](data/nematode_lifespan.csv){.btn .btn-secondary download="nematode_lifespan.csv"}
+
+## What one-way ANOVA does
+
+ANOVA compares the means of **three or more** groups in one test. It asks whether the variation **among** group means is large compared to the variation **within** groups (the F-ratio).
+
+$H_0: \mu_1 = \mu_2 = \dots = \mu_k$ vs. $H_A$: at least one mean differs.
+
+A significant F says *some* means differ, not *which*. Post-hoc tests answer that.
+
+**Data:** body temperature (°C) of fiddler crabs in four groups: females, intact males, and males with the major or minor claw removed. Does the big claw act as a heat sink?
+
+**Assumptions:** independent observations, normal residuals, equal variances among groups.
+
+## Step 1: Load packages and data
+
+```{r}
+#| label: step-1-load
+#| message: false
+library(tidyverse)
+library(car)       # leveneTest(), Anova()
+library(emmeans)   # post-hoc comparisons
+library(FSA)       # dunnTest() for Kruskal-Wallis follow-up
+
+crab_df <- read_csv("data/fiddler_crabs.csv") %>%
+  mutate(crab_type = factor(crab_type),
+         # make intact males the reference (control) group
+         crab_type = fct_relevel(crab_type, "intact male"))
+
+count(crab_df, crab_type)
+```
+
+## Step 2: Summarize and plot
+
+```{r}
+#| label: step-2-summary
+#| fig-width: 4.5
+#| fig-height: 3
+crab_df %>%
+  group_by(crab_type) %>%
+  summarize(n = n(),
+            mean = mean(body_temp_c),
+            sd = sd(body_temp_c),
+            se = sd / sqrt(n))
+
+crab_df %>%
+  ggplot(aes(crab_type, body_temp_c)) +
+  geom_boxplot() +
+  geom_jitter(width = 0.1, alpha = 0.5) +
+  labs(x = NULL, y = "Body temperature (°C)") +
+  theme_bw()
+```
+
+## Step 3: Fit the model
+
+ANOVA is a linear model with a categorical predictor.
+
+```{r}
+#| label: step-3-fit
+crab_model <- lm(body_temp_c ~ crab_type, data = crab_df)
+```
+
+## Step 4: Check the assumptions
+
+```{r}
+#| label: step-4-assumptions
+#| fig-width: 6
+#| fig-height: 6
+par(mfrow = c(2, 2))
+plot(crab_model)
+par(mfrow = c(1, 1))
+
+shapiro.test(residuals(crab_model))                    # normal residuals?
+leveneTest(body_temp_c ~ crab_type, data = crab_df)    # equal variances?
+```
+
+Both p > 0.05 and the plots look fine, so the ANOVA assumptions hold.
+
+## Step 5: The ANOVA table
+
+```{r}
+#| label: step-5-anova
+anova(crab_model)
+```
+
+**Reading the output:**
+
+- **Df**: k − 1 = 3 for groups; N − k = 80 for residuals.
+- **Sum Sq / Mean Sq**: variation among groups and within groups. Mean Sq = Sum Sq / Df.
+- **F value**: Mean Sq(groups) / Mean Sq(residuals). Large F → group means differ more than chance.
+- **Pr(>F)**: p < 0.001, so at least one group mean differs.
+
+With one factor, `anova()`, `Anova(type = "II")`, and `Anova(type = "III")` all give the same answer. The type only matters with two or more factors (see the two-way ANOVA vignette).
+
+```{r}
+#| label: step-5b-r2
+summary(crab_model)$r.squared   # share of variation explained by crab type
+```
+
+## Step 6: Which groups differ? Post-hoc tests
+
+Estimated marginal means, then all pairwise comparisons with a Tukey adjustment.
+
+```{r}
+#| label: step-6-posthoc
+crab_emm <- emmeans(crab_model, ~ crab_type)
+crab_emm
+
+pairs(crab_emm, adjust = "tukey")
+```
+
+Compact letter display: groups that **share a letter** are not significantly different.
+
+```{r}
+#| label: step-6b-cld
+multcomp::cld(crab_emm, Letters = letters, adjust = "sidak")
+```
+
+## Step 7: When assumptions fail — Kruskal-Wallis
+
+**Nematode data:** lifespan (days) of worms in four treatments. Check the assumptions first:
+
+```{r}
+#| label: step-7a-worm-check
+#| message: false
+worm_df <- read_csv("data/nematode_lifespan.csv") %>%
+  mutate(treatment = fct_relevel(factor(treatment), "water"))
+
+worm_model <- lm(lifespan_days ~ treatment, data = worm_df)
+
+shapiro.test(residuals(worm_model))
+leveneTest(lifespan_days ~ treatment, data = worm_df)
+```
+
+Both assumptions fail, so use the rank-based **Kruskal-Wallis test**, the non-parametric partner of one-way ANOVA.
+
+```{r}
+#| label: step-7b-kruskal
+kruskal.test(lifespan_days ~ treatment, data = worm_df)
+```
+
+Follow up with **Dunn's test** (Benjamini-Hochberg adjusted p-values):
+
+```{r}
+#| label: step-7c-dunn
+dunnTest(lifespan_days ~ treatment, data = worm_df, method = "bh")$res %>%
+  mutate(across(where(is.numeric), ~ signif(.x, 3)))
+```
+
+Use `P.adj`, not `P.unadj`. For Kruskal-Wallis, report **medians**.
+
+## Step 8: Write it up
+
+```{r}
+#| label: step-8-numbers
+crab_aov <- anova(crab_model)
+```
+
+> Body temperature differed among crab types (one-way ANOVA: F~`r crab_aov$Df[1]`,`r crab_aov$Df[2]`~ = `r round(crab_aov[1, "F value"], 1)`, p < 0.001, R² = `r round(summary(crab_model)$r.squared, 2)`). Females were warmer than all three male groups, and males with the major claw removed were warmer than males with the minor claw removed (Tukey, p < 0.05).
+
+Report F with both df, p, and which groups differed. Show means ± SE with the letters from Step 6.

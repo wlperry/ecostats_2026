@@ -1,0 +1,134 @@
+---
+order: 10
+week: 6
+title: "Correlation"
+subtitle: "Pearson and Spearman correlation"
+description: "Pearson correlation and its rank-based partner, Spearman's rho, on the booby and rope-trick data from lecture."
+resources: ["correlation.R", "data/booby_aggression.csv", "data/rope_trick.csv"]
+author: "Bill Perry"
+---
+
+[📥 Download the R script](correlation.R){.btn .btn-primary download="correlation.R"}
+[📊 booby_aggression.csv](data/booby_aggression.csv){.btn .btn-secondary download="booby_aggression.csv"}
+[📊 rope_trick.csv](data/rope_trick.csv){.btn .btn-secondary download="rope_trick.csv"}
+
+## What correlation does
+
+Correlation measures how strongly two continuous variables move together in a **straight line**. Neither variable is the "response"; both are just measured. The correlation coefficient **r** runs from −1 (perfect negative) through 0 (none) to +1 (perfect positive).
+
+$H_0: \rho = 0$ (no linear association) vs. $H_A: \rho \neq 0$
+
+| Version | Use when | R call |
+|----|----|----|
+| Pearson's r | Both variables roughly normal, relationship linear | `cor.test(x, y)` |
+| Spearman's rho | Non-normal, outliers, or monotonic but curved | `cor.test(x, y, method = "spearman")` |
+
+Correlation is not causation, and r only detects **linear** patterns. Always plot first.
+
+## Step 1: Load packages and data
+
+```{r}
+#| label: step-1-load
+#| message: false
+library(tidyverse)
+
+booby_df <- read_csv("data/booby_aggression.csv")
+rope_df  <- read_csv("data/rope_trick.csv")
+
+booby_df
+```
+
+**Booby data:** how often a Nazca booby was visited by unrelated adults as a nestling, and how aggressive it was as an adult.
+
+## Step 2: Plot the relationship
+
+```{r}
+#| label: step-2-plot
+#| fig-width: 3.4
+#| fig-height: 3
+booby_df %>%
+  ggplot(aes(visits_as_nestling, future_aggression)) +
+  geom_point(size = 2) +
+  labs(x = "Visits as a nestling", y = "Adult aggression score") +
+  theme_bw()
+```
+
+Look for: a roughly straight trend, no strong curve, no single point driving the pattern.
+
+## Step 3: Check normality
+
+Pearson's test assumes both variables are (bivariate) normal.
+
+```{r}
+#| label: step-3-normality
+shapiro.test(booby_df$visits_as_nestling)
+shapiro.test(booby_df$future_aggression)
+```
+
+```{r}
+#| label: step-3b-qq
+#| fig-width: 4
+#| fig-height: 2.4
+booby_df %>%
+  pivot_longer(everything()) %>%
+  ggplot(aes(sample = value)) +
+  geom_qq() +
+  geom_qq_line() +
+  facet_wrap(~ name, scales = "free") +
+  theme_bw()
+```
+
+## Step 4: Pearson correlation
+
+```{r}
+#| label: step-4-pearson
+booby_test <- cor.test(booby_df$visits_as_nestling,
+                       booby_df$future_aggression)
+booby_test
+```
+
+**Reading the output:**
+
+- **cor**: r = `r round(booby_test$estimate, 2)`, a moderate positive association.
+- **t, df**: the test of $H_0: \rho = 0$; df = n − 2.
+- **p-value**: `r signif(booby_test$p.value, 2)`, so we reject $H_0$.
+- **95% CI**: the plausible range for ρ. Wide CIs are normal with small n.
+- **r²** = `r round(booby_test$estimate^2, 2)` is the share of variation the two variables have in common.
+
+## Step 5: When normality fails — Spearman's rho
+
+**Rope trick data:** years since a person saw the Indian rope trick, and how impressive they remember it being.
+
+```{r}
+#| label: step-5a-rope-check
+#| fig-width: 3.4
+#| fig-height: 3
+shapiro.test(rope_df$impressiveness)
+
+rope_df %>%
+  ggplot(aes(years_since_seen, impressiveness)) +
+  geom_point(size = 2) +
+  labs(x = "Years since seen", y = "Impressiveness score") +
+  theme_bw()
+```
+
+Impressiveness is a 1–5 score and is not normal, so use Spearman. It correlates the **ranks**, not the raw values.
+
+```{r}
+#| label: step-5b-spearman
+#| warning: false
+rope_test <- cor.test(rope_df$years_since_seen,
+                      rope_df$impressiveness,
+                      method = "spearman")
+rope_test
+```
+
+The warning about ties is expected with a 1–5 score; R uses an approximate p-value.
+
+## Step 6: Write it up
+
+> Adult aggression increased with the number of visits a booby received as a nestling (Pearson's r = `r round(booby_test$estimate, 2)`, t(`r booby_test$parameter`) = `r round(booby_test$statistic, 2)`, p = `r signif(booby_test$p.value, 2)`, n = `r nrow(booby_df)`).
+
+> Remembered impressiveness of the rope trick increased with years since it was seen (Spearman's ρ = `r round(rope_test$estimate, 2)`, p < 0.001, n = `r nrow(rope_df)`).
+
+Report r (or ρ), the test statistic and df for Pearson, p, and n. Show the scatterplot.

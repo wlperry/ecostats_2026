@@ -1,0 +1,133 @@
+---
+order: 11
+week: 7
+title: "Multiple Regression"
+subtitle: "Regression with several predictors"
+description: "Full model, collinearity (VIF), comparing nested models, and Type II tests on Loyn's forest bird data from lecture."
+resources: ["multiple_regression.R", "data/loyn_birds.csv"]
+author: "Bill Perry"
+---
+
+[📥 Download the R script](multiple_regression.R){.btn .btn-primary download="multiple_regression.R"}
+[📊 Download the data](data/loyn_birds.csv){.btn .btn-secondary download="loyn_birds.csv"}
+
+## What multiple regression does
+
+Multiple regression predicts one response from **several** predictors at once. Each slope is a **partial** slope: the effect of that predictor while holding the others constant.
+
+$$Y = \beta_0 + \beta_1 X_1 + \beta_2 X_2 + \dots + \varepsilon$$
+
+**Data:** forest bird abundance in 56 forest patches in Victoria, Australia (Loyn 1987), with patch area, distance to the nearest patch and to the nearest larger patch, year isolated, grazing intensity (1–5), and altitude.
+
+**Assumptions:** the same as simple regression (linearity, normal residuals, equal variance, independence), **plus** predictors that are not too strongly correlated with each other (collinearity).
+
+## Step 1: Load packages and data
+
+Area and distances are strongly right-skewed, so we log-transform them, as in lecture.
+
+```{r}
+#| label: step-1-load
+#| message: false
+library(tidyverse)
+library(car)   # vif(), Anova()
+
+bird_df <- read_csv("data/loyn_birds.csv") %>%
+  mutate(log_area        = log10(area_ha),
+         log_dist        = log10(dist_m),
+         log_dist_larger = log10(dist_larger_m))
+
+glimpse(bird_df)
+```
+
+## Step 2: Look at the predictors together
+
+A scatterplot matrix shows each predictor against the response and against each other.
+
+```{r}
+#| label: step-2-pairs
+#| fig-width: 7
+#| fig-height: 7
+bird_df %>%
+  select(abundance, log_area, log_dist, log_dist_larger,
+         year_isolated, grazing, altitude_m) %>%
+  pairs()
+```
+
+## Step 3: Fit the full model
+
+```{r}
+#| label: step-3-full
+full_model <- lm(abundance ~ log_area + log_dist +
+                   log_dist_larger + year_isolated +
+                   grazing + altitude_m,
+                 data = bird_df)
+
+summary(full_model)
+```
+
+Only `log_area` is clearly significant here; `grazing` is close.
+
+## Step 4: Check collinearity
+
+The **variance inflation factor** (VIF) says how much each slope's variance is inflated by correlation with the other predictors. VIF > 5 is a warning; > 10 is a problem.
+
+```{r}
+#| label: step-4-vif
+vif(full_model)
+```
+
+All VIFs are below 3, so collinearity is not a concern here.
+
+## Step 5: Compare the full model with a reduced model
+
+Drop the predictors that add nothing and test whether the fit got worse. This is a **partial F-test** of nested models.
+
+```{r}
+#| label: step-5-compare
+reduced_model <- lm(abundance ~ log_area + grazing, data = bird_df)
+
+anova(reduced_model, full_model)
+```
+
+p > 0.05: the four extra predictors did not significantly improve the fit, so keep the simpler model.
+
+## Step 6: Check the assumptions on the final model
+
+```{r}
+#| label: step-6-diagnostics
+#| fig-width: 6
+#| fig-height: 6
+par(mfrow = c(2, 2))
+plot(reduced_model)
+par(mfrow = c(1, 1))
+
+shapiro.test(residuals(reduced_model))
+```
+
+## Step 7: Test each predictor
+
+`summary()` gives each partial slope. `Anova(type = "II")` tests each predictor after the other, which is the standard table for multiple regression.
+
+```{r}
+#| label: step-7-test
+summary(reduced_model)
+
+Anova(reduced_model, type = "II")
+```
+
+**Reading the output:**
+
+- `log_area` slope: abundance rises by about `r round(coef(reduced_model)["log_area"], 1)` birds for each 10-fold increase in patch area, **holding grazing constant**.
+- `grazing` slope: each step up in grazing intensity lowers abundance by about `r round(-coef(reduced_model)["grazing"], 1)` birds, holding area constant.
+- **Adjusted R²** (`r round(summary(reduced_model)$adj.r.squared, 2)`) penalizes extra predictors; use it to compare models of different size.
+
+## Step 8: Write it up
+
+```{r}
+#| label: step-8-numbers
+red_aov <- Anova(reduced_model, type = "II")
+```
+
+> Forest bird abundance increased with log~10~ patch area (F~1,53~ = `r round(red_aov["log_area", "F value"], 1)`, p < 0.001) and decreased with grazing intensity (F~1,53~ = `r round(red_aov["grazing", "F value"], 1)`, p < 0.001; multiple regression, R² = `r round(summary(reduced_model)$r.squared, 2)`). Distance to other patches, year of isolation, and altitude did not improve the model (partial F-test, p = `r round(anova(reduced_model, full_model)[2, "Pr(>F)"], 2)`).
+
+Report each predictor's slope or F with df and p, the overall R², and how you chose the final model.

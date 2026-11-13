@@ -1,0 +1,140 @@
+---
+order: 17
+week: 12
+title: "ANCOVA"
+subtitle: "Analysis of covariance"
+description: "Testing homogeneity of slopes, fitting an ANCOVA, and comparing covariate-adjusted means with emmeans, using the Partridge & Farquhar fruit fly longevity data from lecture."
+resources: ["ancova.R", "data/partridge.csv"]
+author: "Bill Perry"
+---
+
+[📥 Download the R script](ancova.R){.btn .btn-primary download="ancova.R"}
+[📊 Download the data](data/partridge.csv){.btn .btn-secondary download="partridge.csv"}
+
+## What ANCOVA does
+
+ANCOVA compares group means (like ANOVA) while **adjusting for a continuous covariate** (like regression). The covariate soaks up variation that would otherwise sit in the error term, so group differences are easier to detect, and groups are compared at the **same** covariate value.
+
+$$Y_{ij} = \mu + \alpha_i + \beta(X_{ij} - \bar{X}) + \varepsilon_{ij}$$
+
+**The key extra assumption: homogeneity of slopes.** The covariate must have the same slope in every group (parallel lines). Test this first with a group × covariate interaction.
+
+**Data:** Partridge & Farquhar (1981). Male fruit fly longevity (days) under five mating treatments, with thorax length (mm) as the covariate. Bigger flies live longer, so we adjust for size.
+
+## Step 1: Load packages and data
+
+```{r}
+#| label: step-1-load
+#| message: false
+library(tidyverse)
+library(car)       # Anova()
+library(emmeans)   # adjusted means
+
+# PARTNERS = number of females (0/1/8); TYPE = 0 inseminated, 1 virgin
+partridge <- read_csv("data/partridge.csv") %>%
+  mutate(treatment = case_when(
+    PARTNERS == 0               ~ "No females",
+    PARTNERS == 1 & TYPE == 0   ~ "One inseminated female daily",
+    PARTNERS == 8 & TYPE == 0   ~ "Eight inseminated females daily",
+    PARTNERS == 1 & TYPE == 1   ~ "One virgin female daily",
+    PARTNERS == 8 & TYPE == 1   ~ "Eight virgin females daily"),
+    treatment = factor(treatment, levels = c(
+      "No females",
+      "One inseminated female daily", "Eight inseminated females daily",
+      "One virgin female daily", "Eight virgin females daily")))
+
+count(partridge, treatment)
+```
+
+## Step 2: Plot the covariate against the response
+
+```{r}
+#| label: step-2-plot
+#| fig-width: 6
+#| fig-height: 3.5
+#| message: false
+partridge %>%
+  ggplot(aes(THORAX, LONGEV, color = treatment)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(x = "Thorax length (mm)", y = "Longevity (days)", color = NULL) +
+  theme_bw()
+```
+
+Lines that are roughly parallel suggest the slopes are homogeneous.
+
+## Step 3: Test homogeneity of slopes
+
+```{r}
+#| label: step-3-slopes
+options(contrasts = c("contr.sum", "contr.poly"))
+
+homo_slopes_model <- lm(LONGEV ~ THORAX * treatment, data = partridge)
+Anova(homo_slopes_model, type = "III")
+```
+
+Look **only** at the `THORAX:treatment` row. p > 0.05 means the slopes do not differ, so we can drop the interaction and fit the ANCOVA. (If it were significant, the treatment effect would depend on size; see the ANCOVA lecture for `emtrends()`.)
+
+## Step 4: Fit the ANCOVA
+
+```{r}
+#| label: step-4-ancova
+ancova_model <- lm(LONGEV ~ THORAX + treatment, data = partridge)
+Anova(ancova_model, type = "III")
+```
+
+## Step 5: Check the assumptions
+
+```{r}
+#| label: step-5-diagnostics
+#| fig-width: 6
+#| fig-height: 6
+par(mfrow = c(2, 2))
+plot(ancova_model)
+par(mfrow = c(1, 1))
+
+shapiro.test(residuals(ancova_model))
+```
+
+## Step 6: Why the covariate helps
+
+Compare the ANOVA without the covariate to the ANCOVA:
+
+```{r}
+#| label: step-6-compare
+Anova(lm(LONGEV ~ treatment, data = partridge), type = "III")
+```
+
+The residual sum of squares is much larger without thorax length. The covariate removes size-related noise, so the F for treatment is larger in the ANCOVA.
+
+## Step 7: Adjusted means and pairwise comparisons
+
+`emmeans()` gives each treatment's mean **at the average thorax length**.
+
+```{r}
+#| label: step-7-emmeans
+adjusted_means <- emmeans(ancova_model, ~ treatment)
+adjusted_means
+
+pairs(adjusted_means, adjust = "tukey")
+```
+
+```{r}
+#| label: step-7b-cld
+multcomp::cld(adjusted_means, Letters = letters, adjust = "sidak")
+
+# put R's default contrasts back
+options(contrasts = c("contr.treatment", "contr.poly"))
+```
+
+## Step 8: Write it up
+
+```{r}
+#| label: step-8-numbers
+anc_aov   <- Anova(ancova_model, type = "III")
+slope_aov <- Anova(homo_slopes_model, type = "III")
+```
+
+> After adjusting for thorax length (F~1,`r anc_aov["Residuals", "Df"]`~ = `r round(anc_aov["THORAX", "F value"], 1)`, p < 0.001), longevity differed among mating treatments (ANCOVA: F~4,`r anc_aov["Residuals", "Df"]`~ = `r round(anc_aov["treatment", "F value"], 1)`, p < 0.001). Slopes were homogeneous (thorax × treatment: p = `r round(slope_aov["THORAX:treatment", "Pr(>F)"], 2)`). Males housed with eight virgin females had the shortest adjusted lifespan.
+
+Report the slopes test, both F-tests from the ANCOVA, and the **adjusted** means (not the raw means).

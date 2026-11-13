@@ -1,0 +1,146 @@
+---
+order: 19
+week: 14
+title: "Principal Component Analysis"
+subtitle: "PCA"
+description: "Standardizing, running PCA with prcomp(), choosing how many components to keep, and reading loadings, scores, and biplots, using the iris data from lecture."
+resources: ["pca.R"]
+author: "Bill Perry"
+---
+
+[📥 Download the R script](pca.R){.btn .btn-primary download="pca.R"}
+
+The data are R's built-in `iris`, so there is no file to download.
+
+## What PCA does
+
+PCA takes many correlated variables and rotates them into new, **uncorrelated** axes called principal components (PCs). PC1 points along the direction of greatest variation, PC2 the next greatest at right angles to PC1, and so on. If the first two or three PCs capture most of the variation, you can plot and analyze them instead of every variable.
+
+- **Eigenvalue**: the variance captured by a PC.
+- **Loadings** (eigenvectors): how much each original variable contributes to a PC.
+- **Scores**: where each observation falls on the new axes.
+
+PCA is **descriptive**: there is no p-value. It assumes roughly linear relationships among the variables.
+
+**Data:** four flower measurements (cm) on 150 irises of three species. Species is *not* used to build the PCA; we only use it to color the plot afterwards.
+
+## Step 1: Load packages and data
+
+```{r}
+#| label: step-1-load
+#| message: false
+library(tidyverse)
+library(janitor)      # clean_names()
+library(factoextra)   # fviz_eig(), fviz_pca_var(), fviz_pca_biplot()
+
+iris_df <- iris %>% clean_names()
+
+iris_data <- iris_df %>%
+  dplyr::select(sepal_length, sepal_width, petal_length, petal_width)
+
+head(iris_data)
+```
+
+## Step 2: Look at the correlations
+
+PCA is only useful if the variables are correlated.
+
+```{r}
+#| label: step-2-cor
+round(cor(iris_data), 2)
+```
+
+The petal measurements and sepal length are strongly correlated, so a few PCs should summarize them well.
+
+## Step 3: Standardize
+
+Variables on different scales must be standardized (mean 0, SD 1), or the variable with the largest variance dominates.
+
+```{r}
+#| label: step-3-scale
+iris_scaled <- scale(iris_data)
+
+round(colMeans(iris_scaled), 3)        # all 0
+round(apply(iris_scaled, 2, sd), 3)    # all 1
+```
+
+## Step 4: Run the PCA
+
+```{r}
+#| label: step-4-pca
+iris_pca <- prcomp(iris_scaled, center = FALSE, scale. = FALSE)
+
+summary(iris_pca)
+```
+
+`center` and `scale.` are FALSE because `scale()` already did both. (Giving raw data to `prcomp(..., scale. = TRUE)` is identical.)
+
+**Reading the output:** *Proportion of Variance* is each PC's share; *Cumulative Proportion* adds them up.
+
+## Step 5: How many PCs to keep?
+
+```{r}
+#| label: step-5-eigen
+eigenvalues <- iris_pca$sdev^2
+eigenvalues
+```
+
+```{r}
+#| label: step-5b-scree
+#| fig-width: 4
+#| fig-height: 3
+fviz_eig(iris_pca, addlabels = TRUE)
+```
+
+Common rules: keep PCs with eigenvalue > 1 (Kaiser), or keep PCs before the "elbow" in the scree plot, or keep enough to explain ~80–90%. Here PC1 and PC2 explain about `r round(100 * sum(eigenvalues[1:2]) / sum(eigenvalues))`%.
+
+## Step 6: Loadings — what do the PCs mean?
+
+```{r}
+#| label: step-6-loadings
+round(iris_pca$rotation, 2)
+```
+
+- **PC1**: sepal length and both petal measurements load strongly with the same sign. PC1 is overall **flower size**.
+- **PC2**: dominated by sepal width.
+
+The sign of a PC is arbitrary; only the relative signs within a PC matter.
+
+```{r}
+#| label: step-6b-var-plot
+#| fig-width: 4
+#| fig-height: 4
+fviz_pca_var(iris_pca, col.var = "contrib", repel = TRUE)
+```
+
+Arrows pointing the same way are positively correlated; longer arrows are better represented by these two PCs.
+
+## Step 7: Scores and the biplot
+
+```{r}
+#| label: step-7-biplot
+#| fig-width: 5
+#| fig-height: 4
+fviz_pca_biplot(iris_pca,
+                geom.ind = "point",
+                col.ind = iris_df$species,
+                addEllipses = TRUE,
+                repel = TRUE,
+                legend.title = "Species")
+```
+
+The species separate along PC1: *setosa* has small petals, *virginica* large. The scores can be saved for later analysis:
+
+```{r}
+#| label: step-7b-scores
+scores_df <- as_tibble(iris_pca$x) %>%
+  mutate(species = iris_df$species)
+
+head(scores_df)
+```
+
+## Step 8: Write it up
+
+> A PCA on the correlation matrix of four standardized flower measurements produced two components that together explained `r round(100 * sum(eigenvalues[1:2]) / sum(eigenvalues))`% of the variation (PC1 `r round(100 * eigenvalues[1] / sum(eigenvalues))`%, PC2 `r round(100 * eigenvalues[2] / sum(eigenvalues))`%). PC1 reflected overall flower size (high loadings for petal length, petal width, and sepal length); PC2 reflected sepal width. The three species separated mainly along PC1.
+
+Report whether variables were standardized, the variance explained by each retained PC, how you chose how many to keep, what the loadings mean, and show the biplot.

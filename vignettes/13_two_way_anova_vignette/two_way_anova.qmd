@@ -1,0 +1,183 @@
+---
+order: 13
+week: 9
+title: "Two-Way (Factorial) ANOVA"
+subtitle: "Two factors and their interaction"
+description: "Two-factor ANOVA with an interaction, Type III sums of squares, estimated marginal means, simple effects, and an interaction plot, using the palmerpenguins species-by-sex data from lecture."
+resources: ["two_way_anova.R"]
+author: "Bill Perry"
+---
+
+[📥 Download the R script](two_way_anova.R){.btn .btn-primary download="two_way_anova.R"}
+
+The data come from the `palmerpenguins` package, so there is no file to download. Run `install.packages("palmerpenguins")` once if you need it.
+
+## What two-way ANOVA does
+
+Two-way ANOVA tests two categorical factors at once, **and** whether they interact:
+
+$$Y_{ijk} = \mu + \alpha_i + \beta_j + (\alpha\beta)_{ij} + \varepsilon_{ijk}$$
+
+It tests three null hypotheses:
+
+1. **Factor A** (species): no difference among species means.
+2. **Factor B** (sex): no difference between sexes.
+3. **Interaction A × B**: the effect of sex is the **same** in every species.
+
+**Check the interaction first.** If it is significant, the main effects are averages over situations that differ, so you should compare one factor *within* each level of the other (simple effects).
+
+**Data:** body mass of three penguin species, by sex.
+
+## Step 1: Load packages and data
+
+```{r}
+#| label: step-1-load
+#| message: false
+library(tidyverse)
+library(car)              # Anova(), leveneTest()
+library(emmeans)          # marginal means and post-hoc tests
+library(palmerpenguins)   # the data
+
+p_df <- penguins %>%
+  filter(!is.na(body_mass_g), !is.na(sex), !is.na(species)) %>%
+  select(species, sex, body_mass_g)
+
+count(p_df, species, sex)
+```
+
+## Step 2: Balance the design
+
+The cells have unequal n. As in lecture, we first sample the same number from every cell so the three types of sums of squares agree. (Step 9 shows what changes when the data are unbalanced.)
+
+```{r}
+#| label: step-2-balance
+min_n <- min(count(p_df, species, sex)$n)
+
+set.seed(123)
+balanced_df <- p_df %>%
+  group_by(species, sex) %>%
+  slice_sample(n = min_n) %>%
+  ungroup()
+
+count(balanced_df, species, sex)
+```
+
+## Step 3: Summarize and plot
+
+```{r}
+#| label: step-3-summary
+#| fig-width: 4.5
+#| fig-height: 3
+balanced_df %>%
+  group_by(species, sex) %>%
+  summarize(n = n(),
+            mean = mean(body_mass_g),
+            se = sd(body_mass_g) / sqrt(n),
+            .groups = "drop")
+
+balanced_df %>%
+  ggplot(aes(species, body_mass_g, fill = sex)) +
+  geom_boxplot() +
+  labs(x = NULL, y = "Body mass (g)") +
+  theme_bw()
+```
+
+## Step 4: Fit the model with sum-to-zero contrasts
+
+Type III tests are only correct with **sum-to-zero contrasts**. Set them before fitting.
+
+```{r}
+#| label: step-4-fit
+options(contrasts = c("contr.sum", "contr.poly"))
+
+anova_model <- lm(body_mass_g ~ species * sex, data = balanced_df)
+```
+
+`species * sex` is shorthand for `species + sex + species:sex`.
+
+## Step 5: Check the assumptions
+
+```{r}
+#| label: step-5-assumptions
+#| fig-width: 6
+#| fig-height: 6
+par(mfrow = c(2, 2))
+plot(anova_model)
+par(mfrow = c(1, 1))
+
+shapiro.test(residuals(anova_model))
+leveneTest(body_mass_g ~ species * sex, data = balanced_df)
+```
+
+## Step 6: The ANOVA table
+
+```{r}
+#| label: step-6-anova
+anova_type3 <- Anova(anova_model, type = "III")
+anova_type3
+```
+
+Read it **bottom up**: the `species:sex` interaction is significant, so the size of the sex difference depends on species. The main-effect rows are still true, but they are averages.
+
+## Step 7: Follow up the interaction
+
+The six **cell** means, then species compared **within each sex** (simple effects):
+
+```{r}
+#| label: step-7-emmeans
+interaction_emm <- emmeans(anova_model, ~ species * sex)
+interaction_emm
+
+# F-test for species within each sex
+joint_tests(anova_model, by = "sex")
+
+# Tukey pairwise comparisons of species within each sex
+pairs(interaction_emm, by = "sex", adjust = "tukey")
+```
+
+Compact letter display for all six cells (cells sharing a letter do not differ):
+
+```{r}
+#| label: step-7b-cld
+multcomp::cld(interaction_emm, Letters = letters, adjust = "sidak")
+```
+
+## Step 8: Interaction plot
+
+Non-parallel lines are what an interaction looks like.
+
+```{r}
+#| label: step-8-plot
+#| fig-width: 4.5
+#| fig-height: 3
+emm_df <- as.data.frame(interaction_emm)
+
+emm_df %>%
+  ggplot(aes(species, emmean, color = sex, group = sex)) +
+  geom_point(size = 3) +
+  geom_line(linewidth = 1) +
+  geom_errorbar(aes(ymin = emmean - SE, ymax = emmean + SE), width = 0.1) +
+  labs(x = NULL, y = "Mean body mass (g) ± SE", color = "Sex") +
+  theme_bw()
+```
+
+## Step 9: Unbalanced data — why Type III
+
+With unequal cell sizes, Type I (sequential) sums of squares change with the **order** of the terms; Type II and III do not. Compare on the full, unbalanced data:
+
+```{r}
+#| label: step-9-unbalanced
+unbal_model <- lm(body_mass_g ~ species * sex, data = p_df)
+
+anova(unbal_model)                 # Type I: order matters
+Anova(unbal_model, type = "III")   # Type III: use this with an interaction
+
+# put R's default contrasts back when you are done
+options(contrasts = c("contr.treatment", "contr.poly"))
+```
+
+## Step 10: Write it up
+
+> Body mass differed among species (F~2,198~ = `r round(anova_type3["species", "F value"], 1)`, p < 0.001) and between sexes (F~1,198~ = `r round(anova_type3["sex", "F value"], 1)`, p < 0.001), and the sex difference depended on species (species × sex interaction: F~2,198~ = `r round(anova_type3["species:sex", "F value"], 1)`, p < 0.001; two-way ANOVA, Type III SS). Males were heavier than females in all three species, with the largest difference in Gentoo penguins.
+
+Report all three F-tests with df and p, then describe the interaction using the cell means and the interaction plot.

@@ -1,0 +1,155 @@
+---
+order: 16
+week: 11
+title: "Linear Mixed Models"
+subtitle: "Random intercepts for nested data"
+description: "Fitting a random-intercept mixed model with lme4, testing the fixed effect, reading the variance components, and checking diagnostics, using the urchin grazing data from lecture."
+resources: ["linear_mixed_models.R", "data/andrew.csv"]
+author: "Bill Perry"
+---
+
+[📥 Download the R script](linear_mixed_models.R){.btn .btn-primary download="linear_mixed_models.R"}
+[📊 Download the data](data/andrew.csv){.btn .btn-secondary download="andrew.csv"}
+
+## What a mixed model does
+
+When measurements are grouped (quadrats within patches, fish within lakes, repeated measures on one animal), observations in the same group are not independent. Treating them as independent is **pseudoreplication**: it inflates the df and makes p-values too small.
+
+A **linear mixed model** has two kinds of effects:
+
+- **Fixed effects**: the treatments you care about and want to compare (urchin density).
+- **Random effects**: the grouping units you sampled from a larger population (patches). The model estimates **one variance** for them, not a separate mean for each.
+
+$$algae_{ijk} = \mu + \alpha_i + b_{j(i)} + \varepsilon_{ijk}$$
+
+**Data:** Andrew & Underwood's urchin experiment. Urchin density was set to 0, 33, 66, or 100% in 16 patches (4 per treatment), and algal cover was measured in 5 quadrats per patch. The **patch** is the experimental unit, not the quadrat.
+
+## Step 1: Load packages and data
+
+```{r}
+#| label: step-1-load
+#| message: false
+library(tidyverse)
+library(janitor)       # clean_names()
+library(car)           # Anova()
+library(lme4)          # lmer()
+library(lmerTest)      # Kenward-Roger F-tests
+library(emmeans)       # post-hoc comparisons
+library(performance)   # check_model(), icc()
+
+# sum-to-zero contrasts for Type III tests
+options(contrasts = c("contr.sum", "contr.poly"))
+
+u_df <- read_csv("data/andrew.csv") %>%
+  clean_names() %>%
+  # the file's dens_33 / dens_66 labels are reversed relative to the book
+  mutate(treat = case_when(
+           treat == "removal" ~ "0%",
+           treat == "dens_66" ~ "33%",
+           treat == "dens_33" ~ "66%",
+           treat == "control" ~ "100%"),
+         treat = factor(treat, levels = c("0%", "33%", "66%", "100%")),
+         patch = as_factor(patch))
+
+count(u_df, treat, patch) %>% head()
+```
+
+## Step 2: Plot quadrats within patches
+
+```{r}
+#| label: step-2-plot
+#| fig-width: 5
+#| fig-height: 3
+u_df %>%
+  ggplot(aes(patch, algae, color = treat)) +
+  geom_point(alpha = 0.6) +
+  stat_summary(fun = mean, geom = "point", size = 3, shape = 18) +
+  labs(x = "Patch", y = "Algal cover (%)", color = "Urchin density") +
+  theme_bw()
+```
+
+Quadrats in the same patch cluster together. That clustering is what the random effect models.
+
+## Step 3: The wrong model (for comparison)
+
+```{r}
+#| label: step-3-wrong
+wrong_model <- lm(algae ~ treat, data = u_df)
+anova(wrong_model)
+```
+
+This uses 76 residual df, as if all 80 quadrats were independent, and gives p < 0.001. There are really only 16 patches. Compare this p-value with Step 6.
+
+## Step 4: Fit the mixed model
+
+`(1 | patch)` adds a **random intercept** for each patch.
+
+```{r}
+#| label: step-4-fit
+u_lmer_model <- lmer(algae ~ treat + (1 | patch), data = u_df)
+
+summary(u_lmer_model)
+```
+
+## Step 5: Variance components
+
+```{r}
+#| label: step-5-variance
+VarCorr(u_lmer_model)
+
+icc(u_lmer_model)
+```
+
+The **ICC** (intraclass correlation) is the share of the variance that lies **between patches**. Here about half the variation is among patches, so ignoring them would be a serious mistake.
+
+## Step 6: Test the fixed effect
+
+Use F-tests with **Kenward-Roger** df. Notice the denominator df: 12 (16 patches − 4 treatments), not 76.
+
+```{r}
+#| label: step-6-test
+Anova(u_lmer_model, type = 3, test.statistic = "F")
+```
+
+## Step 7: Post-hoc comparisons
+
+```{r}
+#| label: step-7-posthoc
+u_emm <- emmeans(u_lmer_model, ~ treat)
+u_emm
+
+pairs(u_emm, adjust = "tukey")
+```
+
+## Step 8: Check the assumptions
+
+A mixed model assumes normal residuals **and** normal random effects. The `reqq` panel checks the 16 patch intercepts.
+
+```{r}
+#| label: step-8-diagnostics
+#| fig-width: 7
+#| fig-height: 3.5
+#| message: false
+check_model(u_lmer_model, check = c("qq", "reqq", "homogeneity"))
+```
+
+Algal cover is bounded at 0 and many quadrats are 0, so the residuals are not perfect. Report that, and note that 16 patches cannot support strong claims either way.
+
+```{r}
+#| label: step-8b-reset
+# put R's default contrasts back
+options(contrasts = c("contr.treatment", "contr.poly"))
+```
+
+## Step 9: Write it up
+
+```{r}
+#| label: step-9-numbers
+u_aov <- Anova(u_lmer_model, type = 3, test.statistic = "F")
+```
+
+> Algal cover tended to decline with urchin density, but the effect was not significant once patch-to-patch variation was accounted for (linear mixed model with patch as a random intercept: F~3,12~ = `r round(u_aov["treat", "F"], 2)`, p = `r round(u_aov["treat", "Pr(>F)"], 3)`, Kenward-Roger df). Patches accounted for about `r round(100 * icc(u_lmer_model)$ICC_adjusted)`% of the variance in algal cover.
+
+Report the fixed-effect test with its (correct) df, the random-effect structure, and the variance components or ICC.
+
+For random slopes and correlated residuals over time, see the **Mixed Model Structures** vignette.

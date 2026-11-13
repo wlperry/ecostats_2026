@@ -1,0 +1,202 @@
+---
+order: 15
+week: 10
+title: "Generalized Linear Models"
+subtitle: "Poisson, negative binomial, and logistic regression"
+description: "GLMs for counts (Poisson and negative binomial, with an overdispersion check) and for presence/absence (logistic regression), using the Galapagos and Polis lizard data from lecture."
+resources: ["glm.R", "data/galapagos_species_area.csv", "data/polis.csv"]
+author: "Bill Perry"
+---
+
+[📥 Download the R script](glm.R){.btn .btn-primary download="glm.R"}
+[📊 galapagos_species_area.csv](data/galapagos_species_area.csv){.btn .btn-secondary download="galapagos_species_area.csv"}
+[📊 polis.csv](data/polis.csv){.btn .btn-secondary download="polis.csv"}
+
+## What a GLM does
+
+A linear model assumes a normal response with constant variance. Counts and yes/no data break both assumptions. A **generalized linear model** keeps the linear predictor but adds:
+
+- a **family** (error distribution) that matches the data, and
+- a **link function** that connects the mean to the linear predictor.
+
+| Response | Family | Link | R call |
+|----|----|----|----|
+| Continuous | `gaussian` | identity | `glm(..., family = gaussian)` = `lm()` |
+| Counts | `poisson` | log | `glm(..., family = poisson)` |
+| Overdispersed counts | negative binomial | log | `MASS::glm.nb()` |
+| 0/1, presence/absence | `binomial` | logit | `glm(..., family = binomial)` |
+
+GLMs are tested with **likelihood-ratio (LR) χ²** tests instead of F-tests, and fit is compared with **AIC** (lower is better).
+
+## Step 1: Load packages and data
+
+```{r}
+#| label: step-1-load
+#| message: false
+library(tidyverse)
+library(janitor)       # clean_names()
+library(car)           # Anova()
+library(MASS)          # glm.nb()
+library(performance)   # check_overdispersion(), r2()
+
+g_df <- read_csv("data/galapagos_species_area.csv")
+
+polis_df <- read_csv("data/polis.csv", na = c(".", "")) %>%
+  clean_names() %>%
+  drop_na(paratio, pa)
+```
+
+`MASS` has its own `select()`. If you load it after the tidyverse, write `dplyr::select()`.
+
+## Part A: Counts — plant species on Galapagos islands
+
+### Step 2: Look at the counts
+
+For a Poisson variable the variance equals the mean. A ratio far above 1 is **overdispersion**.
+
+```{r}
+#| label: step-2-counts
+g_df %>%
+  summarise(mean_spp = mean(n_species),
+            var_spp  = var(n_species),
+            ratio    = var_spp / mean_spp)
+```
+
+```{r}
+#| label: step-2b-plot
+#| fig-width: 3.4
+#| fig-height: 3
+g_df %>%
+  ggplot(aes(log(area_km2), n_species)) +
+  geom_point() +
+  labs(x = "log(island area, km²)", y = "Number of plant species") +
+  theme_bw()
+```
+
+### Step 3: Poisson GLM
+
+```{r}
+#| label: step-3-poisson
+poiss_model <- glm(n_species ~ log(area_km2),
+                   data = g_df,
+                   family = poisson(link = "log"))
+
+summary(poiss_model)
+```
+
+### Step 4: Check for overdispersion
+
+```{r}
+#| label: step-4-overdispersion
+check_overdispersion(poiss_model)
+```
+
+A dispersion ratio near 1 is fine. Here it is far above 1, so the Poisson standard errors are too small and its p-values are too optimistic. Switch to a negative binomial.
+
+### Step 5: Negative binomial GLM
+
+```{r}
+#| label: step-5-negbin
+nb_model <- glm.nb(n_species ~ log(area_km2), data = g_df)
+
+summary(nb_model)
+check_overdispersion(nb_model)
+```
+
+### Step 6: Test and compare
+
+```{r}
+#| label: step-6-test
+Anova(nb_model, type = "III", test = "LR")
+
+AIC(poiss_model, nb_model)
+```
+
+The negative binomial has a much lower AIC, so it fits far better.
+
+### Step 7: Interpret the slope
+
+Coefficients are on the **log** scale. Exponentiate to get a multiplicative effect:
+
+```{r}
+#| label: step-7-interpret
+exp(coef(nb_model))
+```
+
+Each 1-unit increase in log(area), i.e. a 2.7-fold larger island, multiplies the expected number of species by about `r round(exp(coef(nb_model)[2]), 2)`.
+
+## Part B: Presence/absence — Uta lizards on islands
+
+### Step 8: Look at the data
+
+`pa` is 1 if *Uta* lizards are present, 0 if absent. `paratio` is the island's perimeter-to-area ratio.
+
+```{r}
+#| label: step-8-look
+polis_df %>% dplyr::select(island, paratio, pa)
+count(polis_df, pa)
+```
+
+### Step 9: Logistic regression
+
+```{r}
+#| label: step-9-logistic
+lizard_model <- glm(pa ~ paratio,
+                    data = polis_df,
+                    family = binomial(link = "logit"))
+
+summary(lizard_model)
+```
+
+### Step 10: Test against a null model
+
+The likelihood-ratio test compares the model with an intercept-only model.
+
+```{r}
+#| label: step-10-lrt
+null_model <- glm(pa ~ 1, data = polis_df, family = binomial(link = "logit"))
+
+anova(null_model, lizard_model, test = "Chisq")
+```
+
+### Step 11: Odds ratios and fit
+
+```{r}
+#| label: step-11-odds
+#| message: false
+exp(coef(lizard_model))                  # odds ratios
+exp(confint(lizard_model, "paratio"))    # 95% CI for the odds ratio
+
+r2(lizard_model)                         # pseudo-R²
+```
+
+An odds ratio below 1 means the odds of presence **drop** as `paratio` rises: each 1-unit increase multiplies the odds by `r round(exp(coef(lizard_model)[2]), 2)`.
+
+### Step 12: Plot the fitted curve
+
+```{r}
+#| label: step-12-plot
+#| fig-width: 3.6
+#| fig-height: 3
+#| message: false
+polis_df %>%
+  ggplot(aes(paratio, pa)) +
+  geom_point() +
+  geom_smooth(method = "glm", method.args = list(family = binomial)) +
+  labs(x = "Perimeter:area ratio", y = "Probability Uta present") +
+  theme_bw()
+```
+
+## Step 13: Write it up
+
+```{r}
+#| label: step-13-numbers
+nb_lr  <- Anova(nb_model, type = "III", test = "LR")
+liz_lr <- anova(null_model, lizard_model, test = "Chisq")
+```
+
+> Plant species richness increased with island area (negative binomial GLM, LR χ²~1~ = `r round(nb_lr[1, "LR Chisq"], 1)`, p < 0.001); a Poisson model was strongly overdispersed.
+
+> The probability that *Uta* lizards were present declined as island perimeter:area ratio increased (logistic regression, LR χ²~1~ = `r round(liz_lr$Deviance[2], 1)`, p < 0.001; odds ratio = `r round(exp(coef(lizard_model)[2]), 2)` per unit ratio, n = `r nrow(polis_df)` islands).
+
+Report the family and link, the LR χ² with df and p, and the effect on the response scale (multiplier or odds ratio).
