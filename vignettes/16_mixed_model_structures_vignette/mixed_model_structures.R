@@ -8,6 +8,7 @@
 # Part 4  Choosing between them            REML comparison, anova(), singular fits
 # Part 5  Residual variance-covariance     nlme::lme / gls, correlation = ...
 # Part 6  Time series: AR(1) and friends    corAR1, corCAR1, corARMA, corSymm
+#         ... and AR(1) inside lme4         ar1(0 + f_time | g), lme4 >= 2.0
 # Part 7  Unequal variances                 weights = varIdent / varPower
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -66,6 +67,7 @@ anova(m_slope)
 # Loblolly: height of 14 pine seed sources measured at ages 3, 5, 10, 15, 20, 25
 data(Loblolly)                      # ships with base R, in the datasets package
 lob <- as.data.frame(Loblolly)
+lob$f_age <- factor(lob$age)        # age as a FACTOR, for lme4's ar1() / cs()
 
 ctrl <- lmeControl(opt = "optim", msMaxIter = 200)
 
@@ -86,6 +88,39 @@ plot(ACF(l_ri, maxLag = 4), alpha = 0.05)
 # AR(1) by position in the sequence -- assumes equally spaced times
 l_ar1 <- lme(height ~ age, random = ~ 1 | Seed, data = lob,
              correlation = corAR1(form = ~ 1 | Seed), control = ctrl)
+
+# ---- the same thing in lme4 (version 2.0 or newer) --------------------------
+# Tag a random-effects term with ar1(). Time goes in as a FACTOR, with `0 +`
+# so there is one column per occasion. lmerTest, emmeans and crossed random
+# effects all still work on the result.
+packageVersion("lme4")
+if (packageVersion("lme4") >= "2.0.0") {
+
+  m_ri  <- lmer(height ~ age + (1 | Seed), data = lob)        # = l_ri
+  m_ar1 <- lmer(height ~ age + ar1(0 + f_age | Seed), data = lob)
+  print(VarCorr(m_ar1))        # Corr tagged (ar1) is rho; note the Residual line
+
+  # like-for-like nlme model: AR(1) with no random intercept
+  g_ar1 <- gls(height ~ age, data = lob,
+               correlation = corAR1(form = ~ 1 | Seed))
+  print(c(lme4_rho = unname(getME(m_ar1, "par")["Seed.rho"]),
+          nlme_phi = unname(coef(g_ar1$modelStruct$corStruct,
+                                 unconstrained = FALSE))))
+  print(c(lme4 = logLik(m_ar1), nlme = logLik(g_ar1)))
+  print(coef(summary(m_ar1)))  # Satterthwaite df from lmerTest
+
+  # THE DIFFERENCE: lme4's ar1() is a random effect, so the independent
+  # residual is still added on top -- the model is AR(1) + measurement error.
+  # Here that residual is estimated as ~0, so it matches nlme's corAR1.
+
+  # compound symmetry in lme4 -- same likelihood as the random intercept
+  m_cs <- lmer(height ~ age + cs(0 + f_age | Seed, hom = TRUE), data = lob)
+  print(AIC(m_ri, m_cs, m_ar1))
+
+  # LIMITS: ar1() counts positions, not years (3->5 and 20->25 are both "one
+  # step"), and lme4 has no continuous-time AR(1), no ARMA, no spatial
+  # structures and no variance functions. For those, carry on with nlme below.
+}
 
 # THE TRAP: corAR1 needs an integer index. Hand it `age` and it does not
 # error -- it silently returns phi = 0. Always print the estimated phi.

@@ -726,6 +726,151 @@ choice — do not pick one and delete the other.
 :::
 :::::
 
+## Why `lme4` Prints No *p*-Values {.tight-code}
+
+::::: columns
+::: {.column width="52%"}
+```{r lmm-pval-01}
+#| echo: true
+#| message: false
+#| warning: false
+#| collapse: true
+# the same model, fitted by lme4 alone
+u_plain <- lme4::lmer(algae ~ treat + (1 | patch),
+                      data = u_df)
+round(coef(summary(u_plain)), 2)
+
+# and by lmerTest (what library(lmerTest) gives you)
+round(coef(summary(u_lmer_model)), 3)
+```
+
+Same estimates, same standard errors, same *t*. `lmerTest` adds two
+columns: **df** and ***p***.
+:::
+
+::: {.column width="48%"}
+The missing columns are deliberate. Douglas Bates, who wrote `lme4`,
+left them out because:
+
+- in `lm()` the denominator df is a simple count, and *t* and *F* follow
+  their distributions **exactly**
+- in a mixed model the denominator is built from **several estimated
+  variances** — so the ratio is only approximately *F*, and there is
+  **no single correct df**
+- only balanced classical designs (like this one) give an exact answer
+
+::: callout-note
+**📖 What `lmerTest` does**
+
+It fits the **identical model**, then approximates the df
+(Satterthwaite by default, Kenward-Roger on request). The *p*-value is
+a well-tested approximation, not an exact result — which is why you
+report **which df method** you used.
+:::
+:::
+:::::
+
+## Four Routes to a *p*-Value
+
+::::: columns
+::: {.column width="52%"}
+```{r lmm-pval-02}
+#| echo: false
+#| message: false
+#| warning: false
+#| collapse: true
+pv_m1 <- lme4::lmer(algae ~ treat + (1 | patch), data = u_df, REML = FALSE)
+pv_m0 <- lme4::lmer(algae ~ 1 + (1 | patch), data = u_df, REML = FALSE)
+pv_pb <- pbkrtest::PBmodcomp(pv_m1, pv_m0, nsim = 1000, seed = 2026)
+
+data.frame(
+  method = c("Wald chi-square", "Likelihood-ratio test",
+             "F, Kenward-Roger df", "Parametric bootstrap"),
+  assumes = c("variances known exactly", "many groups",
+              "df approximated", "nothing about df"),
+  p = round(c(
+    Anova(u_lmer_model, type = 3, test.statistic = "Chisq")["treat", "Pr(>Chisq)"],
+    pv_pb$test["LRT", "p.value"],
+    Anova(u_lmer_model, type = 3, test.statistic = "F")["treat", "Pr(>F)"],
+    pv_pb$test["PBtest", "p.value"]), 3))
+```
+
+Ben Bolker (who maintains `lme4`) does not say "never use *p*-values".
+He **ranks** the ways of getting one, crudest first — the order of this
+table.
+
+The **parametric bootstrap** simulates 1000 data sets from the model
+with no treatment effect and asks how often the test statistic comes
+out as large as ours. It assumes nothing about df.
+:::
+
+::: {.column width="48%"}
+::: callout-important
+**The two careful methods agree. The two shortcuts agree.**
+
+The bootstrap, which makes no df assumption at all, lands on the
+*F*-test — and on Part 1's `aov(Error(patch))`. The χ² and the
+likelihood-ratio test both say "significant", and both are wrong for
+the same reason: they behave as if 16 patches were many.
+:::
+
+::: callout-tip
+**🖐 For ecological data**
+
+Groups are nearly always few. Use the ***F*-test with Kenward-Roger or
+Satterthwaite df**. Reach for the bootstrap
+(`pbkrtest::PBmodcomp()`) when a result sits near 0.05 and matters.
+
+Better still, report the **estimate and its confidence interval**.
+:::
+:::
+:::::
+
+## Do I Still Need `contr.sum`?
+
+::::: columns
+::: {.column width="55%"}
+The first chunk of every lecture sets
+`options(contrasts = c("contr.sum", "contr.poly"))`. What does that
+change in a mixed model?
+
+::: {.compact-table}
+| Output | Changes with the contrast? |
+|------------------------------|------------------|
+| fitted values, variance components | **no** — same model |
+| `emmeans()` and pairwise tests | **no** |
+| `anova()` from `lmerTest` | **no** |
+| `car::Anova(type = 3)`, model has an **interaction** | **yes** |
+| what each row of `summary()` means | **yes** |
+:::
+
+It is **interactions**, not unbalanced data, that make the contrast
+matter. With one factor, as here, every test is identical either way.
+:::
+
+::: {.column width="45%"}
+::: callout-warning
+**⚠️ Why `car::Anova(type = 3)` cares**
+
+It tests "is this coefficient zero". Under R's default treatment
+contrasts, a main-effect coefficient is the effect **at the reference
+level of the other factor** — not averaged across its levels.
+
+Under `contr.sum` it is the **average** effect, which is what "main
+effect" means.
+:::
+
+::: callout-tip
+**🖐 The habit**
+
+Keep the `options(contrasts = ...)` line at the top of every script.
+It is required for `car::Anova(type = 3)` with interactions and
+harmless everywhere else. And read effects from **`emmeans()`**, never
+from the rows of `summary()`.
+:::
+:::
+:::::
+
 ## Part 4 · How the Variance Actually Gets Estimated {.divider}
 
 ## The Question This Part Answers
@@ -1161,6 +1306,48 @@ told you that.
 ::::
 :::::::
 
+## The ICC, Said Four Ways {.tight-code}
+
+::::: columns
+::: {.column width="50%"}
+$$ICC = \frac{\sigma^2_{among\ groups}}{\sigma^2_{among\ groups} + \sigma^2_{within\ groups}}$$
+
+```{r lmm-icc-02}
+#| echo: true
+#| message: false
+#| warning: false
+#| collapse: true
+icc  <- v_patch / (v_patch + v_resid)
+deff <- 1 + (5 - 1) * icc     # 5 quadrats per patch
+# the same model with treatment left out
+vc0 <- as.data.frame(VarCorr(
+  lmer(algae ~ 1 + (1 | patch), data = u_df)))
+round(c(ICC = icc, design_effect = deff,
+        effective_n = 80 / deff,
+        ICC_no_treat = vc0$vcov[1] / sum(vc0$vcov)), 2)
+```
+:::
+
+::: {.column width="50%"}
+1. **A share of variance** — half the leftover variation is
+   patch-to-patch, half is quadrat-to-quadrat.
+2. **A correlation** — two quadrats from the same patch are correlated
+   at *r* = 0.50. (Hence the name: **i**ntra**c**lass **c**orrelation.)
+3. **Redundancy** — a second quadrat in a patch is half new
+   information, half something you already knew.
+4. **Lost sample size** — the *design effect* 1 + (*m* − 1) × ICC says
+   80 quadrats carry the information of about **27** independent ones.
+
+::: callout-warning
+**⚠️ What people get wrong**
+
+A **small** ICC still bites when groups are big: 0.05 with 100 fish
+per lake is a design effect of 5.95. And it depends on the fixed
+effects: 0.50 with treatment in the model, 0.58 without.
+:::
+:::
+:::::
+
 ## Price the Next Experiment {.tight-code}
 
 ::::: columns
@@ -1200,6 +1387,58 @@ below $\sqrt{294.3 / 4}$ = 8.58, however many quadrats you count.
 **83%** of the uncertainty in a treatment mean came from having only
 four patches. The experiment was not short of data. It was short of
 **patches**.
+:::
+:::
+:::::
+
+## Three Ways to Estimate a Group {.tight-code}
+
+::::: columns
+::: {.column width="55%"}
+"Pooling" just means **sharing data across groups**. What is the true
+mean of one patch?
+
+::: {.compact-table}
+| | What you do | In R |
+|-----------|---------------------------|----------------|
+| **Complete pooling** | ignore patch; every patch gets its treatment mean | `lm(algae ~ treat)` |
+| **No pooling** | every patch gets its own raw mean of 5 quadrats | `lm(algae ~ patch)` |
+| **Partial pooling** | a weighted compromise between the two | `lmer(... + (1|patch))` |
+:::
+
+$$\text{weight} = \frac{\sigma^2_{patch}}{\sigma^2_{patch} + \sigma^2_{within} / n}$$
+
+$$\text{estimate} = \text{treatment mean} + \text{weight} \times (\text{raw mean} - \text{treatment mean})$$
+
+Weight 1 = believe the patch's own mean. Weight 0 = ignore it.
+:::
+
+::: {.column width="45%"}
+```{r lmm-pool-01}
+#| echo: true
+#| message: false
+#| warning: false
+#| collapse: true
+w <- v_patch / (v_patch + v_resid / 5)
+round(w, 2)
+
+u_df %>%
+  group_by(treat, patch) %>%
+  summarise(raw = mean(algae), .groups = "drop") %>%
+  group_by(treat) %>%
+  mutate(trt_mean = mean(raw),
+         model = trt_mean + w * (raw - trt_mean)) %>%
+  filter(treat == "0%") %>%
+  mutate(model = round(model, 1)) %>%
+  as.data.frame()
+```
+
+::: callout-note
+**📖 Read the weight as two kinds of doubt**
+
+Patches really differ a lot (big σ²~patch~) → trust each patch.
+Quadrats are noisy or few (big σ²~within~ / *n*) → trust it less.
+Nobody picks the weight; it follows from the two variances.
 :::
 :::
 :::::
@@ -1260,6 +1499,149 @@ and pretending they are all identical.
 :::
 ::::
 :::::::
+
+## Shrinkage, With the Right Answer Visible
+
+::::: columns
+::: {.column width="58%"}
+```{r lmm-shrink-01}
+#| echo: false
+#| message: false
+#| warning: false
+#| fig-width: 5.4
+#| fig-height: 3.5
+#| fig-alt: "Twelve simulated lakes sorted by number of fish caught, from two to eighty. For each lake a grey dot shows the raw average mass, a blue dot the mixed-model estimate and a black cross the true mean, with an arrow from grey to blue. Arrows are long for lakes with few fish and absent for lakes with many, and all point toward the vertical line marking the all-lakes mean."
+set.seed(2026)
+sh_n <- c(2, 2, 3, 3, 4, 5, 6, 8, 12, 20, 40, 80)   # fish netted per lake
+
+sh_survey <- function() {
+  truth <- rnorm(12, 450, 40)                        # lakes differ: SD 40 g
+  d <- tibble(lake = factor(rep(1:12, sh_n)),
+              true_mean = rep(truth, sh_n),
+              mass = true_mean + rnorm(sum(sh_n), 0, 80))   # fish: SD 80 g
+  m <- suppressMessages(suppressWarnings(
+    lmer(mass ~ 1 + (1 | lake), data = d)))
+  d %>%
+    group_by(lake) %>%
+    summarise(n = n(), true_mean = first(true_mean),
+              raw = mean(mass), .groups = "drop") %>%
+    mutate(model = coef(m)$lake[as.character(lake), 1],
+           grand = fixef(m)[1],
+           sd_lake = sqrt(as.numeric(VarCorr(m)$lake)))
+}
+
+# draw surveys until one estimates the lake SD close to its true 40 g,
+# so the picture shows a typical survey rather than a lucky or unlucky one
+repeat {
+  sh_one <- sh_survey()
+  if (abs(sh_one$sd_lake[1] - 40) < 5) break
+}
+sh_closer <- sum(abs(sh_one$model - sh_one$true_mean) <
+                   abs(sh_one$raw - sh_one$true_mean))
+
+sh_one %>%
+  mutate(lab = fct_rev(fct_inorder(paste0("lake ", lake, "  (n = ", n, ")")))) %>%
+  ggplot(aes(y = lab)) +
+  geom_vline(aes(xintercept = grand), colour = "#D55E00", linewidth = 0.8) +
+  geom_segment(aes(x = raw, xend = model, yend = lab), colour = "grey40",
+               arrow = arrow(length = unit(0.15, "cm"))) +
+  geom_point(aes(x = raw, shape = "raw lake average"),
+             colour = "grey55", size = 2.6) +
+  geom_point(aes(x = model, shape = "mixed-model estimate"),
+             colour = "#0072B2", size = 2.6) +
+  geom_point(aes(x = true_mean, shape = "TRUTH"), size = 2.8, stroke = 1.1) +
+  scale_shape_manual(
+    values = c("raw lake average" = 16, "mixed-model estimate" = 16, "TRUTH" = 4),
+    breaks = c("raw lake average", "mixed-model estimate", "TRUTH"), name = NULL,
+    guide = guide_legend(override.aes = list(
+      colour = c("grey55", "#0072B2", "black")))) +
+  labs(x = "Mean trout mass (g)", y = NULL) +
+  theme_classic(base_size = 10) +
+  theme(legend.position = "bottom")
+```
+:::
+
+::: {.column width="42%"}
+Twelve made-up lakes where we **know** each lake's true mean trout
+mass. We net 2 fish in some and 80 in others, then fit
+`lmer(mass ~ 1 + (1 | lake))`.
+
+- **Long arrows at the top, none at the bottom.** The model moves the
+  lakes it has reason to doubt, toward the all-lakes mean (orange).
+- The most extreme raw averages are mostly **small samples**. That is
+  regression to the mean.
+
+::: callout-important
+**In this survey the model was closer to the truth in
+`{r} sh_closer` of 12 lakes**
+
+Not all 12. A truly exceptional lake gets pulled in too. Shrinkage is
+a bet that pays **on average**.
+:::
+:::
+:::::
+
+## Does the Bet Pay Off?
+
+::::: columns
+::: {.column width="56%"}
+```{r lmm-shrink-02}
+#| echo: false
+#| message: false
+#| warning: false
+#| fig-width: 5.2
+#| fig-height: 3.2
+#| fig-alt: "Typical error of three estimates of a lake's true mean against number of fish caught, from five hundred simulated surveys. The raw lake average has large error at two fish and falls steeply; the grand mean has constant error near forty grams; the mixed-model estimate lies below both at every sample size and merges with the raw average by eighty fish."
+sh_many <- map_dfr(1:500, \(i) sh_survey())
+
+sh_rmse <- sh_many %>%
+  group_by(n) %>%
+  summarise(`No pooling: raw lake average` =
+              sqrt(mean((raw - true_mean)^2)),
+            `Complete pooling: grand mean for all` =
+              sqrt(mean((grand - true_mean)^2)),
+            `Partial pooling: mixed model` =
+              sqrt(mean((model - true_mean)^2)), .groups = "drop")
+
+sh_all <- round(c(raw   = sqrt(mean((sh_many$raw   - sh_many$true_mean)^2)),
+                  model = sqrt(mean((sh_many$model - sh_many$true_mean)^2))))
+
+sh_rmse %>%
+  pivot_longer(-n) %>%
+  ggplot(aes(n, value, colour = name)) +
+  geom_line(linewidth = 0.9) +
+  geom_point(size = 1.8) +
+  scale_x_log10(breaks = c(2, 3, 5, 8, 12, 20, 40, 80)) +
+  scale_colour_manual(values = c("black", "grey55", "#0072B2"), name = NULL) +
+  expand_limits(y = 0) +
+  labs(x = "Fish caught in the lake (log scale)",
+       y = "Typical error in the lake's mean (g)") +
+  theme_classic(base_size = 10) +
+  theme(legend.position = "inside", legend.position.inside = c(0.98, 0.98),
+        legend.justification = c(1, 1), legend.text = element_text(size = 7.5))
+```
+:::
+
+::: {.column width="44%"}
+The same survey, repeated 500 times. Lower is better.
+
+- With **2 fish**, the raw average is the worst estimate on the page.
+  With **80**, raw and mixed model are the same thing.
+- The mixed model is **never worse than either alternative**.
+
+Across all lakes the typical error falls from
+**`{r} sh_all["raw"]` g to `{r} sh_all["model"]` g**.
+
+::: callout-note
+**📖 "Borrowing strength"**
+
+A lake with 2 fish is estimated using what the other 11 lakes taught
+the model about **how much lakes differ**. It matters whenever the
+groups themselves are the point: ranking sites, or predicting for one
+lake. Raw rankings put small samples at both ends of the list.
+:::
+:::
+:::::
 
 ## Reporting the Variance Components
 
@@ -2001,7 +2383,7 @@ its slope (do high-growth lakes also show a bigger advantage?).
 Reach for `(1 + x | g)` when `x` is **continuous** or you have many
 groups. For a factor with few groups, `(1 | g) + (1 | g:x)` asks the
 same question with one fewer parameter and no singular fit. The
-[Mixed Model Structures](../../vignettes/22_mixed_models_vignette/mixed_model_structures.qmd)
+[Mixed Model Structures](../../vignettes/16_mixed_model_structures_vignette/mixed_model_structures.qmd)
 page works through both.
 :::
 :::
@@ -2241,6 +2623,71 @@ samples — is the same model: `(1 + time | id)`.
 :::
 :::::
 
+## What a Random Slope Does to the Spread
+
+::::: columns
+::: {.column width="56%"}
+```{r lmm-chick-05}
+#| echo: false
+#| message: false
+#| warning: false
+#| fig-width: 5.2
+#| fig-height: 3.2
+#| fig-alt: "Standard deviation of body weight among chicks on the same diet against age. The observed spread rises from about one gram at hatching to about sixty grams at day twenty-one. The random-intercept model implies a flat line; the random-slope model implies a rising curve close to the observed one from day ten onward."
+ck_obs <- ck_df %>%
+  group_by(diet, time) %>%
+  summarise(v = var(weight), .groups = "drop") %>%
+  group_by(time) %>%
+  summarise(sd = sqrt(mean(v)), .groups = "drop")
+
+ck_G  <- as.matrix(Matrix::bdiag(VarCorr(ck_rs)))     # 2 x 2: intercept, slope
+ck_s2 <- sigma(ck_rs)^2
+
+ck_sd <- ck_obs %>%
+  transmute(time,
+            `Observed` = sd,
+            `(1 | chick)` = sqrt(as.numeric(VarCorr(ck_ri)$chick) +
+                                   sigma(ck_ri)^2),
+            `(1 + time | chick)` = sqrt(ck_G[1, 1] + 2 * time * ck_G[1, 2] +
+                                          time^2 * ck_G[2, 2] + ck_s2))
+
+ck_sd %>%
+  pivot_longer(-time) %>%
+  mutate(name = fct_inorder(name)) %>%
+  ggplot(aes(time, value, colour = name, linetype = name)) +
+  geom_line(linewidth = 0.9) +
+  geom_point(size = 1.6) +
+  scale_colour_manual(values = c("black", "grey55", "#0072B2"), name = NULL) +
+  scale_linetype_manual(values = c("solid", "dashed", "solid"), name = NULL) +
+  labs(x = "Age (days)", y = "SD among chicks on one diet (g)") +
+  theme_classic(base_size = 10) +
+  theme(legend.position = "bottom")
+```
+:::
+
+::: {.column width="44%"}
+Chicks hatch almost identical and end up very different. **The spread
+among animals grows through time.**
+
+Each formula is a claim about that spread:
+
+- **`(1 | chick)`** — chicks differ by a constant amount at every age.
+  A flat line; parallel growth curves.
+- **`(1 + time | chick)`** — chicks differ in growth **rate**, so they
+  fan out. (It is still too wide at hatching: one residual variance
+  has to serve every age.)
+
+$$\sigma^2_{age} = \sigma^2_{int} + 2 \cdot age \cdot cov + age^2 \cdot \sigma^2_{slope} + \sigma^2_{resid}$$
+
+::: callout-tip
+**🖐 How to choose, before any test**
+
+Plot one line per animal. **Parallel** → random intercept.
+**Fanning, crossing or converging** → random slope.
+:::
+:::
+:::::
+
 ## A Treatment Blocked by Stream
 
 ::::: columns
@@ -2461,6 +2908,60 @@ part; last week's distribution.
 
 ## Part 9 · Wrap-Up {.divider}
 
+## Anatomy of a Random Term
+
+::::: columns
+::: {.column width="50%"}
+```
+y  ~  x  +  (  1 + x   |   lake  )
+               -----       ----
+               WHAT        ACROSS WHICH
+               varies      groups
+```
+
+Read the bar as **"is allowed to differ among"**. The left side is
+ordinary formula language:
+
+- **`1`** is the **intercept** → each lake gets its own baseline:
+  a **random intercept**
+- **a variable name** is that variable's **slope** → each lake gets
+  its own steepness: a **random slope**
+- **`1 + x`** is both, plus the correlation between them
+
+::: callout-tip
+**🖐 Say it aloud**
+
+`(1 | lake)` — "the intercept differs among lakes."
+
+`(1 + x | lake)` — "the intercept **and the slope of x** differ among
+lakes."
+:::
+:::
+
+::: {.column width="50%"}
+In `y ~ x + (1 + x | lake)` the **x appears twice**, doing two jobs:
+
+::: {.compact-table}
+| Where | Estimates | Shows up in |
+|-------------|---------------------|------------------|
+| `y ~ x` | the **average** slope over all lakes | Fixed effects: an estimate and SE |
+| `(... x | lake)` | **how much** lakes' slopes differ from it | Random effects: an SD and a Corr |
+:::
+
+::: callout-warning
+**⚠️ Shorthand that catches people**
+
+- `(x | lake)` **is** `(1 + x | lake)` — the intercept is automatic,
+  as in `y ~ x`. Write the `1 +` anyway.
+- `(0 + x | lake)` is a slope with **no** random intercept.
+- The right side must be a **grouping factor**, never a number.
+- A predictor can go on the left only if it **varies within** the
+  groups. Urchin density does not vary within a patch, so
+  `(1 + treat | patch)` cannot be fitted.
+:::
+:::
+:::::
+
 ## The `lmer` Formula Cheat-Sheet
 
 ::::::: columns
@@ -2468,18 +2969,19 @@ part; last week's distribution.
 Read every random term as **`( what varies | across what )`**.
 
 ::: {.compact-table}
-| Formula | Meaning |
-|------------------|------------------------------------|
-| `y ~ x + (1|g)` | random **intercept** per group |
-| `y ~ x + (1 + x|g)` | random intercept **and slope** |
-| `y ~ x + (0 + x|g)` | random slope only, shared intercept |
-| `y ~ x + (1|a) + (1|b)` | two **crossed** random factors |
-| `y ~ x + (1|a/b)` | b **nested** in a — shorthand for `(1|a) + (1|a:b)` |
+| Formula | Meaning | Picture |
+|------------------|---------------------------|----------------|
+| `y ~ x + (1|g)` | random **intercept** per group | parallel lines |
+| `y ~ x + (1 + x|g)` | random intercept **and slope** | lines fan or cross |
+| `y ~ x + (1 + x||g)` | the same, intercept and slope uncorrelated | lines fan or cross |
+| `y ~ x + (0 + x|g)` | random slope only, shared intercept | lines pivot on one point |
+| `y ~ x + (1|a) + (1|b)` | two **crossed** random factors | every a meets every b |
+| `y ~ x + (1|a/b)` | b **nested** in a — shorthand for `(1|a) + (1|a:b)` | b lives inside one a |
 :::
 
 Random slopes were Parts 7 and 8; time-series error structures and the full
 set of random-slope spellings get their own reference page:
-[Mixed Model Structures](../../vignettes/22_mixed_models_vignette/mixed_model_structures.qmd).
+[Mixed Model Structures](../../vignettes/16_mixed_model_structures_vignette/mixed_model_structures.qmd).
 
 ::: callout-important
 **⚠️ The confusion to avoid**

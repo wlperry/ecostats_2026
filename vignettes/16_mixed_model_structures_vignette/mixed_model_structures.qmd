@@ -3,7 +3,7 @@ order: 16.1
 week: 11
 title: "Mixed Model Structures"
 subtitle: "Random slopes and variance-covariance structures"
-description: "Random intercept vs. random intercept-and-slope in lme4, and how to change the residual variance-covariance matrix (AR(1), compound symmetry, unstructured, unequal variances) with nlme for repeated-measures and time-series data."
+description: "Random intercept vs. random intercept-and-slope in lme4, and how to model correlation through time (AR(1), compound symmetry, unstructured) and unequal variances for repeated-measures and time-series data — in nlme, and with the ar1() and cs() terms that lme4 gained in version 2.0."
 resources: ["mixed_model_structures.R"]
 author: "Bill Perry"
 ---
@@ -39,8 +39,14 @@ $$\mathbf{V} = \underbrace{\mathbf{Z}\,\mathbf{G}\,\mathbf{Z}^\top}_{\text{rando
   default $\mathbf{R} = \sigma^2\mathbf{I}$: equal variances, zero
   correlation. This is what `correlation =` and `weights =` change.
 
-**`lme4` can only change $\mathbf{G}$.** To change $\mathbf{R}$ you need
-`nlme` or `glmmTMB`. That single fact explains most of this page.
+**`lme4` can only change $\mathbf{G}$.** Its $\mathbf{R}$ is always
+$\sigma^2\mathbf{I}$. To change $\mathbf{R}$ itself you need `nlme` or
+`glmmTMB`.
+
+**But since version 2.0, `lme4` can put an AR(1) or compound-symmetric
+pattern *inside* $\mathbf{G}$** — `ar1(0 + time | g)` — which gives you
+correlation that fades through time without leaving `lmer()`. Part 6
+shows both routes side by side, and where they differ.
 :::
 
 ## Setup
@@ -56,6 +62,11 @@ library(nlme)       # residual correlation and variance structures
 library(tidyverse)
 
 options(contrasts = c("contr.sum", "contr.poly"))
+
+# ar1() and cs() terms need lme4 2.0 or newer; chunks that use them are
+# skipped on older installs
+packageVersion("lme4")
+has_lme4_cov <- packageVersion("lme4") >= "2.0.0"
 ```
 
 ::: callout-warning
@@ -283,7 +294,7 @@ and if you get a singular fit, drop correlations first (`||`), then the
 least-supported slope, and **report what you dropped and why**.
 :::
 
-# Part 5 · Changing the Residual Matrix — Why You Need `nlme`
+# Part 5 · Changing the Residual Matrix — `nlme`, and What `lme4` Can Now Do
 
 Everything so far changed $\mathbf{G}$. Now for $\mathbf{R}$.
 
@@ -295,6 +306,11 @@ set $\mathbf{R}$ with two arguments:
 - `correlation =` — the **correlation** part of $\mathbf{R}$
 - `weights =` — the **variance** part of $\mathbf{R}$
 
+Each `nlme` model below is followed by its **`lme4` spelling** where one
+exists. For AR(1) and compound symmetry it does (`lme4` ≥ 2.0). For
+continuous-time AR(1), ARMA, spatial structures and unequal residual
+variances it does not, and `nlme` or `glmmTMB` is still the tool.
+
 We switch datasets to something with a real time axis: `Loblolly`, which
 ships with base R — the height of 14 loblolly pine seed sources measured
 at ages 3, 5, 10, 15, 20 and 25 years. Fourteen groups, six times each,
@@ -304,6 +320,7 @@ balanced, and **unevenly spaced in time**, which will matter.
 #| collapse: true
 data(Loblolly)
 lob <- as.data.frame(Loblolly)
+lob$f_age <- factor(lob$age)  # age as a FACTOR: lme4's ar1() / cs() need it
 str(lob)
 table(table(lob$Seed))        # 14 seed sources, 6 measurements each
 sort(unique(lob$age))
@@ -337,6 +354,10 @@ l_ri <- lme(height ~ age, random = ~ 1 | Seed, data = lob, control = ctrl)
 #                                   ... for NESTED a/b only; nlme cannot do
 #                                   crossed random effects. Use lme4 for those.
 VarCorr(l_ri)
+
+# the same model in lme4 -- identical fit
+m_ri <- lmer(height ~ age + (1 | Seed), data = lob)
+c(nlme = logLik(l_ri), lme4 = logLik(m_ri))
 ```
 
 ::: callout-note
@@ -424,12 +445,139 @@ round(corMatrix(l_ar1$modelStruct$corStruct)[[1]], 3)
   (`form = ~ visit | g`) is safer.
 :::
 
+## AR(1) in `lme4` — yes, since version 2.0
+
+For years the answer to "can `lmer()` do AR(1)?" was no. From `lme4`
+2.0 it can. You tag a random-effects term with the structure you want,
+the same way `glmmTMB` does:
+
+```{r m-ar1}
+#| collapse: true
+#| eval: !expr has_lme4_cov
+m_ar1 <- lmer(height ~ age + ar1(0 + f_age | Seed), data = lob)
+
+VarCorr(m_ar1)
+```
+
+Read the term like any other: `( what varies | across what )`, with a
+tag saying how the pieces covary.
+
+- **`f_age`** — time **as a factor**. Each seed source gets one random
+  deviation *per measurement occasion*, not one slope.
+- **`0 +`** — no intercept in this term, so the six columns are the six
+  ages themselves. Leave it out and you get five *differences from age
+  3*, which is not a time series.
+- **`| Seed`** — series in different seed sources are independent.
+- **`ar1( )`** — the six deviations within a seed source are correlated
+  $\rho^{|i-j|}$: the `Corr` column, tagged `(ar1)`, is $\rho$.
+
+```{r m-ar1-compare}
+#| collapse: true
+#| eval: !expr has_lme4_cov
+# nlme's version with no random intercept, for a like-for-like comparison
+g_ar1 <- gls(height ~ age, data = lob,
+             correlation = corAR1(form = ~ 1 | Seed))
+
+c(lme4_rho = unname(getME(m_ar1, "par")["Seed.rho"]),
+  nlme_phi = unname(coef(g_ar1$modelStruct$corStruct, unconstrained = FALSE)))
+
+c(lme4 = logLik(m_ar1), nlme = logLik(g_ar1))
+
+# fixed effects, with Satterthwaite df from lmerTest
+round(coef(summary(m_ar1)), 4)
+```
+
+Same $\rho$, same log-likelihood, same slope and standard error. And
+because it is still an `lmer` fit, `lmerTest`, `emmeans`, `anova()` and
+crossed random effects all keep working — which is the reason to want
+it there.
+
+::: callout-important
+## The one difference: `lme4` keeps the residual
+
+In `nlme`, `corAR1` *replaces* the independent residual: $\mathbf{R}$
+itself becomes the AR(1) matrix. In `lme4`, `ar1()` is a **random
+effect**, and the ordinary independent residual $\sigma^2\mathbf{I}$ is
+still added on top:
+
+$$\mathbf{V} = \underbrace{\sigma^2_{ar}\,\mathbf{AR1}(\rho)}_{\texttt{ar1(0 + f\_age | Seed)}} \;+\; \underbrace{\sigma^2\,\mathbf{I}}_{\text{residual}}$$
+
+So the `lme4` model is **AR(1) plus measurement error**. Look at the
+`Residual` line of `VarCorr(m_ar1)` above: it is essentially zero. On
+these data the extra term was not needed, the model collapsed to a pure
+AR(1), and the two packages agree.
+
+When that residual is **not** zero the two are different models. AR(1)
+plus measurement error is often the more realistic one — a real
+biological state that carries over, plus an instrument that is noisy
+each time — and its correlation pattern is the same as an ARMA(1,1).
+Just say which one you fitted.
+:::
+
+::: callout-warning
+## Four things to check before you trust an `lme4` AR(1)
+
+1. **Time must be a factor**, in time order, and every group should use
+   the same set of occasions. A numeric `age` inside `ar1()` is a slope,
+   not a series.
+2. **It counts positions, not time.** Like `corAR1(form = ~ 1 | g)`, it
+   treats age 3 → 5 and age 20 → 25 as one step each. There is no
+   continuous-time version in `lme4`; for uneven spacing use
+   `nlme::corCAR1` (next section) or `glmmTMB::ou()`.
+3. **Adding `(1 | Seed)` as well is allowed but often redundant.** With
+   a high $\rho$ the AR(1) term already makes a group's observations
+   alike. On these data
+   `(1 | Seed) + ar1(0 + f_age | Seed)` estimates the intercept variance
+   as zero and warns about convergence. Add it only when the correlation
+   should level off above zero at long lags.
+4. **Your collaborators need `lme4` ≥ 2.0.** On an older install the
+   formula fails with an error about `ar1`. Check
+   `packageVersion("lme4")`.
+:::
+
+The same tagging gives the other structures `lme4` supports:
+
+```{r m-cs}
+#| collapse: true
+#| eval: !expr has_lme4_cov
+# compound symmetry: one correlation for every pair of ages
+m_cs <- lmer(height ~ age + cs(0 + f_age | Seed, hom = TRUE), data = lob)
+
+VarCorr(m_cs)
+
+# random intercept, lme4 compound symmetry, lme4 AR(1)
+AIC(m_ri, m_cs, m_ar1)
+```
+
+`m_cs` has the same log-likelihood as the plain random intercept and
+costs one more parameter — the compound-symmetry trap of the next
+section, reproduced inside `lme4`. `m_ar1` is the real improvement.
+
+::: callout-note
+## `lme4` structure tags (version 2.0+)
+
+| Term | Structure among the columns | Default |
+|-------------------|---------------------------|-------------------|
+| `(f \| g)` or `us(f \| g)` | unstructured — every variance and correlation | — |
+| `diag(f \| g)` | variances only, no correlations | one variance per column |
+| `cs(f \| g)` | compound symmetry — one correlation | one variance per column; `hom = TRUE` for a single variance |
+| `ar1(f \| g)` | AR(1) — correlation $\rho^{\text{lag}}$ | a single variance; `hom = FALSE` for one per column |
+
+`ar1(0 + f_age | Seed, hom = FALSE)` is AR(1) with a **different
+variance at each age** — the `lme4` counterpart of `corAR1` plus
+`varIdent`. On these data it fits far better, because the spread grows
+with age, but with 14 seed sources it also throws a convergence warning.
+Treat it as a model to check against `nlme`, not to report blind.
+:::
+
 ## `corCAR1` — when the times are not equally spaced
 
 Our ages are 3, 5, 10, 15, 20, 25. The gap from 3 to 5 is two years; the
 gap from 20 to 25 is five. `corAR1` with `form = ~ 1 | Seed` treats both
-as "one step apart", which is wrong. `corCAR1` uses the actual value:
-$\text{cor} = \phi^{|t_i - t_j|}$ for continuous $t$.
+as "one step apart", which is wrong — and so does `lme4`'s `ar1()`.
+`corCAR1` uses the actual value:
+$\text{cor} = \phi^{|t_i - t_j|}$ for continuous $t$. **There is no `lme4`
+spelling for this one.**
 
 ```{r l-car1}
 #| collapse: true
@@ -510,6 +658,13 @@ apart.** A random intercept cannot express that. AR(1) can.
 AIC(l_ri, l_cs, l_ar1, l_car1, l_arma)
 ```
 
+```{r compare-lme4}
+#| collapse: true
+#| eval: !expr has_lme4_cov
+# the lme4 fits, for the three structures it can express
+AIC(m_ri, m_cs, m_ar1)
+```
+
 These are not all nested in one another, so this is an AIC comparison,
 not a sequence of LRTs. The ordering is the story:
 
@@ -519,19 +674,23 @@ not a sequence of LRTs. The ordering is the story:
 - `l_car1` is better still, because it uses the real age gaps.
 - `l_arma` is best here, but with 14 groups be suspicious of the third
   correlation parameter before you report it.
+- The `lme4` rows reproduce their `nlme` counterparts: `m_ri` = `l_ri`,
+  `m_cs` = `l_cs`, and `m_ar1` = `l_ar1`. The two best models on this
+  page, `l_car1` and `l_arma`, have **no `lme4` equivalent** — which is
+  the practical limit of doing this in `lmer()`.
 
 ::: callout-note
 ## Structures available in `nlme`
 
-| Call | $\mathbf{R}$ structure | Parameters |
-|-------------------|-------------------|-------------------|
-| *(default)* | independent, equal variance | 1 (σ²) |
-| `corCompSymm` | compound symmetry / exchangeable | 2 |
-| `corAR1` | AR(1), equally spaced integer time | 2 |
-| `corCAR1` | continuous-time AR(1) | 2 |
-| `corARMA(p, q)` | ARMA | 2 + *p* + *q* |
-| `corSymm` | unstructured ("general") | 1 + *t*(*t*−1)/2 |
-| `corExp`, `corGaus`, `corSpher`, `corLin`, `corRatio` | **spatial** — decay with 2-D distance; `form = ~ x + y \| g` | 2–3 |
+| `nlme` call | $\mathbf{R}$ structure | Parameters | `lme4` (≥ 2.0) spelling |
+|------------------|------------------|-----------|------------------|
+| *(default)* | independent, equal variance | 1 (σ²) | *(default)* |
+| `corCompSymm` | compound symmetry / exchangeable | 2 | `(1 \| g)`, or `cs(0 + f_time \| g, hom = TRUE)` |
+| `corAR1` | AR(1), equally spaced integer time | 2 | `ar1(0 + f_time \| g)` — plus a residual |
+| `corCAR1` | continuous-time AR(1) | 2 | none |
+| `corARMA(p, q)` | ARMA | 2 + *p* + *q* | none |
+| `corSymm` | unstructured ("general") | 1 + *t*(*t*−1)/2 | `us(0 + f_time \| g)` — rarely estimable alongside a residual |
+| `corExp`, `corGaus`, `corSpher`, `corLin`, `corRatio` | **spatial** — decay with 2-D distance; `form = ~ x + y \| g` | 2–3 | none |
 
 The spatial ones are the same idea with distance in place of time, and
 are how you handle spatially autocorrelated residuals.
@@ -593,6 +752,12 @@ wins on AIC here (it spends 5 extra parameters and uses them), but
 continuous trend like this one, prefer `varPower`; reserve `varIdent`
 for a handful of genuinely discrete groups.
 
+**`lme4` has no `weights =` variance functions.** Its `weights` argument
+takes known precision weights only. The nearest things are a
+transformation of the response, `diag(0 + f_age | Seed)` or
+`ar1(..., hom = FALSE)` (a variance per occasion, as a random effect),
+or `glmmTMB`'s `dispformula`.
+
 ::: callout-note
 ## Variance functions in `nlme`
 
@@ -617,7 +782,8 @@ necessary.
 | Random intercepts and slopes | ✅ | ✅ | ✅ |
 | **Crossed** random effects | ✅ fast | ❌ nested only | ✅ |
 | Thousands of groups | ✅ fast | slow | ✅ |
-| Residual correlation (AR1, …) | ❌ | ✅ | ✅ (`ar1()`, `ou()`, `exp()`) |
+| AR(1), compound symmetry | ✅ `ar1()`, `cs()` — v2.0+, equal spacing | ✅ | ✅ |
+| Continuous-time AR(1), ARMA, spatial | ❌ | ✅ | ✅ (`ou()`, `exp()`, …; no ARMA) |
 | Unequal residual variance | ❌ | ✅ `weights =` | ✅ `dispformula =` |
 | Non-normal response | `glmer()` | ❌ | ✅ best support |
 | Zero inflation | ❌ | ❌ | ✅ |
@@ -625,10 +791,12 @@ necessary.
 :::
 
 **A practical decision rule.** Nested or crossed grouping and nothing
-special about the residuals → **`lme4`**. Repeated measures over time, or
-unequal variances, with a normal response → **`nlme`**. Anything
-non-normal, zero-inflated, or needing both a correlation structure *and*
-crossed random effects → **`glmmTMB`**.
+special about the residuals → **`lme4`**. Equally spaced repeated
+measures where a plain AR(1) will do → **`lme4`** with `ar1()`, and you
+keep `lmerTest` and crossed random effects. Uneven spacing, ARMA,
+spatial correlation or unequal variances, with a normal response →
+**`nlme`**. Anything non-normal, zero-inflated, or needing an uneven-time
+correlation structure *and* crossed random effects → **`glmmTMB`**.
 
 ::: callout-tip
 ## `glmmTMB` equivalents, for reference
@@ -708,6 +876,17 @@ model it as the residual.
 (1 | a) + (1 | b)   # a and b crossed
 ```
 
+## Correlation through time, inside `lme4` (version 2.0+)
+
+``` r
+ar1(0 + f_time | g)              # AR(1) across occasions; f_time is a FACTOR
+ar1(0 + f_time | g, hom = FALSE) # ... with a variance per occasion
+cs(0 + f_time | g, hom = TRUE)   # compound symmetry (= a random intercept)
+diag(0 + f_time | g)             # a variance per occasion, no correlation
+```
+
+Equal spacing only, and the independent residual is still added on top.
+
 ## $\mathbf{R}$ — the residuals (`nlme` or `glmmTMB`)
 
 ``` r
@@ -738,6 +917,9 @@ effects**.
 - **Barr, D. J., Levy, R., Scheepers, C., & Tily, H. J.** (2013). Random
   effects structure for confirmatory hypothesis testing: Keep it
   maximal. *Journal of Memory and Language, 68*(3), 255–278.
+- **`vignette("covariance_structures", package = "lme4")`** — the
+  `ar1()`, `cs()` and `diag()` terms added in `lme4` 2.0, with the
+  mathematics.
 - **Brooks, M. E., et al.** (2017). glmmTMB balances speed and
   flexibility among packages for zero-inflated generalized linear mixed
   modeling. *The R Journal, 9*(2), 378–400.
