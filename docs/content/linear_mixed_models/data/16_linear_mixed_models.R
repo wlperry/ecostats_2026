@@ -6,11 +6,8 @@
 # Save as scripts/16_linear_mixed_models.R
 #
 # Only the plumbing is written for you - libraries, the
-# data reads, and the plots in sections 9-10. Every line of
-# statistics you type yourself.
-# The code is on the activity page.
-#
-# Section 6 has NO code on the activity page either.
+# data reads, and the plots in sections 9-10. The code to
+# type is on the activity page.
 #
 # The THINK lines are to talk about, not to answer here.
 # The WRITE-UP (sections 7-8) is what gets graded.
@@ -21,7 +18,7 @@
 library(janitor)
 library(car)          # Anova()
 library(lme4)         # lmer()
-library(lmerTest)     # Satterthwaite df and p-values
+library(lmerTest)     # df and p-values for lmer
 library(emmeans)
 library(performance)  # icc()
 library(DHARMa)
@@ -33,10 +30,9 @@ options(contrasts = c("contr.sum", "contr.poly"))  # for Anova(type = 3)
 invisible(NULL)
 
 
-# ---- 1 The sea urchin data, again ------------------------
-# The data from lecture Part 1. 16 patches of reef got one
-# urchin-density treatment each; 5 quadrats scored inside
-# every patch.
+# ---- 1 The sea urchin data -------------------------------
+# 16 patches of reef got one urchin-density treatment each;
+# 5 quadrats scored inside every patch.
 #
 # The recode is written for you. NOTE: the file's dens_33 /
 # dens_66 labels are the reverse of the book's percentages,
@@ -59,153 +55,71 @@ head(u_df)
 
 invisible(NULL)
 
-# THINK: lecture Part 1 wrote Error(patch) and got a
-# p-value of 0.091. Two weeks later, what question is still
-# unanswered about those patches?
+# THINK: what was the treatment applied to - a quadrat or a
+# patch? So how many real replicates are there?
 
 
 # ---- 2 Fit the mixed model -------------------------------
-# A FIXED effect is a level you chose and care about -
-# treat. A RANDOM effect is a level drawn from a population
-# you want to generalize to - patch.
-#
-# Random-effects notation:
-#   (1|group)          random intercept per group
-#   (slope|group)      random intercept AND slope
-#   (1|outer/inner)    inner nested in outer
-#   (1|a) + (1|b)      crossed, not nested
+# (1 | patch) = a random intercept: each patch gets its own
+# baseline algae cover.
 
-# YOUR CODE: lmer() of algae on treat with a random
-# intercept for patch, then summary().
-#
-# Add control = lmerControl(calc.derivs = FALSE) to keep it
-# quiet.
+# YOUR CODE: lmer() of algae on treat with (1 | patch),
+# named mixed_model, then summary(mixed_model).
+# Add control = lmerControl(calc.derivs = FALSE).
 
 invisible(NULL)
 
-# THINK: find the Random effects block in the summary.
-# There are two numbers there. What is each one?
+# THINK: in the Random effects block, write down the
+# patch variance and the residual variance.
+#   patch    = how far patches sit from their OWN treatment mean
+#   Residual = how far quadrats sit from their OWN patch mean
 
-# THINK: why is patch the random effect and treat the fixed
-# one? What would it mean to call patch fixed?
+# THINK: Number of obs: 80, groups: patch, 16. Which is the
+# real replication for testing treat?
 
 
-# ---- 3 Two tests, two answers ----------------------------
-# YOUR CODE: the F-test - Anova(type = 3,
-# test.statistic = "F"). Note the header says
-# Kenward-Roger df.
+# ---- 3 The ICC -------------------------------------------
+# ICC = patch variance / (patch variance + residual variance)
 
-invisible(NULL)
-
-# YOUR CODE: the Satterthwaite version -
-# lmerTest::anova() on the same model.
+# YOUR CODE: icc(mixed_model)
 
 invisible(NULL)
 
-# YOUR CODE: the chi-square test - Anova(type = 3,
-# test.statistic = "Chisq").
+# THINK: "About ___% of the differences in algae cover come
+# from ___."
+
+# THINK: twice as many quadrats, or twice as many patches -
+# which helps the next experiment more?
+
+
+# ---- 4 Test the treatment --------------------------------
+# YOUR CODE: Anova(type = 3, test.statistic = "F"),
+# then the same with test.statistic = "Chisq".
 
 invisible(NULL)
 
-# THINK: write down all three p-values. Two of them agree
-# and one does not. Which is the odd one out?
-
-# THINK: chi-square = F x numerator df, and it assumes
-# INFINITE denominator df. You have 12. Is that infinite?
-
-# THINK: the two tests straddle alpha = 0.05. If you only
-# ran one, you would never know. Which do you report, and
-# could you defend that choice to a reviewer who wanted the
-# other one?
+# THINK: which side of 0.05 does each p fall on? Which one
+# do you report, and why?
 
 
-# ---- 4 Variance components - the new information ---------
-# This is what Error(patch) could never give you. The
-# nested ANOVA told you whether treat mattered. It did not
-# tell you HOW MUCH variation lives among patches.
-
-# YOUR CODE: VarCorr() on the model, then icc().
+# ---- 5 Treatment means -----------------------------------
+# YOUR CODE: emm <- emmeans(mixed_model, ~ treat), print
+# emm, then pairs(emm, adjust = "sidak").
 
 invisible(NULL)
 
-# THINK: compare the patch variance to the residual
-# variance. Which is bigger, and by how much?
+# THINK: some confidence limits go below zero. What is the
+# model assuming?
 
-# THINK: the ICC is the share of variance sitting among
-# patches. Say what your value means in one plain sentence
-# about this reef.
 
-# THINK: an ICC near zero would mean what? Near one?
-
-# ---- 4b Where that variance came from, the old way -------
-# lmer() never computed a sum of squares. Part 1 did
-# nothing else. The table and the two mean squares are
-# pulled out for you.
-
-a_tab <- summary(aov(algae ~ treat + treat:patch, data = u_df))[[1]]
-a_tab
-
-MS_patch  <- a_tab[2, "Mean Sq"]
-MS_within <- a_tab[3, "Mean Sq"]
-
-# YOUR CODE: (MS_patch - MS_within) / 5
+# ---- 6 Diagnostics ---------------------------------------
+# YOUR CODE: set.seed(123), simulateResiduals(), then
+# plotQQunif() and plotResiduals().
 
 invisible(NULL)
 
-# THINK: did that match VarCorr()? To how many decimals?
-
-# THINK: the / 5 is quadrats per patch. If a storm had cut
-# four patches to ONE quadrat each, what would you divide
-# by? Does lmer() have to answer that question at all?
-
-# THINK: MS_patch can come out SMALLER than MS_within by
-# chance, which makes that subtraction negative. A variance
-# cannot be negative. What does lmer() report instead, and
-# what warning goes with it?
-
-
-# ---- 5 Diagnostics ---------------------------------------
-# YOUR CODE: DHARMa - simulateResiduals(), then
-# plotQQunif(), plotResiduals(), testDispersion().
-
-invisible(NULL)
-
-# YOUR CODE: plot(mixed_model) and a boxplot of the
-# residuals by patch.
-
-invisible(NULL)
-
-# THINK: a mixed model assumes the random effects are
-# normally distributed too. You have 16 patches - is that
-# enough to check that assumption honestly?
-
-
-# ---- 6 Does it agree with the nested ANOVA? --------------
-# YOUR TURN - no code on the activity page.
-#
-# The claim: lmer() with (1|patch) and aov() with
-# Error(patch) are the same test on this balanced design.
-# Check it.
-#
-#   a) fit the traditional nested model with
-#      aov(... + Error(patch)) on u_df
-#   b) put its F, df and p next to the F-test from
-#      section 3
-#   c) collapse to the 16 patch means and run a plain
-#      one-way aov() on those 16 numbers - and add
-#      that row too
-#   d) three rows, one table. Decide which numbers match.
-
-# YOUR CODE:
-
-invisible(NULL)
-
-# THINK: if the F-test is identical to a method from the
-# 1960s, what did you gain by fitting a mixed model at all?
-# Name two things. (Section 4 is one of them.)
-
-# THINK: the design here is perfectly balanced. Where would
-# aov(Error()) and lmer() start to come apart?
+# THINK: roughly acceptable? What would you say in a
+# methods section?
 
 
 # ==========================================================
@@ -216,45 +130,33 @@ invisible(NULL)
 
 # ---- 7 Report the model ----------------------------------
 
-# Q1. Fill in the table:
+# Q15. Fill in the table:
 #
-#       method                        F / Chisq   df      p
-#       lmer, F (Kenward-Roger)
-#       lmer, F (Satterthwaite)
-#       lmer, chi-square
-#       aov with Error(patch)
+#       test                      F or Chisq   df      p
+#       F (Kenward-Roger)
+#       chi-square
 #
 # ANSWER:
 
 
-# Q2. Variance components: patch, residual, and the ICC.
+# Q16. The patch variance, the residual variance and the
+#      ICC, plus one plain sentence about what the ICC means
+#      for this reef.
 # ANSWER:
 
 
-# Q2b. The patch variance from section 4b, by hand from the
-#      mean squares. Does it match VarCorr()? One sentence
-#      on why the two agree here but would not if the
-#      design were unbalanced.
+# Q17. A 2-3 sentence results paragraph. Report the F-test
+#      AND the variance components - both belong in it.
 # ANSWER:
 
 
-# Q3. A 2-3 sentence results paragraph. Report the fixed
-#     effect with the test you chose, AND the variance
-#     component - both belong in the sentence.
+# Q18. Does this experiment show urchins have NO effect on
+#      algae cover? Use the treatment means and the ICC.
 # ANSWER:
 
 
-# Q4. Does this experiment show urchins have no effect on
-#     algae? The lecture called it a large effect that four
-#     patches could not resolve - has your answer
-#     changed now that you can see the variance components?
-# ANSWER:
-
-
-# Q5. You now have three ways to analyse a nested design:
-#     aov with Error(), lmer with a random intercept, and a
-#     one-way ANOVA on the unit means. Which would you
-#     reach for first on a design of your own, and why?
+# Q19. If you repeated this experiment, would you add more
+#      quadrats or more patches? Use the ICC to justify it.
 # ANSWER:
 
 
@@ -263,21 +165,23 @@ invisible(NULL)
 # readable sizing. It is the graded deliverable.
 #
 # Show BOTH levels of variation: the treatment means with
-# their intervals from the model, and the individual patch
-# means behind them.
+# their 95% intervals (as_tibble(emm)), and the 16 patch
+# means behind them:
+#   u_df %>% group_by(treat, patch) %>%
+#     summarise(algae = mean(algae), .groups = "drop")
 
 # YOUR CODE:
 
 invisible(NULL)
 
-# Q6. Your figure shows two kinds of spread - among patches
-#     within a treatment, and among treatments. Which one
-#     is bigger, and which one does the p-value care about?
+# Q20. Your figure shows two kinds of spread - among patches
+#      within a treatment, and among the treatment means.
+#      Which one does the treatment have to beat?
 # ANSWER:
 
 
 # ==========================================================
-# TWO MORE DESIGNS - after lecture Part 8. Not graded.
+# TWO MORE DESIGNS - after lecture Part 6. Not graded.
 #
 # The data prep and the plots are written for you.
 # You type the models.
@@ -296,6 +200,8 @@ ggplot(ck_df, aes(x = time, y = weight, group = chick)) +
   facet_wrap(~ diet)
 
 invisible(NULL)
+
+# THINK: how many chicks, how many rows? Parallel or fanning?
 
 # YOUR CODE: weight ~ time * diet, three ways. Name them
 # ck_lm, ck_ri and ck_rs.
@@ -344,27 +250,16 @@ invisible(NULL)
 # THINK: what was the treatment applied to? How many of
 # each kind are there?
 
-# YOUR CODE: log_insects three ways, then anova() on each.
-# Name them w_naive, w_fixed and w_mixed.
-#   lm( ~ reach)
-#   lm( ~ reach * stream)
-#   lmer( ~ reach + (1 | stream) + (1 | stream:reach))
+# YOUR CODE: the wrong way and the right way, then anova()
+# on each. Name them w_naive and w_mixed.
+#   lm(log_insects ~ reach)
+#   lmer(log_insects ~ reach + (1 | stream) + (1 | stream:reach))
 # Add control = lmerControl(calc.derivs = FALSE) to the lmer.
 
 invisible(NULL)
 
-# THINK: which term makes w_mixed right and the other two
-# wrong?
-
-# YOUR CODE: stream as a FIXED block, and the old way on
-# the 9 reach means. anova() on both.
-#   w_block: lmer( ~ reach + stream + (1 | stream:reach))
-#   w_rcb:   lm( ~ reach + stream, data = w_means)
-
-invisible(NULL)
-
-# THINK: did fixed-or-random stream change the reach test?
-# With 3 streams, which would you report?
+# THINK: denominator df for reach in each. Why is
+# (1 | stream:reach) the urchin (1 | patch)?
 
 
 # ==========================================================

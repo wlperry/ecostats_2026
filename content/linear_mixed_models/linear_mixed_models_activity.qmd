@@ -3,7 +3,7 @@ order: 16
 week: 11
 title: "Activity: Linear Mixed Models"
 subtitle: "Random effects for nested data"
-description: "Hands-on activity: refitting the sea urchin nested design with lme4::lmer(), choosing between the F-test and the Chi-square test when they disagree, reading variance components and the ICC, and proving the mixed model reproduces the traditional nested ANOVA. Then two more designs: chick growth through time with random slopes, and a simulated stream experiment blocked by stream."
+description: "Hands-on activity: fitting the sea urchin nested design with lme4::lmer(), reading the patch and residual variances, using the ICC to see what the next experiment needs, testing the treatment with the F-test, and making the final figure. Then two more designs: chick growth through time with random slopes, and a simulated stream experiment blocked by stream."
 author: "Bill Perry"
 metadata-files:
   - ../../_templates/activities.yml
@@ -16,17 +16,12 @@ format:
 
 ### Today's Objectives
 
-1.  Tell a fixed effect from a random effect, and say why `patch` is random
-2.  Write random-effects notation for nested and for crossed designs
-3.  Fit a nested design as a mixed model with `lme4::lmer()`
-4.  Run the *F*-test and the Chi-square test, and find that they disagree
-5.  Choose between them, and defend the choice
-6.  Read variance components and the ICC — information the nested ANOVA never gave you
-7.  Reproduce the patch variance from the nested ANOVA's mean squares, and say why REML does not need to
-8.  Run DHARMa diagnostics on a mixed model
-9.  Prove `lmer()` reproduces `aov(... + Error())` on a balanced design
-10. Give each animal its own line through time with a random slope
-11. Find the real replicate in a treatment blocked by stream
+1.  Say why `patch` is a random effect and `treat` is fixed
+2.  Fit a nested design with `lmer()` and read the two variances it prints
+3.  Use the ICC to say how much patches matter, and what the next experiment needs
+4.  Test the treatment with the *F*-test, and say why not the chi-square
+5.  Get treatment means with `emmeans()` and check the model with DHARMa
+6.  Find the real replicate in two more designs: chicks through time, and streams
 
 ::: callout-tip
 ## 📂 Files for today
@@ -34,78 +29,60 @@ format:
 [📥 Urchin data](data/andrew.csv){.btn .btn-primary download="andrew.csv"} [📥 Stream data (simulated)](data/willow_streams_simulated.csv){.btn .btn-primary download="willow_streams_simulated.csv"} [📥 Script skeleton (.R)](data/16_linear_mixed_models.R){.btn .btn-primary download="16_linear_mixed_models.R"} [📥 Complete script (.R)](data/16_linear_mixed_models_complete.R){.btn .btn-primary download="16_linear_mixed_models_complete.R"}
 
 - Save the skeleton as `scripts/16_linear_mixed_models.R`, and both `.csv` files in your `data/` folder.
-- The **complete script** has every line of code already written, including sections 6 and 8. Use it if you would rather run and read than type. The write-up `ANSWER:` lines are still blank for you to fill in.
-- The stream data are for sections 9–10 at the end. They are **simulated**, not a real study.
-- Same data the lecture used in Part 1, where the traditional nested analysis was built.
+- The **complete script** has every line of code already written. Use it if you would rather run and read than type. The write-up `ANSWER:` lines are still blank for you.
+- The stream data are for section 10 at the end. They are **simulated**, not a real study.
 :::
 
 ::: callout-important
 ## What you hand in
 
-- **All of today's code is right here in this activity.** Type it into your script as we go and run it chunk by chunk. The skeleton has the plumbing — libraries, the data reads, the mean-squares table in section 4, and the plots in sections 9–10 — and nothing else. Every line of statistics you type yourself.
-- **Section 6 has no code here either.** It is a comparison against the traditional `aov(Error())` analysis from lecture Part 1 — three lines you have the pieces for.
-- The **Q** boxes are **things to think about**, not inline homework. Read them, talk them over, answer them in your head. You do **not** have to type answers into the script, and they are not graded.
-- The **write-up** — sections 7 and 8 — *is* graded.
-- **Sections 9 and 10** are two more designs, after the write-up. Same rules as the Q boxes: do them, talk about them, not graded. Those answers go into the script as `#` comments.
-- Hand in `scripts/16_linear_mixed_models.R`. Run it top to bottom (**Ctrl/Cmd + Shift + Enter**) first — it must run with no errors.
-:::
-
-::: callout-note
-## 🔮 Predict before you run
-
-Today's trap is not a broken assumption — it is two legitimate tests that give you different answers on either side of α = 0.05. Before you run each one, say which way you expect it to come out.
+- **All of today's code is on this page.** Type it into your script and run it chunk by chunk. The skeleton has the libraries, the data reads and the plots for sections 9–10.
+- The **Q** boxes are **things to think about** and talk over. They are not graded.
+- The **write-up** (sections 7 and 8) **is** graded.
+- Hand in `scripts/16_linear_mixed_models.R`. Run it top to bottom first (**Ctrl/Cmd + Shift + Enter**). It must run with no errors.
 :::
 
 ::: callout-tip
 ## The `invisible(NULL)` lines in the skeleton
 
-Every section ends with `invisible(NULL)`. It is a **bumper**. Press Ctrl/Cmd + Enter on a section's last real line and your cursor jumps to the next line *that has code on it* — without the bumper, that is the next section, way down past the next heading. With it, the cursor stops right there and you keep your place. It does nothing and prints nothing.
+Every section ends with `invisible(NULL)`. It does nothing. It just stops your cursor at the end of the section when you run code with Ctrl/Cmd + Enter, so you keep your place.
 :::
 
-Keep the plots plain today — no labels, colors, or themes. The goal is to **read** them. The one exception is the final figure in section 8, which is the graded deliverable.
+Keep the plots plain today (no labels, colours or themes), except the final figure in section 8, which is graded.
 
 ------------------------------------------------------------------------
 
 ## Where this fits
 
-In **lecture Part 1** you saw this experiment analysed with `aov(algae ~ treat + Error(patch))`. It gave the right answer — *F* = 2.72 on 3 and 12 df, *p* = 0.091 — by forcing the treatment to be tested against patch-to-patch variation instead of quadrat-to-quadrat noise, which would have given a wildly over-confident *F* = 16.11.
+16 patches of reef each got one urchin density. 5 quadrats were scored in every patch. The treatment was applied to the **patch**, so there are **16** real replicates, not 80. In lecture, ignoring that gave *p* = 0.00003; testing the treatment against patches gave *p* = 0.091.
 
-`Error()` is the 1960s way to get the right denominator. It works, and it is brittle: it needs a balanced design, it cannot handle more than one grouping cleanly, and it tells you nothing about *how much* variation lives among patches.
-
-A **mixed model** does the same job by naming `patch` as a **random effect**. Same question, better machinery — and one new piece of output that the nested ANOVA simply could not produce.
+A **mixed model** handles this by naming `patch` as a **random effect**.
 
 |                | Fixed effect                 | Random effect                  |
-|------------------|---------------------------|--------------------------|
-| What it is     | levels you chose             | levels drawn from a population |
+|----------------|------------------------------|--------------------------------|
+| What it is     | levels you chose             | levels sampled from many       |
 | What you want  | the difference between them  | how much they vary             |
-| Here           | `treat` — the four densities | `patch` — 16 bits of reef      |
-| Generalizes to | these four densities         | reef patches in general        |
+| Here           | `treat`, the four densities  | `patch`, 16 bits of reef       |
 
-Random-effects notation:
+R will print two variances. We call them by R's names:
 
-| Code              | Meaning                               |
-|-------------------|---------------------------------------|
-| `(1|group)`       | a random intercept for each group     |
-| `(slope|group)`   | random intercept **and** random slope |
-| `(1|outer/inner)` | `inner` nested inside `outer`         |
-| `(1|a) + (1|b)`   | crossed, not nested                   |
+- **patch variance**: how much patches differ from **their own treatment's** mean (among-patch)
+- **residual variance**: how much quadrats differ from **their own patch's** mean (within-patch)
 
 ------------------------------------------------------------------------
 
-> ## 🧩 Block 1 — Fixed, random, and the model *(after lecture Parts 1–2)*
->
-> Sections 1–2: the data again, then the mixed model.
+> ## 🧩 Block 1: Fit the model and read it *(after lecture Parts 1–2)*
 
-# Section 1 · The sea urchin data, again
+# Section 1 · The sea urchin data
 
-*Written for you in the skeleton — run it and read it.*
+*Written for you in the skeleton. Run it and read it.*
 
 ``` r
 # ---- Libraries -------------------------------------------
 library(janitor)
 library(car)          # Anova()
 library(lme4)         # lmer()
-library(lmerTest)     # Satterthwaite df and p-values
+library(lmerTest)     # df and p-values for lmer
 library(emmeans)
 library(performance)  # icc()
 library(DHARMa)
@@ -116,7 +93,7 @@ options(contrasts = c("contr.sum", "contr.poly"))  # for Anova(type = 3)
 ```
 
 ``` r
-# ---- 1 The sea urchin data, again ------------------------
+# ---- 1 The sea urchin data -------------------------------
 u_df <- read_csv("data/andrew.csv") %>%
   clean_names() %>%
   mutate(
@@ -133,243 +110,174 @@ u_df <- read_csv("data/andrew.csv") %>%
 head(u_df)
 ```
 
-✏️ **Q1:** The nested ANOVA gave *p* = 0.091 and stopped there. What question about those 16 patches does that leave completely unanswered?
+✏️ **Q1:** What was the treatment applied to: a quadrat or a patch? So how many real replicates are there?
 
 ------------------------------------------------------------------------
 
-# Section 2 · Fit the mixed model
+# Section 2 · Fit the mixed model and read the output
 
 **▶ Type this yourself:**
 
 ``` r
 # ---- 2 Fit the mixed model -------------------------------
-mixed_model <- lmer(algae ~ treat + (1|patch), data = u_df,
+mixed_model <- lmer(algae ~ treat + (1 | patch), data = u_df,
                     control = lmerControl(calc.derivs = FALSE))
 
 summary(mixed_model)
 ```
 
-`control = lmerControl(calc.derivs = FALSE)` just suppresses a convergence check that is noisy on small datasets. It does not change the fit.
+`(1 | patch)` gives each patch its own baseline: a **random intercept**. `calc.derivs = FALSE` just skips a noisy convergence check.
 
-✏️ **Q2:** Find the **Random effects** block in the summary. There are two rows. What is each one, and what are the two numbers?
+Find the **Random effects** block:
 
-✏️ **Q3:** Why is `patch` the random effect and `treat` the fixed one? What would it *mean* to call `patch` fixed — what would you be claiming you wanted to know?
+```
+ Groups   Name        Variance Std.Dev.
+ patch    (Intercept) ...
+ Residual             ...
+```
 
-✏️ **Q4:** The summary reports `Number of obs: 80, groups: patch, 16`. Which of those two numbers is your real replication for testing `treat`?
+✏️ **Q2:** Write down the **patch variance** and the **residual variance**. Which is bigger, or are they about the same?
+
+✏️ **Q3:** The output says `Number of obs: 80, groups: patch, 16`. Which number is the real replication for testing `treat`?
+
+✏️ **Q4:** Why is `patch` random and `treat` fixed? (Hint: would a repeat of the study use the same patches? The same densities?)
+
+> 💡 Skip the **Fixed effects** table in `summary()`. With `contr.sum`, `treat1`, `treat2` and so on are deviations from the grand mean, which is confusing. You will get the treatment means from `emmeans()` in section 5.
 
 ------------------------------------------------------------------------
 
-> ## 🧩 Block 2 — Two tests that disagree *(after lecture Part 3)*
->
-> Section 3: the same model, three tests, two different answers.
+> ## 🧩 Block 2: How much do patches matter? *(after lecture Part 3)*
 
-# Section 3 · Two tests, two answers
+# Section 3 · The ICC
 
-Mixed models have an awkward problem: there is no single agreed way to count the denominator degrees of freedom. Different approximations give different *p*-values.
-
-> 🔮 **Predict first:** the nested ANOVA gave *p* = 0.091. Will the mixed model's *F*-test land near that, or somewhere else?
-
-**▶ Type this yourself** — the *F*-test, with Kenward-Roger df:
-
-``` r
-# ---- 3 Two tests, two answers ----------------------------
-Anova(mixed_model, type = 3, test.statistic = "F")
-```
-
-> 💡 Read the header R prints: **"Kenward-Roger df"**. `car::Anova()` has no `ddf` argument — it always uses Kenward-Roger when you ask for `test.statistic = "F"`.
-
-**▶ Type this yourself** — the Satterthwaite version, which is what `lmerTest` adds:
-
-``` r
-anova(mixed_model)
-```
-
-> 🔮 **Predict first:** before the next chunk — the Chi-square test is the same model again. Same answer, or different?
-
-**▶ Type this yourself** — the Chi-square test:
-
-``` r
-Anova(mixed_model, type = 3, test.statistic = "Chisq")
-```
-
-✏️ **Q5:** Write down all three *p*-values. Two agree and one does not. Which is the odd one out, and which side of 0.05 does it fall on?
-
-✏️ **Q6:** Chi-square = *F* × numerator df, and the Chi-square test assumes **infinite** denominator df. How many do you actually have? Is 12 infinite?
-
-✏️ **Q7:** The rule of thumb: under \~100 observations or fewer than \~20 random-effect levels, use the *F*-test; over \~500 observations and more than \~50 levels, Chi-square is fine; in between, the *F*-test is safer. You have 80 observations and 16 patches. Which does the rule pick?
-
-✏️ **Q8:** Here is the uncomfortable part. If you had run **only** the Chi-square test, you would have reported a significant treatment effect and never known. What does that tell you about running one test and stopping?
-
-✏️ **Q9:** Could you defend the *F*-test to a reviewer who wanted the Chi-square? Write the one sentence you would say.
-
-> 💡 **Key idea:** this is not a case of one test being broken. Both are legitimate approximations; they differ because one of them pretends you have more information than you do. When two defensible analyses straddle α = 0.05, the honest move is to say so and justify your choice — not to pick the one you like and delete the other.
-
-------------------------------------------------------------------------
-
-> ## 🧩 Block 3 — What the nested ANOVA couldn't tell you *(after lecture Parts 4–6)*
->
-> Sections 4–5: variance components, then diagnostics.
-
-# Section 4 · Variance components — the new information
-
-Everything so far has reproduced the nested ANOVA. **This** is what `Error(patch)` could never give you.
-
-> 🔮 **Predict first:** the patch means within the 0% treatment alone run from 2.2% to 62%. Before you run this: is more of the variation among **patches**, or among **quadrats within** a patch?
+> 🔮 **Predict first:** the four patches with urchins removed have means of 34, 62, 2 and 58% algae. Is more of the variation among **patches**, or among **quadrats within** a patch?
 
 **▶ Type this yourself:**
 
 ``` r
-# ---- 4 Variance components - the new information ---------
-VarCorr(mixed_model)
-
+# ---- 3 The ICC -------------------------------------------
 icc(mixed_model)
 ```
 
-✏️ **Q10:** Write down the patch variance and the residual variance. Which is bigger?
+The ICC is
 
-✏️ **Q11:** The **ICC** (intraclass correlation) is the share of total variance sitting among patches. What is yours? Say what it means in one plain sentence about this reef.
+$$ICC = \frac{\text{patch variance}}{\text{patch variance} + \text{residual variance}}$$
 
-✏️ **Q12:** What would an ICC near **zero** mean about the patches? Near **one**?
+the share of the variation that is **among patches**. Use the **adjusted** ICC.
 
-✏️ **Q13:** The nested ANOVA gave you a *p*-value and an effect size, and nothing else. Name the practical decision you could make with the ICC that you could not make with either of those. (Think about designing the *next* experiment.)
+✏️ **Q5:** Check it by hand from your Q2 numbers. Do you get the same value?
 
-Where that patch variance came from, the *old* way. *The table and the two mean squares are written for you in the skeleton:*
+✏️ **Q6:** Finish this sentence about the reef: "About ___% of the differences in algae cover come from ___."
+
+✏️ **Q7:** An ICC near 0 would mean what about the patches? Near 1?
+
+✏️ **Q8:** Next year you can afford either **twice as many quadrats per patch** or **twice as many patches**. Which one helps more, and why? (Think about patch 15, which was nearly bare.)
+
+------------------------------------------------------------------------
+
+> ## 🧩 Block 3: Test, means and checks *(after lecture Part 4)*
+
+# Section 4 · Test the treatment
+
+**▶ Type this yourself:**
 
 ``` r
-a_tab <- summary(aov(algae ~ treat + treat:patch, data = u_df))[[1]]
-a_tab
+# ---- 4 Test the treatment --------------------------------
+Anova(mixed_model, type = 3, test.statistic = "F")
 
-MS_patch  <- a_tab[2, "Mean Sq"]
-MS_within <- a_tab[3, "Mean Sq"]
+Anova(mixed_model, type = 3, test.statistic = "Chisq")
 ```
 
-**▶ Type this yourself** — one line of arithmetic:
+✏️ **Q9:** Write down the *p*-value from each. Which side of 0.05 does each fall on?
+
+✏️ **Q10:** The *F*-test's denominator df is 12. Where does 12 come from? (Patches, treatments.)
+
+✏️ **Q11:** The chi-square test assumes you have **infinite** replicates. You have 16 patches. Which test do you report?
+
+> 💡 **Key idea:** with few groups, which is nearly always the case in ecology, report the ***F*-test** (Kenward-Roger df). The chi-square is over-confident, and if you had run only that one you would have reported a "significant" effect and never known.
+
+------------------------------------------------------------------------
+
+# Section 5 · Treatment means
+
+**▶ Type this yourself:**
 
 ``` r
-(MS_patch - MS_within) / 5
-```
-
-> 🔮 **Predict first:** `lmer()` never computed a sum of squares. That line above is pure arithmetic on the nested ANOVA table. Will it land on the same number `VarCorr()` gave you, or just near it?
-
-✏️ **Q13b:** Did it match? To how many decimal places?
-
-✏️ **Q13c:** That `/ 5` is the number of quadrats per patch. Suppose a storm had cut four patches down to **one** quadrat each. What number would you divide by then — and does `lmer()` have to answer that question at all?
-
-✏️ **Q13d:** `MS_patch` could come out **smaller** than `MS_within` by chance, which makes that subtraction negative. A variance cannot be negative. What do you think `lmer()` reports instead, and what warning have you been told to expect when it does?
-
-**▶ Type this yourself** — the treatment means from the model:
-
-``` r
+# ---- 5 Treatment means -----------------------------------
 emm <- emmeans(mixed_model, ~ treat)
 emm
 
 pairs(emm, adjust = "sidak")
-
-multcomp::cld(emm, Letters = letters)
 ```
 
-✏️ **Q14:** Look hard at the confidence limits on the `33%` and `100%` means. They go **below zero**. Algae cover is a percentage — it cannot be negative.
+✏️ **Q12:** What is the mean algae cover with urchins removed (0%) and at natural density (100%)? Is that a big difference?
 
-✏️ **Q15:** You spent all of last week on models that refuse to predict impossible values. So what is this model assuming about `algae` that is not true, and what would you do about it? (You do not have to fix it today — name the fix.)
-
-> 💡 **Key idea:** the mixed model fixed the *error structure* and left the *distribution* alone. Last week you fixed the distribution and left the error structure alone. Real data often needs both at once — that is a generalized linear **mixed** model, `glmer()`, and you now have both halves of it.
+✏️ **Q13:** Some confidence limits go **below zero**. Algae cover can't be negative. What is the model assuming that isn't true? (Last week's lecture has the fix.)
 
 ------------------------------------------------------------------------
 
-# Section 5 · Diagnostics
+# Section 6 · Diagnostics
 
 **▶ Type this yourself:**
 
 ``` r
-# ---- 5 Diagnostics ---------------------------------------
+# ---- 6 Diagnostics ---------------------------------------
 set.seed(123)
 sim_mixed <- simulateResiduals(mixed_model, plot = FALSE)
 
 plotQQunif(sim_mixed)
 plotResiduals(sim_mixed)
-testDispersion(sim_mixed)
 ```
 
-**▶ Type this yourself:**
-
-``` r
-plot(mixed_model)
-
-resid_df <- u_df %>%
-  mutate(.resid = residuals(mixed_model))
-
-ggplot(resid_df, aes(x = patch, y = .resid)) +
-  geom_boxplot()
-```
-
-✏️ **Q16:** Do the DHARMa diagnostics look acceptable?
-
-✏️ **Q17:** A mixed model also assumes the **random effects** are normally distributed. You have 16 patches. Is that enough to check that assumption honestly? What would you say in a paper?
+✏️ **Q14:** Do the plots look acceptable, roughly? Percent cover with lots of zeros won't be perfect. What would you say in a methods section?
 
 ------------------------------------------------------------------------
 
-# Section 6 · Does it agree with the nested ANOVA? *(you write this one)*
+::: callout-note
+## 🚀 Optional challenge (not graded)
 
-**No code on this page.** Every piece of it appeared in lecture Part 1 or in section 3.
-
-**The claim:** on a balanced design, `lmer(algae ~ treat + (1|patch))` and `aov(algae ~ treat + Error(patch))` are the *same test*. Check it.
-
-Work through:
-
-a.  Fit the traditional nested model: `aov()` with `+ Error(patch)` on `u_df`.
-b.  Put its *F*, df, and *p* next to the *F*-test from section 3.
-c.  Collapse to the 16 patch means with `group_by()`/`summarise()`, run a plain one-way `aov()` on those 16 numbers, and add that row too.
-d.  Three rows, one table. Decide which numbers match and which do not.
-
-✏️ **Q18:** Do all three agree? Exactly, or just closely?
-
-✏️ **Q19:** If the *F*-test is identical to a method from the 1960s, what did you actually gain by fitting a mixed model? Name **two** things — section 4 is one of them.
-
-✏️ **Q20:** This design is perfectly balanced: 4 patches per treatment, 5 quadrats per patch. Where would `aov(Error())` and `lmer()` start to come apart? (What if one patch had been lost to a storm?)
-
-> 💡 **Key idea:** the mixed model did not give you a *better p-value* — it gave you the same one, plus variance components, plus a path to unbalanced data, crossed random effects, and non-normal responses. That is why it replaced `Error()`, not because the old answer was wrong.
+Want to see where the patch variance comes from, the old way? Or check that `lmer()` gives the same *F* as `aov(algae ~ treat + Error(patch))`? Both are worked through, with code, in the [Mixed Models Under the Hood](../../vignettes/16_lmm_under_the_hood_vignette/lmm_under_the_hood.qmd) vignette (Steps 2, 3 and 6). The complete script has the comparison at the bottom of section 6.
+:::
 
 ------------------------------------------------------------------------
 
 # Homework
 
-[**Homework 16 — Linear Mixed Models**](../../homeworks/lmm_homework/lmm_homework.qmd)
+[**Homework 16: Linear Mixed Models**](../../homeworks/lmm_homework/lmm_homework.qmd)
 
-The **rusty crayfish** growth experiment — but now `lake` is a **random** effect rather than a fixed factor. Same data as Homework 13, deliberately: the comparison between the two analyses *is* the assignment. Lecture Part 7 walked the comparison — fixed vs random intercept vs random slope — and read `summary()` line by line; the homework asks you to do it yourself and say what each version lets you claim.
+The **rusty crayfish** growth experiment, but now `lake` is a **random** effect rather than a fixed factor. Same data as Homework 13, on purpose: comparing the two analyses *is* the assignment. Lecture Part 5 walks through it.
 
-**Data:** [`sargent_lodge_crayfish.csv`](../../homeworks/lmm_homework/data/sargent_lodge_crayfish.csv) — Sargent & Lodge (2014), *Evolutionary Applications* 7: 949–961.
+**Data:** [`sargent_lodge_crayfish.csv`](../../homeworks/lmm_homework/data/sargent_lodge_crayfish.csv) from Sargent & Lodge (2014), *Evolutionary Applications* 7: 949–961.
 
-Start a new script for it — do not add it to `16_linear_mixed_models.R`.
+Start a new script for it. Do not add it to `16_linear_mixed_models.R`.
 
 ------------------------------------------------------------------------
 
-# Write-up — graded
+# Write-up: graded
 
-*These go into the bottom of your script, as `#` comments after `ANSWER:`.*
+*These go at the bottom of your script, as `#` comments after `ANSWER:`.*
 
 ## Section 7 · Report the model
 
-✏️ **Q21:** Fill in the table:
+✏️ **Q15:** Fill in the table:
 
-```         
-method                        F / Chisq   df      p
-lmer, F (Kenward-Roger)
-lmer, F (Satterthwaite)
-lmer, chi-square
-aov with Error(patch)
+```
+test                      F or Chisq   df      p
+F (Kenward-Roger)
+chi-square
 ```
 
-✏️ **Q22:** Variance components: patch, residual, and the ICC.
+✏️ **Q16:** The patch variance, the residual variance and the ICC, plus one plain sentence about what the ICC means for this reef.
 
-✏️ **Q23:** A 2–3 sentence results paragraph. Report the fixed effect with the test you chose **and** the variance component — both belong in the sentence.
+✏️ **Q17:** A 2–3 sentence results paragraph. Report the *F*-test **and** the variance components; both belong in it. (The lecture's "Reporting the Result" slide is a model.)
 
-✏️ **Q24:** Does this experiment show urchins have **no** effect on algae cover? The lecture argued it shows "a large effect four patches could not resolve" — does seeing the variance components change or confirm that?
+✏️ **Q18:** Does this experiment show urchins have **no** effect on algae cover? Use the treatment means and the ICC in your answer.
 
-✏️ **Q25:** You now have three ways to analyse a nested design: `aov` with `Error()`, `lmer` with a random intercept, and a one-way ANOVA on the unit means. Which would you reach for first on a design of your own, and why?
+✏️ **Q19:** If you repeated this experiment, would you add more quadrats or more patches? Use the ICC to justify it.
 
 ## Section 8 · The final figure
 
-One publication-quality figure showing **both** levels of variation: the treatment means with their intervals from the model, and the individual patch means behind them. Proper axis labels, a real theme, readable sizing — this one is graded on presentation. Export it with `ggsave()`.
+One publication-quality figure showing **both** levels of variation: the treatment means with their 95% intervals from the model, and the 16 patch means behind them. Proper axis labels, a real theme, readable sizing. This one is graded on presentation. Export it with `ggsave()`.
 
 ``` r
 # ---- 8 The final figure ----------------------------------
@@ -377,19 +285,21 @@ One publication-quality figure showing **both** levels of variation: the treatme
 # ggsave("figures/16_urchin_mixed.pdf", width = 7, height = 5)
 ```
 
-✏️ **Q26:** Your figure shows two kinds of spread — among patches within a treatment, and among treatments. Which one is bigger, and which one does the *p*-value care about?
+> 💡 You'll need the patch means: `u_df %>% group_by(treat, patch) %>% summarise(algae = mean(algae), .groups = "drop")`, and the model means: `as_tibble(emm)`.
+
+✏️ **Q20:** Your figure shows two kinds of spread: among patches within a treatment, and among the treatment means. Which one does the treatment have to beat?
 
 ------------------------------------------------------------------------
 
-> ## 🧩 Block 4 — Two designs you will actually run *(after lecture Part 8)*
+> ## 🧩 Block 4: Two designs you will actually run *(after lecture Part 6)*
 >
-> Sections 9–10: animals followed through time, then a treatment blocked by stream. Not graded.
+> Not graded.
 
-# Section 9 · Animals through time — chick growth
+# Section 9 · Animals through time: chick growth
 
-`ChickWeight` ships with R, so there is nothing to download: 50 chicks on 4 diets, each weighed up to 12 times over 21 days.
+`ChickWeight` ships with R: 50 chicks on 4 diets, each weighed up to 12 times over 21 days.
 
-*Written for you in the skeleton — run it and look at the plot.*
+*Written for you in the skeleton. Run it and look at the plot.*
 
 ``` r
 # ---- 9 Animals through time - chick growth ---------------
@@ -402,11 +312,9 @@ ggplot(ck_df, aes(x = time, y = weight, group = chick)) +
   facet_wrap(~ diet)
 ```
 
-✏️ **Q27:** The diet was given to a chick. How many chicks are there, and how many rows? Which of those two numbers is the replication for a diet effect?
+✏️ **Q21:** The diet was given to a chick. How many chicks are there, and how many rows? Which is the replication for a diet effect? Do the lines run parallel or fan out?
 
-> 🔮 **Predict first:** the question is whether chicks **grow at different rates** on different diets — the `time:diet` term. You are about to fit it three ways. Which will give the biggest *F*?
-
-**▶ Type this yourself:**
+**▶ Type this yourself:** the question is whether chicks **grow at different rates** on different diets (`time:diet`), fitted three ways:
 
 ``` r
 ck_lm <- lm(weight ~ time * diet, data = ck_df)
@@ -418,9 +326,7 @@ anova(ck_ri)
 anova(ck_rs)
 ```
 
-✏️ **Q28:** Write down *F* and the denominator df for `time:diet` in all three. Which one has df close to the number of chicks?
-
-✏️ **Q29:** The random-**intercept** model gave the *largest* *F* — bigger than ignoring chick altogether. It removed chick-to-chick differences in size from the noise. What is it still assuming about every chick on the same diet?
+✏️ **Q22:** Write down the denominator df for `time:diet` in all three. Which one is close to the number of chicks?
 
 **▶ Type this yourself:**
 
@@ -430,21 +336,17 @@ VarCorr(ck_rs)
 emtrends(ck_rs, ~ diet, var = "time")
 ```
 
-✏️ **Q30:** Find the `time` row in the random effects. That SD is in grams per day. Say what it means in one sentence about chicks on the **same** diet.
+✏️ **Q23:** The `time` SD in the random effects is in grams per day. What does it say about chicks on the **same** diet?
 
-✏️ **Q31:** `emtrends()` is `emmeans()` for slopes. What is the growth rate on diet 1 and on diet 3? What df do those standard errors rest on?
-
-✏️ **Q32:** You tag 30 fish and re-measure each one every summer for five years. Write the `lmer()` formula for growth. What goes on the left of the bar, and what on the right?
-
-> 💡 **Key idea:** repeated measurements on one animal are subsamples of that animal, exactly as quadrats were subsamples of a patch. If the thing you care about is a **rate**, each animal needs its own rate in the model — a random slope.
+✏️ **Q24:** You tag 30 fish and re-measure each one every summer for five years. Write the `lmer()` formula for growth.
 
 ------------------------------------------------------------------------
 
 # Section 10 · A treatment blocked by stream
 
-**These data are simulated.** The layout is a real project: 3 streams, and in each one a **reference** reach, a reach with **crack willow**, and a reach where willow was **removed**. 15 benthic samples per reach. Because the numbers were made up, the truth is known: willow cuts insect numbers by 30%.
+**These data are simulated.** 3 streams; in each a **reference** reach, a **crack willow** reach, and a reach where willow was **removed**. 15 samples per reach. The truth is known: willow cuts insect numbers by 30%.
 
-*Written for you in the skeleton — run it and look at the plot.*
+*Written for you in the skeleton. Run it and look at the plot.*
 
 ``` r
 # ---- 10 A treatment blocked by stream --------------------
@@ -465,46 +367,25 @@ ggplot(w_df, aes(x = reach, y = log_insects)) +
   facet_wrap(~ stream)
 ```
 
-✏️ **Q33:** What was the treatment applied to — a sample, a reach, or a stream? How many of those are there in total, and how many **of each kind**?
+✏️ **Q25:** What was the treatment applied to: a sample, a reach or a stream? How many of each kind are there?
 
-> 🔮 **Predict first:** 135 samples, and a real 30% effect built in. Will the correct analysis find it?
-
-**▶ Type this yourself** — three analyses of the same 135 samples:
+**▶ Type this yourself:** the wrong way and the right way:
 
 ``` r
 w_naive <- lm(log_insects ~ reach, data = w_df)
-w_fixed <- lm(log_insects ~ reach * stream, data = w_df)
 w_mixed <- lmer(log_insects ~ reach + (1 | stream) + (1 | stream:reach),
                 data = w_df,
                 control = lmerControl(calc.derivs = FALSE))
 
 anova(w_naive)
-anova(w_fixed)
 anova(w_mixed)
 ```
 
-✏️ **Q34:** *F*, denominator df and *p* for `reach` in each. `reach * stream` with everything fixed looks like the careful analysis. What is it testing reach against, and why is that the wrong yardstick?
+✏️ **Q26:** Denominator df and *p* for `reach` in each. Why is `(1 | stream:reach)` the urchin `(1 | patch)` under another name?
 
-✏️ **Q35:** `(1 | stream:reach)` is the urchin `(1 | patch)` under another name. Explain why, in one sentence.
+✏️ **Q27:** The effect was real and the mixed model gave *p* ≈ 0.10. A lab-mate suggests 30 samples per reach next year instead of 15. Is that the right fix? What would you do instead?
 
-**▶ Type this yourself** — stream as a fixed block, and the old way on reach means:
-
-``` r
-w_block <- lmer(log_insects ~ reach + stream + (1 | stream:reach),
-                data = w_df)
-w_rcb <- lm(log_insects ~ reach + stream, data = w_means)
-
-anova(w_block)
-anova(w_rcb)
-```
-
-✏️ **Q36:** Compare the `reach` row in `w_mixed`, `w_block` and `w_rcb`. Did it matter whether stream was fixed or random? Which term did all three have in common that the two wrong models lacked?
-
-✏️ **Q37:** The effect was real and you got *p* ≈ 0.10. A lab-mate suggests taking 30 samples per reach next year instead of 15. Is that the right fix? What would you do instead?
-
-✏️ **Q38:** With only 3 streams, which would you report — stream fixed or stream random — and what does that choice let you claim? (Think about the crayfish and their 3 lakes.)
-
-> 💡 **Key idea:** fixed block or random block is a question about what you want to **claim**. Whether the reach is in the model as its own random term is a question about whether the test is **right**. Get the second one right first.
+> 💡 **Key idea:** before fitting anything, ask **what the treatment was applied to** and count those. That number, not the number of rows, is your replication.
 
 ------------------------------------------------------------------------
 
@@ -512,19 +393,12 @@ anova(w_rcb)
 
 At this point you should be able to:
 
-- [ ] Tell a fixed effect from a random effect, and justify which is which
-- [ ] Write random-effects notation for nested, crossed, and random-slope designs
-- [ ] Fit a nested design with `lmer()` and read its random-effects block
-- [ ] Choose between the *F*-test and the Chi-square test, and defend the choice
-- [ ] Explain what happens when two defensible tests straddle α = 0.05
-- [ ] Read variance components and the ICC, and say what they mean biologically
-- [ ] Get the same patch variance two ways — from mean squares and from `VarCorr()` — and say where the two methods diverge
-- [ ] Use the ICC to plan a better experiment
-- [ ] Run DHARMa diagnostics on a mixed model
-- [ ] Show that `lmer()` reproduces `aov(... + Error())` on a balanced design, and say where they diverge
-- [ ] Fit a random slope for animals measured through time, and read its SD as a rate
-- [ ] Name the experimental unit in a blocked design with subsamples, and put it in the model
+- [ ] Tell a fixed effect from a random effect
+- [ ] Fit a nested design with `lmer()` and read the patch and residual variances
+- [ ] Explain the ICC in one plain sentence, and use it to plan a better experiment
+- [ ] Choose the *F*-test over the chi-square, and say why
+- [ ] Get treatment means with `emmeans()` and check the model with DHARMa
+- [ ] Fit a random slope for animals measured through time
+- [ ] Find the treated unit in a blocked design and put it in the model
 
 Run your whole script top to bottom with **Ctrl/Cmd + Shift + Enter**. It must run clean.
-
-> 💡 **Key idea:** you have now changed both halves of the linear model — the distribution (week 10) and the error structure (this week). Put them together and you have `glmer()`: a count response with a random effect, which is what most real ecological field data actually is.

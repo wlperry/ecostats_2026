@@ -161,10 +161,44 @@ The chi-square test assumes you have *infinite* replicates. You have 12 df, so i
 Adjusted ICC: 0.496
 ```
 
-**Interpretation:** about **half (50%)** of the variation in algae cover, after accounting for treatment, is among patches. The other half is among quadrats within patches.
+**ICC = patch variance / (patch variance + residual variance) = 294 / (294 + 299) = 0.50**
 
-- ICC near **0**: patches are all alike, so quadrats are nearly independent
-- ICC near **1**: everything in a patch is the same, so it's really one data point per patch
+**What the ICC asks:** if I pick two quadrats from the same patch, how similar are they likely to be? It is the share of the variation (after taking out treatment) that is **among patches** rather than **within patches**.
+
+**Example: ICC near 0, where patches don't matter** (made-up numbers, same treatment)
+
+| | Quadrats | Patch mean |
+|---|---|---|
+| Patch A | 10, 30, 5, 25, 20 | 18 |
+| Patch B | 22, 8, 28, 12, 20 | 18 |
+
+The patch means are the same, so all the variation is quadrat to quadrat. Knowing the patch tells you nothing, and the quadrats act like independent replicates.
+
+**Example: ICC near 1, where patch is everything**
+
+| | Quadrats | Patch mean |
+|---|---|---|
+| Patch A | 5, 6, 5, 4, 5 | 5 |
+| Patch B | 40, 41, 39, 40, 40 | 40 |
+
+Quadrats inside a patch are nearly identical. You measured the same number 5 times, so each patch is really **one** data point.
+
+**The real urchin data: ICC = 0.50, right in the middle.** These are the 4 patches with urchins removed (0%), all given the same treatment:
+
+| Patch | Quadrats | Patch mean |
+|---|---|---|
+| 13 | 46, 44, 41, 29, 11 | 34 |
+| 14 | 65, 55, 61, 74, 55 | 62 |
+| 15 | 0, 5, 0, 0, 6 | **2** |
+| 16 | 30, 82, 70, 27, 83 | 58 |
+
+- **Among patches (big):** same treatment, but patch 15 is nearly bare while patch 14 is at 62%. That's the patch variance (294).
+- **Within patches (also big):** patch 16 ranges from 27 to 83. That's the residual variance (299).
+- Half the differences in algae cover come from *which patch* a quadrat was in.
+
+**Why it matters:** quadrats from the same patch are not independent. One bare patch like patch 15 drags down the whole 0% mean, and only **more patches** can average that out. More quadrats in patch 15 would just confirm it's bare.
+
+> **One sentence:** The ICC is the share of variation that comes from patches. At 0.50, half the differences in algae cover come from which patch a quadrat was in, so patches, not quadrats, are what we need more of.
 
 **This is the new information a mixed model gives you.** The old nested ANOVA (`aov` with `Error(patch)`) gives the same p-value here but never tells you this.
 
