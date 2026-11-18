@@ -91,6 +91,20 @@ invisible(NULL)
 # THINK: twice as many quadrats, or twice as many patches -
 # which helps the next experiment more?
 
+# R2: how much of the variation each part explains.
+#   Marginal R2    = fixed effects only (treat)
+#   Conditional R2 = fixed + random effects (treat + patch)
+
+# YOUR CODE: r2(mixed_model)
+
+invisible(NULL)
+
+# THINK: share explained by treatment? By treatment + patch?
+# So by patches alone (conditional - marginal)?
+
+# THINK: which explains more - urchin density or which patch
+# a quadrat was in? Why is "R2 = 0.62" alone misleading?
+
 
 # ---- 4 Test the treatment --------------------------------
 # YOUR CODE: Anova(type = 3, test.statistic = "F"),
@@ -139,14 +153,14 @@ invisible(NULL)
 # ANSWER:
 
 
-# Q16. The patch variance, the residual variance and the
-#      ICC, plus one plain sentence about what the ICC means
-#      for this reef.
+# Q16. The patch variance, the residual variance, the ICC,
+#      and the marginal and conditional R2, plus one plain
+#      sentence about what the ICC means for this reef.
 # ANSWER:
 
 
-# Q17. A 2-3 sentence results paragraph. Report the F-test
-#      AND the variance components - both belong in it.
+# Q17. A 2-3 sentence results paragraph. Report the F-test,
+#      the variance components AND both R2 values.
 # ANSWER:
 
 
@@ -220,8 +234,10 @@ invisible(NULL)
 
 invisible(NULL)
 
-# THINK: the SD in the time row is grams per day. What does
-# it say about chicks on the SAME diet?
+# THINK: emtrends() time.trend = the AVERAGE growth rate per
+# diet (g/day). The time SD in VarCorr() = how much chicks
+# vary AROUND that average. A typical chick on diet 1 grows
+# at about ___ give or take ___ g/day.
 
 
 # ---- 10 A treatment blocked by stream --------------------

@@ -569,6 +569,81 @@ that out. Five more quadrats in patch 15 would just confirm it's bare.
 :::
 :::::
 
+## R²: How Much Does Each Part Explain? {.tight-code}
+
+::::: columns
+::: {.column width="50%"}
+```{r lmm-r2-01}
+#| echo: true
+#| message: false
+#| warning: false
+#| collapse: true
+r2(u_lmer_model)
+```
+
+A mixed model explains variation in **two** ways, so it gets **two**
+R² values (Nakagawa & Schielzeth 2013):
+
+- **Marginal R²**: the **fixed** effects only (`treat`)
+- **Conditional R²**: fixed **and** random effects (`treat` + `patch`)
+
+```{r lmm-r2-02}
+#| echo: false
+#| message: false
+#| warning: false
+#| fig-width: 4.6
+#| fig-height: 1.5
+#| fig-alt: "A single horizontal bar split into three parts showing how the variation in algae cover divides up: about 24 percent explained by urchin treatment, about 38 percent by which patch a quadrat was in, and about 38 percent left over as quadrat-to-quadrat noise."
+u_r2 <- r2(u_lmer_model)
+r2_split <- tibble(
+  part  = factor(c("treatment", "patch", "residual (quadrats)"),
+                 levels = c("residual (quadrats)", "patch", "treatment")),
+  share = c(u_r2$R2_marginal,
+            u_r2$R2_conditional - u_r2$R2_marginal,
+            1 - u_r2$R2_conditional))
+
+ggplot(r2_split, aes(x = share, y = "", fill = part)) +
+  geom_col(width = 0.6, colour = "white") +
+  geom_text(aes(label = paste0(part, "\n", round(100 * share), "%")),
+            position = position_stack(vjust = 0.5), size = 2.8,
+            colour = "white", fontface = "bold") +
+  scale_fill_manual(values = c("treatment" = "#D55E00", "patch" = "#0072B2",
+                               "residual (quadrats)" = "grey55"),
+                    guide = "none") +
+  scale_x_continuous(labels = scales::percent,
+                     expand = expansion(mult = c(0.01, 0.03))) +
+  labs(x = "Share of the variation in algae cover", y = NULL) +
+  theme_minimal(base_size = 9) +
+  theme(panel.grid = element_blank())
+```
+:::
+
+::: {.column width="50%"}
+::: callout-important
+**24% treatment, 38% patch, 39% left over**
+
+- **Treatment** explains about **24%** of the variation in algae cover
+  (marginal R²).
+- Add **which patch** a quadrat was in and it's **62%** (conditional
+  R²).
+- The gap, 62 − 24 = **38%**, is the patch part. That is the
+  **unadjusted ICC** that `icc()` printed.
+
+**Patches explain more of the variation than the treatment does.**
+:::
+
+::: callout-warning
+**⚠️ Report both, and say which is which**
+
+"R² = 0.62" on its own overstates what the treatment did. R² is a
+**description**, not a test: the *F*-test is still the test.
+
+The adjusted ICC (0.50) is different again: the patch share of the
+variation *left after* treatment.
+:::
+:::
+:::::
+
 ## Use It to Price the Next Experiment {.tight-code}
 
 ::::: columns
@@ -909,7 +984,9 @@ treatments (linear mixed model with patch as a random intercept,
 ***F*~3,12~ = 2.72, *p* = 0.091**, Kenward-Roger df), although cover
 was much higher where urchins were removed (39%) than at natural
 density (1%). Patches varied as much as quadrats within patches (patch
-variance **294**, residual variance **299**, **ICC = 0.50**)."
+variance **294**, residual variance **299**, **ICC = 0.50**). Treatment
+explained 24% of the variation in cover, and treatment plus patch 62%
+(marginal R² = 0.24, conditional R² = 0.62)."
 :::
 
 **Both halves belong in the sentence.** The *F*-test answers *did the
@@ -1441,21 +1518,22 @@ emtrends(ck_rs, ~ diet, var = "time") %>%
 :::
 
 ::: {.column width="48%"}
-Read the random effects as biology:
+**1. The average growth rate on each diet** comes from `emtrends()`
+(the `time.trend` column, which is `emmeans()` for slopes):
+
+- diet 1: **6.3** g/day · diet 2: **8.6** · diet 3: **11.4** · diet 4:
+  **9.5**
+- each SE rests on about **45 df**: the chicks, not the 578 weighings.
+
+**2. How much chicks vary around that average** comes from `VarCorr()`:
 
 - **`time` SD 3.3**: chicks on the *same* diet differ in growth rate by
-  about **3.3 g/day**. Against a mean of 6–11 g/day, that's a lot.
+  about **3.3 g/day**. On diet 1, a typical chick grows somewhere
+  between about **3 and 10 g/day** (6.3 ± 3.3). Individuals vary a lot.
 - **Residual SD 12.8**: one weighing sits about 13 g off that chick's
   own line.
 - **Corr −0.98**: don't interpret it. Growth curves upward, so a
   straight line through a fast grower starts too low.
-
-::: callout-note
-**📖 `emtrends()` is `emmeans()` for slopes**
-
-Growth is **6.3 g/day** on diet 1 and **11.4** on diet 3, each SE
-resting on about 45 df: the chicks.
-:::
 
 **Your own repeated measures** (tagged fish, resurveyed plots, repeat
 blood samples) use the same model: `(1 + time | id)`.
@@ -1732,8 +1810,9 @@ m <- lmer(algae ~ treat + (1 | patch), data = u_df)
 # 2. read the two variances
 summary(m)
 
-# 3. share of variation among patches
+# 3. share of variation among patches, and R²
 icc(m)
+r2(m)
 
 # 4. test the treatment (report this one)
 Anova(m, type = 3, test.statistic = "F")
