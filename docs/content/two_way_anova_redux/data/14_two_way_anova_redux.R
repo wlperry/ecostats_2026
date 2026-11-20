@@ -4,6 +4,7 @@
 # Date:
 #
 # Save as scripts/14_two_way_anova_redux.R
+# Hand in the exit ticket at the end of class.
 #
 # This is a TEMPLATE for any two-factor factorial analysis.
 # To reuse it on your own data, change three things:

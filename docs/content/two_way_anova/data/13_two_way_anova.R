@@ -10,7 +10,8 @@
 # section 7 EMM comparison. Every line of statistics you
 # type yourself. The code is on the activity page.
 #
-# The WRITE-UP at the bottom is what gets graded.
+# Hand in the exit ticket at the end of class. The
+# WRITE-UP is practice for the homework, not handed in.
 # ==========================================================
 
 # ---- Libraries -------------------------------------------
@@ -181,7 +182,7 @@ invisible(NULL)
 
 
 # ==========================================================
-# WRITE-UP - graded
+# WRITE-UP - practice for the homework
 #
 # Type answers after ANSWER:, every line starting with #
 # ==========================================================
@@ -218,7 +219,7 @@ invisible(NULL)
 
 # ---- 10 The final figure ---------------------------------
 # This one gets the full treatment - axis labels, a theme,
-# readable sizing. It is the graded deliverable.
+# readable sizing. Practice for the homework figure.
 # Build it from the EMMs, not the raw means.
 
 # YOUR CODE:

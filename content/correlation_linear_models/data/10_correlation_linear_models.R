@@ -1,19 +1,34 @@
-# =====================================================================
-# 10 · CORRELATION AND LINEAR MODELS — IN-CLASS SKELETON
-# Ecological Statistics
+# ==========================================================
+# Activity 10 - Correlation And Linear Models
+# Name:
+# Date:
 #
-# Code only. Answer the worksheet questions on the worksheet,
-# not in this script.
-#
-# Parts 1-4 are correlation. Parts 5-8 are regression.
-# =====================================================================
+# Save as scripts/10_correlation_linear_models.R. The code to type is on the
+# activity page. Run it top to bottom: it must run clean.
+# Hand in the exit ticket at the end of class.
+# ==========================================================
 
-# =====================================================================
+
+# ==========================================================
 # PART 1 · SETUP AND THE DATA
-# =====================================================================
+# ==========================================================
+
+
+# ==========================================================
+# THE CORRELATION + REGRESSION RECIPE
+#   Correlation:  ggplot(df, aes(x, y)) + geom_point()
+#                 cor.test(df$x, df$y)                         # Pearson
+#                 cor.test(df$x, df$y, method = "spearman")    # ranks
+#   Regression:   model <- lm(y ~ x, data = df)
+#                 summary(model);  anova(model)
+#                 ggplot(df, aes(x, y)) + geom_point() + geom_smooth(method = "lm")
+#                 predict(model, tibble(x = 0.5), interval = "confidence")
+#   Check the RESIDUALS:  par(mfrow = c(2, 2)); plot(model)
+#                         shapiro.test(residuals(model))
+# ==========================================================
+
 
 # ── Part 1.1 · Setup and the data ─────────────────────────────────────
-# FILLED IN.
 library(tidyverse)
 library(patchwork)
 
@@ -25,33 +40,36 @@ lion_df <- read_csv("data/lion_noses.csv")
 
 booby_df
 
-# =====================================================================
+invisible(NULL)
+
+
+# ==========================================================
 # PART 2 · CORRELATION
-# =====================================================================
+# ==========================================================
+
 
 # ── Part 2.1 · Correlation ────────────────────────────────────────────
-# YOUR TURN. Plot future_aggression against visits_as_nestling. Look at
-# the shape before you compute anything.
+invisible(NULL)
 
 
 # ── Part 2.2 · Correlation ────────────────────────────────────────────
-# YOUR TURN. The coefficient on its own, then the test that comes with
-# a p-value and a confidence interval.
+invisible(NULL)
+
 
 # ── Part 2.3 · Correlation ────────────────────────────────────────────
-# YOUR TURN. Save the coefficient as r_booby, then square it.
+invisible(NULL)
 
 
-# =====================================================================
+# ==========================================================
 # PART 3 · CORRELATION ASSUMPTIONS
-# =====================================================================
+# ==========================================================
+
 
 # ── Part 3.1 · Correlation assumptions ────────────────────────────────
-# YOUR TURN. Test each of the two variables for normality. Remember the
-# null here is that the data ARE normal.
+invisible(NULL)
+
 
 # ── Part 3.2 · Correlation assumptions ────────────────────────────────
-# FILLED IN — four panels is a lot of typing for one look at the data.
 h1 <- ggplot(booby_df, aes(visits_as_nestling)) + geom_histogram(bins = 10)
 h2 <- ggplot(booby_df, aes(future_aggression)) + geom_histogram(bins = 10)
 q1 <- ggplot(booby_df, aes(sample = visits_as_nestling)) +
@@ -63,95 +81,92 @@ q2 <- ggplot(booby_df, aes(sample = future_aggression)) +
 
 (h1 / h2) | (q1 / q2)
 
+invisible(NULL)
 
-# =====================================================================
+
+# ==========================================================
 # PART 4 · WHEN NORMALITY FAILS
-# =====================================================================
+# ==========================================================
+
 
 # ── Part 4.1 · When normality fails ───────────────────────────────────
-# YOUR TURN. Plot impressiveness against years_since_seen, then test
-# impressiveness for normality.
+invisible(NULL)
+
 
 # ── Part 4.2 · When normality fails ───────────────────────────────────
-# YOUR TURN. Run cor.test() twice on the same two columns: once the
-# default way, once with method = "spearman".
+invisible(NULL)
 
 
-# =====================================================================
+# ==========================================================
 # PART 5 · FITTING A REGRESSION
-# =====================================================================
+# ==========================================================
+
 
 # ── Part 5.1 · Fitting a regression ───────────────────────────────────
-# YOUR TURN. Plot age_years against proportion_black, fit the model as
-# lion_model, and print its summary. The formula is response ~ predictor.
+invisible(NULL)
 
 
 # ── Part 5.2 · Fitting a regression ───────────────────────────────────
-# YOUR TURN. Same plot again, with the fitted line and its confidence
-# band added.
+invisible(NULL)
+
 
 # ── Part 5.3 · Fitting a regression ───────────────────────────────────
-# FILLED IN — the two predict() calls differ by one word; the point is
-# the comparison, not the typing.
 new_lion <- tibble(proportion_black = 0.50)
 
 predict(lion_model, new_lion, interval = "confidence")
 
 predict(lion_model, new_lion, interval = "prediction")
 
+invisible(NULL)
 
-# =====================================================================
+
+# ==========================================================
 # PART 6 · SUMS OF SQUARES
-# =====================================================================
+# ==========================================================
+
 
 # ── Part 6.1 · Sums of squares ────────────────────────────────────────
-# PART FILLED IN. The two pieces you need are set up; build the three
-# sums of squares yourself.
 fitted_age <- predict(lion_model)
 mean_age <- mean(lion_df$age_years)
 
-# YOUR TURN. Each one is sum of (something - something)^2:
-#   ss_total  — every observation from the mean
-#   ss_reg    — every fitted value from the mean
-#   ss_resid  — every observation from its own fitted value
-# Then print all three, and check that ss_reg + ss_resid gives ss_total.
+invisible(NULL)
 
 
 # ── Part 6.2 · Sums of squares ────────────────────────────────────────
-# YOUR TURN. Get the same three numbers out of R in one call.
+invisible(NULL)
 
 
 # ── Part 6.3 · Sums of squares ────────────────────────────────────────
-# FILLED IN — subsetting a summary object by [row, column] is fiddly.
 summary(lion_model)$coefficients
 
 summary(lion_model)$coefficients[2, 3]^2
 
+invisible(NULL)
 
-# =====================================================================
+
+# ==========================================================
 # PART 7 · REGRESSION ASSUMPTIONS
-# =====================================================================
-# Every check here is on the RESIDUALS, not the raw data.
+# ==========================================================
+
 
 # ── Part 7.1 · Regression assumptions ─────────────────────────────────
-# FILLED IN — par() bookkeeping, not statistics.
 par(mfrow = c(2, 2))
 plot(lion_model)
 par(mfrow = c(1, 1))
 
+invisible(NULL)
+
+
 # ── Part 7.2 · Regression assumptions ─────────────────────────────────
-# YOUR TURN. Test the residuals for normality. Note what goes inside
-# the test: residuals(lion_model), not lion_df$age_years.
+invisible(NULL)
 
 
-# =====================================================================
-# PART 8 · THE FIGURE YOU HAND IN
-# =====================================================================
+# ==========================================================
+# PART 8 · THE FINAL FIGURE
+# ==========================================================
 
-# ── Part 8.1 · The figure you hand in ─────────────────────────────────
-# FILLED IN — this is the one plot that gets the full treatment, and it
-# is far too much typing for class time. Read it, run it, change the
-# title if you want it to say something better.
+
+# ── Part 8.1 · The final figure ──────────────────────────────────────────
 yourlast_name_final_plot <- ggplot(lion_df, aes(proportion_black, age_years)) +
   geom_point(size = 2.5) +
   geom_smooth(method = "lm", colour = "blue")
@@ -165,7 +180,4 @@ ggsave(
   units = "in"
 )
 
-# Open the PDF and check the axis labels are readable before you
-# submit it.
-
-# Then repeat this for the homework
+invisible(NULL)

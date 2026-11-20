@@ -4,6 +4,7 @@
 # Date:
 #
 # Save as scripts/15_glm_logistic_regression.R
+# Hand in the exit ticket at the end of class.
 #
 # This is a TEMPLATE for any GLM analysis. To reuse it on
 # your own data, change three things:

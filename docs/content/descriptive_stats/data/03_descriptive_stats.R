@@ -1,26 +1,35 @@
-# =====================================================================
-# 03 · DESCRIBING YOUR DATA — SCRIPT SKELETON
-# Ecological Statistics
+# ==========================================================
+# Activity 03 - Describing Your Data
+# Name:
+# Date:
 #
-# Save this as scripts/03_descriptive_stats.R in your project.
-#
-#   Run one line      Ctrl/Cmd + Enter
-#   Run everything    Ctrl/Cmd + Shift + Enter
-#
-# Filled-in blocks are ones the worksheet showed you as "Run this" — type
-# them and read the output. Blocks marked YOUR TURN are ones the worksheet
-# asks you to write yourself, usually by adapting the block right above.
-#
-# Code only. Answer the worksheet questions on the worksheet,
-# not in this script.
-# =====================================================================
+# Save as scripts/03_descriptive_stats.R. The code to type is on the
+# activity page. Run it top to bottom: it must run clean.
+# Hand in the exit ticket at the end of class.
+# ==========================================================
 
 
-# =====================================================================
+# ==========================================================
 # PART 1 · LOAD AND SPLIT THE DATA
-# =====================================================================
+# ==========================================================
+
+# ==========================================================
+# THE SUMMARY RECIPE
+#   df %>%
+#     group_by(group) %>%
+#     summarize(n    = sum(!is.na(y)),
+#               mean = mean(y, na.rm = TRUE),
+#               sd   = sd(y, na.rm = TRUE),
+#               se   = sd / sqrt(n))
+#   Two-stage summary (pseudoreplication): group_by(tree, side) %>%
+#     summarize(y = mean(y)), THEN summarize the tree means.
+#   ggplot(df, aes(group, y)) +
+#     stat_summary(fun = mean, geom = "point") +
+#     stat_summary(fun.data = mean_se, geom = "errorbar", width = 0.2)
+# ==========================================================
+
+
 # ── Part 1.1 · Load and split the data ──────────────────────────────────
-# FILLED IN.
 library(tidyverse)
 
 pine_df <- read_csv("data/pine_data.csv")
@@ -30,12 +39,14 @@ sunny_df <- pine_df |> filter(side == "sunny")
 
 shady_df
 
+invisible(NULL)
 
-# =====================================================================
+
+# ==========================================================
 # PART 2 · MEAN AND MEDIAN
-# =====================================================================
+# ==========================================================
+
 # ── Part 2.1 · Mean and median ──────────────────────────────────────────
-# FILLED IN.
 shady_df |>
   summarize(mean_mm = mean(needle_length_mm),
             med_mm  = median(needle_length_mm))
@@ -44,12 +55,14 @@ sunny_df |>
   summarize(mean_mm = mean(needle_length_mm),
             med_mm  = median(needle_length_mm))
 
+invisible(NULL)
 
-# =====================================================================
+
+# ==========================================================
 # PART 3 · VARIANCE AND STANDARD DEVIATION
-# =====================================================================
+# ==========================================================
+
 # ── Part 3.1 · Variance and standard deviation ──────────────────────────
-# FILLED IN.
 shady_df |>
   summarize(var_mm = var(needle_length_mm),
             sd_mm  = sd(needle_length_mm))
@@ -58,12 +71,14 @@ sunny_df |>
   summarize(var_mm = var(needle_length_mm),
             sd_mm  = sd(needle_length_mm))
 
+invisible(NULL)
 
-# =====================================================================
+
+# ==========================================================
 # PART 3b · QUANTILES, RANGE, AND IQR
-# =====================================================================
+# ==========================================================
+
 # ── Part 3b.1 · Quantiles, range, and IQR ───────────────────────────────
-# FILLED IN.
 shady_df |>
   summarize(
     min_mm   = min(needle_length_mm),
@@ -75,16 +90,18 @@ shady_df |>
     iqr_mm   = IQR(needle_length_mm)
   )
 
+invisible(NULL)
+
 
 # ── Part 3b.2 · Quantiles, range, and IQR ───────────────────────────────
-# YOUR TURN. Compute the same seven numbers for sunny_df.
+invisible(NULL)
 
 
-# =====================================================================
+# ==========================================================
 # PART 4 · THE length() TRAP
-# =====================================================================
+# ==========================================================
+
 # ── Part 4.1 · The `length()` trap ──────────────────────────────────────
-# FILLED IN.
 na_demo_df <- tibble(length_mm = c(4, 3, NA, 7, NA))
 
 na_demo_df |>
@@ -94,9 +111,10 @@ na_demo_df |>
     real_values = sum(!is.na(length_mm))   # the n you actually want
   )
 
+invisible(NULL)
+
 
 # ── Part 4.2 · The `length()` trap ──────────────────────────────────────
-# FILLED IN.
 na_demo_df |>
   summarize(
     wrong_n  = n(),
@@ -106,12 +124,14 @@ na_demo_df |>
     right_se = sd_mm / sqrt(right_n)
   )
 
+invisible(NULL)
 
-# =====================================================================
+
+# ==========================================================
 # PART 5 · STANDARD ERROR, ON REAL DATA
-# =====================================================================
+# ==========================================================
+
 # ── Part 5.1 · Standard error, on real data ─────────────────────────────
-# FILLED IN.
 shady_df |>
   summarize(
     n     = sum(!is.na(needle_length_mm)),
@@ -126,12 +146,14 @@ sunny_df |>
     se_mm = sd_mm / sqrt(n)
   )
 
+invisible(NULL)
 
-# =====================================================================
+
+# ==========================================================
 # PART 6 · ALL STATS, ONE GROUP, ONE summarize()
-# =====================================================================
+# ==========================================================
+
 # ── Part 6.1 · All stats, one group, one `summarize()` ──────────────────
-# FILLED IN.
 shady_df |>
   summarize(
     n       = sum(!is.na(needle_length_mm)),
@@ -141,28 +163,30 @@ shady_df |>
     se_mm   = round(sd(needle_length_mm, na.rm = TRUE) / sqrt(n), 2)
   )
 
+invisible(NULL)
+
 
 # ── Part 6.2 · All stats, one group, one `summarize()` ──────────────────
-# YOUR TURN. Copy the block above and adapt it to compute the same five
-# numbers for sunny_df.
+invisible(NULL)
 
 
-# =====================================================================
+# ==========================================================
 # PART 6b · skimr — A FAST FULL-DATASET OVERVIEW
-# =====================================================================
+# ==========================================================
+
 # ── Part 6b.1 · `skimr` ─────────────────────────────────────────────────
-# FILLED IN. Run install.packages("skimr") first, one time only, if you
-# haven't already.
 library(skimr)
 
 skim(pine_df)
 
+invisible(NULL)
 
-# =====================================================================
+
+# ==========================================================
 # PART 7 · TIDY GROUP STATS — group_by() + summarize()
-# =====================================================================
+# ==========================================================
+
 # ── Part 7.1 · Tidy group stats ─────────────────────────────────────────
-# FILLED IN.
 side_stats_df <- pine_df |>
   group_by(side) |>
   summarize(
@@ -175,20 +199,18 @@ side_stats_df <- pine_df |>
 
 side_stats_df
 
-# Watch out: compute se_mm from the raw sd(), not from the rounded sd_mm
-# column above it -- round only what you print.
+invisible(NULL)
 
 
 # ── Part 7.2 · Tidy group stats ─────────────────────────────────────────
-# YOUR TURN. Now group by team (the field team) instead of side, and
-# compute the same five statistics.
+invisible(NULL)
 
 
-# =====================================================================
+# ==========================================================
 # PART 7c · THE n YOU REPORT IS A CHOICE
-# =====================================================================
+# ==========================================================
+
 # ── Part 7c.1 · The `n` you report is a choice ──────────────────────────
-# FILLED IN. Stage 1: collapse each tree to one number.
 team_means_df <- pine_df |>
   group_by(team, side) |>
   summarize(team_mean_mm = mean(needle_length_mm, na.rm = TRUE),
@@ -196,9 +218,10 @@ team_means_df <- pine_df |>
 
 team_means_df
 
+invisible(NULL)
+
 
 # ── Part 7c.2 · The `n` you report is a choice ──────────────────────────
-# FILLED IN. Stage 2: summarize those team means.
 side_correct_df <- team_means_df |>
   group_by(side) |>
   summarize(
@@ -209,12 +232,14 @@ side_correct_df <- team_means_df |>
 
 side_correct_df
 
+invisible(NULL)
 
-# =====================================================================
+
+# ==========================================================
 # PART 7b · SEE IT — BOXPLOT WITH MEAN +/- SE
-# =====================================================================
+# ==========================================================
+
 # ── Part 7b.1 · See it — boxplot with mean ± SE ─────────────────────────
-# FILLED IN.
 side_plot <- ggplot(pine_df, aes(x = side, y = needle_length_mm)) +
 
   # layer 1 — the spread of all 64 needles
@@ -237,9 +262,10 @@ side_plot <- ggplot(pine_df, aes(x = side, y = needle_length_mm)) +
 
 side_plot
 
+invisible(NULL)
+
 
 # ── Part 7b.2 · See it — boxplot with mean ± SE ─────────────────────────
-# FILLED IN.
 ggsave("figures/pine_side_mean_se.png",
        plot   = side_plot,
        width  = 5,
@@ -247,33 +273,24 @@ ggsave("figures/pine_side_mean_se.png",
        units  = "in",
        dpi    = 300)
 
-# Those error bars are the naive ones -- stat_summary() used all 32
-# needles per side, the pseudoreplicated n = 32 standard error.
+invisible(NULL)
+
 
 # ── Part 7b.3 · See it — boxplot with mean ± SE ─────────────────────────
-# YOUR TURN. Build the same plot from team_means_df instead, so the error
-# bars come from n = 4. Start from
-# ggplot(team_means_df, aes(x = side, y = team_mean_mm)), keep the two
-# stat_summary() layers, and compare the error bar widths with the plot
-# above.
+invisible(NULL)
 
 
-# =====================================================================
+# ==========================================================
 # PART 8 · SAVE YOUR SUMMARY TABLE
-# =====================================================================
+# ==========================================================
+
 # ── Part 8.1 · Save your summary table ──────────────────────────────────
-# FILLED IN.
 write_csv(side_stats_df, "output/pine_side_stats.csv")
 
-# Check your output/ folder -- the summary table should be there, and
-# data/ should be untouched.
+invisible(NULL)
 
 
-# =====================================================================
+# ==========================================================
 # PART 9 · REVIEW AND CHECKPOINT
-# =====================================================================
+# ==========================================================
 
-
-# =====================================================================
-# END
-# =====================================================================

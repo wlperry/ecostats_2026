@@ -1,72 +1,78 @@
-# =====================================================================
-# 02 · WRANGLING YOUR DATA — SCRIPT SKELETON
-# Ecological Statistics
+# ==========================================================
+# Activity 02 - Wrangling Your Data
+# Name:
+# Date:
 #
-# Save this as scripts/02_wrangling_data.R in your project.
-#
-#   Run one line      Ctrl/Cmd + Enter
-#   Run everything    Ctrl/Cmd + Shift + Enter
-#
-# Filled-in blocks are ones you have typed many times — setup and
-# reading data. Spend your time on the blanks: the actual filter(),
-# select(), mutate(), and case_when() logic.
-#
-# Code only. Answer the worksheet questions on the worksheet,
-# not in this script.
-# =====================================================================
+# Save as scripts/02_wrangling_data.R. The code to type is on the
+# activity page. Run it top to bottom: it must run clean.
+# Hand in the exit ticket at the end of class.
+# ==========================================================
 
 
-# =====================================================================
+# ==========================================================
 # PART 1 · IMPORT THE SAME DATA TWO WAYS
-# =====================================================================
+# ==========================================================
+
+
+# ==========================================================
+# THE WRANGLING RECIPE   (each verb takes a data frame, returns one)
+#   df %>% filter(side == "sunny")            # keep rows
+#   df %>% select(team, side, length)         # keep columns
+#   df %>% mutate(new = old * 10)             # add or change a column
+#   df %>% mutate(size = case_when(x < 10 ~ "small",
+#                                  x < 20 ~ "medium",
+#                                  TRUE   ~ "large"))
+#   df %>% arrange(desc(length))              # sort
+#   df %>% count(team)                        # rows per group
+#   df %>% distinct()                         # drop duplicate rows
+#   write_csv(df, "output/clean.csv")
+# ==========================================================
+
 
 # ── Part 1.1 · Import the same data two ways ────────────────────────────
-# FILLED IN.
 library(tidyverse)
 library(readxl)
 
 pine_csv_df   <- read_csv("data/pine_data.csv")
 pine_excel_df <- read_excel("data/pine_data.xlsx")
 
-# You do not need glimpse() here -- click pine_csv_df in the Variables
-# pane in Positron and look at it there.
+invisible(NULL)
 
 
-# =====================================================================
+# ==========================================================
 # PART 2 · filter() — PICKING ROWS
-# =====================================================================
+# ==========================================================
+
 
 # ── Part 2.1 · `filter()` ───────────────────────────────────────────────
-# FILLED IN.
 pine_csv_df |> filter(side == "shady") |> head()
 pine_csv_df |> filter(needle_length_mm > 17) |> head()
 
+invisible(NULL)
+
 
 # ── Part 2.2 · `filter()` ───────────────────────────────────────────────
-# YOUR TURN. A filter() that keeps only sunny (side == "sunny") needles
-# longer than 15 mm. Remember: == for equality, not =.
+invisible(NULL)
 
 
-# =====================================================================
+# ==========================================================
 # PART 2b · filter() — OR, %in%, AND MISSING VALUES
-# =====================================================================
+# ==========================================================
+
 
 # ── Part 2b.1 · `filter()` ──────────────────────────────────────────────
-# FILLED IN.
-# OR: shady side, OR any exceptionally long needle
 pine_csv_df |> filter(side == "shady" | needle_length_mm > 18)
 
-# %in%: match one of several named teams
 pine_csv_df |> filter(team %in% c("botany", "waterbugs"))
+
+invisible(NULL)
 
 
 # ── Part 2b.2 · `filter()` ──────────────────────────────────────────────
-# YOUR TURN. Rewrite the %in% line above as a chain of | conditions
-# instead -- same result, longer code.
+invisible(NULL)
 
 
 # ── Part 2b.3 · `filter()` ──────────────────────────────────────────────
-# FILLED IN.
 survey_df <- tibble(
   site  = c("A", "B", "C", "D"),
   count = c(12, NA, 8, NA)
@@ -75,32 +81,35 @@ survey_df <- tibble(
 survey_df |> filter(is.na(count))
 survey_df |> filter(!is.na(count))
 
+invisible(NULL)
+
 
 # ── Part 2b.4 · `filter()` ──────────────────────────────────────────────
-# YOUR TURN. A filter() on pine_csv_df that keeps sunny needles that are
-# ALSO longer than 14mm -- think about whether you need ,/& or |.
+invisible(NULL)
 
 
-# =====================================================================
+# ==========================================================
 # PART 3 · select() — PICKING COLUMNS
-# =====================================================================
+# ==========================================================
+
 
 # ── Part 3.1 · `select()` ───────────────────────────────────────────────
-# FILLED IN.
 pine_csv_df |> select(side, needle_length_mm) |> head()
 pine_csv_df |> select(-source_file) |> head()
 
+invisible(NULL)
+
 
 # ── Part 3.2 · `select()` ───────────────────────────────────────────────
-# YOUR TURN. A select() that keeps every column EXCEPT replicate.
+invisible(NULL)
 
 
-# =====================================================================
+# ==========================================================
 # PART 4 · mutate() — NEW AND CHANGED COLUMNS
-# =====================================================================
+# ==========================================================
+
 
 # ── Part 4.1 · `mutate()` ───────────────────────────────────────────────
-# FILLED IN.
 pine_csv_df |>
   mutate(needle_length_cm = needle_length_mm / 10) |>
   head()
@@ -109,18 +118,19 @@ pine_csv_df |>
   mutate(log_length = log(needle_length_mm)) |>
   head()
 
+invisible(NULL)
+
 
 # ── Part 4.2 · `mutate()` ───────────────────────────────────────────────
-# YOUR TURN. Add a column called size_class that is "long" when
-# needle_length_mm > 15 and "short" otherwise. Use if_else().
+invisible(NULL)
 
 
-# =====================================================================
+# ==========================================================
 # PART 4b · case_when() — RECODING AND BINNING
-# =====================================================================
+# ==========================================================
+
 
 # ── Part 4b.1 · `case_when()` ───────────────────────────────────────────
-# FILLED IN.
 pine_csv_df |>
   mutate(
     size_class = case_when(
@@ -131,14 +141,14 @@ pine_csv_df |>
   ) |>
   count(size_class)
 
+invisible(NULL)
+
 
 # ── Part 4b.2 · `case_when()` ───────────────────────────────────────────
-# YOUR TURN. Change the two cutoffs (13 and 16) to different values of
-# your choosing.
+invisible(NULL)
 
 
 # ── Part 4b.3 · `case_when()` ───────────────────────────────────────────
-# FILLED IN.
 pine_csv_df |>
   mutate(
     team_code = case_when(
@@ -151,31 +161,31 @@ pine_csv_df |>
   ) |>
   distinct(team, team_code)
 
-# Remember to add a size_class column (as above) to pine_wrangled_df's
-# recipe -- you'll build the full pipeline with it in Part 6.
+invisible(NULL)
 
 
-# =====================================================================
+# ==========================================================
 # PART 5 · arrange() — SORTING ROWS
-# =====================================================================
+# ==========================================================
+
 
 # ── Part 5.1 · `arrange()` ──────────────────────────────────────────────
-# FILLED IN.
 pine_csv_df |> arrange(needle_length_mm)
 pine_csv_df |> arrange(desc(needle_length_mm))
 
+invisible(NULL)
+
 
 # ── Part 5.2 · `arrange()` ──────────────────────────────────────────────
-# YOUR TURN. Sort the data by side, and within each side, by
-# needle_length_mm from longest to shortest.
+invisible(NULL)
 
 
-# =====================================================================
+# ==========================================================
 # PART 6 · THE FULL PIPELINE
-# =====================================================================
+# ==========================================================
+
 
 # ── Part 6.1 · The full pipeline ────────────────────────────────────────
-# FILLED IN.
 pine_wrangled_df <- pine_csv_df |>
   filter(needle_length_mm > 0) |>
   select(team, side, needle_length_mm, needle_width_mm) |>
@@ -192,53 +202,52 @@ pine_wrangled_df <- pine_csv_df |>
 
 head(pine_wrangled_df)
 
+invisible(NULL)
 
-# =====================================================================
+
+# ==========================================================
 # PART 7 · FINDING DUPLICATE ROWS
-# =====================================================================
+# ==========================================================
+
 
 # ── Part 7.1 · Finding duplicate rows ───────────────────────────────────
-# FILLED IN.
 needle_check_df <- read_csv("data/pine_needles_error.csv")
 
 nrow(needle_check_df)
 n_distinct(needle_check_df)
 
+invisible(NULL)
+
 
 # ── Part 7.2 · Finding duplicate rows ───────────────────────────────────
-# FILLED IN.
 needle_check_df |> filter(duplicated(needle_check_df))
 
 needle_clean_df <- needle_check_df |> distinct()
 
 nrow(needle_clean_df)
 
+invisible(NULL)
 
-# =====================================================================
+
+# ==========================================================
 # PART 8 · SAVING YOUR WORK WITH write_csv()
-# Everything runs one way: data/ (raw, read-only) -> scripts/ (your
-# code) -> output/ (results). Never give a wrangled file the same name
-# as the raw file.
-# =====================================================================
+# ==========================================================
+
 
 # ── Part 8.1 · Saving your work with `write_csv()` ──────────────────────
-# FILLED IN.
 pine_out_df <- pine_wrangled_df |>
   select(team, side, needle_length_mm, needle_width_mm)
 
 write_csv(pine_out_df, "output/pine_data_wrangled.csv")
 
+invisible(NULL)
+
 
 # ── Part 8.2 · Saving your work with `write_csv()` ──────────────────────
-# YOUR TURN. Save your cleaned needle_clean_df from Part 7 to
-# output/pine_needles_cleaned.csv.
+invisible(NULL)
 
 
-# =====================================================================
+# ==========================================================
 # PART 9 · REVIEW AND CHECKPOINT
-# =====================================================================
+# ==========================================================
 
-
-# =====================================================================
-# END
-# =====================================================================

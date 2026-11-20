@@ -9,8 +9,9 @@
 # data reads, and the plots in sections 9-10. The code to
 # type is on the activity page.
 #
-# The WRITE-UP (sections 7-8) is what gets graded.
-# Sections 9-10 after it are two more designs, not graded.
+# Hand in the exit ticket at the end of class. The
+# WRITE-UP is practice for the homework, not handed in.
+# Sections 9-10 are two more designs.
 # ==========================================================
 
 # ---- Libraries -------------------------------------------
@@ -105,7 +106,7 @@ invisible(NULL)
 
 
 # ==========================================================
-# WRITE-UP - graded
+# WRITE-UP - practice for the homework
 #
 # Type answers after ANSWER:, every line starting with #
 # ==========================================================
@@ -144,7 +145,7 @@ invisible(NULL)
 
 # ---- 8 The final figure ----------------------------------
 # This one gets the full treatment - axis labels, a theme,
-# readable sizing. It is the graded deliverable.
+# readable sizing. Practice for the homework figure.
 #
 # Show BOTH levels of variation: the treatment means with
 # their 95% intervals (as_tibble(emm)), and the 16 patch

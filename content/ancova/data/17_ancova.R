@@ -4,7 +4,8 @@
 # Date:
 #
 # Save as scripts/17_ancova.R. The code to type is on the
-# activity page. Only the WRITE-UP at the bottom is graded.
+# activity page. Hand in the exit ticket at the end of class;
+# the WRITE-UP is practice for the homework.
 # ==========================================================
 
 # ---- Libraries -------------------------------------------
@@ -118,7 +119,7 @@ invisible(NULL)
 
 
 # ==========================================================
-# WRITE-UP - graded. Type answers after ANSWER:
+# WRITE-UP - practice for the homework. Answer after ANSWER:
 # ==========================================================
 
 # ---- 8 Report the fruitfly model -------------------------

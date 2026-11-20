@@ -10,7 +10,7 @@
 # section by section and read the output.
 #
 # The THINK lines are to talk about, not to answer here.
-# The WRITE-UP (sections 7-8) is what gets graded - the
+# The WRITE-UP (sections 7-8) is practice for the homework - the
 # ANSWER: lines are still yours to fill in.
 # Sections 9-10 after it are two more designs, not graded.
 # ==========================================================
@@ -171,7 +171,7 @@ invisible(NULL)
 
 
 # ==========================================================
-# WRITE-UP - graded
+# WRITE-UP - practice for the homework
 #
 # Type answers after ANSWER:, every line starting with #
 # ==========================================================

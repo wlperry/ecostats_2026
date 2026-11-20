@@ -1,27 +1,32 @@
-# =====================================================================
-# 12 · ANALYSIS OF VARIANCE — IN-CLASS SKELETON
-# Ecological Statistics
+# ==========================================================
+# Activity 12 - Analysis Of Variance
+# Name:
+# Date:
 #
-# Save this as scripts/12_analysis_of_variance.R in your project.
-#
-# Blocks marked FILLED IN are done for you — they are typing, not
-# statistics. Blocks marked YOUR TURN are the statistics; write the
-# call yourself.
-#
-# Code only. Answer the worksheet questions on the worksheet,
-# not in this script.
-#
-# 84 fiddler crabs, 21 in each of four groups. Does the male's
-# oversized major claw act as a heat radiator?
-# (Darnell & Munguia 2011, via Whitlock & Schluter Ch. 15)
-# =====================================================================
+# Save as scripts/12_analysis_of_variance.R. The code to type is on the
+# activity page. Run it top to bottom: it must run clean.
+# Hand in the exit ticket at the end of class.
+# ==========================================================
 
-# =====================================================================
+
+# ==========================================================
 # PART 1 · SETUP AND THE DATA
-# =====================================================================
+# ==========================================================
+
+
+# ==========================================================
+# THE ONE-WAY ANOVA RECIPE
+#   df <- df %>% mutate(group = fct_relevel(group, "control"))
+#   model <- lm(y ~ group, data = df)
+#   anova(model)                                  # the F test
+#   par(mfrow = c(2, 2)); plot(model)             # residuals
+#   shapiro.test(residuals(model)); leveneTest(y ~ group, data = df)
+#   Which groups differ?  TukeyHSD(aov(y ~ group, data = df))
+#                         emm <- emmeans(model, ~ group); pairs(emm); cld(emm)
+# ==========================================================
+
 
 # ── Part 1.1 · Setup and the data ─────────────────────────────────────
-# FILLED IN.
 library(tidyverse)
 library(car)
 library(emmeans)
@@ -33,19 +38,19 @@ crab_df <- read_csv("data/fiddler_crabs.csv") %>%
 
 count(crab_df, crab_type)
 
+invisible(NULL)
+
+
 # ── Part 1.2 · Setup and the data ─────────────────────────────────────
-# YOUR TURN. Boxplot of body_temp_c by crab_type, with the raw points
-# jittered on top.
+invisible(NULL)
 
 
-# =====================================================================
+# ==========================================================
 # PART 2 · BUILD THE SUMS OF SQUARES
-# =====================================================================
+# ==========================================================
+
 
 # ── Part 2.1 · Build the sums of squares ──────────────────────────────
-# FILLED IN. Read it line by line and see where each deviation comes
-# from -- the statistics is in understanding the three sums, not in
-# typing them.
 grand_mean <- mean(crab_df$body_temp_c)
 
 crab_parts <- crab_df %>%
@@ -61,27 +66,20 @@ c(total = ss_total, among = ss_among, within = ss_within)
 
 ss_among + ss_within
 
+invisible(NULL)
 
-# =====================================================================
+
+# ==========================================================
 # PART 3 · THE ANOVA
-# =====================================================================
+# ==========================================================
+
 
 # ── Part 3.1 · The ANOVA ──────────────────────────────────────────────
-# YOUR TURN. Fit crab_model, print its summary(), then its anova()
-# table. The formula is response ~ factor. Look at summary() FIRST --
-# that is the only one of the two that shows you the intercept.
+invisible(NULL)
 
 
 # ── Part 3.2 · Type I, II and III sums of squares ──────────────
-# anova() gives Type I. Types II and III come from car::Anova() -- note
-# the capital A.
-#
-# YOUR TURN. Print Anova(crab_model, type = "II") and compare the
-# crab_type row with the anova() table you just made.
 
-# FILLED IN -- a true Type III needs contr.sum, and the model refit
-# AFTER the option changes. The last line puts R back the way it was;
-# never leave it out.
 options(contrasts = c("contr.sum", "contr.poly"))
 
 crab_sum <- lm(body_temp_c ~ crab_type, data = crab_df)
@@ -89,70 +87,71 @@ Anova(crab_sum, type = "III")
 
 options(contrasts = c("contr.treatment", "contr.poly"))
 
+invisible(NULL)
 
-# =====================================================================
+
+# ==========================================================
 # PART 4 · CHECK THE ASSUMPTIONS
-# =====================================================================
+# ==========================================================
+
 
 # ── Part 4.1 · Check the assumptions ──────────────────────────────────
-# FILLED IN — par() bookkeeping, not statistics.
 par(mfrow = c(2, 2))
 plot(crab_model)
 par(mfrow = c(1, 1))
 
+invisible(NULL)
+
+
 # ── Part 4.2 · Check the assumptions ──────────────────────────────────
-# YOUR TURN. Test the residuals for normality, and the groups for equal
-# variance. One of these takes residuals(crab_model); the other takes a
-# formula and the data.
+invisible(NULL)
 
 
-# =====================================================================
+# ==========================================================
 # PART 5 · SET THE REFERENCE LEVEL
-# =====================================================================
+# ==========================================================
+
 
 # ── Part 5.1 · Set the reference level ────────────────────────────────
-# YOUR TURN. Print the levels() of crab_df$crab_type, then the
-# coefficient table of crab_model.
+invisible(NULL)
 
 
 # ── Part 5.2 · Set the reference level ────────────────────────────────
-# PART FILLED IN — the fct_relevel() call.
+invisible(NULL)
 
 
-# =====================================================================
+# ==========================================================
 # PART 6 · WHICH GROUPS ACTUALLY DIFFER?
-# =====================================================================
+# ==========================================================
+
 
 # ── Part 6.1 · Which groups actually differ? ──────────────────────────
-# FILLED IN. Tukey's HSD needs an aov() object, so the model gets
-# wrapped. This is the classic call -- see it once, then move on.
 TukeyHSD(aov(crab_model))
 
+invisible(NULL)
+
+
 # ── Part 6.2 · The same comparisons with emmeans ──────────────────────
-# YOUR TURN. emmeans is what we will use on every model from here on.
-# Step 1: save the estimated marginal means for crab_type as crab_emm
-#         -- emmeans(model, ~ factor) -- and print it.
-# Step 2: pass crab_emm to pairs() with adjust = "tukey".
+invisible(NULL)
+
 
 # ── Part 6.3 · Compact letter display ────────────────────────────────
-# FILLED IN -- new syntax, not new statistics. Note the multcomp::
-# prefix: do NOT run library(multcomp), it masks dplyr::select() and
-# your pipes will start failing for no visible reason.
 multcomp::cld(crab_emm, Letters = letters, adjust = "tukey")
 
+invisible(NULL)
 
-# =====================================================================
+
+# ==========================================================
 # PART 7 · REPORT IT
-# =====================================================================
+# ==========================================================
 
 
-# =====================================================================
-# PART 8 · THE FIGURE YOU HAND IN
-# =====================================================================
+# ==========================================================
+# PART 8 · THE FINAL FIGURE
+# ==========================================================
 
-# ── Part 8.1 · The figure you hand in ─────────────────────────────────
-# FILLED IN — this is the one plot that gets the full treatment, and it
-# is far too much typing for class time.
+
+# ── Part 8.1 · The final figure ──────────────────────────────────────────
 crab_summary <- crab_df %>%
   group_by(crab_type) %>%
   reframe(summary_stats(body_temp_c))
@@ -178,5 +177,4 @@ ggsave(
   units = "in"
 )
 
-# Open the PDF and check the bars run in the order you releveled to,
-# not alphabetically.
+invisible(NULL)
