@@ -9,7 +9,6 @@
 # data reads, and the plots in sections 9-10. The code to
 # type is on the activity page.
 #
-# The THINK lines are to talk about, not to answer here.
 # The WRITE-UP (sections 7-8) is what gets graded.
 # Sections 9-10 after it are two more designs, not graded.
 # ==========================================================
@@ -55,9 +54,6 @@ head(u_df)
 
 invisible(NULL)
 
-# THINK: what was the treatment applied to - a quadrat or a
-# patch? So how many real replicates are there?
-
 
 # ---- 2 Fit the mixed model -------------------------------
 # (1 | patch) = a random intercept: each patch gets its own
@@ -69,14 +65,6 @@ invisible(NULL)
 
 invisible(NULL)
 
-# THINK: in the Random effects block, write down the
-# patch variance and the residual variance.
-#   patch    = how far patches sit from their OWN treatment mean
-#   Residual = how far quadrats sit from their OWN patch mean
-
-# THINK: Number of obs: 80, groups: patch, 16. Which is the
-# real replication for testing treat?
-
 
 # ---- 3 The ICC -------------------------------------------
 # ICC = patch variance / (patch variance + residual variance)
@@ -85,11 +73,6 @@ invisible(NULL)
 
 invisible(NULL)
 
-# THINK: "About ___% of the differences in algae cover come
-# from ___."
-
-# THINK: twice as many quadrats, or twice as many patches -
-# which helps the next experiment more?
 
 # R2: how much of the variation each part explains.
 #   Marginal R2    = fixed effects only (treat)
@@ -99,21 +82,12 @@ invisible(NULL)
 
 invisible(NULL)
 
-# THINK: share explained by treatment? By treatment + patch?
-# So by patches alone (conditional - marginal)?
-
-# THINK: which explains more - urchin density or which patch
-# a quadrat was in? Why is "R2 = 0.62" alone misleading?
-
 
 # ---- 4 Test the treatment --------------------------------
 # YOUR CODE: Anova(type = 3, test.statistic = "F"),
 # then the same with test.statistic = "Chisq".
 
 invisible(NULL)
-
-# THINK: which side of 0.05 does each p fall on? Which one
-# do you report, and why?
 
 
 # ---- 5 Treatment means -----------------------------------
@@ -122,18 +96,12 @@ invisible(NULL)
 
 invisible(NULL)
 
-# THINK: some confidence limits go below zero. What is the
-# model assuming?
-
 
 # ---- 6 Diagnostics ---------------------------------------
 # YOUR CODE: set.seed(123), simulateResiduals(), then
 # plotQQunif() and plotResiduals().
 
 invisible(NULL)
-
-# THINK: roughly acceptable? What would you say in a
-# methods section?
 
 
 # ==========================================================
@@ -215,7 +183,6 @@ ggplot(ck_df, aes(x = time, y = weight, group = chick)) +
 
 invisible(NULL)
 
-# THINK: how many chicks, how many rows? Parallel or fanning?
 
 # YOUR CODE: weight ~ time * diet, three ways. Name them
 # ck_lm, ck_ri and ck_rs.
@@ -226,18 +193,11 @@ invisible(NULL)
 
 invisible(NULL)
 
-# THINK: denominator df for time:diet in each. Which one is
-# close to the number of chicks?
 
 # YOUR CODE: VarCorr(ck_rs), then
 # emtrends(ck_rs, ~ diet, var = "time").
 
 invisible(NULL)
-
-# THINK: emtrends() time.trend = the AVERAGE growth rate per
-# diet (g/day). The time SD in VarCorr() = how much chicks
-# vary AROUND that average. A typical chick on diet 1 grows
-# at about ___ give or take ___ g/day.
 
 
 # ---- 10 A treatment blocked by stream --------------------
@@ -263,8 +223,6 @@ ggplot(w_df, aes(x = reach, y = log_insects)) +
 
 invisible(NULL)
 
-# THINK: what was the treatment applied to? How many of
-# each kind are there?
 
 # YOUR CODE: the wrong way and the right way, then anova()
 # on each. Name them w_naive and w_mixed.
@@ -274,14 +232,11 @@ invisible(NULL)
 
 invisible(NULL)
 
-# THINK: denominator df for reach in each. Why is
-# (1 | stream:reach) the urchin (1 | patch)?
-
 
 # ==========================================================
 # Run the whole script top to bottom with
 # Ctrl/Cmd + Shift + Enter. It must run clean.
 #
-# Homework 16 (Linear Mixed Models, crayfish) is a separate
+# Homework 6 (Linear Mixed Models, crayfish) is a separate
 # worksheet - start a new script for it.
 # ==========================================================

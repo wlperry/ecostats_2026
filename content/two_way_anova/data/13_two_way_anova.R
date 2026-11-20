@@ -10,7 +10,6 @@
 # section 7 EMM comparison. Every line of statistics you
 # type yourself. The code is on the activity page.
 #
-# The THINK lines are to talk about, not to answer here.
 # The WRITE-UP at the bottom is what gets graded.
 # ==========================================================
 
@@ -47,9 +46,6 @@ p_df %>%
 
 invisible(NULL)
 
-# THINK: six groups, one response. What are the three
-# separate null hypotheses a factorial ANOVA tests?
-
 
 # ---- 2 Count the cells, then force balance ---------------
 # A design is BALANCED when every cell has the same n.
@@ -76,9 +72,6 @@ pb_df %>%
 
 invisible(NULL)
 
-# THINK: how many birds did we throw away to get balance?
-# Why would anyone pay that price on purpose?
-
 
 # ---- 3 Fit the balanced factorial model ------------------
 # Fit under R's DEFAULT contrasts. Section 6 is where the
@@ -87,9 +80,6 @@ invisible(NULL)
 # YOUR CODE: pb_model on pb_df, then summary() and anova().
 
 invisible(NULL)
-
-# THINK: spp * sex expands to spp + sex + spp:sex. Read the
-# interaction row first. Why does it get read first?
 
 
 # ---- 4 Assumptions ---------------------------------------
@@ -104,10 +94,6 @@ par(mfrow = c(1, 1))
 # Then the two formal tests - normality and equal variance.
 
 invisible(NULL)
-
-# THINK: normality is about the RESIDUALS, not the raw
-# masses. Where above would unequal variance across the six
-# cells show up?
 
 
 # ---- 5 Estimated marginal means and post-hoc -------------
@@ -124,13 +110,6 @@ invisible(NULL)
 # YOUR CODE: the compact letter display, then emmip().
 
 invisible(NULL)
-
-# THINK: on balanced data the EMMs matched the raw means
-# exactly. Why? Watch that break in section 7.
-
-# THINK: groups sharing a letter are NOT distinguishable.
-# Which cells share one, and does the interaction plot show
-# you the same thing?
 
 
 # ---- 6 The three sums-of-squares types, balanced ---------
@@ -154,13 +133,6 @@ invisible(NULL)
 #   options(contrasts = c("contr.treatment", "contr.poly"))
 
 invisible(NULL)
-
-# THINK: compare the three F-values for spp. What do you
-# notice, and what is it about THIS dataset that causes it?
-
-# THINK: Anova(pb_model, type = 3) on the DEFAULT-contrast
-# model gives F = 196.1 for spp instead of 477.2. No error,
-# no warning. What is the options() line changing?
 
 
 # ---- 7 The same model, unbalanced ------------------------
@@ -194,13 +166,6 @@ emmeans(pu_model, ~ spp)
 
 invisible(NULL)
 
-# THINK: the three SS types agreed in section 6 and
-# disagree now. Which one would you report, and why?
-
-# THINK: only ONE of the six cells is actually unbalanced.
-# Find it. Is that really enough to move the marginal
-# means?
-
 
 # ---- 8 Effect size ---------------------------------------
 # A p-value says whether. An effect size says how big. The
@@ -213,13 +178,6 @@ invisible(NULL)
 # Eta2_partial column with rules = "field2013".
 
 invisible(NULL)
-
-# THINK: spp:sex was significant but its partial eta squared
-# is the smallest of the three. What does that add that the
-# p-value did not?
-
-# THINK: the small/medium/large labels are psychology
-# cutoffs. Is 0.05 "small" for penguin body mass?
 
 
 # ==========================================================
@@ -277,6 +235,6 @@ invisible(NULL)
 # Run the whole script top to bottom with
 # Ctrl/Cmd + Shift + Enter. It must run clean.
 #
-# Homework 13 (Factorial ANOVA, crayfish) is a separate
-# worksheet - start a new script for it.
+# Homework 4 (Two-Way ANOVA, leaf area) is posted after
+# the Redux session - start a new script for it.
 # ==========================================================

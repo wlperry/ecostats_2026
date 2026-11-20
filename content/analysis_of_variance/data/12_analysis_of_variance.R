@@ -8,9 +8,8 @@
 # statistics. Blocks marked YOUR TURN are the statistics; write the
 # call yourself.
 #
-# Boxed sections marked with rows of * * * * are the written-answer
-# questions from the worksheet. Type your answer between the two
-# closing rows of stars, right here in this script.
+# Code only. Answer the worksheet questions on the worksheet,
+# not in this script.
 #
 # 84 fiddler crabs, 21 in each of four groups. Does the male's
 # oversized major claw act as a heat radiator?
@@ -38,13 +37,6 @@ count(crab_df, crab_type)
 # YOUR TURN. Boxplot of body_temp_c by crab_type, with the raw points
 # jittered on top.
 
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: Which group looks warmest, and does the picture match the
-# radiator prediction?
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 # =====================================================================
 # PART 2 · BUILD THE SUMS OF SQUARES
@@ -69,15 +61,6 @@ c(total = ss_total, among = ss_among, within = ss_within)
 
 ss_among + ss_within
 
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: Does the partition add up, and what fraction does the
-# grouping explain?
-#   ss_among + ss_within =            ss_total =
-#   ss_among / ss_total  =
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 # =====================================================================
 # PART 3 · THE ANOVA
@@ -88,26 +71,6 @@ ss_among + ss_within
 # table. The formula is response ~ factor. Look at summary() FIRST --
 # that is the only one of the two that shows you the intercept.
 
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: Match the table to what you computed in Part 2.
-#   Sum Sq, crab_type =            Sum Sq, Residuals =
-#   Df =        and             F =            p =
-#   R squared =
-#   (Intercept) =            -- which group's mean is that, and why?           (compare with ss_among / ss_total)
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: Write down exactly what this p-value  says --
-# and one thing it does NOT.
-#   It says:
-#   It does not say:
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 # ── Part 3.2 · Type I, II and III sums of squares ──────────────
 # anova() gives Type I. Types II and III come from car::Anova() -- note
@@ -126,18 +89,6 @@ Anova(crab_sum, type = "III")
 
 options(contrasts = c("contr.treatment", "contr.poly"))
 
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: Fill in the crab_type sum of squares from each table.
-#   Type I   =          Type II  =          Type III =
-#
-#   Why are they identical in a one-way ANOVA?
-#
-#   Which row DID change between contr.treatment and contr.sum, and
-#   what is it testing in each case?
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 # =====================================================================
 # PART 4 · CHECK THE ASSUMPTIONS
@@ -154,14 +105,6 @@ par(mfrow = c(1, 1))
 # variance. One of these takes residuals(crab_model); the other takes a
 # formula and the data.
 
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: Both tests have a null hypothesis you WANT to keep.
-#   Shapiro H0 =                  p =            pass?
-#   Levene  H0 =                  p =            pass?
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 # =====================================================================
 # PART 5 · SET THE REFERENCE LEVEL
@@ -171,30 +114,10 @@ par(mfrow = c(1, 1))
 # YOUR TURN. Print the levels() of crab_df$crab_type, then the
 # coefficient table of crab_model.
 
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: Which level is the reference, why did R pick it, and what
-# is each coefficient comparing?
-#   Reference:              Why:
-#   Each coefficient is "degrees hotter than a                    "
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 # ── Part 5.2 · Set the reference level ────────────────────────────────
 # PART FILLED IN — the fct_relevel() call.
 
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: Compare the two coefficient tables, and the two ANOVA
-# tables.
-#   What changed:
-#   What did not change:
-#
-#   Why does the F-test not care which level is first?
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 # =====================================================================
 # PART 6 · WHICH GROUPS ACTUALLY DIFFER?
@@ -217,66 +140,11 @@ TukeyHSD(aov(crab_model))
 # your pipes will start failing for no visible reason.
 multcomp::cld(crab_emm, Letters = letters, adjust = "tukey")
 
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: Read the letters.
-#   Which groups share a letter with intact male?
-#   A shared letter means
-#   and it does NOT mean
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: Fill in the adjusted p-values for the three comparisons
-# with the control. The p-values are the same from either call; the
-# signs are not, because emmeans subtracts the other way round.
-#   female - intact male             =
-#   male major removed - intact male =
-#   male minor removed - intact male =
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: In the emmeans table every group has the same SE. Where
-# does that SE come from, and why is it not each group's own SD?
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: The radiator hypothesis predicts that removing the MAJOR
-# claw makes males hotter. Does the Tukey output support it? One
-# sentence, using the number.
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: Females ARE significantly hotter than every male group.
-# Why does that not rescue the hypothesis?
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 # =====================================================================
 # PART 7 · REPORT IT
 # =====================================================================
 
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: Write the results sentence you would put in a paper. It
-# needs the test, F with BOTH degrees of freedom, the p-value, R-squared
-# and the post-hoc method -- including the comparison that was NOT
-# significant.
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 # =====================================================================
 # PART 8 · THE FIGURE YOU HAND IN

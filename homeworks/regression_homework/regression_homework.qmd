@@ -1,0 +1,149 @@
+---
+order: 11
+week: 7
+title: "Homework 3 — Correlation & Regression"
+subtitle: "Covers Correlation, Linear Models and Multiple Regression"
+description: "Seventy-three North American grasslands: a correlation, a regression that needs a transformation, and two predictors so tangled that adding one flips the sign of the other."
+author: "Bill Perry"
+---
+
+[📥 Grassland data](data/grassland_c3.csv){.btn .btn-primary download="grassland_c3.csv"} [📥 Same data (.xlsx)](data/grassland_c3.xlsx){.btn .btn-primary download="grassland_c3.xlsx"} [📥 Answer sheet (.docx)](regression_answer_sheet.docx){.btn .btn-primary download="regression_answer_sheet.docx"}
+
+::: callout-note
+## 📚 Where these data come from
+
+**Book source:** Quinn & Keough, *Experimental Design and Data Analysis for Biologists*, **Chapter 6**, **Box 6.1** (`paruelo.csv`).
+
+**Original study:** Paruelo, J.M. & Lauenroth, W.K. (1996), *Ecological Applications*: relative abundance of plant functional types across the grasslands and shrublands of central North America.
+
+**What we changed:** the columns are renamed to readable names. The numbers are the book's.
+:::
+
+## The data
+
+73 grassland sites across central North America, one row per site.
+
+| Column | What it is |
+|--------------------|----------------------------------------------|
+| `c3_proportion` | fraction of the plant cover that is C3 (cool-season) grass: **the response** |
+| `mean_annual_precip_mm` | mean annual precipitation (mm) |
+| `mean_annual_temp_c` | mean annual temperature (°C) |
+| `summer_precip_prop` | proportion of the rain that falls in summer |
+| `winter_precip_prop` | proportion of the rain that falls in winter |
+| `longitude`, `latitude` | site location (degrees) |
+
+**The question:** what controls how much C3 grass a grassland has?
+
+## How this homework works
+
+The code is from the **Correlation vs Linear Models** and **Multiple Regression** skeletons. Reuse it.
+
+- Start a new script, `scripts/hw3_grassland.R`, and put the data in `data/`.
+- Work through the Parts in order.
+- Answer the ten ✏️ questions on the **answer sheet**. Q9 is your final figure.
+
+```{r setup}
+#| message: false
+#| warning: false
+library(car)          # vif(), ncvTest()
+library(tidyverse)
+```
+
+------------------------------------------------------------------------
+
+# Part 1 · Correlation
+
+Read `data/grassland_c3.csv` into `grass_df`. Plot `c3_proportion` against `latitude`, then run `cor.test()` on the two.
+
+```{r part1}
+
+```
+
+✏️ **Q1.** Report *r*, its 95% CI and *p*. Describe the relationship in one sentence. What does a correlation **not** tell you that a regression would?
+
+------------------------------------------------------------------------
+
+# Part 2 · The regression on the raw scale
+
+Fit `lm(c3_proportion ~ latitude)`. Look at `summary()`, the four diagnostic plots (`par(mfrow = c(2, 2))` then `plot()`), `shapiro.test()` on the residuals, and `ncvTest()`.
+
+```{r part2}
+
+```
+
+✏️ **Q2.** Report the slope, R² and *p*. Then the diagnostics: which assumption fails? (Look at the residuals-vs-fitted plot and count how many sites have **zero** C3 grass.)
+
+------------------------------------------------------------------------
+
+# Part 3 · Fix it with a transformation
+
+Add `log_c3 = log10(c3_proportion + 0.1)` with `mutate()`. The `+ 0.1` keeps the zeros from becoming `-Inf`. Refit with `log_c3` as the response and redo the Part 2 diagnostics.
+
+```{r part3}
+
+```
+
+✏️ **Q3.** Did the diagnostics improve? Report the new slope, R² and *p*.
+
+✏️ **Q4.** Square the correlation between `latitude` and `log_c3` and compare it with the R² of the log model. Why are they the same number?
+
+------------------------------------------------------------------------
+
+# Part 4 · Two predictors that tell the same story
+
+Use `log_c3` from here on. Fit `lm(log_c3 ~ mean_annual_temp_c)` on its own, then `lm(log_c3 ~ mean_annual_temp_c + latitude)`. Then get the correlation matrix of the six predictors (`select()` them, then `cor()`) and `vif()` of the two-predictor model.
+
+```{r part4}
+
+```
+
+✏️ **Q5.** Give the temperature slope and *p* alone, and again with latitude in the model. What happened to it? Which two predictors are most strongly correlated (give *r*)? Are the VIFs above the "VIF > 10" rule of thumb? What does that tell you about the rule?
+
+------------------------------------------------------------------------
+
+# Part 5 · The full model
+
+Fit all six predictors. Look at `summary()` and `vif()`.
+
+```{r part5}
+
+```
+
+✏️ **Q6.** How many of the six predictors are significant? The overall *F*-test is highly significant. Explain how both can be true at once.
+
+------------------------------------------------------------------------
+
+# Part 6 · Choose a model
+
+Fit these four models and build a table (a `tibble()`) of adjusted R², AIC and ΔAIC for each: all six, `latitude + summer_precip_prop`, `latitude` only, and `mean_annual_temp_c` only. Then test the latitude-only model against the full model with `anova()`.
+
+```{r part6}
+
+```
+
+✏️ **Q7.** Which model has the lowest AIC? What does the `anova()` test say about dropping the other five predictors? Which model would you report, and why?
+
+✏️ **Q8.** A reviewer writes: *"The authors show that mean annual temperature has no effect on C3 grass."* Why is that sentence wrong? What kind of sites would you need to add to separate temperature from latitude?
+
+------------------------------------------------------------------------
+
+# Part 7 · The final figure
+
+One publication-quality figure of the model you chose: `log_c3` against your predictor, with the fitted line and its confidence band (`geom_smooth(method = "lm")`), axis labels with units, and a theme. Save it with `ggsave()`.
+
+```{r part7}
+
+```
+
+✏️ **Q9.** Paste your final figure into the answer sheet.
+
+✏️ **Q10.** Write a 3–4 sentence results paragraph: the model you chose, its slope with SE, R², *F*, df and *p*, the transformation and why you used it, and one clause on what latitude is confounded with.
+
+------------------------------------------------------------------------
+
+# What to turn in
+
+1.  **The answer sheet** (Word) with Q1–Q10 answered and your figure pasted in at Q9.
+2.  **Your script**, `hw3_grassland.R`. It must run top to bottom. It is not graded line by line, but an answer your script can't reproduce earns no credit.
+
+**Points:** 30, 3 per question. **3** great: correct and fully explained. **2** good: the right idea with a piece missing or a small error. **1** ok: attempted, but mostly wrong or unexplained. **0**: missing.

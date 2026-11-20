@@ -8,9 +8,8 @@
 # statistics. Blocks marked YOUR TURN are the statistics; write the
 # call yourself.
 #
-# Boxed sections marked with rows of * * * * are the written-answer
-# questions from the worksheet. Type your answer between the two
-# closing rows of stars, right here in this script.
+# Code only. Answer the worksheet questions on the worksheet,
+# not in this script.
 #
 # 56 remnant forest patches in Victoria, Australia (Loyn 1987):
 # bird abundance against six patch characteristics.
@@ -37,16 +36,6 @@ bird_df <- read_csv("data/loyn_birds.csv") %>%
 
 bird_df
 
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: Why are area and the two distances logged? Look at the
-# range of area_ha.
-
-
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 # =====================================================================
 # PART 2 · ONE PREDICTOR AT A TIME
@@ -56,19 +45,6 @@ bird_df
 # YOUR TURN. Three separate simple regressions of abundance on
 # log_area, on grazing, and on year_isolated. Print a summary of each.
 
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: Record each one.
-#   log_area:      slope =              p =
-#   grazing:       slope =              p =
-#   year_isolated: slope =              p =
-#   How many are significant?
-
-
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 # =====================================================================
 # PART 3 · TWO PREDICTORS — THE WORKED EXAMPLE
@@ -81,29 +57,6 @@ bird_df
 # YOUR TURN. Fit reduced_model with log_area and grazing together, and
 # print its summary.
 
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: Write the fitted equation out, with the numbers in it.
-#   abundance =         +         x log_area +         x grazing
-
-
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: Read each slope as a sentence. The phrase you need is
-# "holding the other predictor constant."
-#   log_area:
-#   grazing:
-
-
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 # Notice that BOTH slopes shrank compared with Part 2 -- area from
 # about 9.8 to 6.9, grazing from about -5.0 to -2.9. Part 4 is why.
@@ -117,31 +70,6 @@ bird_df
 # log_area, log_dist, log_dist_larger, year_isolated, grazing and
 # altitude_m -- and print its summary.
 
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: Which predictors are still significant, and what happened
-# to grazing?
-#   Still significant:
-#   grazing slope: alone        two-predictor        here
-
-
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: All three grazing slopes came from the same 56 patches. Is
-# any of them wrong? Say what each one is actually measuring.
-
-
-
-
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 # =====================================================================
 # PART 5 · WHY IT HAPPENED
@@ -151,29 +79,6 @@ bird_df
 # YOUR TURN. Print the rounded correlation matrix of the six
 # predictors, and then the VIFs of full_model.
 
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: Find the two most strongly correlated predictors, and say
-# in one sentence what that correlation means on the ground.
-#   Pair:               and               r =
-#   On the ground:
-
-
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: All the VIFs are small. Does that mean collinearity is not
-# a problem here?
-
-
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 # =====================================================================
 # PART 6 · WHICH MODEL DO YOU KEEP?
@@ -192,17 +97,6 @@ tibble(
   AIC    = c(AIC(full_model), AIC(reduced_model))
 )
 
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: Do the two methods agree? Which model do you keep?
-#   anova p =              lower AIC =
-#   Model I keep:
-
-
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 # ── Part 6.2 · Which predictors do you keep? ───────────────────
 # anova() and AIC compare whole models. Partial eta squared and delta
@@ -234,26 +128,6 @@ tibble(
 #          dR2   =        ) %>%
 #   arrange(desc(      ))
 
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: Read your table.
-#   Strongest predictor (pEta2 =        ):
-#   Two weakest predictors:
-#
-#   Now add up the dR2 column and compare it to the model's R^2:
-#   sum of dR2 =            model R^2 =
-#   Why don't they match? Where is the missing variance?
-#
-#
-#   One of your weak predictors might be useless and another might
-#   just be tangled with a stronger one. Which tool from Part 5 tells
-#   you which is which?
-
-
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 # =====================================================================
 # PART 7 · CHECK THE ASSUMPTIONS
@@ -268,19 +142,6 @@ par(mfrow = c(1, 1))
 
 # YOUR TURN. Test the residuals of reduced_model for normality.
 
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: One line per assumption.
-#   Linearity:
-#   Equal variance:
-#   Normality (Shapiro p =        ):
-#   Influential points:
-
-
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 # =====================================================================
 # PART 8 · GRAZING AS A FACTOR
@@ -293,17 +154,6 @@ par(mfrow = c(1, 1))
 # YOUR TURN. Turn grazing_class into a factor with factor(), print its
 # levels(), and fit abundance ~ log_area + grazing_class.
 
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: Which level is R using as the reference, and why did it
-# pick that one?
-#   Reference level:            Why:
-
-
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 # ── Part 8.2 · Grazing as a factor ──────────────────────────────────────
 # PART FILLED IN — the fct_relevel() call, because naming five levels
@@ -318,35 +168,6 @@ levels(bird_df$grazing_class)
 # YOUR TURN. Fit grazing_model with the releveled factor and print its
 # summary.
 
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: Write down the four grazing coefficients and their
-# p-values.
-#   light:               p =
-#   moderate:            p =
-#   heavy:               p =
-#   intense:             p =
-
-
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: The R-squared and F-statistic are identical in 8.1 and
-# 8.2 -- only the coefficients moved. Given that, what did fitting
-# grazing as the NUMBER 1-5 (one slope of about -2.9 birds per step,
-# back in Part 3) hide from you?
-
-
-
-
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 # =====================================================================
 # PART 9 · THE FIGURE YOU HAND IN

@@ -4,9 +4,8 @@
 #
 # Save this as scripts/07_nonparametric_t_tests.R in your project.
 #
-# Boxed sections marked with rows of * * * * are written-answer questions
-# from the worksheet. Type your answer between the two closing rows of
-# stars, right in this script — that's the lesson, not a distraction.
+# Code only. Answer the worksheet questions on the worksheet,
+# not in this script.
 # =====================================================================
 
 # =====================================================================
@@ -29,26 +28,11 @@ source("themes_functions/r_themes_and_functions.R")
 # Everything from here on uses mass_g of trout from the lake trout data set
 # =====================================================================
 
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: We want to test if the mass of lake trout in NE 12 differs
-# from a mean of 500g. Write out the hypotheses.
-#   H0: mu = _____ (the mean mass of lake trout in NE 12 is _____ g)
-#   H1: mu ≠ _____ (the mean mass of lake trout in NE 12 is not _____ g)
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 # ── Part 2.1 · Reading in the lake trout ─────────────────────────────
 # FILLED IN. Libraries and source() are already loaded in Part 1.1.
 lt_df <- read_csv("data/lake_trout.csv")
 
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: How many lakes are in this dataset?
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 # ── Part 2.2 · Mode of mass by lake ──────────────────────────────────
 # FILLED IN — R has no built-in statistical mode(). This group_by +
@@ -97,13 +81,6 @@ ne12_df <- lt_df %>%
 # YOUR TURN. shapiro.test() on ne12_df$mass_g.
 # Remember: H0 is that the data ARE normal, so small p rejects normality.
 
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: Does the QQ plot agree with the Shapiro-Wilk result?
-# Is NE 12's mass normally distributed?
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 # ── Part 3.5 · One-sample test against 500 g ─────────────────────────
 # YOUR TURN. Test the hypotheses you wrote in Part 2 with
@@ -164,13 +141,6 @@ summary_by_lake
 #   summarise(test = list(leveneTest(yvar ~ group, data = .))) %>%
 #   reframe(tidy(test[[1]]))
 
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: Based on your normality and Levene's test results, do these
-# two lakes meet the assumptions for a standard t-test?
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 # ── Part 4.7 · Another lake pair  (bonus) ────────────────────────────
 # YOUR TURN. Pick a different pair of lakes and repeat Parts 4.1-4.6.
@@ -192,15 +162,7 @@ in_df <- in_df %>%
 
 # ── Part 5.4 · Did the transformation work? ──────────────────────────
 # YOUR TURN. Re-run Parts 4.5 and 4.6 on log_mass.
-# Did normality improve? Did equal variance?
 
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: Did the log transformation fix normality, equal variance,
-# both, or neither?
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 # =====================================================================
 # PART 6 · COMPARING THE TWO LAKES — FOUR TESTS
@@ -230,14 +192,6 @@ in_df <- in_df %>%
 # YOUR TURN. wilcox.test(), same formula interface.
 # Call it wilcox_test_result. The statistic is W, not t.
 
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: Do all four tests agree on whether the difference is
-# significant? If any disagree, what does that tell you about how
-# sensitive the conclusion is to test choice?
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 # =====================================================================
 # PART 7 · TAKE-HOME — SAGEBRUSH CRICKETS
@@ -252,29 +206,6 @@ cricket_df %>%
   group_by(feeding_status) %>%
   reframe(summary_stats(time_to_mating_h))
 
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: Look at the n, mean, and sd for each group before you do
-# anything else. What do you notice about the two standard deviations
-# relative to the two means?
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: State your hypotheses. Explore the data yourself -- normality,
-# variance, sample size, outliers, whatever you need to check -- and
-# decide which test from this unit is the right one. Justify your choice.
-#   H0 =
-#   ________________________________________________________
-#   Ha =
-#   ________________________________________________________
-#   Test I will use and why:
-#   ________________________________________________________
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 # ── Part 7.2 · Your analysis ─────────────────────────────────────────
 # YOUR TURN. Check the assumptions, pick ONE test, run it.
@@ -282,18 +213,6 @@ cricket_df %>%
 # A well-justified non-significant result is a full-credit answer --
 # do NOT go hunting through the other three tests for a smaller p-value.
 
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: Write your interpretation and results sentence.
-#   Interpretation:
-#   ________________________________________________________
-#   ________________________________________________________
-#
-#   Results sentence:
-#   ________________________________________________________
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 # ── Part 7.3 · Your figure ───────────────────────────────────────────
 # YOUR TURN. One publication-quality figure, axis labels with units,

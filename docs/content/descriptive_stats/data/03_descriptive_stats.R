@@ -11,9 +11,8 @@
 # them and read the output. Blocks marked YOUR TURN are ones the worksheet
 # asks you to write yourself, usually by adapting the block right above.
 #
-# Boxed sections marked with rows of * * * * are written-answer questions
-# from the worksheet. Type your answer between the two closing rows of
-# stars, right in this script — that's the lesson, not a distraction.
+# Code only. Answer the worksheet questions on the worksheet,
+# not in this script.
 # =====================================================================
 
 
@@ -31,16 +30,6 @@ sunny_df <- pine_df |> filter(side == "sunny")
 
 shady_df
 
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: How many needles are in shady_df? In sunny_df?
-
-
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-
 
 # =====================================================================
 # PART 2 · MEAN AND MEDIAN
@@ -55,17 +44,6 @@ sunny_df |>
   summarize(mean_mm = mean(needle_length_mm),
             med_mm  = median(needle_length_mm))
 
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: For each side, is the mean close to the median, or far from it?
-# What would a big gap suggest about the shape of the data?
-
-
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-
 
 # =====================================================================
 # PART 3 · VARIANCE AND STANDARD DEVIATION
@@ -79,17 +57,6 @@ shady_df |>
 sunny_df |>
   summarize(var_mm = var(needle_length_mm),
             sd_mm  = sd(needle_length_mm))
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: Which side has more spread in its needle lengths -- shady or
-# sunny? How do you know?
-
-
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 
 # =====================================================================
@@ -110,21 +77,7 @@ shady_df |>
 
 
 # ── Part 3b.2 · Quantiles, range, and IQR ───────────────────────────────
-# YOUR TURN. Compute the same seven numbers for sunny_df. Which side has
-# the wider IQR?
-
-
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: Which side has the wider IQR?
-
-
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+# YOUR TURN. Compute the same seven numbers for sunny_df.
 
 
 # =====================================================================
@@ -141,16 +94,6 @@ na_demo_df |>
     real_values = sum(!is.na(length_mm))   # the n you actually want
   )
 
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: Explain in your own words why n() gives the wrong answer for
-# a sample size when there are missing values.
-
-
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 # ── Part 4.2 · The `length()` trap ──────────────────────────────────────
 # FILLED IN.
@@ -162,16 +105,6 @@ na_demo_df |>
     wrong_se = sd_mm / sqrt(wrong_n),
     right_se = sd_mm / sqrt(right_n)
   )
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: Are wrong_se and right_se the same number? Why or why not?
-
-
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 
 # =====================================================================
@@ -192,17 +125,6 @@ sunny_df |>
     sd_mm = sd(needle_length_mm, na.rm = TRUE),
     se_mm = sd_mm / sqrt(n)
   )
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: In one sentence, explain the difference between what SD tells
-# you and what SE tells you.
-
-
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 
 # =====================================================================
@@ -225,8 +147,6 @@ shady_df |>
 # numbers for sunny_df.
 
 
-
-
 # =====================================================================
 # PART 6b · skimr — A FAST FULL-DATASET OVERVIEW
 # =====================================================================
@@ -236,29 +156,6 @@ shady_df |>
 library(skimr)
 
 skim(pine_df)
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: Find needle_length_mm in the skim() output. Its mean and SD
-# are for all 64 needles at once -- how do they compare with the per-side
-# numbers you computed in Parts 2 and 3?     Y / N
-
-
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: What does skim() show you for a character column (like team
-# or side) that it doesn't show for a numeric one?
-
-
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 
 # =====================================================================
@@ -281,22 +178,10 @@ side_stats_df
 # Watch out: compute se_mm from the raw sd(), not from the rounded sd_mm
 # column above it -- round only what you print.
 
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: Do the mean_mm and se_mm values match the ones you calculated
-# one side at a time in Parts 2 and 5?     Y / N
-
-
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 # ── Part 7.2 · Tidy group stats ─────────────────────────────────────────
 # YOUR TURN. Now group by team (the field team) instead of side, and
 # compute the same five statistics.
-
-
 
 
 # =====================================================================
@@ -323,32 +208,6 @@ side_correct_df <- team_means_df |>
   )
 
 side_correct_df
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: Fill in the comparison.
-#                    naive (n = 32)      correct (n = 4)
-#   mean, shady:     ______              ______
-#   mean, sunny:     ______              ______
-#   SE, shady:       ______              ______
-#   SE, sunny:       ______              ______
-
-
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: Which changed -- the means, the standard errors, or both?
-# What does that tell you about what pseudoreplication actually damages?
-
-
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 
 # =====================================================================
@@ -378,28 +237,6 @@ side_plot <- ggplot(pine_df, aes(x = side, y = needle_length_mm)) +
 
 side_plot
 
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: The box and the error bar show different things.
-#   Box:          ________________________________________
-#   Error bar:    ________________________________________
-
-
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: Look at the four faded team means on each side. Do all four
-# teams agree, or is one tree pulling its side around?
-
-
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 # ── Part 7b.2 · See it — boxplot with mean ± SE ─────────────────────────
 # FILLED IN.
@@ -421,20 +258,6 @@ ggsave("figures/pine_side_mean_se.png",
 # above.
 
 
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: Which error bars are wider, and why is that the more honest
-# picture?
-
-
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-
-
 # =====================================================================
 # PART 8 · SAVE YOUR SUMMARY TABLE
 # =====================================================================
@@ -449,18 +272,6 @@ write_csv(side_stats_df, "output/pine_side_stats.csv")
 # =====================================================================
 # PART 9 · REVIEW AND CHECKPOINT
 # =====================================================================
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN -- before you move on: run your whole script top to bottom.
-#   Ran cleanly?  Y / N
-#   -- if not, the error was:
-
-
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 
 # =====================================================================

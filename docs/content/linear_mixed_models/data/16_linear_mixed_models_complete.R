@@ -337,6 +337,6 @@ invisible(NULL)
 # Run the whole script top to bottom with
 # Ctrl/Cmd + Shift + Enter. It must run clean.
 #
-# Homework 16 (Linear Mixed Models, crayfish) is a separate
+# Homework 6 (Linear Mixed Models, crayfish) is a separate
 # worksheet - start a new script for it.
 # ==========================================================

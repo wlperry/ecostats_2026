@@ -13,9 +13,8 @@
 # Writing the ggplot code yourself, character by character, is the
 # lesson here, not something to skip past.
 #
-# Boxed sections marked with rows of * * * * are written-answer
-# questions from the worksheet. Type your answer between the two
-# closing rows of stars, right in this script.
+# Code only. Answer the worksheet questions on the worksheet,
+# not in this script.
 # =====================================================================
 
 
@@ -41,22 +40,6 @@ pine_df <- read_csv("data/pine_data.csv")
 # legend with theme(legend.position = "none").
 
 
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: In the plot above, what does the line in the middle of each
-# box represent? What do the box edges represent?
-#   Middle line: ________________________
-#   Box edges:   ________________________
-
-
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-
-
 # =====================================================================
 # PART 3 · ADD THE RAW POINTS
 # =====================================================================
@@ -66,26 +49,8 @@ pine_df <- read_csv("data/pine_data.csv")
 # layer (position_jitter(width = 0.15), alpha = 0.6, size = 2).
 
 
-
-
 # ── Part 3.2 · Add the raw points ───────────────────────────────────────
 # YOUR TURN. Change width = 0.15 to width = 0.4 and rerun.
-
-
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: What happens to the points? Which version do you prefer,
-# and why?
-#   ________________________________________________________
-#   ________________________________________________________
-
-
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 
 # =====================================================================
@@ -97,28 +62,9 @@ pine_df <- read_csv("data/pine_data.csv")
 # subtitle, x, y, fill, and caption all set explicitly.
 
 
-
-
 # ── Part 3b.2 · Axis labels and titles with `labs()` ────────────────────
 # YOUR TURN. Change the title, x, and y text to your own wording.
 # Re-run and confirm the plot updates.
-
-
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: pine_box_plot maps fill = side. What happens if you write
-# labs(color = "Side") instead of labs(fill = "Side")? Try it and
-# explain why.
-#   ________________________________________________________
-#   ________________________________________________________
-
-
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 
 # =====================================================================
@@ -131,32 +77,14 @@ pine_df <- read_csv("data/pine_data.csv")
 # theme_minimal() and hide the legend.
 
 
-
-
 # ── Part 3c.2 · Axis limits with coord_cartesian() ──────────────────────
 # YOUR TURN. pine_scatter_plot: needle_length_mm on x, needle_width_mm
 # on y, colored by side. Set coord_cartesian() limits on BOTH axes.
 
 
-
-
 # ── Part 3c.3 · Axis limits with coord_cartesian() ──────────────────────
 # YOUR TURN. A boxplot of needle_length_mm by side with y-axis limits
 # you chose on purpose.
-
-
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: Why did you choose those limits?
-#   ________________________________________________________
-
-
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 
 # =====================================================================
@@ -168,13 +96,9 @@ pine_df <- read_csv("data/pine_data.csv")
 # jittered points (width = 0.15, size = 2.5, alpha = 0.8).
 
 
-
-
 # ── Part 4.2 · Map a third variable with color ──────────────────────────
 # YOUR TURN. Try color = team inside aes() versus color = "darkblue"
 # outside aes(). Describe what changes.
-
-
 
 
 # =====================================================================
@@ -185,32 +109,13 @@ pine_df <- read_csv("data/pine_data.csv")
 # YOUR TURN. Histogram of needle_length_mm, binwidth = 2.
 
 
-
-
 # ── Part 4b.2 · Histograms and density curves ───────────────────────────
-# YOUR TURN. Try binwidth = 0.5 and binwidth = 5. Which value tells the
-# real story about this data, and which one hides or exaggerates it?
-
-
+# YOUR TURN. Try binwidth = 0.5 and binwidth = 5.
 
 
 # ── Part 4b.3 · Histograms and density curves ───────────────────────────
 # YOUR TURN. Overlaid density curves of needle_length_mm, filled by
 # side, alpha = 0.5.
-
-
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: Do the shady and sunny density curves look like they
-# overlap a lot, or are they clearly separated?
-
-
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 
 # =====================================================================
@@ -223,42 +128,12 @@ pine_df <- read_csv("data/pine_data.csv")
 # point, one plotting mean_se() as an errorbar.
 
 
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: Which two stat_summary() calls compute the mean point and
-# the SE error bars? Copy them below and label which is which.
-#   Mean point:   ________________________
-#   SE bars:      ________________________
-
-
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-
-
 # =====================================================================
 # PART 6 · FACET BY FIELD TEAM
 # =====================================================================
 
 # ── Part 6.1 · Facet by field team ──────────────────────────────────────
 # YOUR TURN. pine_facet_plot <- pine_box_plot + facet_wrap(~team).
-
-
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: Looking at the four panels, does every field team show the
-# same shady-vs-sunny pattern, or does one team look different?
-
-
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 
 # =====================================================================
@@ -268,20 +143,6 @@ pine_df <- read_csv("data/pine_data.csv")
 # ── Part 7.1 · The built-in themes ──────────────────────────────────────
 # YOUR TURN. Try pine_jitter_plot + theme_bw(), then + theme_classic(),
 # then + theme_minimal(). Compare all three.
-
-
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: Which theme do you like best for this kind of biological
-# comparison? Why?
-
-
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 
 # =====================================================================
@@ -297,20 +158,6 @@ source("r_themes_for_3_sizes.R")
 # ── Part 7b.2 · Use the themes ──────────────────────────────────────────
 # YOUR TURN. pine_theme_plot: the Part 3c.1 boxplot again, but with
 # theme_small() in place of theme_minimal().
-
-
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: Swap theme_small() for theme_regular() and re-run. What
-# changed?
-
-
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 
 # =====================================================================
@@ -332,20 +179,14 @@ library(patchwork)
 # same two stacked with / instead.
 
 
-
-
 # ── Part 7c.4 · A three-panel figure ────────────────────────────────────
 # YOUR TURN. combined_plot: (pine_jitter_plot + pine_mean_se_plot) /
 # pine_scatter_plot, with plot_annotation(tag_levels = "A").
 
 
-
-
 # ── Part 7c.5 · Your own combined figure ────────────────────────────────
 # YOUR TURN. Build your own two-panel figure from any two plots you
 # have made today, stacked with / instead of side by side.
-
-
 
 
 # =====================================================================
@@ -358,25 +199,9 @@ library(patchwork)
 # written for.
 
 
-
-
 # ── Part 8.2 · Save the combined figure ─────────────────────────────────
 # YOUR TURN. ggsave() combined_plot. Size the canvas for THREE panels'
 # worth of space, not one.
-
-
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: What are the four arguments (besides the filename and
-# plot =) you should always set explicitly in ggsave()?
-
-
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 
 # =====================================================================
@@ -389,58 +214,18 @@ library(patchwork)
 # hex values for each side.
 
 
-
-
 # ── Part 8b.2 · Advanced / extra work ───────────────────────────────────
 # YOUR TURN. Pick two hex colors of your own and substitute them into
 # values =. Then try removing one entry entirely and see what R does.
 
 
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: pine_df$side only has two levels. What happens if values =
-# is missing an entry for one of them?
-
-
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-
 # ── Part 8b.3 · Advanced / extra work ───────────────────────────────────
 # YOUR TURN. The fill equivalent -- a boxplot with scale_fill_manual().
-
-
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: In one sentence, when do you reach for scale_color_manual()
-# versus scale_fill_manual()?
-
-
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 
 # =====================================================================
 # PART 9 · REVIEW AND CHECKPOINT
 # =====================================================================
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: Run your whole script top to bottom. Ran cleanly? Y / N --
-# if not, the error was:
-
-
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 
 # =====================================================================

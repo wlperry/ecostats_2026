@@ -4,9 +4,8 @@
 #
 # Save this as scripts/09_study_design_sampling.R in your project.
 #
-# Boxed sections marked with rows of * * * * are written-answer questions
-# from the worksheet. Type your answer between the two closing rows of
-# stars, right in this script.
+# Code only. Answer the worksheet questions on the worksheet,
+# not in this script.
 #
 # Wright & Czeisler (2002): does light on the back of the knee reset the
 # circadian clock the way light in the eyes does?  control / knee / eyes,
@@ -35,17 +34,6 @@ knees_df
 # ── Part 2.1 · Read the design off the data ───────────────────────────
 # YOUR TURN. How many subjects in each treatment? One call: count().
 
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: What is the experimental unit here, and is the design
-# balanced?
-#   unit =
-#   balanced?
-
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 # ── Part 2.2 · Read the design off the data ───────────────────────────
 # YOUR TURN. Summary statistics for shift_h by treatment --
@@ -56,15 +44,6 @@ knees_df
 # shift_h on y, geom_boxplot() plus geom_jitter(width = 0.15).
 # No labels, no theme -- this plot is for you, not for handing in.
 
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: From the plot alone, which treatment looks different from
-# the other two?
-
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 # =====================================================================
 # PART 3 · DID THE PLACEBO DO ANYTHING?
@@ -79,15 +58,6 @@ knees_df %>%
   filter(treatment %in% c("control", "knee")) %>%
   t.test(shift_h ~ treatment, data = .)
 
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: p =            . Is there a procedural artifact in this
-# experiment?
-
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 # =====================================================================
 # PART 4 · DID THE REAL TREATMENT DO ANYTHING?
@@ -100,35 +70,11 @@ knees_df %>%
 # YOUR TURN. How big is it? Same filter, then cohens_d() instead of
 # t.test().
 
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: p =            d =
-#
-# Two comparisons, both chosen BEFORE looking at the data -- that is
-# what makes them legitimate. Three groups at once is a one-way ANOVA,
-# which is Week 8.
-
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 # =====================================================================
 # PART 5 · WHAT THE DESIGN BOUGHT
 # =====================================================================
 
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: In the sponge experiment from lecture the sham control
-# (foam) DID differ from the bare control, and the living sponges added
-# nothing. Here it came out the other way around. One sentence: what
-# would you have concluded in this study if the knee arm had never
-# been run?
-
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 # ── Part 5.1 · What the design bought (bonus) ─────────────────────────
 # YOUR TURN. This design is unbalanced (8, 7, 7). Compare the standard

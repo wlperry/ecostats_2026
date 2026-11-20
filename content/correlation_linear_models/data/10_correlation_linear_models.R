@@ -2,9 +2,8 @@
 # 10 · CORRELATION AND LINEAR MODELS — IN-CLASS SKELETON
 # Ecological Statistics
 #
-# Boxed sections marked with rows of * * * * are the written-answer
-# questions from the worksheet. Type your answer between the two
-# closing rows of stars, right here in this script.
+# Code only. Answer the worksheet questions on the worksheet,
+# not in this script.
 #
 # Parts 1-4 are correlation. Parts 5-8 are regression.
 # =====================================================================
@@ -34,13 +33,6 @@ booby_df
 # YOUR TURN. Plot future_aggression against visits_as_nestling. Look at
 # the shape before you compute anything.
 
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: Is the trend straight, or is there a curve in it? Any
-# point far off on its own?
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 # ── Part 2.2 · Correlation ────────────────────────────────────────────
 # YOUR TURN. The coefficient on its own, then the test that comes with
@@ -49,23 +41,6 @@ booby_df
 # ── Part 2.3 · Correlation ────────────────────────────────────────────
 # YOUR TURN. Save the coefficient as r_booby, then square it.
 
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: Fill these in from the output above.
-#   r =                 p =                 r squared =
-#
-# What share of the variation do the two variables share?         %
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: Write one sentence stating what the correlation means
-# biologically — without using the word "cause."
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 # =====================================================================
 # PART 3 · CORRELATION ASSUMPTIONS
@@ -88,24 +63,6 @@ q2 <- ggplot(booby_df, aes(sample = future_aggression)) +
 
 (h1 / h2) | (q1 / q2)
 
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: H0 here is "these data ARE normal." Do both variables
-# pass?
-#   visits:     p =              pass?
-#   aggression: p =              pass?
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: One of them lands very close to 0.05 while its QQ plot
-# looks fine. At n = 24, which do you believe, and does it change the
-# coefficient you report?
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 # =====================================================================
 # PART 4 · WHEN NORMALITY FAILS
@@ -119,23 +76,6 @@ q2 <- ggplot(booby_df, aes(sample = future_aggression)) +
 # YOUR TURN. Run cor.test() twice on the same two columns: once the
 # default way, once with method = "spearman".
 
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: Which coefficient do you report for these data, and why?
-#   Pearson r =                 Spearman rho =
-#
-#   I report                because
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: Spearman works on ranks. What did you give up by switching
-# to it?
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 # =====================================================================
 # PART 5 · FITTING A REGRESSION
@@ -145,26 +85,6 @@ q2 <- ggplot(booby_df, aes(sample = future_aggression)) +
 # YOUR TURN. Plot age_years against proportion_black, fit the model as
 # lion_model, and print its summary. The formula is response ~ predictor.
 
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: Write the fitted equation, then the slope as a sentence in
-# the units of the data.
-#   age =              +              x proportion_black
-#
-#   For every 0.1 more black on the nose, predicted age goes up by
-#         years.
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: The intercept is the predicted age at proportion_black = 0.
-# The youngest lion measured was 1.1 years old. Is the intercept a
-# statement about newborn lions? Why not?
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 # ── Part 5.2 · Fitting a regression ───────────────────────────────────
 # YOUR TURN. Same plot again, with the fitted line and its confidence
@@ -179,13 +99,6 @@ predict(lion_model, new_lion, interval = "confidence")
 
 predict(lion_model, new_lion, interval = "prediction")
 
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: Which interval is wider, and what question does each one
-# answer?
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 # =====================================================================
 # PART 6 · SUMS OF SQUARES
@@ -203,30 +116,10 @@ mean_age <- mean(lion_df$age_years)
 #   ss_resid  — every observation from its own fitted value
 # Then print all three, and check that ss_reg + ss_resid gives ss_total.
 
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: Does the partition add up, and what fraction of the total
-# does the line account for?
-#   ss_reg + ss_resid =                 ss_total =
-#
-#   ss_reg / ss_total =
-#   Where have you seen that number before?
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 # ── Part 6.2 · Sums of squares ────────────────────────────────────────
 # YOUR TURN. Get the same three numbers out of R in one call.
 
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: Match the table to what you computed.
-#   Sum Sq, proportion_black row =        Sum Sq, Residuals row =
-#
-#   Df =        and             Mean Sq = Sum Sq /
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 # ── Part 6.3 · Sums of squares ────────────────────────────────────────
 # FILLED IN — subsetting a summary object by [row, column] is fiddly.
@@ -234,14 +127,6 @@ summary(lion_model)$coefficients
 
 summary(lion_model)$coefficients[2, 3]^2
 
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: Compare that to the F value in the ANOVA table. What does
-# the match tell you about the two tests?
-#   t squared =                 F =
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 # =====================================================================
 # PART 7 · REGRESSION ASSUMPTIONS
@@ -258,24 +143,6 @@ par(mfrow = c(1, 1))
 # YOUR TURN. Test the residuals for normality. Note what goes inside
 # the test: residuals(lion_model), not lion_df$age_years.
 
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: One line per assumption. Say what you looked at, not just
-# pass or fail.
-#   Linearity (residuals vs fitted):
-#   Equal variance (scale-location):
-#   Normality (QQ + Shapiro p =        ):
-#   Influential points (Cook's distance):
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: Would you report this model as it stands? One sentence.
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 # =====================================================================
 # PART 8 · THE FIGURE YOU HAND IN

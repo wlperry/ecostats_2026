@@ -1,378 +1,158 @@
 ---
-order: 13
+order: 14
 week: 9
-title: "Homework 13 — Factorial ANOVA"
-subtitle: "Factorial ANOVA"
-description: "Two-factor / factorial ANOVA."
+title: "Homework 4 — Two-Way ANOVA"
+subtitle: "Covers Analysis of Variance and both Two-Way ANOVA sessions"
+description: "Do shrubs and trees differ in leaf area? A one-way ANOVA says no. A two-way ANOVA says it depends on where you are, and the answer flips sign between locations."
 author: "Bill Perry"
 ---
 
-[📥 Leaf area data](data/reich_leaf_area.csv){.btn .btn-primary download="reich_leaf_area.csv"}
+[📥 Leaf area data](data/reich_leaf_area.csv){.btn .btn-primary download="reich_leaf_area.csv"} [📥 Answer sheet (.docx)](factorial_anova_answer_sheet.docx){.btn .btn-primary download="factorial_anova_answer_sheet.docx"}
 
 ::: callout-note
 ## 📚 Where these data come from
 
-**Source:** Quinn, G.P. & Keough, M.J. (2002), *Experimental Design and Data Analysis for Biologists*, **Ch. 9** — Box 9-2. The original study is Reich, P.B., Walters, M.B., Ellsworth, D.S., et al. (1998), *Oecologia* 114: 471–482.
+**Book source:** Quinn, G.P. & Keough, M.J. (2002), *Experimental Design and Data Analysis for Biologists*, **Ch. 9**, Box 9-2 (`reich.csv`).
 
-Leaf area was measured on woody plants at **four locations** spanning a huge climatic range — New Mexico, South Carolina, Venezuela and Wisconsin — and each plant was classified by **growth form**: shrub or tree. The question is whether the shrub/tree difference in leaf area is the same everywhere, or whether it depends on where you are.
+**Original study:** Reich, P.B., Walters, M.B., Ellsworth, D.S., et al. (1998). *Oecologia* 114: 471–482.
 
-**In class you analysed the crayfish common-garden experiment.** This is the same design class — a two-factor factorial with badly unequal cell sizes — on a different question, and it behaves differently in a way worth finding.
+**What we changed:** nothing. The columns are the book's `LOCATION`, `FUNCTION`, `LEAFAREA`.
 :::
+
+## The data
+
+58 woody plants from **four locations** with very different climates. Each plant is a shrub or a tree.
+
+| Column | What it is | Role |
+|-------------|--------------------------------------------|-------------|
+| `LOCATION` | `Newmex`, `Scarolin`, `Venezuel`, `Wiscons` | factor |
+| `FUNCTION` | `Shrub` or `Tree` | factor |
+| `LEAFAREA` | leaf area (cm²) | response |
+
+**The question:** do shrubs and trees differ in leaf area, and is the difference the same everywhere?
 
 ::: callout-warning
-## ⚠️ Three things about this file
+## ⚠️ Two things about this file
 
-1.  It uses a **`.`** to mark a missing value. Check `class()` on your response column before you model anything — if it came in as `character`, that is why. `read_csv(..., na = c("", "NA", "."))` is the fix.
-2.  The cell sizes run from **2 to 21**. Every cell is filled, so every term is estimable, but nothing about this design is balanced.
-3.  **Look at a histogram of the raw response before you fit.** Leaf areas are a classic case where the untransformed scale will not pass a normality check. You are allowed to transform — but say so, and say why.
+1.  A **`.`** marks one missing value, so `LEAFAREA` reads in as text. Use `read_csv(..., na = c("", "NA", "."))`.
+2.  `FUNCTION` is a **reserved word** in R. After `clean_names()`, rename it: `rename(func = \`function\`)`.
 :::
 
-```{r setup_libraries}
-library(skimr)
-library(patchwork)
-library(janitor)
-library(readxl)
-library(car)
-library(broom)
-library(emmeans)
-library(effectsize)
-library(tidyverse)
+## How this homework works
 
-theme_set(theme_light())
-```
+The code is from the **Analysis of Variance** and **Two-Way ANOVA** skeletons. Reuse it.
 
-# Assignment Overview
+- Start a new script, `scripts/hw4_leaf_area.R`, and put the data in `data/`.
+- Work through the Parts in order.
+- Answer the ten ✏️ questions on the **answer sheet**. Q9 is your final figure.
 
-This homework assignment analyzes the Reich et al. leaf-area data to examine whether the difference in leaf area between **shrubs** and **trees** is consistent across four **locations**, using a two-way factorial ANOVA on an unbalanced design.
-
-## Learning Objectives
-
-By completing this assignment, you will be able to:
-
-1.  **Understand two-way ANOVA concepts and applications**
-2.  **Perform exploratory data analysis for factorial designs**
-3.  **Conduct two-way ANOVA analysis**
-4.  **Test statistical assumptions for ANOVA**
-5.  **Interpret main effects and interactions**
-6.  **Create publication-quality figures**
-7.  **Write scientific methods and results sections**
-
-## Data Description
-
-The dataset contains leaf-area measurements on woody plants sampled at four locations, each plant classified as a shrub or a tree. There are 58 rows, one of which has a missing response.
-
-**Key variables:**
-
-- \- `LOCATION`: sampling location (Newmex, Scarolin, Venezuel, Wiscons) — 4 levels
-- \- `FUNCTION`: growth form (Shrub vs Tree) — 2 levels
-- \- `LEAFAREA`: leaf area (cm²) — the response variable
-
-Note that `FUNCTION` is a reserved word in R. `janitor::clean_names()` will lower-case it, and you should rename it to something safe — `func`, say — before you use it in a formula.
-
-------------------------------------------------------------------------
-
-# Part 1: Data Loading and Preparation
-
-## 1.1 Load and Clean the Data
-
-```{r load_crayfish_data}
+```{r setup}
 #| message: false
 #| warning: false
-#| paged-print: false
+library(janitor)
+library(car)          # Anova(), leveneTest()
+library(emmeans)
+library(effectsize)   # eta_squared()
+library(tidyverse)
 
-```
-
-```{r clean_crayfish_data}
-
-```
-
-------------------------------------------------------------------------
-
-# Part 2: Statistical Analysis Setup
-
-## 2.1 Analysis Type and Model
-
-**Type of Analysis:** Two-way factorial ANOVA
-
-**Model Equation:** Leaf area = μ + Location + Function + (Location × Function) + ε
-
-Where:
-
-- \- Leaf area = leaf area, cm² (transform it if your diagnostics tell you to)
-- \- Location = sampling location (4 levels)
-- \- Function = growth form (Shrub vs Tree)
-- \- Location × Function = interaction between the two
-- \- ε = random error
-
-**Hypotheses:**
-
-- *Main Effect*
-  - *- Location:*
-    - \- H₀: μ_Newmex = μ_Scarolin = μ_Venezuel = μ_Wiscons
-    - \- H₁: At least one location mean differs from the others
-  - *- Function:*
-    - \- H₀: μ_Shrub = μ_Tree (no difference in leaf area between growth forms)
-    - \- H₁: μ_Shrub ≠ μ_Tree
-- *Interaction Effect:*
-  - \- H₀: The shrub–tree difference is the same at every location
-
-  - \- H₁: The shrub–tree difference depends on location
-
-**Variables:**
-
-- \- Response: leafarea (continuous, cm²)
-- \- Factor 1: location (categorical, 4 levels)
-- \- Factor 2: func (categorical, 2 levels: Shrub, Tree)
-
-**Because the design is unbalanced, use Type III sums of squares** — `car::Anova(model, type = 3)` — and set `options(contrasts = c("contr.sum", "contr.poly"))` **before** you fit the model.
-
-------------------------------------------------------------------------
-
-# Part 3: Exploratory Data Analysis
-
-## 3.1 Summary Statistics
-
-```{r data_summary_basic}
-#| paged-print: false
-
-# leaf_df %>% group_by(location, func) %>% 
-# skim()
-```
-
-## 3.2 Exploratory Visualizations
-
-```{r histogram_of_response}
-
-```
-
-```{r boxplot_main_effects}
-
-```
-
-```{r interaction_plot}
-
+options(contrasts = c("contr.sum", "contr.poly"))   # for Anova(type = 3)
 ```
 
 ------------------------------------------------------------------------
 
-# Part 4: Two-Way ANOVA Analysis
+# Part 1 · Read the data
 
-## 4.1 Fit the ANOVA Model
+Read the file **without** the `na =` fix first and check `class(leaf_df$LEAFAREA)`. Then read it again **with** the fix, `clean_names()`, rename `function` to `func`, drop the missing row, and make `location` and `func` factors. Show the number of plants in each cell with `count(location, func)`.
 
-```{r anova_model}
-
-```
-
-Car ANOVA for unbalanced
-
-```{r}
-# Anova(????, type = 3)
-```
-
-## 4.2 Effect Sizes
-
-The `effectsize` package does this in one line each — no sums of squares by hand, and it
-reports a confidence interval with every estimate. It is already loaded in the setup chunk
-at the top.
-
-**▶ Run this** on your fitted model:
-
-```{r effect_sizes}
-# eta_squared(leaf_model, partial = FALSE)
-#
-# omega_squared(leaf_model, partial = FALSE)
-```
-
-Each gives you one row per term — `location`, `func` and `location:func` — with the
-estimate and its 95% CI.
-
-To get the small / medium / large label without looking it up in a table:
-
-```{r effect_size_interpretation}
-# eta_squared(leaf_model, partial = FALSE) %>%
-#   interpret_eta_squared()
-```
-
-### What the two numbers mean
-
-- **Eta-squared (η²)** is the proportion of total variance explained by that term:
-  η² = SS_term / SS_total. If η² = 0.10 for `func`, then 10% of the variance in leaf area
-  is explained by whether the plant is a shrub or a tree.
-- **Omega-squared (ω²)** is the same idea corrected for bias. η² always overestimates a
-  little, especially with small samples; ω² is the more honest estimate. They will be close.
-
-Use `partial = FALSE` so the terms are fractions of the *same* total and can be compared to
-each other. (`partial = TRUE`, the default, divides each term by itself plus the residual,
-which is useful but does not add up to anything.)
-
-### Interpretation guidelines
-
-```
-Effect Size     η² / ω²       Interpretation
-Small           0.01          1% of variance explained
-Medium          0.06          6% of variance explained
-Large           0.14          14% of variance explained
-```
-
-✏️ **Your turn:** Fill in from your own output, then answer the question underneath.
-
-```
-                eta2      omega2    label
-location      ______     ______    ______
-func          ______     ______    ______
-location:func ______     ______    ______
-```
-
-A term can be highly significant and still explain very little. Which of your three terms
-has the smallest p-value, and which has the largest effect size? Are they the same term —
-and if not, what does that tell you about what p-values measure?
-
-```
-____________________________________________________________
-
-____________________________________________________________
-```
-
-### ⚠️ The part that is different from class
-
-In class, all three terms were significant and you read the interaction first. **Here, one
-of your two main effects will not be significant.** Before you write "growth form does not
-affect leaf area," do this:
-
-**▶ Run the simple effects** — the shrub–tree contrast *separately within each location*:
-
-```{r simple_effects_by_location}
-# pairs(emmeans(leaf_model, ~ func | location))
-```
-
-Then answer:
-
-1.  Is the shrub–tree difference zero at **every** location, or does it differ between
-    locations in **direction** as well as size?
-
-```
-____________________________________________________________
-```
-
-2.  Given your answer, explain in one or two sentences **how a factor can have a
-    non-significant main effect and still matter enormously.** What is the main-effect test
-    averaging over, and why does that average come out near zero here?
-
-```
-____________________________________________________________
-
-____________________________________________________________
-```
-
-3.  Write the one sentence you would put in a results section. It must not contain a claim
-    that is false at any of the four locations.
-
-```
-____________________________________________________________
-```
-
-## 4.3 Post-hoc Tests
-
-```{r emmeans_main_effects}
-# Estimated marginal means for main effects
+```{r part1}
 
 ```
 
-```{r emmeans_pairwise_comparisons}
-# Pairwise comparisons with Sidak correction
-
-```
-
-```{r emmeans_compact_letter_display}
-
-```
-
-```{r emmeans_interaction_effect}
-# Estimated marginal means for interaction effect
-
-```
-
-```{r emmeans_interaction_cld}
-# Compact letter display for interaction effect
-
-```
-
-```{r emmeans_interaction_plot_custom}
-# Custom interaction plot using emmeans results
-# emmeans_interaction_df <- as.data.frame(emmeans_interaction)
-# 
-# emmeans_interaction_plot <- emmeans_interaction_df %>%
-#   ggplot(aes(x = location, y = emmean, color = func, group = func)) +
-#   geom_point(size = 3, position = position_dodge(width=0.2)) +
-#   geom_line(size = 1, position = position_dodge(width=0.2)) +
-#   geom_errorbar(aes(ymin = lower.CL, ymax = upper.CL), 
-#                 width = 0.1, size = 1,
-#                 , position = position_dodge(width=0.2)) +
-#   labs(x = "Location", 
-#        y = "Estimated Marginal Mean Leaf Area",
-#        color = "Growth form",
-#        title = "Estimated Marginal Means with 95% Confidence Intervals") +
-#   scale_color_manual(values = c("Shrub" = "coral", "Tree" = "darkblue")) +
-#   theme_classic()
-# 
-# emmeans_interaction_plot
-```
+✏️ **Q1.** What class was `LEAFAREA` before the fix, and why? How many plants are left? Which cell has the fewest plants and which the most?
 
 ------------------------------------------------------------------------
 
-# Part 5: Assumption Testing
+# Part 2 · Look first
 
-## 5.1 Check ANOVA Assumptions
+Make a boxplot of `leafarea` by `location`, filled by `func`. Then make an interaction plot: the mean leaf area of each cell, `location` on the x-axis, one colored line per `func` (`stat_summary(fun = mean, geom = "line")` with `aes(group = func)`).
 
-```{r assumption_testing_base}
-# # Create diagnostic plots
-# par(mfrow = c(2, 2))
-# plot(leaf_model)
-# par(mfrow = c(1, 1))
+```{r part2}
 
 ```
 
-## 5.2 Formal Assumption Tests
-
-```{r normality_test}
-
-```
-
-```{r homogeneity_test}
-
-```
+✏️ **Q2.** Are the lines in the interaction plot parallel? In which location is the shrub–tree difference biggest, and which way does it go?
 
 ------------------------------------------------------------------------
 
-# Part 6: Publication Figure
+# Part 3 · Check the assumptions, and fix them
 
-## 6.1 Create Publication-Quality Figure
+Fit `lm(leafarea ~ location * func)`. Check the residuals with `plot()` (2 × 2), `shapiro.test(residuals())` and `leveneTest()`. Then refit with `log(leafarea)` as the response and check again.
 
-```{r publication_figure}
+```{r part3}
 
 ```
 
+✏️ **Q3.** Which assumption fails on the raw scale? Does the log fix it? Give the Shapiro *p* for both. Use the log model from here on.
+
 ------------------------------------------------------------------------
 
-# 
+# Part 4 · The one-way ANOVA first
 
-# Submission Guidelines
+Ignore location. Fit `lm(log(leafarea) ~ func)` and run `Anova()`.
 
-## What to turn in -
+```{r part4}
 
-1.  An **R script** (`13_factorial_anova_homework.R`) with all of your code, plus the data file if you modified the original. All of the code should run top to bottom with what you turn in. **(2 points)**
+```
 
-2.  **A PDF of your final figure** from Part 6, saved with `ggsave()`. **(2 points)**
+✏️ **Q4.** Report *F*, df and *p*. What would you conclude about shrubs and trees from this alone?
 
-3.  **Comments in the script** that say what each block of code is doing and what you concluded from the output - credit will be given even if the code does not work, as long as you detail what you were trying to do. As we move further into statistics you will be expected to interpret the results, not just produce them. **(2 points)**
+------------------------------------------------------------------------
 
-No quarto file and no rendered html are required for this assignment - a commented `.R` script is enough.
+# Part 5 · The two-way ANOVA
 
-## Points
+Run `Anova(type = 3)` on the log model from Part 3. Then run `Anova(type = 2)` and plain `anova()` (Type I) on the same model.
 
-- summary stats - 2 point
-- assumptions and hypotheses - 3 points
-- exploratory graphs - 2 point
-- interpretation - 4 points
-- Final figure - 1 point
-- Results - 2 points
+```{r part5}
+
+```
+
+✏️ **Q5.** Report *F*, df and *p* for `location`, `func` and `location:func` from the Type III table. Which terms are significant?
+
+✏️ **Q6.** Compare the `func` and `location` rows across Types I, II and III. Do they change? Why can they change in **this** design, when they would not in a balanced one?
+
+------------------------------------------------------------------------
+
+# Part 6 · Where do shrubs and trees differ?
+
+Get the shrub–tree contrast **within each location** with `pairs(emmeans(model, ~ func | location))`. Then get partial η² with `eta_squared()`.
+
+```{r part6}
+
+```
+
+✏️ **Q7.** In which locations do shrubs and trees differ, and in which direction? Use this to explain why `func` is not significant as a main effect, and why the one-way ANOVA in Part 4 missed the story.
+
+✏️ **Q8.** Which term has the largest partial η²? The Venezuela result drives the interaction. How many **shrubs** is that result based on, and how much would you trust it?
+
+------------------------------------------------------------------------
+
+# Part 7 · The final figure
+
+One publication-quality figure of the **model's** means: `emmeans(model, ~ func | location, type = "response")` gives back-transformed means and 95% CIs. Plot them with `location` on the x-axis, colored by `func`, with points and error bars (`position_dodge()`), axis labels with units, and a theme. Save it with `ggsave()`.
+
+```{r part7}
+
+```
+
+✏️ **Q9.** Paste your final figure into the answer sheet.
+
+✏️ **Q10.** Write a 3–4 sentence results paragraph: the transformation and why, the interaction test (*F*, df, *p*), and the shrub–tree difference in the locations where it was significant, with the back-transformed means.
+
+------------------------------------------------------------------------
+
+# What to turn in
+
+1.  **The answer sheet** (Word) with Q1–Q10 answered and your figure pasted in at Q9.
+2.  **Your script**, `hw4_leaf_area.R`. It must run top to bottom. It is not graded line by line, but an answer your script can't reproduce earns no credit.
+
+**Points:** 30, 3 per question. **3** great: correct and fully explained. **2** good: the right idea with a piece missing or a small error. **1** ok: attempted, but mostly wrong or unexplained. **0**: missing.

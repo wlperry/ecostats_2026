@@ -11,9 +11,8 @@
 # reading data. Spend your time on the blanks: the actual filter(),
 # select(), mutate(), and case_when() logic.
 #
-# Boxed sections marked with rows of * * * * are written-answer
-# questions from the worksheet. Type your answer between the two
-# closing rows of stars, right in this script.
+# Code only. Answer the worksheet questions on the worksheet,
+# not in this script.
 # =====================================================================
 
 
@@ -32,27 +31,6 @@ pine_excel_df <- read_excel("data/pine_data.xlsx")
 # You do not need glimpse() here -- click pine_csv_df in the Variables
 # pane in Positron and look at it there.
 
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: List the six column names and, for each, its type
-# (<chr>, <dbl>, etc.):
-#   Column:              Type:
-#
-#   Column:              Type:
-#   Column:              Type:
-#
-#   Column:              Type:
-#
-#   Column:              Type:
-#
-#   Column:              Type:
-
-
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-
 
 # =====================================================================
 # PART 2 · filter() — PICKING ROWS
@@ -67,8 +45,6 @@ pine_csv_df |> filter(needle_length_mm > 17) |> head()
 # ── Part 2.2 · `filter()` ───────────────────────────────────────────────
 # YOUR TURN. A filter() that keeps only sunny (side == "sunny") needles
 # longer than 15 mm. Remember: == for equality, not =.
-
-
 
 
 # =====================================================================
@@ -89,8 +65,6 @@ pine_csv_df |> filter(team %in% c("botany", "waterbugs"))
 # instead -- same result, longer code.
 
 
-
-
 # ── Part 2b.3 · `filter()` ──────────────────────────────────────────────
 # FILLED IN.
 survey_df <- tibble(
@@ -107,8 +81,6 @@ survey_df |> filter(!is.na(count))
 # ALSO longer than 14mm -- think about whether you need ,/& or |.
 
 
-
-
 # =====================================================================
 # PART 3 · select() — PICKING COLUMNS
 # =====================================================================
@@ -121,8 +93,6 @@ pine_csv_df |> select(-source_file) |> head()
 
 # ── Part 3.2 · `select()` ───────────────────────────────────────────────
 # YOUR TURN. A select() that keeps every column EXCEPT replicate.
-
-
 
 
 # =====================================================================
@@ -145,20 +115,6 @@ pine_csv_df |>
 # needle_length_mm > 15 and "short" otherwise. Use if_else().
 
 
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: Does mutate() change how many ROWS your data frame has?
-# How many COLUMNS did each example above add?
-
-
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-
-
 # =====================================================================
 # PART 4b · case_when() — RECODING AND BINNING
 # =====================================================================
@@ -178,21 +134,8 @@ pine_csv_df |>
 
 # ── Part 4b.2 · `case_when()` ───────────────────────────────────────────
 # YOUR TURN. Change the two cutoffs (13 and 16) to different values of
-# your choosing. How do the counts in each bin shift?
+# your choosing.
 
-
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: What happens if you delete the TRUE ~ "long" line and
-# rerun? Try it, then explain why that's dangerous.
-
-
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 # ── Part 4b.3 · `case_when()` ───────────────────────────────────────────
 # FILLED IN.
@@ -227,8 +170,6 @@ pine_csv_df |> arrange(desc(needle_length_mm))
 # needle_length_mm from longest to shortest.
 
 
-
-
 # =====================================================================
 # PART 6 · THE FULL PIPELINE
 # =====================================================================
@@ -251,21 +192,6 @@ pine_wrangled_df <- pine_csv_df |>
 
 head(pine_wrangled_df)
 
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: In your own words, read this pipeline out loud, step by
-# step, the way we did in lecture.
-#   Take pine_csv_df, then ______________________, then ______________________,
-#
-#
-#   then ______________________, then ______________________.
-
-
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-
 
 # =====================================================================
 # PART 7 · FINDING DUPLICATE ROWS
@@ -278,15 +204,6 @@ needle_check_df <- read_csv("data/pine_needles_error.csv")
 nrow(needle_check_df)
 n_distinct(needle_check_df)
 
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: Do nrow() and n_distinct() match? What does that tell you?
-
-
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 # ── Part 7.2 · Finding duplicate rows ───────────────────────────────────
 # FILLED IN.
@@ -295,17 +212,6 @@ needle_check_df |> filter(duplicated(needle_check_df))
 needle_clean_df <- needle_check_df |> distinct()
 
 nrow(needle_clean_df)
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN: How many rows did distinct() remove? Why does this matter
-# for the sample size you'd report?
-
-
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 
 # =====================================================================
@@ -328,22 +234,9 @@ write_csv(pine_out_df, "output/pine_data_wrangled.csv")
 # output/pine_needles_cleaned.csv.
 
 
-
-
 # =====================================================================
 # PART 9 · REVIEW AND CHECKPOINT
 # =====================================================================
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# YOUR TURN -- BEFORE YOU MOVE ON: Run your whole script top to bottom.
-#   Ran cleanly?  Y / N  -- if not, the error was:
-
-
-
-
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 
 # =====================================================================
