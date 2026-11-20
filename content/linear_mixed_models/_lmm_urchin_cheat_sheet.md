@@ -167,30 +167,30 @@ Adjusted ICC: 0.496
 
 **Example: ICC near 0, where patches don't matter** (made-up numbers, same treatment)
 
-| | Quadrats | Patch mean |
-|---|---|---|
-| Patch A | 10, 30, 5, 25, 20 | 18 |
-| Patch B | 22, 8, 28, 12, 20 | 18 |
+|         | Quadrats          | Patch mean |
+|---------|-------------------|------------|
+| Patch A | 10, 30, 5, 25, 20 | 18         |
+| Patch B | 22, 8, 28, 12, 20 | 18         |
 
 The patch means are the same, so all the variation is quadrat to quadrat. Knowing the patch tells you nothing, and the quadrats act like independent replicates.
 
 **Example: ICC near 1, where patch is everything**
 
-| | Quadrats | Patch mean |
-|---|---|---|
-| Patch A | 5, 6, 5, 4, 5 | 5 |
-| Patch B | 40, 41, 39, 40, 40 | 40 |
+|         | Quadrats           | Patch mean |
+|---------|--------------------|------------|
+| Patch A | 5, 6, 5, 4, 5      | 5          |
+| Patch B | 40, 41, 39, 40, 40 | 40         |
 
 Quadrats inside a patch are nearly identical. You measured the same number 5 times, so each patch is really **one** data point.
 
 **The real urchin data: ICC = 0.50, right in the middle.** These are the 4 patches with urchins removed (0%), all given the same treatment:
 
-| Patch | Quadrats | Patch mean |
-|---|---|---|
-| 13 | 46, 44, 41, 29, 11 | 34 |
-| 14 | 65, 55, 61, 74, 55 | 62 |
-| 15 | 0, 5, 0, 0, 6 | **2** |
-| 16 | 30, 82, 70, 27, 83 | 58 |
+| Patch | Quadrats           | Patch mean |
+|-------|--------------------|------------|
+| 13    | 46, 44, 41, 29, 11 | 34         |
+| 14    | 65, 55, 61, 74, 55 | 62         |
+| 15    | 0, 5, 0, 0, 6      | **2**      |
+| 16    | 30, 82, 70, 27, 83 | 58         |
 
 - **Among patches (big):** same treatment, but patch 15 is nearly bare while patch 14 is at 62%. That's the patch variance (294).
 - **Within patches (also big):** patch 16 ranges from 27 to 83. That's the residual variance (299).

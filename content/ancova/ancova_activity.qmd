@@ -37,10 +37,10 @@ format:
 ::: callout-important
 ## What you hand in
 
--   **All of today's code is right here in this activity.** Type it into your script as we go and run it chunk by chunk. The skeleton has the plumbing — libraries and the two data reads — and nothing else. Every line of statistics you type yourself.
+-   **All of today's code is right here in this activity.** Type it into your script as we go and run it chunk by chunk. The skeleton has the libraries, the two data reads, and **the ANCOVA recipe** as one comment block — every line of statistics you type yourself.
 -   **Section 6 has no code here either.** By then you will have run the whole workflow once, so you start it again on your own.
 -   The **Q** boxes are **things to think about**, not inline homework. Read them, talk them over, answer them in your head. You do **not** have to type answers into the script, and they are not graded.
--   The **write-up** at the bottom — sections 8, 9, and 10 — *is* graded. Those answers go into the script as `#` comments.
+-   The **write-up** at the bottom — sections 8, 9, and 10 (Q20–Q26) — *is* graded. Those answers go into the script as `#` comments.
 -   Hand in `scripts/17_ancova.R`. Run it top to bottom (**Ctrl/Cmd + Shift + Enter**) first — it must run with no errors.
 :::
 
@@ -89,7 +89,7 @@ A covariate does **two** different jobs, and they are worth keeping separate in 
 >
 > Sections 1–2: meet the fruitflies, then run the one test that decides everything else.
 
-# Section 1 · The fruitfly data
+# Section 1 · The data
 
 *Written for you in the skeleton — run it and read it.*
 
@@ -98,9 +98,7 @@ A covariate does **two** different jobs, and they are worth keeping separate in 
 library(janitor)
 library(car)          # Anova()
 library(emmeans)      # emmeans(), emtrends()
-library(broom)
 library(lmtest)       # bptest()
-library(interactions) # sim_slopes()
 library(tidyverse)
 
 options(scipen = 999)
@@ -120,7 +118,7 @@ The design is cleverer than it first looks:
 | Eight virgin females daily | 8 | **yes** |
 
 ``` r
-# ---- 1 The fruitfly data ---------------------------------
+# ---- 1 The data ------------------------------------------
 p_df <- read_csv("data/partridge.csv", show_col_types = FALSE) %>%
   clean_names() %>%
   mutate(
@@ -137,10 +135,24 @@ p_df <- read_csv("data/partridge.csv", show_col_types = FALSE) %>%
     )
   )
 
-head(p_df)
-
 count(p_df, treat)
+
+g_df <- read_csv("data/gray_I3_I8.csv", show_col_types = FALSE) %>%
+  clean_names() %>%
+  filter(mass_g > 0) %>%
+  mutate(log_len  = log10(length_mm),
+         log_mass = log10(mass_g))
+
+count(g_df, lake)
 ```
+
+The grayling (`g_df`) wait until section 6.
+
+::: callout-tip
+## 🧾 The recipe in your skeleton
+
+Right under the data reads is a comment block called **THE ANCOVA RECIPE** — the whole workflow in four steps, written with `y`, `x` and `A`. Every section today is that recipe with the real names swapped in. When you are stuck, look there first.
+:::
 
 ::: callout-warning
 **⚠️ Why the labels are built from `partners` and `type`, not from `treatmen`**
@@ -181,11 +193,7 @@ Anova(slopes_model, type = 3)
 
 ✏️ **Q4:** Write down the *F* and *p* for the `thorax:treat` interaction. Are the slopes homogeneous?
 
-✏️ **Q5:** This is a test you **want** to fail to reject. Name one other test you have run this semester where that was also true.
-
-✏️ **Q6:** Suppose it had come back *p* = 0.001. What would you do next, and what would you **not** be allowed to report?
-
-✏️ **Q7:** Look at the `treat` row in this table. Is it significant? Hold onto that — you are about to fit a different model and get a very different answer.
+✏️ **Q5:** Look at the `treat` row in this table. Is it significant? Hold onto that — you are about to fit a different model and get a very different answer.
 
 > 💡 **Key idea:** the interaction term asks whether the groups share one slope. If they do not, there is no single "difference between the groups" to report — the difference depends on where you are along the covariate. That is why this test comes first, before the model you intend to publish.
 
@@ -210,11 +218,9 @@ summary(ancova_model)
 Anova(ancova_model, type = 2)
 ```
 
-✏️ **Q8:** Both `thorax` and `treat` are significant now. In Q7 the `treat` row was not. Same data, same question — what changed?
+✏️ **Q6:** Both `thorax` and `treat` are significant now. In Q5 the `treat` row was not. Same data, same question — what changed?
 
-✏️ **Q9:** The `thorax` coefficient is about 136. What are its units, and what does it mean in fruitflies?
-
-✏️ **Q10:** `summary()` shows `treat1`, `treat2`, `treat3`, `treat4` — four coefficients for five groups. Why four, and what is the fifth group's effect?
+✏️ **Q7:** The `thorax` coefficient is about 136. What are its units, and what does it mean in fruitflies?
 
 **▶ Type this yourself** — check the assumptions on the final model:
 
@@ -228,7 +234,7 @@ shapiro.test(residuals(ancova_model))
 bptest(ancova_model)
 ```
 
-✏️ **Q11:** Do the diagnostics look acceptable? Which plot tells you about equal variances?
+✏️ **Q8:** Do the diagnostics look acceptable? Which plot tells you about equal variances?
 
 ------------------------------------------------------------------------
 
@@ -247,9 +253,13 @@ no_cov_model <- lm(longev ~ treat, data = p_df)
 Anova(no_cov_model, type = 2)
 
 Anova(ancova_model, type = 2)
+
+p_df %>%
+  group_by(treat) %>%
+  summarise(mean_thorax = mean(thorax))
 ```
 
-✏️ **Q12:** Fill this in from the two tables:
+✏️ **Q9:** Fill this in from the two tables. What fraction of the residual SS did one df of `thorax` remove?
 
 ```
                   residual SS   residual df   treat F
@@ -257,11 +267,7 @@ no covariate
 ANCOVA
 ```
 
-✏️ **Q13:** What fraction of the residual sum of squares did one degree of freedom of `thorax` remove?
-
-✏️ **Q14:** The treatment effect was significant **both** ways. So was the covariate worth including? Give a reason that is not about this particular *p*-value.
-
-✏️ **Q15:** The five groups have almost identical mean thorax lengths (check with `group_by(treat) %>% summarise(mean(thorax))`). Given that, which of the covariate's **two jobs** — confounding or noise — is it doing here?
+✏️ **Q10:** The five groups have almost identical mean thorax lengths. So which of the covariate's **two jobs** — confounding or noise — is it doing here?
 
 > 💡 **Key idea:** a covariate earns its place even when your groups are perfectly balanced on it. Balance kills the *confounding* problem; it does nothing about the *noise* problem. Measure the covariate anyway.
 
@@ -291,15 +297,9 @@ multcomp::cld(p_emm, Letters = letters)
 plot(p_emm, comparisons = TRUE)
 ```
 
-✏️ **Q16:** Put the adjusted means next to the raw means. How far apart are they, and why is the gap small here?
+✏️ **Q11:** Put the adjusted means next to the raw means. Why is the gap small here, and what thorax length are the means adjusted *to*? (Check `mean(p_df$thorax)`.)
 
-✏️ **Q17:** What covariate value are these means adjusted *to*? (Check `mean(p_df$thorax)`.)
-
-✏️ **Q18:** Read the letter display. Which groups form one block, and what do those groups have in common biologically?
-
-✏️ **Q19:** Say the result in one sentence about fruitflies — not about *F* and *p*. What exactly is costing them their lifespan?
-
-✏️ **Q20:** Four of the ten pairwise comparisons are not significant. Which four, and does that pattern support or undercut the conclusion in Q19?
+✏️ **Q12:** Read the letter display. Which groups form one block, and what do they have in common? Say the result in one sentence about fruitflies — what is costing them their lifespan?
 
 > 💡 **Key idea:** adjusted means are what ANCOVA compares — every group's predicted response **at the same covariate value**. When the groups are already balanced on the covariate, they land close to the raw means and the covariate is pure power. When the groups are *not* balanced, the two can differ a lot, and the raw means are the misleading ones.
 
@@ -317,18 +317,7 @@ Back to the Arctic grayling from **week 5** — lakes I3 and I8. Fish mass scale
 
 **Question:** do grayling in the two lakes have the same length–mass relationship?
 
-*Written for you in the skeleton:*
-
-``` r
-# ---- 6 Grayling allometry --------------------------------
-g_df <- read_csv("data/gray_I3_I8.csv", show_col_types = FALSE) %>%
-  clean_names() %>%
-  filter(mass_g > 0) %>%
-  mutate(log_len = log10(length_mm),
-         log_mass = log10(mass_g))
-
-count(g_df, lake)
-```
+You already read the data in section 1 (`g_df`).
 
 **Now you:**
 
@@ -336,13 +325,13 @@ a.  Plot `log_mass` against `log_len`, colored by `lake`, with a line per lake.
 b.  Run the homogeneity-of-slopes test — the interaction model, then `Anova(type = 3)`.
 c.  Decide whether you are allowed to fit `log_mass ~ log_len + lake`.
 
-> 💡 **Hint:** the only things that change from sections 2–3 are the data frame and the three variable names.
+> 💡 **Hint:** follow the recipe in your skeleton. Only the data frame and the three variable names change from sections 2–3.
 
-✏️ **Q21:** What is the *F* and *p* for the interaction? What does that forbid you from doing?
+✏️ **Q13:** What is the *F* and *p* for the interaction? What does that forbid you from doing?
 
-✏️ **Q22:** Fit `lm(log_mass ~ log_len + lake)` anyway and look at the `lake` term. It is wildly significant. Why is that number not reportable?
+✏️ **Q14:** Fit `lm(log_mass ~ log_len + lake)` anyway and look at the `lake` term. It is wildly significant. Why is that number not reportable?
 
-✏️ **Q23:** Compare the two lakes' length ranges (`group_by(lake) %>% summarise(min(length_mm), max(length_mm))`). What does that tell you about where you are allowed to compare them?
+✏️ **Q15:** Compare the two lakes' length ranges (`group_by(lake) %>% summarise(min(length_mm), max(length_mm))`). What does that tell you about where you are allowed to compare them?
 
 ------------------------------------------------------------------------
 
@@ -375,17 +364,28 @@ lens <- log10(c(200, 250, 300))
 pairs(emmeans(g_int, ~ lake | log_len, at = list(log_len = lens)))
 ```
 
-✏️ **Q24:** Write down each lake's slope with its SE. Which one is indistinguishable from 3, and what does isometry mean for a fish?
+✏️ **Q16:** Write down each lake's slope with its SE. Which one is indistinguishable from 3 (isometry — the fish keeps its shape), and what happens to the other lake's fish as they get longer?
 
-✏️ **Q25:** The other slope is below 3. In words: what happens to those fish as they get longer?
+✏️ **Q17:** Look at the contrasts at 200, 250 and 300 mm. At which length are the lakes indistinguishable, and what happens to the gap as fish get bigger?
 
-✏️ **Q26:** Look at the contrasts at 200, 250 and 300 mm. At which length are the lakes indistinguishable, and what happens to the gap as fish get bigger?
-
-✏️ **Q27:** You might have reached for `sim_slopes(..., johnson_neyman = TRUE)` here. Try it. What does it tell you, and why? (Read the warning carefully.)
-
-✏️ **Q28:** An additive ANCOVA would have reported one "lake effect." Name the biological finding it would have thrown away.
+✏️ **Q18:** An additive ANCOVA would have reported one "lake effect." Name the biological finding it would have thrown away.
 
 > 💡 **Key idea:** a significant interaction is not a failed analysis — it is usually the more interesting one. "These groups differ by a constant amount" is a weaker, less informative claim than "these groups differ in *how* they scale." When the data offer you the second, do not flatten it into the first.
+
+**Where is the `lake` row tested?** In Section 6, the `lake` row of the interaction model's `Anova(type = 3)` came out at *p* = 0.011. When a model contains an interaction, that main effect is the lake difference **where the covariate equals 0**. Here that's `log_len` = 0, a 1 mm fish. You move the zero by **centering**: subtract a value you care about from the covariate.
+
+**▶ Type this yourself:**
+
+``` r
+g_df <- g_df %>%
+  mutate(log_len_c = log_len - log10(250))
+
+Anova(g_int, type = 3)
+
+Anova(lm(log_mass ~ log_len_c * lake, data = g_df), type = 3)
+```
+
+✏️ **Q19:** Which rows changed between the two tables, and which stayed the same? What fish length is each `lake` row comparing the lakes at? Square the *t* ratio at 250 mm from Q17 and compare it with the new `lake` *F*.
 
 ------------------------------------------------------------------------
 
@@ -395,7 +395,7 @@ pairs(emmeans(g_int, ~ lake | log_len, at = list(log_len = lens)))
 
 ## Section 8 · Report the fruitfly model
 
-✏️ **Q29:** Fill in:
+✏️ **Q20:** Fill in:
 
 ```
 homogeneity of slopes   F(  ,  ) =        p =
@@ -405,17 +405,17 @@ adjusted mean, 8 virgin        ±
 adjusted mean, no females      ±
 ```
 
-✏️ **Q30:** A 3–4 sentence results paragraph. Report the slopes test, then the ANCOVA, then the adjusted means with the letter display. Say what value the means are adjusted to.
+✏️ **Q21:** A 3–4 sentence results paragraph. Report the slopes test, then the ANCOVA, then the adjusted means with the letter display. Say what value the means are adjusted to.
 
-✏️ **Q31:** One sentence on the biology: what does this experiment show costs a male fruitfly its lifespan, and which treatment groups let you rule out the alternative?
+✏️ **Q22:** One sentence on the biology: what does this experiment show costs a male fruitfly its lifespan, and which treatment groups let you rule out the alternative?
 
 ## Section 9 · Report the grayling model
 
-✏️ **Q32:** The interaction test, both slopes with their SEs, and the contrast at 250 mm.
+✏️ **Q23:** The interaction test, both slopes with their SEs, and the contrast at 250 mm.
 
-✏️ **Q33:** Two or three sentences reporting it. You are reporting an **interaction**, so report slopes — not an adjusted mean.
+✏️ **Q24:** Two or three sentences reporting it. You are reporting an **interaction**, so report slopes — not an adjusted mean.
 
-✏️ **Q34:** Why would it have been wrong to report a single "lake effect" for these fish? Answer in a way a reviewer would accept.
+✏️ **Q25:** Why would it have been wrong to report a single "lake effect" for these fish? Answer in a way a reviewer would accept.
 
 ## Section 10 · The final figure
 
@@ -427,7 +427,7 @@ One publication-quality figure. Pick **either** the fruitfly adjusted means with
 # ggsave("figures/17_ancova.pdf", width = 7, height = 5)
 ```
 
-✏️ **Q35:** If you drew the grayling figure, why must the two lines stop where the data stop? If you drew the fruitfly figure, why does the caption have to name the thorax length the means were adjusted to?
+✏️ **Q26:** If you drew the grayling figure, why must the two lines stop where the data stop? If you drew the fruitfly figure, why does the caption have to name the thorax length the means were adjusted to?
 
 ------------------------------------------------------------------------
 
@@ -454,8 +454,8 @@ Run your whole script top to bottom with **Ctrl/Cmd + Shift + Enter**. It must r
 
 **[Homework 17 — ANCOVA](../../homeworks/ancova_homework/ancova_homework.qmd)**
 
-Chirp rate against temperature in **two tree cricket species** — the whole workflow on your own: test the interaction first to see whether the slopes differ, then interpret the species effect at a common temperature with `emmeans()`, and check the assumptions before you trust any of it.
+Does grazing help or hurt scarlet gilia (*Ipomopsis*)? You run the ANOVA you would have run last month, then the ANCOVA, and the two disagree about the **direction** of the effect. Today's fruitflies had groups balanced on body size. These plants are not, and that is the twist.
 
-**Data:** [`cricket_chirp_rate.csv`](../../homeworks/ancova_homework/data/cricket_chirp_rate.csv) — Walker (1962), *Evolution* 16: 407–428.
+**Data:** [`ipomopsis.csv`](../../homeworks/ancova_homework/data/ipomopsis.csv) — Crawley (2007) *The R Book*, Ch. 12; the argument behind it is Paige & Whitham (1987) vs Bergelson & Crawley (1992).
 
-Start a new script for it — do not add it to `17_ancova.R`.
+Start a new script for it. Do not add it to `17_ancova.R`.

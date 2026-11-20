@@ -56,31 +56,31 @@ g_df <- read_csv("data/gray_I3_I8.csv", show_col_types = FALSE) %>%
          log_mass = log10(mass_g))
 
 # ---- Partridge & Farquhar fruitflies -- Quinn & Keough Box 12-1 ----
-# Build the treatment labels from the DESIGN columns, not from the
-# TREATMEN code order. PARTNERS = number of females (0/1/8);
-# TYPE = 0 newly inseminated (will NOT mate), 1 virgin (will mate),
-# 9 not applicable. Deriving them this way means the labels cannot
-# drift out of step with the data.
-partridge <- read.csv("data/partridge.csv")
-partridge$treatment <- factor(
-  dplyr::case_when(
-    partridge$PARTNERS == 0                       ~ "No females",
-    partridge$PARTNERS == 1 & partridge$TYPE == 0 ~ "One inseminated female daily",
-    partridge$PARTNERS == 8 & partridge$TYPE == 0 ~ "Eight inseminated females daily",
-    partridge$PARTNERS == 1 & partridge$TYPE == 1 ~ "One virgin female daily",
-    partridge$PARTNERS == 8 & partridge$TYPE == 1 ~ "Eight virgin females daily"
-  ),
-  levels = c("No females",
-             "One inseminated female daily", "Eight inseminated females daily",
-             "One virgin female daily",       "Eight virgin females daily")
-)
+# Same code as the activity. Labels come from partners + type, NOT the
+# treatmen codes (1 = 8 inseminated, 2 = none, 3 = 1 inseminated,
+# 4 = 1 virgin, 5 = 8 virgin) -- guessing those reverses the result.
+p_df <- read_csv("data/partridge.csv", show_col_types = FALSE) %>%
+  clean_names() %>%
+  mutate(
+    treat = factor(
+      case_when(
+        partners == 0               ~ "no females",
+        partners == 1 & type == 0   ~ "1 inseminated",
+        partners == 8 & type == 0   ~ "8 inseminated",
+        partners == 1 & type == 1   ~ "1 virgin",
+        partners == 8 & type == 1   ~ "8 virgin"
+      ),
+      levels = c("no females", "1 inseminated", "8 inseminated",
+                 "1 virgin", "8 virgin")
+    )
+  )
 ```
 
 ## Part 1 · From GLMs to ANCOVA {.divider}
 
 ## Where We Left Off
 
-::::: columns
+:::::: columns
 ::: {.column width="55%"}
 Covered last time — **linear mixed models**:
 
@@ -94,20 +94,16 @@ Covered in week 10 — **generalized** linear models:
 - Poisson, negative binomial, logistic
 :::
 
-::: {.column width="45%"}
+:::: {.column width="45%"}
 ::: callout-note
 **✅ Where today fits**
 
-Week 10 changed the **distribution**. Week 11 changed the **error
-structure**. Today changes neither — it goes back to the ordinary linear
-model and asks what happens when the predictors are **one categorical
-and one continuous at the same time**.
+Week 10 changed the **distribution**. Week 11 changed the **error structure**. Today changes neither — it goes back to the ordinary linear model and asks what happens when the predictors are **one categorical and one continuous at the same time**.
 
-This is the last of the general linear models, and the one that links
-the ANOVA half of the course to the regression half.
+This is the last of the general linear models, and the one that links the ANOVA half of the course to the regression half.
 :::
-:::
-:::::
+::::
+::::::
 
 ## ANCOVA Overview
 
@@ -132,10 +128,9 @@ the ANOVA half of the course to the regression half.
 
 ## Introduction to ANCOVA
 
-:::::: columns
-:::: {.column width="60%"}
-**ANCOVA = Analysis of COVAriance** — regression and ANOVA in one
-model. You use it when you have:
+::::: columns
+::: {.column width="60%"}
+**ANCOVA = Analysis of COVAriance** — regression and ANOVA in one model. You use it when you have:
 
 - a **continuous response** (Y)
 - a **categorical predictor** (factor A)
@@ -143,10 +138,9 @@ model. You use it when you have:
 
 **Two things it is for:**
 
-1. Compare group means **after adjusting** for the covariate
-2. Ask whether two or more **regression lines** differ — in slope, in
-   intercept, or both
-::::
+1.  Compare group means **after adjusting** for the covariate
+2.  Ask whether two or more **regression lines** differ — in slope, in intercept, or both
+:::
 
 ::: {.column width="40%"}
 ```{r l15-02}
@@ -181,39 +175,27 @@ ggplot(data, aes(x = x, y = y, color = group)) +
   theme(legend.position = "bottom")
 ```
 :::
-::::::
+:::::
 
 ## When to Use ANCOVA
 
-- **Common Applications of ANCOVA**
-  - **Increasing statistical power**
-    - The covariate (e.g., body size, initial temperature) explains some of the "noise" (residual error) in the response variable.
+Three reasons, and the next slides take them one at a time:
 
-    - By "removing" this variation, we reduce the residual error, making it easier to detect the true effect of our categorical factor.
-
-    - This results in a more powerful test of treatment effects.
-  - **Adjusting for confounding variables**
-    - Imagine your treatment groups happen to differ in their average covariate value (e.g., Group A was tested in a warmer room than Group B).
-
-    - ANCOVA allows you to separate the treatment effect from the covariate effect.
-  - **Testing equality of regression lines**
-    - Do treatments have the same relationship (slope) with a continuous variable?
+1.  **Power.** The covariate soaks up residual "noise," so the test of the factor gets stronger. *(the fruitflies)*
+2.  **Confounding.** The groups sit at different covariate values, so raw means mislead. ANCOVA compares them at a **common** covariate value.
+3.  **Comparing regression lines.** Do the groups share a slope at all? *(the grayling)*
 
 ## The Motivating Problem — Grayling in Two Lakes
 
 ::::: columns
 ::: {.column width="50%"}
-Back to the Arctic grayling from **week 5** — the same fish, a new
-question.
+Back to the Arctic grayling from **week 5** — the same fish, a new question.
 
-Lake **I8** fish weigh more than lake **I3** fish. But I8 fish are also
-**longer** (mean 364 mm vs 266 mm).
+Lake **I8** fish weigh more than lake **I3** fish. But I8 fish are also **longer** (mean 364 mm vs 266 mm).
 
-> **Is there a lake effect on mass at all, or are I8 fish simply
-> bigger?**
+> **Is there a lake effect on mass at all, or are I8 fish simply bigger?**
 
-You cannot answer that by comparing mean masses. The groups differ in
-the very thing that drives the response.
+You cannot answer that by comparing mean masses. The groups differ in the very thing that drives the response.
 :::
 
 ::: {.column width="50%"}
@@ -238,46 +220,36 @@ ggplot(g_df, aes(log_len, log_mass, color = lake)) +
 
 ## Two Problems, One Tool
 
-::::: columns
+::::::: columns
 ::: {.column width="50%"}
-**Problem 1 — confounding.** The groups differ in the covariate, so a
-raw comparison of means confuses the treatment with the covariate. This
-is the grayling problem, and the classic cricket problem (two species
-measured at different temperatures).
+**Problem 1 — confounding.** The groups differ in the covariate, so a raw comparison of means confuses the treatment with the covariate. This is the grayling problem.
 
-**Problem 2 — noise.** Even when the groups *are* balanced on the
-covariate, the covariate still soaks up residual variation. Removing it
-shrinks the error term and makes the test of the factor **more
-powerful**. This is the fruitfly problem in Part 4.
+**Problem 2 — noise.** Even when the groups *are* balanced on the covariate, the covariate still soaks up residual variation. Removing it shrinks the error term and makes the test of the factor **more powerful**. This is the fruitfly problem in Part 4.
 :::
 
-::: {.column width="50%"}
+::::: {.column width="50%"}
 ::: callout-important
 **ANCOVA does both with one model**
 
 $$y \sim \underbrace{x}_{\text{covariate}} + \underbrace{A}_{\text{factor}}$$
 
-It compares groups **at a common value of the covariate** — the
-"level playing field" comparison — instead of wherever each group
-happened to sit.
+It compares groups **at a common value of the covariate** — the "level playing field" comparison — instead of wherever each group happened to sit.
 :::
 
 ::: callout-warning
 **⚠️ One rule before you start**
 
-The covariate must be measured **independently of the treatment**, and
-must not be **affected** by it. Adjusting for something the treatment
-caused removes the very effect you are trying to measure.
-:::
+The covariate must be measured **independently of the treatment**, and must not be **affected** by it. Adjusting for something the treatment caused removes the very effect you are trying to measure.
 :::
 :::::
+:::::::
 
 ## Part 2 · The ANCOVA Model {.divider}
 
 ## ANCOVA Linear Model: Conceptual Framework
 
 - **The ANCOVA Model**
-  - Key concept: Dfference between "unadjusted" group means and "adjusted" means
+  - Key concept: difference between "unadjusted" group means and "adjusted" means
 - **In this visualization:**
   - **Group Means (asterisks):** The raw average X and Y for each group.
   - Group A and Group B have different mean X values. Comparing directly misleading
@@ -538,68 +510,56 @@ ggplot(param_data, aes(x = x, y = y, color = group)) +
 
 ## Building the ANCOVA Model in R
 
-- Remember `lm(y ~ predictor)`.
-  - ANCOVA combines the predictors from ANOVA and regression.
-- **Simple Linear Regression:**
-  - Predict y using a continuous variable x.
-    - `model_reg <- lm(y ~ x, data = mydata)`
-- **One-Way ANOVA:**
-  - We want to compare y among groups in a categorical factor A.
-    - `model_aov <- lm(y ~ A, data = mydata)`
-- **ANCOVA (Additive Model):**
-  - Compare y among groups in A, after accounting for effect of x.
-  - Add terms together
-    - `model_ancova <- lm(y ~ A + x, data = mydata)`
-  - Model assumes slope of y \~ x relationship is same for all groups in A.
+ANCOVA is just the two `lm()` models you already know, added together.
 
-## Building the ANCOVA Model in R — The Two Formulas
+::: compact-table
+| Model                   | Formula         | Predictors             |
+|-------------------------|-----------------|------------------------|
+| Regression              | `lm(y ~ x)`     | one continuous         |
+| One-way ANOVA           | `lm(y ~ A)`     | one factor             |
+| **ANCOVA, slopes test** | `lm(y ~ x * A)` | both, **plus** `x:A`   |
+| **ANCOVA, additive**    | `lm(y ~ x + A)` | both, one shared slope |
+:::
 
-- **ANCOVA (Interaction Model):**
-  - What if the slopes are different for each group?
-  - Test for interaction between factor and covariate.
-    - `model_int <- lm(y ~ A * x, data = mydata)`
-  - Shorthand for: `lm(y ~ A + x + A:x, data = mydata)`
-  - The `A:x` term tests if the slopes are different.
+`x * A` is shorthand for `x + A + x:A`. The `x:A` term asks one question: **do the groups have different slopes?**
 
-## ANCOVA in R: Workflow Steps 1 and 2
+## The ANCOVA Recipe
 
-- **Step 1: Test for Homogeneity of Slopes - Always Start Here**
+:::::: columns
+::: {.column width="58%"}
+``` r
+# 1 Plot it - one line per group
+ggplot(df, aes(x = x, y = y, color = A)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE)
 
-  - Fit interaction model first - tests key assumption that all groups share same slope.
+# 2 Test the slopes - look at the x:A row
+slopes_model <- lm(y ~ x * A, data = df)
+Anova(slopes_model, type = 3)
 
-  ``` r
-  # The asterisk * tests for both main effects AND the interaction
-  model_int <- lm(y ~ A * x, data = mydata)
-  ```
+# 3a x:A NOT significant - drop it
+ancova_model <- lm(y ~ x + A, data = df)
+Anova(ancova_model, type = 2)
+emmeans(ancova_model, ~ A)        # adjusted means
 
-- **Step 2: Examine the Interaction Term**
+# 3b x:A significant - keep it, report slopes
+emtrends(slopes_model, ~ A, var = "x")
+```
+:::
 
-  - ANOVA table for `model_int` and find the p-value for interaction term (`A:x`).
+:::: {.column width="42%"}
+::: callout-important
+**Step 2 decides everything.**
 
-  ``` r
-      Anova(model_int, type = "III")
-  ```
+- *p* \> 0.05 → slopes are parallel → fit the additive model and compare **adjusted means** (3a)
+- *p* \< 0.05 → slopes differ → there is no single group difference. **The slopes are the result** (3b)
+:::
 
-  - **If p \> 0.05** (e.g., p = 0.4) - interaction **IS NOT** significant - slopes are homogeneous (parallel).
-  - **If p \< 0.05** (e.g., p = 0.02): - interaction **IS** significant - slopes heterogeneous (NOT parallel).
-  - \*\* standard ANCOVA model (`y ~ A + x`) inappropriate\*\*
-  - Analysis stops here and interpret interaction (often most interesting result!)
+Check the residuals on whichever model you end up reporting.
 
-## ANCOVA in R: Workflow Step 3
-
-- Step 3: Run the ANCOVA (Additive Model)
-
-  - If interaction not significant, run the simpler additive model the final ANCOVA model.
-
-  ``` r
-  # We use the + sign, which means "additive"
-  model_ancova <- lm(y ~ A + x, data = mydata)
-  # Get the final ANCOVA table
-  Anova(model_ancova, type = "III")
-  # Get the adjusted means
-  library(emmeans)
-  emmeans(model_ancova, "A")
-  ```
+This same recipe sits at the top of today's script skeleton.
+::::
+::::::
 
 ## Part 3 · Partitioning Variance & the ANOVA Table {.divider}
 
@@ -759,11 +719,10 @@ $$H_0: \beta_1 = \beta_2 = ... = \beta_p$$
 
 Are the regression slopes the same for all groups?
 
-Test with the `A:x` interaction term in `lm(y ~ A * x)`.
+Test with the `x:A` interaction term in `lm(y ~ x * A)`.
 
 ::: callout-important
-**This one is an assumption check, not a result.** You want to
-*fail* to reject it before going any further.
+**This one is an assumption check, not a result.** You want to *fail* to reject it before going any further.
 :::
 
 ## Null Hypotheses in ANCOVA — the Two Results
@@ -897,29 +856,7 @@ ggplot(all_data, aes(x = x, y = y, color = group)) +
 #| echo: false
 #| paged-print: false
 #| fig-alt: "Scatterplot of fruitfly thorax length versus longevity in days, colored by mating treatment, with a fitted regression line for each treatment group, showing longevity increasing with thorax length across all treatments."
-# We've already loaded this, but good practice
-partridge <- read.csv("data/partridge.csv")
-
-# Build the treatment labels from the DESIGN columns, not from the
-# TREATMEN code order. PARTNERS = number of females (0/1/8);
-# TYPE = 0 newly inseminated (will not mate), 1 virgin (will mate),
-# 9 not applicable. Deriving them this way means the labels cannot
-# drift out of step with the data.
-partridge$treatment <- factor(
-  dplyr::case_when(
-    partridge$PARTNERS == 0                       ~ "No females",
-    partridge$PARTNERS == 1 & partridge$TYPE == 1 ~ "One virgin female daily",
-    partridge$PARTNERS == 8 & partridge$TYPE == 1 ~ "Eight virgin females daily",
-    partridge$PARTNERS == 1 & partridge$TYPE == 0 ~ "One inseminated female daily",
-    partridge$PARTNERS == 8 & partridge$TYPE == 0 ~ "Eight inseminated females daily"
-  ),
-  levels = c("No females",
-             "One inseminated female daily", "Eight inseminated females daily",
-             "One virgin female daily",       "Eight virgin females daily")
-)
-
-# 2. Create a plot of the data showing relationship
-ggplot(partridge, aes(x = THORAX, y = LONGEV, color = treatment)) +
+ggplot(p_df, aes(x = thorax, y = longev, color = treat)) +
   geom_point() +
   geom_smooth(method = "lm", se = FALSE) + # se=FALSE to see lines clearly
   labs(
@@ -939,51 +876,48 @@ ggplot(partridge, aes(x = THORAX, y = LONGEV, color = treatment)) +
 #| include: false
 # Fit ahead of the prose so the inline p-value below has something to read.
 # The visible chunk on the right re-runs the same two lines.
-homo_slopes_model <- lm(LONGEV ~ THORAX * treatment, data = partridge)
-p_interaction <- Anova(homo_slopes_model, type = "III")["THORAX:treatment", "Pr(>F)"]
+homo_slopes_model <- lm(longev ~ thorax * treat, data = p_df)
+p_interaction <- Anova(homo_slopes_model, type = "III")["thorax:treat", "Pr(>F)"]
 ```
 
-::::: columns
+:::::: columns
 ::: {.column width="52%"}
 ```{r l15-10}
 #| echo: true
 #| message: false
 #| warning: false
 #| collapse: true
-homo_slopes_model <- lm(LONGEV ~ THORAX * treatment,
-                        data = partridge)
+homo_slopes_model <- lm(longev ~ thorax * treat,
+                        data = p_df)
 
 Anova(homo_slopes_model, type = "III")
 ```
 :::
 
-::: {.column width="48%"}
-The interaction `THORAX:treatment` has *p* = **`r round(p_interaction, 3)`**
-— about as far from significant as it gets.
+:::: {.column width="48%"}
+The interaction `thorax:treat` has *p* = **`r round(p_interaction, 3)`** — about as far from significant as it gets.
 
-The five treatment groups share a common slope: body size buys the same
-amount of extra life in every group.
+The five treatment groups share a common slope: body size buys the same amount of extra life in every group.
 
 ::: callout-note
-**✅ Proceed to Step 3.** Drop the interaction and fit the additive
-model.
+**✅ Proceed to Step 3.** Drop the interaction and fit the additive model.
 :::
-:::
-:::::
+::::
+::::::
 
 ## Partridge Example: Step 3 — Fit the Additive ANCOVA
 
 - Since the interaction was not significant, we re-run the model without it.
   - **Interpretation:**
-    - **THORAX:** covariate highly significant
+    - **thorax:** covariate highly significant
     - thorax length explains significant amount of variance in longevity
-    - **treatment:** treatment effect, after adjusting for thorax length, is highly significant
+    - **treat:** treatment effect, after adjusting for thorax length, is highly significant
 
 ::: {.panel column="screen"}
 ```{r l15-11}
 #| paged-print: false
 # Step 3: Fit the ANCOVA model (additive model)
-ancova_model <- lm(LONGEV ~ THORAX + treatment, data = partridge)
+ancova_model <- lm(longev ~ thorax + treat, data = p_df)
 # View the final ANCOVA table
 Anova(ancova_model, type = "III")
 ```
@@ -991,7 +925,7 @@ Anova(ancova_model, type = "III")
 
 ## What the Covariate Bought You {.tight-code}
 
-::::: columns
+::::::: columns
 ::: {.column width="50%"}
 Run the same question **without** the covariate, and compare:
 
@@ -1001,7 +935,7 @@ Run the same question **without** the covariate, and compare:
 #| warning: false
 #| collapse: true
 # one-way ANOVA, covariate ignored
-Anova(lm(LONGEV ~ treatment, data = partridge),
+Anova(lm(longev ~ treat, data = p_df),
       type = 2)
 ```
 
@@ -1011,36 +945,31 @@ Anova(lm(LONGEV ~ treatment, data = partridge),
 #| warning: false
 #| collapse: true
 # ANCOVA, thorax length included
-Anova(lm(LONGEV ~ THORAX + treatment, data = partridge),
+Anova(lm(longev ~ thorax + treat, data = p_df),
       type = 2)
 ```
 :::
 
-::: {.column width="50%"}
-::: {.compact-table}
-| | one-way ANOVA | ANCOVA |
-|------------------|------------|------------|
-| residual SS | 26,314 | **13,145** |
-| residual df | 120 | 119 |
-| treatment *F* | 13.61 | **21.75** |
+::::: {.column width="50%"}
+::: compact-table
+|               | one-way ANOVA | ANCOVA     |
+|---------------|---------------|------------|
+| residual SS   | 26,314        | **13,145** |
+| residual df   | 120           | 119        |
+| treatment *F* | 13.61         | **21.75**  |
 :::
 
 ::: callout-important
 **Thorax length absorbed half the residual variation.**
 
-One degree of freedom spent on the covariate cut the error term from
-26,314 to 13,145, and the test of `treatment` got **60% bigger**
-(*F* 13.6 → 21.8) — on identical data and an identical question.
+One degree of freedom spent on the covariate cut the error term from 26,314 to 13,145, and the test of `treat` got **60% bigger** (*F* 13.6 → 21.8) — on identical data and an identical question.
 
-That is the power argument, and it is why you measure a covariate even
-when your groups are perfectly balanced on it.
+That is the power argument, and it is why you measure a covariate even when your groups are perfectly balanced on it.
 :::
 
-Here the treatment effect was significant either way. On a smaller or
-noisier dataset, that difference is the difference between finding the
-effect and missing it.
-:::
+Here the treatment effect was significant either way. On a smaller or noisier dataset, that difference is the difference between finding the effect and missing it.
 :::::
+:::::::
 
 ## Partridge Example: Getting Adjusted Means
 
@@ -1057,7 +986,7 @@ effect and missing it.
 ```{r l15-12}
 # Get adjusted means using emmeans
 library(emmeans)
-adjusted_means <- emmeans(ancova_model, "treatment")
+adjusted_means <- emmeans(ancova_model, "treat")
 adjusted_means
 ```
 :::
@@ -1084,14 +1013,13 @@ pairs(adjusted_means, adjust = "tukey")
 - One vs. eight inseminated — *p* = 0.99
 - No females vs. **one virgin** — *p* = 0.13
 
-Every group that actually **mated** differs from the groups that did
-not, except the single-virgin group — the mildest treatment.
+Every group that actually **mated** differs from the groups that did not, except the single-virgin group — the mildest treatment.
 :::
 :::::
 
 ## Partridge Example: Pairwise Comparisons — Compact Letters
 
-::::: columns
+:::::: columns
 ::: {.column width="58%"}
 ```{r l15-14a}
 #| echo: false
@@ -1113,20 +1041,18 @@ plot(adjusted_means, comparisons = TRUE) +
 ```
 :::
 
-::: {.column width="42%"}
-Groups sharing a letter are not distinguishable. The red arrows say the
-same thing — **overlapping arrows mean no significant difference.**
+:::: {.column width="42%"}
+Groups sharing a letter are not distinguishable. The red arrows say the same thing — **overlapping arrows mean no significant difference.**
 
 ::: callout-important
 **Read the pattern, not the ranking**
 
-The three non-mating groups are one block. One virgin female pulls
-longevity down a little; eight pulls it down a lot.
+The three non-mating groups are one block. One virgin female pulls longevity down a little; eight pulls it down a lot.
 
 **The dose that matters is matings, not company.**
 :::
-:::
-:::::
+::::
+::::::
 
 ## Visualizing ANCOVA Results
 
@@ -1139,13 +1065,13 @@ longevity down a little; eight pulls it down a lot.
 #| warning: false
 #| output: false
 # Create a 2x2 panel of different visualization options
-mean_thorax <- mean(partridge$THORAX)
+mean_thorax <- mean(p_df$thorax)
 adj_means_data <- as.data.frame(adjusted_means)
 
 # 1. Raw data with regression lines
 ancova_vis_plot1 <- ggplot(
-  partridge,
-  aes(x = THORAX, y = LONGEV, color = treatment)
+  p_df,
+  aes(x = thorax, y = longev, color = treat)
 ) +
   geom_point() +
   geom_smooth(method = "lm", se = FALSE) +
@@ -1159,8 +1085,8 @@ ancova_vis_plot1 <- ggplot(
 
 # 2. Add adjusted means reference line
 ancova_vis_plot2 <- ggplot(
-  partridge,
-  aes(x = THORAX, y = LONGEV, color = treatment)
+  p_df,
+  aes(x = thorax, y = longev, color = treat)
 ) +
   geom_point() +
   geom_smooth(method = "lm", se = FALSE) +
@@ -1168,7 +1094,7 @@ ancova_vis_plot2 <- ggplot(
   annotate(
     "text",
     x = mean_thorax + 0.02,
-    y = min(partridge$LONGEV) + 5,
+    y = min(p_df$longev) + 5,
     label = "Mean X",
     angle = 90,
     hjust = 0
@@ -1183,15 +1109,15 @@ ancova_vis_plot2 <- ggplot(
 
 # 3. Adjusted means as points on the vertical line
 ancova_vis_plot3 <- ggplot(
-  partridge,
-  aes(x = THORAX, y = LONGEV, color = treatment)
+  p_df,
+  aes(x = thorax, y = longev, color = treat)
 ) +
   geom_point(alpha = 0.5) +
   geom_smooth(method = "lm", se = FALSE) +
   geom_vline(xintercept = mean_thorax, linetype = "dashed") +
   geom_point(
     data = adj_means_data,
-    aes(x = mean_thorax, y = emmean, color = treatment),
+    aes(x = mean_thorax, y = emmean, color = treat),
     size = 4,
     shape = 18
   ) +
@@ -1206,7 +1132,7 @@ ancova_vis_plot3 <- ggplot(
 # 4. Bar chart of adjusted means with error bars
 ancova_vis_plot4 <- ggplot(
   adj_means_data,
-  aes(x = treatment, y = emmean, fill = treatment)
+  aes(x = treat, y = emmean, fill = treat)
 ) +
   geom_bar(stat = "identity", width = 0.7) +
   geom_errorbar(aes(ymin = lower.CL, ymax = upper.CL), width = 0.2) +
@@ -1246,7 +1172,7 @@ ggsave(
 
 ## What if the Slopes Are HETEROGENEOUS?
 
-::::: columns
+::::::: columns
 ::: {.column width="50%"}
 Back to the grayling. Fit the **interaction** model first, as always:
 
@@ -1260,35 +1186,29 @@ g_int <- lm(log_mass ~ log_len * lake, data = g_df)
 Anova(g_int, type = 3)
 ```
 
-The interaction is **significant** (*p* = 0.0046). The two lakes do
-**not** share a slope.
+The interaction is **significant** (*p* = 0.0046). The two lakes do **not** share a slope.
 :::
 
-::: {.column width="50%"}
+::::: {.column width="50%"}
 ::: callout-important
 **Stop. Do not fit the additive model.**
 
-`log_mass ~ log_len + lake` would force one common slope through two
-populations that do not have one, and then report a single "lake
-effect" that is true at no particular length.
+`log_mass ~ log_len + lake` would force one common slope through two populations that do not have one, and then report a single "lake effect" that is true at no particular length.
 
-There is no such thing as *the* difference between the lakes here. The
-difference **depends on how big the fish is.**
+There is no such thing as *the* difference between the lakes here. The difference **depends on how big the fish is.**
 :::
 
 ::: callout-note
 **📖 This is not a failure**
 
-A significant interaction is usually the **more interesting** result.
-It says the groups differ in *how* the response scales, not merely in
-where it sits.
-:::
+A significant interaction is usually the **more interesting** result. It says the groups differ in *how* the response scales, not merely in where it sits.
 :::
 :::::
+:::::::
 
 ## Reading Heterogeneous Slopes — `emtrends()`
 
-::::: columns
+:::::: columns
 ::: {.column width="52%"}
 ```{r l15-16b}
 #| echo: true
@@ -1301,33 +1221,27 @@ pairs(emtrends(g_int, "lake", var = "log_len"))
 ```
 :::
 
-::: {.column width="48%"}
-`emtrends()` is `emmeans()` for **slopes**. It gives one slope per
-group, with a standard error, and `pairs()` tests whether they differ.
+:::: {.column width="48%"}
+`emtrends()` is `emmeans()` for **slopes**. It gives one slope per group, with a standard error, and `pairs()` tests whether they differ.
 
-On log-log axes the slope is the **allometric exponent**: mass ∝
-length^*b*^.
+On log-log axes the slope is the **allometric exponent**: mass ∝ length^*b*^.
 
 ::: callout-important
 **The biology is in the exponent**
 
-- **I8: *b* = 3.11** — not distinguishable from 3 (*p* = 0.058).
-  Isometric: these fish keep their shape as they grow.
-- **I3: *b* = 2.79** — significantly **below** 3 (*p* = 0.029).
-  I3 grayling get relatively **lighter** as they lengthen.
+- **I8: *b* = 3.11** — not distinguishable from 3 (*p* = 0.058). Isometric: these fish keep their shape as they grow.
+- **I3: *b* = 2.79** — significantly **below** 3 (*p* = 0.029). I3 grayling get relatively **lighter** as they lengthen.
 
-That is a condition difference between the lakes, and an additive
-ANCOVA would have hidden it entirely.
+That is a condition difference between the lakes, and an additive ANCOVA would have hidden it entirely.
 :::
-:::
-:::::
+::::
+::::::
 
 ## Where Do the Groups Actually Differ? {.tight-code}
 
-::::: columns
+::::::: columns
 ::: {.column width="52%"}
-With non-parallel lines, the gap between groups changes along the
-covariate. So ask for the contrast **at specific covariate values**:
+With non-parallel lines, the gap between groups changes along the covariate. So ask for the contrast **at specific covariate values**:
 
 ```{r l15-16c}
 #| echo: true
@@ -1341,109 +1255,92 @@ pairs(emmeans(g_int, ~ lake | log_len,
 ```
 :::
 
-::: {.column width="48%"}
-::: {.compact-table}
-| Length | I3 − I8 (log mass) | *p* |
-|--------|--------------------|-----|
-| 200 mm | −0.030 | 0.13 |
-| 250 mm | −0.061 | <0.0001 |
-| 300 mm | −0.107 | <0.0001 |
+::::: {.column width="48%"}
+::: compact-table
+| Length | I3 − I8 (log mass) | *p*      |
+|--------|--------------------|----------|
+| 200 mm | −0.030             | 0.13     |
+| 250 mm | −0.061             | \<0.0001 |
+| 300 mm | −0.107             | \<0.0001 |
 :::
 
-At **200 mm the two lakes are indistinguishable.** The gap opens as the
-fish get longer, and by 300 mm an I3 grayling is about 20% lighter than
-an I8 grayling of the same length.
+At **200 mm the two lakes are indistinguishable.** The gap opens as the fish get longer, and by 300 mm an I3 grayling is about 20% lighter than an I8 grayling of the same length.
 
 ::: callout-warning
 **⚠️ `johnson_neyman = TRUE` does not work here**
 
-The Johnson–Neyman procedure needs a **continuous** moderator.
-`interactions::sim_slopes()` will warn *"Johnson-Neyman intervals are
-not available for factor predictors or moderators"* and give you
-nothing. With a categorical factor, the contrast-at-covariate-values
-above is the right tool.
-:::
+The Johnson–Neyman procedure needs a **continuous** moderator. `interactions::sim_slopes()` will warn *"Johnson-Neyman intervals are not available for factor predictors or moderators"* and give you nothing. With a categorical factor, the contrast-at-covariate-values above is the right tool.
 :::
 :::::
+:::::::
 
 ## Handling Heterogeneous Slopes — the Options
 
-::::: columns
+::::::: columns
 ::: {.column width="55%"}
 When the interaction is significant:
 
-1.  **Report the interaction.** It is the result. Give the slopes, not
-    an adjusted mean.
+1.  **Report the interaction.** It is the result. Give the slopes, not an adjusted mean.
 2.  **`emtrends()`** for a slope per group, with `pairs()` to test them.
-3.  **Contrast at chosen covariate values** — `emmeans(~ A | x, at = ...)`
-    — to say *where* along the covariate the groups separate.
+3.  **Contrast at chosen covariate values** — `emmeans(~ A | x, at = ...)` — to say *where* along the covariate the groups separate.
 4.  **Johnson–Neyman**, but only when the moderator is continuous.
-5.  **Separate regressions** per group. Simple, honest, least powerful,
-    and it gives up the shared error term.
+5.  **Separate regressions** per group. Simple, honest, least powerful, and it gives up the shared error term.
 :::
 
-::: {.column width="45%"}
+::::: {.column width="45%"}
 ::: callout-warning
 **⚠️ Mind the covariate ranges**
 
-I3 fish run **191–320 mm**; I8 fish run **207–440 mm**. The lines can
-only be compared where both groups have data.
+I3 fish run **191–320 mm**; I8 fish run **207–440 mm**. The lines can only be compared where both groups have data.
 
-Reporting a lake difference at 400 mm would mean extrapolating the I3
-line past every I3 fish ever measured. **ANCOVA will do that
-arithmetic without complaint.** You have to be the one who refuses.
+Reporting a lake difference at 400 mm would mean extrapolating the I3 line past every I3 fish ever measured. **ANCOVA will do that arithmetic without complaint.** You have to be the one who refuses.
 :::
 
 ::: callout-note
-This caution applies to the additive model too — an "adjusted mean" at
-$\bar{x}$ is an extrapolation for any group whose data does not reach
-$\bar{x}$.
-:::
+This caution applies to the additive model too — an "adjusted mean" at $\bar{x}$ is an extrapolation for any group whose data does not reach $\bar{x}$.
 :::
 :::::
+:::::::
 
 ## Assumptions of ANCOVA
 
-::::: columns
-::: {.column width="55%"}
-::: {.compact-table}
-| # | Assumption | How you check it |
-|---|-----------------------------|------------------------|
-| 1 | Independence | design, not a test |
-| 2 | Normal residuals | Q-Q plot |
-| 3 | Equal variances | residuals vs. fitted |
-| 4 | Linearity of Y on X **within each group** | scatterplot |
-| 5 | **Homogeneity of slopes** | the `A:x` interaction |
+:::::::: columns
+:::: {.column width="55%"}
+::: compact-table
+| \#  | Assumption                                | How you check it      |
+|-----|-------------------------------------------|-----------------------|
+| 1   | Independence                              | design, not a test    |
+| 2   | Normal residuals                          | Q-Q plot              |
+| 3   | Equal variances                           | residuals vs. fitted  |
+| 4   | Linearity of Y on X **within each group** | scatterplot           |
+| 5   | **Homogeneity of slopes**                 | the `x:A` interaction |
 :::
-:::
+::::
 
-::: {.column width="45%"}
+::::: {.column width="45%"}
 ::: callout-important
-**#5 is the one that is special to ANCOVA**, and the only one you test
-*before* fitting the model you will report. The other four are the
-ordinary linear-model assumptions you have been checking since week 7.
+**#5 is the one that is special to ANCOVA**, and the only one you test *before* fitting the model you will report. The other four are the ordinary linear-model assumptions you have been checking since week 7.
 :::
 
 ::: callout-warning
 **⚠️ And one that is not on the list**
 
-The covariate must be **independent of the treatment**. No test will
-catch a violation — only knowing how the data were collected will.
-:::
+The covariate must be **independent of the treatment**. No test will catch a violation — only knowing how the data were collected will.
 :::
 :::::
+::::::::
 
 ## Checking Assumptions in R
 
-::::: columns
+:::::: columns
 ::: {.column width="55%"}
 ```{r l15-17}
 #| echo: false
 #| fig-height: 3.4
 #| fig-width: 4.4
 #| fig-alt: "Four-panel diagnostic plot for the fruitfly ANCOVA model: residuals vs. fitted values, normal Q-Q plot, scale-location plot, and residuals vs. leverage, all showing patterns consistent with the model's assumptions being met."
-# Fit ANCOVA model for partridge data
-ancova_model <- lm(LONGEV ~ THORAX + treatment, data = partridge)
+# Fit ANCOVA model for p_df data
+ancova_model <- lm(longev ~ thorax + treat, data = p_df)
 
 # Create a 2x2 panel of diagnostic plots
 par(mfrow = c(2, 2), mar = c(4, 4, 2, 1))
@@ -1451,43 +1348,35 @@ plot(ancova_model)
 ```
 :::
 
-::: {.column width="45%"}
-Check assumptions 2 and 3 on the **final** model — the additive one,
-if the slopes let you fit it.
+:::: {.column width="45%"}
+Check assumptions 2 and 3 on the **final** model — the additive one, if the slopes let you fit it.
 
 - **Residuals vs. fitted** — red line roughly flat at 0 ✅
 - **Normal Q-Q** — points on the dashed line ✅
 - **Scale-location** — red line flat ✅
-- **Residuals vs. leverage** — nothing stranded in the right-hand
-  corners ✅
+- **Residuals vs. leverage** — nothing stranded in the right-hand corners ✅
 
 ::: callout-note
-**Conclusion: the assumptions are met**, so the ANCOVA table on the
-previous slides can be reported as it stands.
+**Conclusion: the assumptions are met**, so the ANCOVA table on the previous slides can be reported as it stands.
 :::
-:::
-:::::
+::::
+::::::
 
 ## Robust ANCOVA Approaches
 
-::::: columns
-::: {.column width="52%"}
+:::::: columns
+:::: {.column width="52%"}
 When the assumptions are **badly** violated — not marginally:
 
-- **Rank transformation** — rank both Y and X, then run the ordinary
-  ANCOVA on the ranks: `lm(rank(y) ~ rank(x) + A)`
-- **Bootstrapping** — resample to get intervals without assuming
-  normality
-- **Quantile regression** — model the median, or any quantile, instead
-  of the mean
-- **Permutation tests** — randomise the treatment labels to build the
-  null distribution
+- **Rank transformation** — rank both Y and X, then run the ordinary ANCOVA on the ranks: `lm(rank(y) ~ rank(x) + A)`
+- **Bootstrapping** — resample to get intervals without assuming normality
+- **Quantile regression** — model the median, or any quantile, instead of the mean
+- **Permutation tests** — randomise the treatment labels to build the null distribution
 
 ::: callout-tip
-**🖐 Run it as a sensitivity check.** If the robust version agrees with
-the parametric one, report the parametric one and say you checked.
+**🖐 Run it as a sensitivity check.** If the robust version agrees with the parametric one, report the parametric one and say you checked.
 :::
-:::
+::::
 
 ::: {.column width="48%"}
 ```{r l15-18}
@@ -1495,17 +1384,17 @@ the parametric one, report the parametric one and say you checked.
 #| message: false
 #| warning: false
 #| collapse: true
-rank_ancova <- lm(rank(LONGEV) ~ rank(THORAX) + treatment,
-                  data = partridge)
+rank_ancova <- lm(rank(longev) ~ rank(thorax) + treat,
+                  data = p_df)
 
 signif(c(
-  parametric = Anova(ancova_model, type = "III")["treatment", "Pr(>F)"],
-  rank_based = Anova(rank_ancova,  type = "III")["treatment", "Pr(>F)"]), 3)
+  parametric = Anova(ancova_model, type = "III")["treat", "Pr(>F)"],
+  rank_based = Anova(rank_ancova,  type = "III")["treat", "Pr(>F)"]), 3)
 ```
 
 Both vanishingly small — the parametric result stands.
 :::
-:::::
+::::::
 
 ## Part 6 · Reporting Results {.divider}
 
@@ -1523,33 +1412,27 @@ Here's how you might write up ANCOVA results for publication:
 
 ## Why the Inseminated-Female Groups Are the Design
 
-::::: columns
-::: {.column width="55%"}
+::::::: columns
+:::: {.column width="55%"}
 ::: callout-important
 **The control that makes the experiment work**
 
-Newly inseminated females **will not mate**. Males housed with them get
-the *presence* of females without the *mating*.
+Newly inseminated females **will not mate**. Males housed with them get the *presence* of females without the *mating*.
 
-Those groups isolate the cost of **mating itself** from the cost of
-simply having company — and they show **no reduction in longevity at
-all** (65.4 and 64.2 days, against 61.5 for males housed alone).
+Those groups isolate the cost of **mating itself** from the cost of simply having company — and they show **no reduction in longevity at all** (65.4 and 64.2 days, against 61.5 for males housed alone).
 :::
-:::
+::::
 
-::: {.column width="45%"}
+:::: {.column width="45%"}
 ::: callout-note
 **📖 What this buys the write-up**
 
-Without those two groups you could only say "males near females die
-younger," which has at least three explanations. With them, the
-conclusion narrows to one.
+Without those two groups you could only say "males near females die younger," which has at least three explanations. With them, the conclusion narrows to one.
 
-**Design, not statistics, is what rules out the alternatives.** ANCOVA
-just made the comparison fair on body size.
+**Design, not statistics, is what rules out the alternatives.** ANCOVA just made the comparison fair on body size.
 :::
-:::
-:::::
+::::
+:::::::
 
 ## Publication Quality Figure
 
@@ -1560,25 +1443,25 @@ just made the comparison fair on body size.
 #| warning: false
 #| paged-print: false
 #| fig-alt: "Two-panel publication-quality figure for the fruitfly ANCOVA: a scatterplot of longevity versus thorax length with fitted lines and adjusted-mean diamonds with error bars at the mean thorax length, plus a bar chart of adjusted mean longevity by treatment with confidence-interval error bars."
-# Create an example of a publication-quality figure for the partridge data
+# Create an example of a publication-quality figure for the p_df data
 adj_means_data <- as.data.frame(adjusted_means)
-mean_thorax <- mean(partridge$THORAX)
+mean_thorax <- mean(p_df$thorax)
 
-# Get prediction data for each treatment across range of thorax lengths
+# Get prediction data for each treat across range of thorax lengths
 thorax_range <- seq(
-  min(partridge$THORAX),
-  max(partridge$THORAX),
+  min(p_df$thorax),
+  max(p_df$thorax),
   length.out = 100
 )
 pred_data <- expand.grid(
   thorax = thorax_range,
-  treatment = levels(partridge$treatment)
+  treat = levels(p_df$treat)
 )
-pred_data$LONGEV <- predict(
+pred_data$longev <- predict(
   ancova_model,
   newdata = data.frame(
-    THORAX = pred_data$thorax,
-    treatment = pred_data$treatment
+    thorax = pred_data$thorax,
+    treat = pred_data$treat
   )
 )
 
@@ -1586,27 +1469,27 @@ pred_data$LONGEV <- predict(
 pub_plot1 <- ggplot() +
   # Raw data with transparency
   geom_point(
-    data = partridge,
-    aes(x = THORAX, y = LONGEV, color = treatment),
+    data = p_df,
+    aes(x = thorax, y = longev, color = treat),
     alpha = 0.6,
     size = 2
   ) +
   # Regression lines
   geom_line(
     data = pred_data,
-    aes(x = thorax, y = LONGEV, color = treatment),
+    aes(x = thorax, y = longev, color = treat),
     size = 1
   ) +
   # Reference line at mean thorax
   geom_vline(
-    xintercept = mean(partridge$THORAX),
+    xintercept = mean(p_df$thorax),
     linetype = "dashed",
     color = "gray50"
   ) +
   # Adjusted means at mean thorax length
   geom_point(
     data = adj_means_data,
-    aes(x = mean(partridge$THORAX), y = emmean, color = treatment),
+    aes(x = mean(p_df$thorax), y = emmean, color = treat),
     size = 4,
     shape = 18
   ) +
@@ -1614,11 +1497,11 @@ pub_plot1 <- ggplot() +
   geom_errorbar(
     data = adj_means_data,
     aes(
-      x = mean(partridge$THORAX),
+      x = mean(p_df$thorax),
       y = emmean,
       ymin = lower.CL,
       ymax = upper.CL,
-      color = treatment
+      color = treat
     ),
     width = 0.02
   ) +
@@ -1643,7 +1526,7 @@ pub_plot1 <- ggplot() +
 # Adjusted means bar chart
 pub_plot2 <- ggplot(
   adj_means_data,
-  aes(x = treatment, y = emmean, fill = treatment)
+  aes(x = treat, y = emmean, fill = treat)
 ) +
   geom_bar(stat = "identity", width = 0.7, color = "black") +
   geom_errorbar(aes(ymin = lower.CL, ymax = upper.CL), width = 0.2) +
@@ -1677,76 +1560,68 @@ pub_plot1 + pub_plot2 + plot_layout(widths = c(2, 1))
 
 - Combines regression and ANOVA
 - **Increases power** by soaking up residual variation with a covariate
-- **Adjusts for confounds** by comparing groups at a common covariate
-  value
+- **Adjusts for confounds** by comparing groups at a common covariate value
 :::
 
 ::: {.column width="50%"}
 **The workflow**
 
-1. **Always** test homogeneity of slopes first — `lm(y ~ A * x)`
-2. Slopes homogeneous (*p* > 0.05) → fit the additive model,
-   `lm(y ~ x + A)`, and report adjusted means
-3. Slopes heterogeneous (*p* < 0.05) → **stop.** Interpret the
-   interaction and report slopes
+1.  **Always** test homogeneity of slopes first — `lm(y ~ x * A)`
+2.  Slopes homogeneous (*p* \> 0.05) → fit the additive model, `lm(y ~ x + A)`, and report adjusted means
+3.  Slopes heterogeneous (*p* \< 0.05) → **stop.** Interpret the interaction and report slopes
 :::
 :::::
+
 ## Summary — Interpreting and Reporting
 
-::::: columns
+:::::: columns
 ::: {.column width="50%"}
 **Interpretation**
 
 - `car::Anova(model, type = "III")` for the table
 - `emmeans()` for **adjusted means** and pairwise comparisons
 - `emtrends()` for **slopes**, when the interaction is the result
-- Report adjusted means, and say what covariate value they are adjusted
-  to
+- Report adjusted means, and say what covariate value they are adjusted to
 :::
 
-::: {.column width="50%"}
+:::: {.column width="50%"}
 **The five assumptions**
 
-1. Independence
-2. Normal residuals
-3. Equal variances
-4. Linearity within groups
-5. **Homogeneity of slopes** — the one you test first
+1.  Independence
+2.  Normal residuals
+3.  Equal variances
+4.  Linearity within groups
+5.  **Homogeneity of slopes** — the one you test first
 
 ::: callout-important
-And the one no test will find: the covariate must not be **affected by**
-the treatment.
+And the one no test will find: the covariate must not be **affected by** the treatment.
 :::
-:::
-:::::
+::::
+::::::
 
 ## Readings
 
 ::::::: columns
-:::: {.column width="55%"}
+::: {.column width="55%"}
 - **Quinn & Keough** (2002), *Experimental Design and Data Analysis for Biologists*, Ch. 12 — Analysis of Covariance. This is the source of today's fruitfly example (Box 12-1, Table 12-2).
 - **Gotelli & Ellison**, Ch. 9 (Regression) and Ch. 10 (The Analysis of Variance) — ANCOVA sits across the two frameworks.
 - **Whitlock & Schluter**, Ch. 17 — Regression, for the diagnostics that carry over.
 - Partridge, L., & Farquhar, M. (1981). Sexual activity reduces lifespan of male fruitflies. *Nature*, 294, 580–582.
-::::
+:::
 
-:::: {.column width="45%"}
+::::: {.column width="45%"}
 ::: callout-note
 **📖 On the datasets**
 
-The fruitfly data are Partridge & Farquhar's, reproduced in Quinn &
-Keough Box 12-1. The Arctic grayling are from the Arctic LTER — the
-same lakes you met in week 5.
+The fruitfly data are Partridge & Farquhar's, reproduced in Quinn & Keough Box 12-1. The Arctic grayling are from the Arctic LTER — the same lakes you met in week 5.
 
 The textbook PDFs are on Canvas.
 :::
 
 ::: callout-tip
-**🖐 The homework crickets**
+**🖐 The homework plants**
 
-Walker's (1962) cricket data is Homework 17. It is the same shape of
-question as the grayling — two groups, one covariate — and you decide
-for yourself whether the slopes let you fit an additive model.
+Homework 17 is Crawley's *Ipomopsis* grazing data. The groups are **not** balanced on the covariate, so this time it does the confounding job, and an ANOVA and an ANCOVA disagree about the direction of the effect.
 :::
-::::
+:::::
 :::::::
