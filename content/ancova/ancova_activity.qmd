@@ -30,24 +30,24 @@ format:
 
 [📥 Script skeleton (.R)](data/17_ancova.R){.btn .btn-primary download="17_ancova.R"} [📥 Fruitfly data](data/partridge.csv){.btn .btn-primary download="partridge.csv"} [📥 Grayling data](data/gray_I3_I8.csv){.btn .btn-primary download="gray_I3_I8.csv"}
 
--   Save the skeleton as `scripts/17_ancova.R`, and both `.csv` files in your `data/` folder.
--   You already have `gray_I3_I8.csv` from **week 5** — same fish, new question.
+- Save the skeleton as `scripts/17_ancova.R`, and both `.csv` files in your `data/` folder.
+- You already have `gray_I3_I8.csv` from **week 5** — same fish, new question.
 :::
 
 ::: callout-important
 ## What you hand in
 
--   **All of today's code is right here in this activity.** Type it into your script as we go and run it chunk by chunk. The skeleton has the libraries, the two data reads, and **the ANCOVA recipe** as one comment block — every line of statistics you type yourself.
--   **Section 6 has no code here either.** By then you will have run the whole workflow once, so you start it again on your own.
--   The **Q** boxes are **things to think about**, not inline homework. Read them, talk them over, answer them in your head. You do **not** have to type answers into the script, and they are not graded.
--   The **write-up** at the bottom is practice for the homework. Do it, but it is not handed in.
--   Hand in the **🎟️ exit ticket** at the bottom of this page, with your script. The script must run top to bottom (**Ctrl/Cmd + Shift + Enter**) with no errors.
+- **All of today's code is right here in this activity.** Type it into your script as we go and run it chunk by chunk. The skeleton has the libraries, the two data reads, and **the ANCOVA recipe** as one comment block — every line of statistics you type yourself.
+- **Section 6 has no code here either.** By then you will have run the whole workflow once, so you start it again on your own.
+- The **Q** boxes are **things to think about**, not inline homework. Read them, talk them over, answer them in your head. You do **not** have to type answers into the script, and they are not graded.
+- The **write-up** at the bottom is practice for the homework. Do it, but it is not handed in.
+- Hand in the **🎟️ exit ticket** at the bottom of this page, with your script. The script must run top to bottom (**Ctrl/Cmd + Shift + Enter**) with no errors.
 :::
 
 ::: callout-note
 ## 🔮 Predict before you run
 
-Today has one decision in it, and everything downstream depends on getting it right: **are the slopes parallel?** You will meet one dataset where they are and one where they are not. Before each test, look at the plot and commit to an answer out loud.
+Today has one decision in it, and everything downstream depends on getting it right: **are the slopes parallel?** You will meet one dataset where they are and one where they are not. Before each test, look at the plot.
 :::
 
 ::: callout-tip
@@ -66,8 +66,8 @@ Week 10 changed the **distribution**. Week 11 changed the **error structure**. T
 
 That is an **ANCOVA**, and it is the model that joins the ANOVA half of this course to the regression half.
 
-| | What it is | Example today |
-|------------------|------------------------------|-------------------------|
+|   | What it is | Example today |
+|------------------|-----------------------------|-------------------------|
 | **Response** | continuous | fruitfly longevity, days |
 | **Factor** | categorical, the thing you care about | mating treatment |
 | **Covariate** | continuous, the thing you adjust for | thorax length, mm |
@@ -75,7 +75,7 @@ That is an **ANCOVA**, and it is the model that joins the ANOVA half of this cou
 A covariate does **two** different jobs, and they are worth keeping separate in your head:
 
 | Job | What goes wrong without it | Fixed by |
-|------------------|------------------------------|-------------------------|
+|------------------|-----------------------------|-------------------------|
 | **Confounding** | groups sit at different covariate values, so a raw comparison of means confuses the two | comparing at a **common** covariate value |
 | **Noise** | the covariate's variation sits in the error term, shrinking your *F* | **removing** it from the residual |
 
@@ -105,12 +105,12 @@ options(scipen = 999)
 options(contrasts = c("contr.sum", "contr.poly"))  # for Anova(type = 3)
 ```
 
-Partridge & Farquhar (1981) asked whether **sexual activity shortens a male fruitfly's life**. They housed 125 males, 25 in each of five treatments, and recorded how long each lived.
+Partridge & Farquhar (1981) asked whether **sexual activity shortens a male fruitfly's life**. They housed 125 males, 25 in each of five treatments, and recorded how long each **male** lived. The response `longev` is the male's lifespan in days; the females are only the treatment (what each male lived with), and their lifespans were not recorded.
 
 The design is cleverer than it first looks:
 
 | Treatment | Females | Do they mate? |
-|----------------------|---------------|---------------------------|
+|-------------------|----------|--------------------------|
 | No females | 0 | — |
 | One inseminated female daily | 1 | **no** — newly inseminated females will not re-mate |
 | Eight inseminated females daily | 8 | **no** |
@@ -146,7 +146,7 @@ g_df <- read_csv("data/gray_I3_I8.csv", show_col_types = FALSE) %>%
 count(g_df, lake)
 ```
 
-The grayling (`g_df`) wait until section 6.
+The grayling (`g_df`) wait until section 6. Two things in that read: `filter(mass_g > 0)` drops any fish weighed as 0 g, because the log of 0 is undefined; and `log10()` puts both length and mass on log scales, because mass grows as a **power** of length and a power law is a straight line on log-log axes (section 6 explains why that matters).
 
 ::: callout-tip
 ## 🧾 The recipe in your skeleton
@@ -191,6 +191,8 @@ slopes_model <- lm(longev ~ thorax * treat, data = p_df)
 Anova(slopes_model, type = 3)
 ```
 
+**Reading this:** `thorax * treat` is shorthand for `thorax + treat + thorax:treat`, so this model gives every treatment its **own** slope. The `thorax:treat` row tests whether those five slopes differ. We use `type = 3` because the model has an interaction in it; that is what the `options(contrasts = ...)` line in your libraries is for.
+
 ✏️ **Q4:** Write down the *F* and *p* for the `thorax:treat` interaction. Are the slopes homogeneous?
 
 ✏️ **Q5:** Look at the `treat` row in this table. Is it significant? Hold onto that — you are about to fit a different model and get a very different answer.
@@ -217,6 +219,12 @@ summary(ancova_model)
 
 Anova(ancova_model, type = 2)
 ```
+
+**Reading this:** `thorax + treat` (a `+`, not a `*`) forces one shared slope, so the five lines are parallel.
+
+- `summary()` gives the **coefficients**. The one you need is `thorax`, the shared slope (Q7). Ignore the `treat` rows there; section 5 gives you group means you can actually read.
+- `Anova()` gives **one *F* test per term**: `thorax` asks "does body size predict lifespan, once treatment is accounted for?" and `treat` asks "do the treatments differ, once body size is accounted for?"
+- `type = 2` here: with no interaction in the model, type 2 and type 3 give the same *F* tests, and type 2 leaves out the intercept row you do not need.
 
 ✏️ **Q6:** Both `thorax` and `treat` are significant now. In Q5 the `treat` row was not. Same data, same question — what changed?
 
@@ -259,9 +267,9 @@ p_df %>%
   summarise(mean_thorax = mean(thorax))
 ```
 
-✏️ **Q9:** Fill this in from the two tables. What fraction of the residual SS did one df of `thorax` remove?
+✏️ **Q9:** Fill this in from the two tables (the residual SS and df are in the `Residuals` row of each). What fraction of the residual SS did one df of `thorax` remove?
 
-```
+```         
                   residual SS   residual df   treat F
 no covariate
 ANCOVA
@@ -287,6 +295,8 @@ p_df %>%
   summarise(raw_mean = mean(longev), mean_thorax = mean(thorax))
 ```
 
+**Reading this:** `emmeans()` takes the fitted parallel lines and reads off each group's predicted longevity at **one common thorax length**. That is the adjusted mean. The `group_by()` table gives the raw means next to it so you can compare.
+
 **▶ Type this yourself** — the comparisons:
 
 ``` r
@@ -296,6 +306,12 @@ multcomp::cld(p_emm, Letters = letters)
 
 plot(p_emm, comparisons = TRUE)
 ```
+
+**Reading this:**
+
+- `pairs()` tests all 10 pairs of treatments, with a Tukey adjustment for making 10 comparisons.
+- `cld()` (the **compact letter display**) summarises those 10 tests: groups that **share a letter** were not shown to differ.
+- In the `plot()`, the blue bars are the confidence intervals and the red arrows are for comparisons: two groups differ when their **arrows do not overlap**.
 
 ✏️ **Q11:** Put the adjusted means next to the raw means. Why is the gap small here, and what thorax length are the means adjusted *to*? (Check `mean(p_df$thorax)`.)
 
@@ -313,7 +329,7 @@ plot(p_emm, comparisons = TRUE)
 
 **No code for part of this page.** You have just run the first two steps of the workflow once. Do them again.
 
-Back to the Arctic grayling from **week 5** — lakes I3 and I8. Fish mass scales with length as a power law, so on **log-log axes** the relationship is a straight line and its slope is the **allometric exponent**: mass ∝ length^*b*^. A slope of 3 means the fish keeps its shape as it grows.
+Back to the Arctic grayling from **week 5** — lakes I3 and I8. Fish mass scales with length as a power law, so on **log-log axes** the relationship is a straight line and its slope is the **allometric exponent**: mass ∝ length^*b*^. Why 3? Mass tracks volume, and volume is length × width × depth. A fish that keeps its shape gets wider and deeper in step with getting longer, so doubling its length multiplies its mass by 2³ = 8. A slope of 3 (**isometry**) means the fish keeps its shape as it grows; a slope below 3 means it gets thinner as it lengthens, and above 3 means it gets plumper.
 
 **Question:** do grayling in the two lakes have the same length–mass relationship?
 
@@ -350,7 +366,11 @@ emtrends(g_int, "lake", var = "log_len")
 pairs(emtrends(g_int, "lake", var = "log_len"))
 ```
 
+**Reading this:** `emtrends()` is `emmeans()` for slopes: `"lake"` asks for one slope per lake, and `var = "log_len"` says which variable the slope is taken with respect to. It only **estimates**; there is no test in it. `pairs()` then tests whether the two slopes differ. With two lakes that is the same test as the `log_len:lake` row in section 6: square its *t* and you get that *F*.
+
 **▶ Type this yourself** — is each slope different from **3**, the isometric value?
+
+`emtrends()` on its own only estimates the slopes. Wrapping it in `test()` with `null = 3` tests each slope against 3, with *t* = (slope − 3) / SE. Without `null =`, `test()` would test against 0, which is meaningless here.
 
 ``` r
 test(emtrends(g_int, "lake", var = "log_len"), null = 3)
@@ -364,6 +384,12 @@ lens <- log10(c(200, 250, 300))
 pairs(emmeans(g_int, ~ lake | log_len, at = list(log_len = lens)))
 ```
 
+**Reading this:**
+
+- The model was fit on `log_len`, so the lengths you ask about must be on the log scale too. `log10(c(200, 250, 300))` is 2.30, 2.40 and 2.48, and that is how the output labels them.
+- `at = list(log_len = lens)` says *where* along the covariate to compare. `~ lake | log_len` says "compare the lakes, separately at each of those lengths."
+- Each `estimate` is a difference in **log10 mass** (I3 − I8). Back-transform it with `10^estimate` to get a mass ratio: `10^-0.086` = 0.82 means an I3 fish is about 18% lighter than an I8 fish of the same length.
+
 ✏️ **Q16:** Write down each lake's slope with its SE. Which one is indistinguishable from 3 (isometry — the fish keeps its shape), and what happens to the other lake's fish as they get longer?
 
 ✏️ **Q17:** Look at the contrasts at 200, 250 and 300 mm. At which length are the lakes indistinguishable, and what happens to the gap as fish get bigger?
@@ -372,7 +398,7 @@ pairs(emmeans(g_int, ~ lake | log_len, at = list(log_len = lens)))
 
 > 💡 **Key idea:** a significant interaction is not a failed analysis — it is usually the more interesting one. "These groups differ by a constant amount" is a weaker, less informative claim than "these groups differ in *how* they scale." When the data offer you the second, do not flatten it into the first.
 
-**Where is the `lake` row tested?** In Section 6, the `lake` row of the interaction model's `Anova(type = 3)` came out at *p* = 0.011. When a model contains an interaction, that main effect is the lake difference **where the covariate equals 0**. Here that's `log_len` = 0, a 1 mm fish. You move the zero by **centering**: subtract a value you care about from the covariate.
+**Where is the `lake` row tested?** In Section 6, the `lake` row of the interaction model's `Anova(type = 3)` came out at *p* = 0.011. When a model contains an interaction, that main effect is the lake difference **where the covariate equals 0**. Here that's `log_len` = 0, a 1 mm fish. You move the zero by **centering**: subtract a value you care about from the covariate. Below, `log_len - log10(250)` makes 0 mean a 250 mm fish, so the new `lake` row compares the lakes at 250 mm.
 
 **▶ Type this yourself:**
 
@@ -397,7 +423,7 @@ Anova(lm(log_mass ~ log_len_c * lake, data = g_df), type = 3)
 
 ✏️ **Q20:** Fill in:
 
-```
+```         
 homogeneity of slopes   F(  ,  ) =        p =
 covariate (thorax)      F(  ,  ) =        p =
 treatment               F(  ,  ) =        p =
@@ -435,14 +461,14 @@ One publication-quality figure. Pick **either** the fruitfly adjusted means with
 
 At this point you should be able to:
 
--   [ ] Name the response, factor and covariate in an ANCOVA, and say what the covariate must not be
--   [ ] Test homogeneity of slopes, and say why it comes before the model you report
--   [ ] Fit an additive ANCOVA and read its ANOVA table
--   [ ] Show what the covariate bought you, in residual SS and in *F*
--   [ ] Explain adjusted means, and say what covariate value they are adjusted to
--   [ ] Recognise heterogeneous slopes and stop before fitting the additive model
--   [ ] Use `emtrends()` to compare slopes, and contrast groups at chosen covariate values
--   [ ] Say where an ANCOVA comparison turns into extrapolation
+- [ ] Name the response, factor and covariate in an ANCOVA, and say what the covariate must not be
+- [ ] Test homogeneity of slopes, and say why it comes before the model you report
+- [ ] Fit an additive ANCOVA and read its ANOVA table
+- [ ] Show what the covariate bought you, in residual SS and in *F*
+- [ ] Explain adjusted means, and say what covariate value they are adjusted to
+- [ ] Recognise heterogeneous slopes and stop before fitting the additive model
+- [ ] Use `emtrends()` to compare slopes, and contrast groups at chosen covariate values
+- [ ] Say where an ANCOVA comparison turns into extrapolation
 
 Run your whole script top to bottom with **Ctrl/Cmd + Shift + Enter**. It must run clean.
 
@@ -471,7 +497,7 @@ Hand this in on Canvas **before you leave**. It is how I know you ran the code, 
 
 # Homework
 
-**[Homework 7 — ANCOVA](../../homeworks/ancova_homework/ancova_homework.qmd)**
+[**Homework 7 — ANCOVA**](../../homeworks/ancova_homework/ancova_homework.qmd)
 
 Does grazing help or hurt scarlet gilia (*Ipomopsis*)? You run the ANOVA you would have run last month, then the ANCOVA, and the two disagree about the **direction** of the effect. Today's fruitflies had groups balanced on body size. These plants are not, and that is the twist.
 

@@ -144,6 +144,7 @@ This is the last of the general linear models, and the one that links the ANOVA 
 
 ::: {.column width="40%"}
 ```{r l15-02}
+#| out-width: "100%"
 #| echo: false
 #| message: false
 #| warning: false
@@ -200,6 +201,7 @@ You cannot answer that by comparing mean masses. The groups differ in the very t
 
 ::: {.column width="50%"}
 ```{r l15-03}
+#| out-width: "100%"
 #| echo: false
 #| message: false
 #| warning: false
@@ -246,21 +248,22 @@ The covariate must be measured **independently of the treatment**, and must not 
 
 ## Part 2 · The ANCOVA Model {.divider}
 
-## ANCOVA Linear Model: Conceptual Framework
+## Raw Means vs Adjusted Means
 
-- **The ANCOVA Model**
-  - Key concept: difference between "unadjusted" group means and "adjusted" means
-- **In this visualization:**
-  - **Group Means (asterisks):** The raw average X and Y for each group.
-  - Group A and Group B have different mean X values. Comparing directly misleading
-  - **Adjusted Means (triangles):** ANCOVA statistically "moves" each group mean along regression line to single, common X value (the overall mean X).
-  - ANCOVA compares heights (the Y values) of adjusted means.
-  - Adjustment "levels the playing field," estimating each group's mean if all groups had same average covariate value
+::::: columns
+::: {.column width="38%"}
+The key idea in ANCOVA is the difference between **raw** and **adjusted** group means.
 
-## ANCOVA Model Visualization
+- **Stars: raw means.** Each group's average X and average Y. The two groups sit at different X, so comparing their Ys mixes the group effect up with the covariate.
+- **Diamonds: adjusted means.** Slide each raw mean **along its own line** (dashed) to one shared X, the overall mean of the covariate (dotted line).
+- ANCOVA compares the **heights of the diamonds**: each group's predicted Y *if every group had the same covariate value*.
+:::
 
-::: {.panel column="screen"}
+::: {.column width="62%"}
 ```{r l15-04}
+#| fig-width: 5.5
+#| fig-height: 4.4
+#| out-width: "100%"
 #| echo: false
 #| message: false
 #| warning: false
@@ -284,13 +287,13 @@ model_data <- rbind(group_a, group_b)
 # Add points
 set.seed(789)
 points_a <- data.frame(
-  x = runif(10, 2.5, 7.5),
+  x = runif(10, 2.2, 5.5),
   group = "Group A"
 )
 points_a$y <- 2 + 0.7 * points_a$x + rnorm(10, 0, 0.5)
 
 points_b <- data.frame(
-  x = runif(10, 2.5, 7.5),
+  x = runif(10, 4.5, 7.8),
   group = "Group B"
 )
 points_b$y <- 5 + 0.7 * points_b$x + rnorm(10, 0, 0.5)
@@ -409,6 +412,7 @@ ggplot() +
   theme(legend.position = "bottom")
 ```
 :::
+:::::
 
 ## Mathematical Model for ANCOVA
 
@@ -439,6 +443,9 @@ ggplot() +
 
 ::: {.column width="40%"}
 ```{r l15-05}
+#| fig-width: 4.2
+#| fig-height: 3.8
+#| out-width: "100%"
 #| echo: false
 #| message: false
 #| warning: false
@@ -508,6 +515,65 @@ ggplot(param_data, aes(x = x, y = y, color = group)) +
 :::
 :::::
 
+## Where Along X Are the Groups Compared?
+
+```{r l15-05c-setup}
+#| include: false
+cmp_model <- lm(longev ~ thorax + treat, data = p_df)
+cmp_xbar  <- mean(p_df$thorax)
+cmp_at0   <- as.data.frame(emmeans(cmp_model, ~ treat, at = list(thorax = 0)))
+cmp_atbar <- as.data.frame(emmeans(cmp_model, ~ treat))
+```
+
+:::::: columns
+::: {.column width="45%"}
+A regression intercept is the line's height at **x = 0**. `lm()` builds an ANCOVA the same way, so its group coefficients describe the fruitflies at **thorax = 0 mm**: a fly with no thorax, predicted to live about **`r round(mean(cmp_at0$emmean))` days**.
+
+That is why the textbook model writes $\beta(X_{ij} - \bar{X})$. **Centering** moves "zero" to the mean thorax length, `r round(cmp_xbar, 2)` mm, so $\mu + \alpha_i$ becomes each group's **adjusted mean** (the diamonds).
+
+**With parallel lines this does not change the test.** Two parallel lines are the same distance apart at every x, so the treatment *F* is 21.75 whether or not you center. Only the meaning of the intercepts changes, and `emmeans()` reports the groups at the mean of x for you.
+:::
+
+:::: {.column width="55%"}
+```{r l15-05c}
+#| echo: false
+#| fig-width: 4.8
+#| fig-height: 3.1
+#| out-width: "100%"
+#| fig-alt: "Fruitfly longevity against thorax length with the five parallel ANCOVA lines extended back to thorax = 0. At zero the lines sit near -50 days, far below any data; at the mean thorax length they pass through the adjusted means, which lie among the data. The vertical gaps between lines are the same at both places."
+cmp_lines <- expand_grid(
+  thorax = seq(0, max(p_df$thorax), length.out = 60),
+  treat  = factor(levels(p_df$treat), levels = levels(p_df$treat))
+)
+cmp_lines$longev <- predict(cmp_model, newdata = cmp_lines)
+cmp_lines$part <- ifelse(cmp_lines$thorax < min(p_df$thorax),
+                         "extrapolated", "data")
+
+ggplot(cmp_lines, aes(thorax, longev, colour = treat)) +
+  geom_hline(yintercept = 0, colour = "grey70") +
+  geom_point(data = p_df, size = 0.8, alpha = 0.5) +
+  geom_line(aes(linetype = part), linewidth = 0.7, show.legend = FALSE) +
+  scale_linetype_manual(values = c(data = "solid", extrapolated = "dashed")) +
+  geom_vline(xintercept = cmp_xbar, linetype = "dotted") +
+  geom_point(data = cmp_at0, aes(x = 0, y = emmean), shape = 21,
+             fill = "white", size = 2.2, stroke = 1) +
+  geom_point(data = cmp_atbar, aes(x = cmp_xbar, y = emmean), shape = 18,
+             size = 3.5) +
+  annotate("text", x = 0.02, y = 20, hjust = 0, size = 2.8,
+           label = "x = 0: what the raw\ncoefficients describe") +
+  annotate("text", x = cmp_xbar - 0.02, y = 98, hjust = 1, size = 2.8,
+           label = "mean thorax:\nadjusted means") +
+  labs(x = "Thorax length (mm)", y = "Longevity (days)", colour = NULL) +
+  theme_minimal(base_size = 9) +
+  theme(legend.position = "bottom")
+```
+
+::: callout-warning
+**Non-parallel lines are different.** In `lm(y ~ x * A)` the `A` row tests the gap **at x = 0**. More in Part 4.
+:::
+::::
+::::::
+
 ## Building the ANCOVA Model in R
 
 ANCOVA is just the two `lm()` models you already know, added together.
@@ -563,153 +629,199 @@ This same recipe sits at the top of today's script skeleton.
 
 ## Part 3 · Partitioning Variance & the ANOVA Table {.divider}
 
-## Analysis of Variance for ANCOVA: Partitioning
+## Three Models: Null, Covariate, Full {.nostretch}
 
-::: {.panel column="screen"}
-```{r l15-06}
+```{r l15-05b-setup}
+#| include: false
+# Sequential split: thorax first, then treat given thorax.
+# These are the pieces anova() reports, and they add exactly to SS_total.
+ss_gm     <- mean(p_df$longev)
+ss_fit_x  <- fitted(lm(longev ~ thorax, data = p_df))          # one common line
+ss_fit_xa <- fitted(lm(longev ~ thorax + treat, data = p_df))  # five parallel lines
+ss_tot <- sum((p_df$longev - ss_gm)^2)
+ss_x   <- sum((ss_fit_x - ss_gm)^2)
+ss_a   <- sum((ss_fit_xa - ss_fit_x)^2)
+ss_res <- sum((p_df$longev - ss_fit_xa)^2)
+ss_x3  <- Anova(lm(longev ~ thorax + treat, data = p_df), type = "III")["thorax", "Sum Sq"]
+ss_res_oneway <- deviance(lm(longev ~ treat, data = p_df))
+ss_fmt <- function(v) format(round(v), big.mark = ",")
+# Type III table for the ANOVA-table slide
+ss_t3 <- Anova(lm(longev ~ thorax + treat, data = p_df), type = "III")
+ss_ms_res <- ss_t3["Residuals", "Sum Sq"] / ss_t3["Residuals", "Df"]
+```
+
+Each model adds **one term** to the one before it. Grey segments show how far each fly sits from what that model predicts.
+
+```{r l15-05m}
+#| echo: false
+#| fig-width: 9
+#| fig-height: 1.95
+#| out-width: "100%"
+#| fig-alt: "Three panels of fruitfly longevity against thorax length. Null model: a flat line at the grand mean with long residual segments. Covariate model: one sloped line with shorter segments. Full model: five parallel coloured lines with the shortest segments."
+mod_df <- bind_rows(
+  p_df %>% mutate(fit = ss_gm, model = "Null:  longev ~ 1"),
+  p_df %>% mutate(fit = ss_fit_x, model = "Covariate:  longev ~ thorax"),
+  p_df %>% mutate(fit = ss_fit_xa, model = "Full:  longev ~ thorax + treat")
+) %>%
+  mutate(model = fct_inorder(model),
+         line_group = ifelse(str_detect(model, "Full"),
+                             as.character(treat), "all"))
+
+ggplot(mod_df, aes(thorax)) +
+  geom_segment(aes(y = longev, yend = fit, xend = thorax), colour = "grey60",
+               alpha = 0.6) +
+  geom_point(aes(y = longev, colour = treat), size = 0.9) +
+  geom_line(data = filter(mod_df, line_group == "all"), aes(y = fit),
+            colour = "grey20", linewidth = 0.9) +
+  geom_line(data = filter(mod_df, line_group != "all"),
+            aes(y = fit, colour = treat), linewidth = 0.8) +
+  facet_wrap(~ model) +
+  labs(x = "Thorax length (mm)", y = "Longevity (days)", colour = NULL) +
+  theme_minimal(base_size = 9) +
+  theme(legend.position = "right",
+        strip.text = element_text(face = "bold", size = 9))
+```
+
+::: compact-table
+| Model | R formula | What it predicts for each fly | Residual SS | SS it removes |
+|---------------|---------------|---------------|---------------|---------------|
+| **Null** | `lm(longev ~ 1)` | the grand mean, `r round(ss_gm, 1)` days, for every fly; no predictors at all | `r ss_fmt(ss_tot)` | none: this **is** $SS_{total}$ |
+| **Covariate** | `lm(longev ~ thorax)` | one line: longevity from body size alone, treatment ignored | `r ss_fmt(ss_tot - ss_x)` | `r ss_fmt(ss_x)` = $SS_{x}$ |
+| **Full** | `lm(longev ~ thorax + treat)` | five **parallel** lines: body size, plus a shift up or down for each treatment | `r ss_fmt(ss_res)` | `r ss_fmt(ss_a)` = $SS_{A(adj)}$ |
+:::
+
+What the full model still cannot explain is $SS_{residual}$. Every *F* test in ANCOVA asks the same thing: **did adding this term remove more variation than chance would?**
+
+## Where the Variation Goes in ANCOVA
+
+::::: columns
+::: {.column width="38%"}
+Same idea as one-way ANOVA, with **one more piece**. Each fly's distance from the grand mean splits three ways:
+
+$$\underbrace{(Y - \bar{Y})}_{\text{total}} = \underbrace{(\hat{Y}_{x} - \bar{Y})}_{\text{covariate}} + \underbrace{(\hat{Y}_{x+A} - \hat{Y}_{x})}_{\text{treatment}} + \underbrace{(Y - \hat{Y}_{x+A})}_{\text{residual}}$$
+
+$$SS_{total} = SS_{x} + SS_{A(adj)} + SS_{residual}$$
+
+`r ss_fmt(ss_tot)` = `r ss_fmt(ss_x)` + `r ss_fmt(ss_a)` + `r ss_fmt(ss_res)`
+
+Dashed line = grand mean; grey line = one common slope; coloured lines = five parallel group lines.
+
+In one-way ANOVA the covariate piece was buried inside the residual.
+:::
+
+::: {.column width="62%"}
+```{r l15-05b}
 #| echo: false
 #| message: false
 #| warning: false
-#| fig-height: 3.6
-#| fig-width: 3.6
-#| paged-print: false
-#| fig-alt: "Two-panel figure: a stacked horizontal bar showing the percentage of total sum of squares attributed to the covariate, the adjusted group effect, and the residual; and faceted scatterplots by group showing the null model, covariate-only model, and full ANCOVA model fits against the raw data."
-# Create a visualization of partitioning variance in ANCOVA
-set.seed(123)
-n <- 60
-group <- rep(c("A", "B", "C"), each = n / 3)
-x <- rnorm(n, mean = 5, sd = 1.5)
-# Create response with clear group differences and correlation with x
-y <- 2 +
-  0.8 * x +
-  ifelse(group == "A", 2, ifelse(group == "B", 1, 0)) +
-  rnorm(n, sd = 1)
-data <- data.frame(group = group, x = x, y = y)
-# Fit models
-model_null <- lm(y ~ 1, data = data)
-model_cov <- lm(y ~ x, data = data)
-model_full <- lm(y ~ x + group, data = data)
-# Get predictions
-data$pred_null <- predict(model_null)
-data$pred_cov <- predict(model_cov)
-data$pred_full <- predict(model_full)
-# Get residuals
-data$resid_null <- residuals(model_null)
-data$resid_cov <- residuals(model_cov)
-data$resid_full <- residuals(model_full)
-# Calculate SS
-ss_total <- sum((data$y - mean(data$y))^2)
-ss_cov <- sum((data$pred_cov - mean(data$y))^2)
-ss_group_adj <- sum((data$pred_full - data$pred_cov)^2)
-ss_residual <- sum(data$resid_full^2)
-# Create labels
-ss_labels <- c(
-  paste("SS_Total =", round(ss_total, 1)),
-  paste("SS_Covariate =", round(ss_cov, 1)),
-  paste("SS_Group(adj) =", round(ss_group_adj, 1)),
-  paste("SS_Residual =", round(ss_residual, 1))
-)
-# Create a stacked bar chart of SS components
-ss_data <- data.frame(
-  component = c("SS_Covariate", "SS_Group(adj)", "SS_Residual"),
-  value = c(ss_cov, ss_group_adj, ss_residual),
-  percentage = c(
-    ss_cov / ss_total,
-    ss_group_adj / ss_total,
-    ss_residual / ss_total
-  ) *
-    100
-)
-# Plot 1: Partitioning of SS
-partitioning_plot1 <- ggplot(
-  ss_data,
-  aes(x = "", y = value, fill = component)
-) +
-  geom_bar(stat = "identity", width = 0.5) +
-  geom_text(
-    aes(label = paste0(round(percentage, 1), "%")),
-    position = position_stack(vjust = 0.5)
-  ) +
-  coord_flip() +
-  labs(
-    title = "Partitioning of Variance in ANCOVA",
-    x = "",
-    y = "Sum of Squares",
-    fill = "Component"
-  ) +
-  theme_minimal(base_size = 7) +
-  theme(legend.position = "bottom")
+#| fig-height: 5
+#| fig-width: 6
+#| out-width: "100%"
+#| fig-alt: "Four panels of fruitfly longevity against thorax length showing the ANCOVA partition: total as each fly's deviation from the grand mean; covariate as the common regression line's deviation from the grand mean; adjusted treatment as each group's parallel line's deviation from the common line; residual as each fly's deviation from its own group's line."
+ss_plot_df <- p_df %>%
+  mutate(fit_x = ss_fit_x, fit_xa = ss_fit_xa)
 
-# Plot 2: Visualization of model fit
-plot_data <- data %>%
-  pivot_longer(
-    cols = c(y, pred_null, pred_cov, pred_full),
-    names_to = "type",
-    values_to = "value"
-  ) %>%
-  mutate(
-    type = factor(
-      type,
-      levels = c("y", "pred_null", "pred_cov", "pred_full"),
-      labels = c("Data", "Null Model", "Covariate Model", "Full Model")
-    )
-  )
-# Sample 20 points for clarity
-set.seed(42)
-sample_indices <- sample(1:n, 20)
-plot_data_sample <- plot_data %>%
-  filter(row_number() %in% rep(sample_indices, 4))
-partitioning_plot2 <- ggplot(
-  plot_data_sample,
-  aes(x = x, y = value, color = type)
+ss_base <- function(p, title) {
+  p +
+    geom_hline(yintercept = ss_gm, linetype = "dashed", colour = "grey20") +
+    labs(title = title, x = NULL, y = NULL, colour = NULL) +
+    theme_minimal(base_size = 7) +
+    theme(legend.position = "none")
+}
+
+common_line <- geom_line(aes(thorax, fit_x), colour = "grey30", linewidth = 0.9)
+group_lines <- geom_line(aes(thorax, fit_xa, colour = treat), linewidth = 0.7,
+                         show.legend = FALSE)
+
+s1 <- ss_base(
+  ggplot(ss_plot_df) +
+    geom_segment(aes(thorax, longev, xend = thorax, yend = ss_gm,
+                     colour = treat), alpha = 0.5, show.legend = FALSE) +
+    geom_point(aes(thorax, longev, colour = treat), size = 0.9),
+  paste0("Total\nfly to grand mean, SS = ", ss_fmt(ss_tot))
+)
+
+s2 <- ss_base(
+  ggplot(ss_plot_df) +
+    geom_point(aes(thorax, longev), colour = "grey70", size = 0.8) +
+    geom_segment(aes(thorax, fit_x, xend = thorax, yend = ss_gm),
+                 colour = "grey30", alpha = 0.5) +
+    common_line,
+  paste0("Covariate\ncommon line to grand mean, SS = ", ss_fmt(ss_x))
+)
+
+s3 <- ss_base(
+  ggplot(ss_plot_df) +
+    geom_point(aes(thorax, longev), colour = "grey80", size = 0.8) +
+    geom_segment(aes(thorax, fit_xa, xend = thorax, yend = fit_x,
+                     colour = treat), alpha = 0.6, show.legend = FALSE) +
+    common_line + group_lines,
+  paste0("Treatment (adjusted)\ngroup line to common line, SS = ", ss_fmt(ss_a))
 ) +
-  geom_point(data = filter(plot_data_sample, type == "Data"), size = 3) +
-  geom_line(
-    data = filter(plot_data_sample, type != "Data"),
-    aes(group = interaction(type, group)),
-    linewidth = 1
-  ) +
-  facet_wrap(~group) +
-  labs(
-    title = "Model Fits in ANCOVA",
-    x = "Covariate (X)",
-    y = "Response (Y)",
-    color = "Model"
-  ) +
-  theme_minimal(base_size = 7) +
-  theme(legend.position = "bottom")
-# Combine plots
-partitioning_plot1 +
-  partitioning_plot2 +
-  plot_layout(ncol = 1, heights = c(1, 2))
+  labs(x = "Thorax length (mm)")
+
+s4 <- ss_base(
+  ggplot(ss_plot_df) +
+    geom_segment(aes(thorax, longev, xend = thorax, yend = fit_xa,
+                     colour = treat), alpha = 0.5, show.legend = FALSE) +
+    geom_point(aes(thorax, longev, colour = treat), size = 0.9) +
+    group_lines,
+  paste0("Residual\nfly to its own group line, SS = ", ss_fmt(ss_res))
+) +
+  labs(x = "Thorax length (mm)")
+
+(s1 + s2) / (s3 + s4) +
+  plot_layout(guides = "collect") &
+  theme(legend.position = "bottom",
+        legend.text = element_text(size = 6),
+        legend.key.size = unit(0.3, "cm")) &
+  guides(colour = guide_legend(nrow = 1, override.aes = list(size = 2)))
 ```
 :::
+:::::
+
+## Reading the Partition
+
+:::::: columns
+::: {.column width="50%"}
+These are the **sequential** pieces — thorax entered first, then treatment given thorax — so they add exactly to $SS_{total}$. It is what `anova(lm(longev ~ thorax + treat))` reports.
+
+`Anova(..., type = "III")` credits thorax only **`r ss_fmt(ss_x3)`**, not `r ss_fmt(ss_x)`: the part of the thorax signal that overlaps treatment is not given to either term. The treatment and residual pieces are **identical** either way.
+:::
+
+:::: {.column width="50%"}
+::: callout-important
+**The residual is the denominator of every F.**
+
+Drop thorax and most of that covariate piece falls back into the residual: a one-way ANOVA on the same flies leaves `r ss_fmt(ss_res_oneway)`, the ANCOVA only `r ss_fmt(ss_res)`. A smaller denominator means a bigger *F* for treatment — the payoff you'll see in Part 4.
+:::
+::::
+::::::
 
 ## ANOVA Table for ANCOVA
 
-The ANOVA table for a single-factor ANCOVA has these components:
+The general layout for one factor A with *p* groups, one covariate X, and *n* observations:
 
-::: {.panel column="screen"}
-```{r l15-07}
-# Create a tibble with ANOVA table information
-anova_table <- tibble(
-  Source = c("Factor A (adjusted)", "Covariate", "Residual", "Total"),
-  df = c("(p-1)", "1", "n-p-1", "n-1"),
-  `Sum of Squares` = c("SS_A(adj)", "SS_Covariate", "SS_Residual", "SS_Total"),
-  `Mean Square` = c(
-    "MS_A(adj) = SS_A(adj)/(p-1)",
-    "MS_Covariate = SS_Covariate/1",
-    "MS_Residual = SS_Residual/(n-p-1)",
-    ""
-  ),
-  `F-ratio` = c("MS_A(adj)/MS_Residual", "MS_Covariate/MS_Residual", "", ""),
-  `Expected MS` = c("σ² + n∑α²/(p-1)", "σ² + β²∑(X-X̄)²", "σ²", "")
-)
-
-# Create
-anova_table
-```
+::: compact-table
+| Source | df | Sum of squares | Mean square | *F* | Expected mean square |
+|------------|------------|------------|------------|------------|------------|
+| Factor A (adjusted) | $p - 1$ | $SS_{A(adj)}$ | $SS_{A(adj)} / (p - 1)$ | $MS_{A(adj)} / MS_{residual}$ | $\sigma^2 + n\sum\alpha_i^2 / (p - 1)$ |
+| Covariate X | $1$ | $SS_{x}$ | $SS_{x} / 1$ | $MS_{x} / MS_{residual}$ | $\sigma^2 + \beta^2 \sum (X - \bar{X})^2$ |
+| Residual | $n - p - 1$ | $SS_{residual}$ | $SS_{residual} / (n - p - 1)$ |  | $\sigma^2$ |
+| Total | $n - 1$ | $SS_{total}$ |  |  |  |
 :::
+
+For the fruitflies (*n* = 125, *p* = 5), as `Anova(lm(longev ~ thorax + treat), type = "III")` reports it:
+
+::: compact-table
+| Source | df | Sum of squares | Mean square | *F* | *p* |
+|------------|------------|------------|------------|------------|------------|
+| treat (adjusted) | `r ss_t3["treat", "Df"]` | `r ss_fmt(ss_t3["treat", "Sum Sq"])` | `r ss_fmt(ss_t3["treat", "Sum Sq"] / ss_t3["treat", "Df"])` | `r sprintf("%.2f", ss_t3["treat", "F value"])` | \< 0.0001 |
+| thorax | `r ss_t3["thorax", "Df"]` | `r ss_fmt(ss_t3["thorax", "Sum Sq"])` | `r ss_fmt(ss_t3["thorax", "Sum Sq"])` | `r sprintf("%.2f", ss_t3["thorax", "F value"])` | \< 0.0001 |
+| Residual | `r ss_t3["Residuals", "Df"]` | `r ss_fmt(ss_t3["Residuals", "Sum Sq"])` | `r sprintf("%.1f", ss_ms_res)` |  |  |
+:::
+
+**Reading the expected mean squares:** when H~0~ is true (all $\alpha_i = 0$, or $\beta = 0$) the extra term drops out, the numerator estimates $\sigma^2$ just as the residual does, and *F* ≈ 1. A big *F* means the term explained more than noise.
 
 ## Null Hypotheses in ANCOVA
 
@@ -725,46 +837,88 @@ Test with the `x:A` interaction term in `lm(y ~ x * A)`.
 **This one is an assumption check, not a result.** You want to *fail* to reject it before going any further.
 :::
 
-## Null Hypotheses in ANCOVA — the Two Results
+## Null Hypotheses in ANCOVA: the Two Results {.nostretch}
+
+Once the slopes are parallel, the additive model `lm(longev ~ thorax + treat)` gives two tests. Each asks something different about the **parallel lines**.
 
 ::::: columns
 ::: {.column width="50%"}
-### Treatment effect, adjusted
+### Treatment effect, adjusted: the `treat` row
 
-$$H_0: \alpha_1 = \alpha_2 = \dots = \alpha_p = 0$$
+**In words:** if every fly had the *same* thorax length, would the treatments still differ in longevity?
 
-Are the **adjusted** group means equal?
+**In the picture:** are the parallel lines at **different heights**?
 
-$$F = \frac{MS_{A(adj)}}{MS_{residual}}$$
-
-the `A` term in `lm(y ~ x + A)`.
+$H_0: \alpha_1 = \alpha_2 = \dots = \alpha_p = 0$, so all the lines collapse onto one. "Adjusted" means thorax has already taken its share, so groups are compared at the same body size.
 :::
 
 ::: {.column width="50%"}
-### Covariate effect
+### Covariate effect: the `thorax` row
 
-$$H_0: \beta = 0$$
+**In words:** within a treatment group, do bigger flies live longer?
 
-Does the covariate relate to the response at all?
+**In the picture:** do the parallel lines **slope**?
 
-$$F = \frac{MS_{covariate}}{MS_{residual}}$$
-
-the `x` term in `lm(y ~ x + A)`.
+$H_0: \beta = 0$, so the lines are flat. Usually this is not the question you came for. It is the reason the covariate is in the model, and a big *F* here is what shrinks the residual.
 :::
 :::::
 
+```{r l15-07h}
+#| echo: false
+#| fig-width: 9
+#| fig-height: 1.75
+#| out-width: "100%"
+#| fig-alt: "Three schematic panels of three group lines. First: treatment H0 true, all groups on one sloped line. Second: covariate H0 true, three flat lines at different heights. Third: both effects present, three sloped parallel lines at different heights, which is what the fruitflies show."
+h0_df <- expand_grid(
+  x = c(0, 1),
+  group = c("A", "B", "C"),
+  panel = factor(c("Treatment H0 true: one line",
+                   "Covariate H0 true: flat lines",
+                   "Both effects: the fruitflies"),
+                 levels = c("Treatment H0 true: one line",
+                            "Covariate H0 true: flat lines",
+                            "Both effects: the fruitflies"))
+) %>%
+  mutate(
+    shift = c(A = 1, B = 0, C = -1)[group],
+    y = case_when(
+      str_detect(panel, "Treatment") ~ 2 * x + shift * 0.03,
+      str_detect(panel, "Covariate") ~ 1 + shift * 0.5,
+      TRUE ~ 2 * x + shift * 0.5
+    )
+  )
+
+ggplot(h0_df, aes(x, y, colour = group)) +
+  geom_line(linewidth = 1.1) +
+  facet_wrap(~ panel) +
+  labs(x = "Covariate (X)", y = "Response (Y)", colour = "Group") +
+  theme_minimal(base_size = 9) +
+  theme(axis.text = element_blank(), panel.grid.minor = element_blank(),
+        strip.text = element_text(face = "bold"))
+```
+
 ## Visualization of Homogeneity of Slopes
 
-**Parallel vs. Non-Parallel Slopes**
+::::: columns
+::: {.column width="32%"}
+The first test in every ANCOVA is the `x:A` interaction in `lm(y ~ x * A)`.
 
-::: {.panel column="screen"}
+**Left: parallel.** Each group gains the same amount of Y per unit of X. The interaction is not significant, so drop it and fit the additive model.
+
+**Right: not parallel.** Group A climbs much faster than group B, so the gap between them depends on where you look along X. There is no single "group effect" to adjust; the slopes are the result (Part 5).
+
+The shaded bands are 95% confidence bands for each line.
+:::
+
+::: {.column width="68%"}
 ```{r l15-08}
 #| echo: false
 #| message: false
 #| warning: false
-#| paged-print: false
-#| fig-alt: "Two faceted scatterplots with fitted regression lines and confidence bands by group: one panel shows homogeneous (parallel) slopes with a non-significant interaction p-value, the other shows heterogeneous (non-parallel) slopes with a significant interaction p-value."
-# Create two datasets - one with parallel slopes, one without
+#| fig-width: 6
+#| fig-height: 3.6
+#| out-width: "100%"
+#| fig-alt: "Two panels of simulated data with a fitted line and confidence band per group. Left: parallel slopes, interaction not significant. Right: non-parallel slopes, interaction significant."
 set.seed(123)
 n <- 40
 
@@ -772,105 +926,84 @@ n <- 40
 x1 <- rnorm(n, mean = 5, sd = 1.5)
 group1 <- rep(c("A", "B"), each = n / 2)
 y1 <- 2 + 0.7 * x1 + ifelse(group1 == "A", 2, 0) + rnorm(n, sd = 0.8)
-data1 <- data.frame(
-  x = x1,
-  y = y1,
-  group = group1,
-  type = "Homogeneous Slopes (p > 0.05)"
-)
 
 # 2. Non-parallel slopes (heterogeneous)
 x2 <- rnorm(n, mean = 5, sd = 1.5)
 group2 <- rep(c("A", "B"), each = n / 2)
 y2 <- 2 + ifelse(group2 == "A", 1.2 * x2, 0.4 * x2) + rnorm(n, sd = 0.8)
-data2 <- data.frame(
-  x = x2,
-  y = y2,
-  group = group2,
-  type = "Heterogeneous Slopes (p < 0.05)"
-)
 
-# Combine datasets
-all_data <- rbind(data1, data2)
+p1 <- anova(lm(y1 ~ x1 * group1))[3, "Pr(>F)"]
+p2 <- anova(lm(y2 ~ x2 * group2))[3, "Pr(>F)"]
 
-# Fit models for each dataset
-model1_int <- lm(y ~ x * group, data = data1) # Homogeneous
-model2_int <- lm(y ~ x * group, data = data2) # Heterogeneous
+lab1 <- sprintf("Parallel slopes\nx:A p = %.2f, not significant", p1)
+lab2 <- sprintf("Non-parallel slopes\nx:A p = %.3f, significant", p2)
 
-# Extract p-values for interactions
-# [3, "Pr(>F)"] targets the interaction term 'x:group'
-p1 <- anova(model1_int)[3, "Pr(>F)"] # p = 0.274
-p2 <- anova(model2_int)[3, "Pr(>F)"] # p = 0.002
+all_data <- bind_rows(
+  tibble(x = x1, y = y1, group = group1, type = lab1),
+  tibble(x = x2, y = y2, group = group2, type = lab2)
+) %>%
+  mutate(type = factor(type, levels = c(lab1, lab2)))
 
-# --- START OF FIX ---
-
-# 1. Create a dedicated data frame for annotations
-# This links each label to the correct 'type' for faceting
-annotations <- data.frame(
-  type = c("Homogeneous Slopes (p > 0.05)", "Heterogeneous Slopes (p < 0.05)"),
-  label = c(
-    paste("Interaction p =", round(p1, 3)), # p = 0.274
-    paste("Interaction p =", round(p2, 3))
-  ), # p = 0.002
-  x_pos = 3, # X-coordinate for text
-  y_pos = 11.5 # Y-coordinate for text
-)
-
-# 2. Plot with geom_text() and corrected subtitle
 ggplot(all_data, aes(x = x, y = y, color = group)) +
   geom_point() +
   geom_smooth(method = "lm", se = TRUE) +
   facet_wrap(~type) +
-  labs(
-    title = "Testing Homogeneity of Slopes (The Interaction)",
-    # CORRECTED SUBTITLE: "Heterogeneous" (p=0.002) is on the left
-    subtitle = "Left: Interaction IS significant (p < 0.05). | Right: Interaction is NOT significant (p > 0.05). Use ANCOVA.",
-    x = "Covariate (X)",
-    y = "Response (Y)",
-    color = "Group"
-  ) +
-  # Use geom_text() instead of annotate()
-  # It will use the 'type' column from 'annotations' to plot in the correct panel
-  geom_text(
-    data = annotations,
-    aes(x = x_pos, y = y_pos, label = label),
-    hjust = 0, # Left-align text
-    inherit.aes = FALSE # CRITICAL: stops inheriting 'color = group'
-  ) +
-  theme_minimal(base_size = 9) +
+  labs(x = "Covariate (X)", y = "Response (Y)", color = "Group") +
+  theme_minimal(base_size = 10) +
   theme(
     legend.position = "bottom",
-    strip.text = element_text(size = 12, face = "bold")
+    strip.text = element_text(size = 10, face = "bold")
   )
 ```
 :::
+:::::
 
 ## Part 4 · Worked Example — Fruitfly Longevity {.divider}
 
-## Partridge Example: Data Overview
+## Fruitfly Example: Data Overview
 
-**ANCOVA on Longevity of Male Fruitflies**
+:::::: columns
+:::: {.column width="45%"}
+**Does mating shorten a male fruitfly's life?** Partridge & Farquhar (1981), Quinn & Keough Box 12-1.
 
-::: {.panel column="screen"}
+- **Response (`longev`):** each **male's** lifespan in days, 125 males. The females are only the treatment.
+- **Treatment (`treat`):** what each male lived with, 25 per group:
+
+::: compact-table
+| Group             | Male housed with              | Can he mate?               |
+|------------------------|------------------------|------------------------|
+| no females        | no females                    | no                         |
+| 1 / 8 inseminated | 1 or 8 newly pregnant females | **no**: they won't re-mate |
+| 1 / 8 virgin      | 1 or 8 virgin females         | **yes**                    |
+:::
+
+- **Covariate (`thorax`):** each male's thorax length (mm), i.e. body size. Bigger males live longer in every group, and the lines look parallel.
+::::
+
+::: {.column width="55%"}
 ```{r l15-09}
 #| echo: false
 #| paged-print: false
-#| fig-alt: "Scatterplot of fruitfly thorax length versus longevity in days, colored by mating treatment, with a fitted regression line for each treatment group, showing longevity increasing with thorax length across all treatments."
+#| fig-width: 5
+#| fig-height: 4.4
+#| out-width: "100%"
+#| fig-alt: "Scatterplot of male fruitfly thorax length versus longevity in days, colored by mating treatment, with a fitted regression line for each treatment group, showing longevity increasing with thorax length across all treatments."
 ggplot(p_df, aes(x = thorax, y = longev, color = treat)) +
   geom_point() +
   geom_smooth(method = "lm", se = FALSE) + # se=FALSE to see lines clearly
   labs(
-    title = "Relationship between Thorax Length and Longevity",
     x = "Thorax Length (mm)",
-    y = "Longevity (days)",
-    color = "Treatment"
+    y = "Male longevity (days)",
+    color = NULL
   ) +
-  theme_minimal(base_size = 9) +
-  theme(legend.position = "bottom")
+  theme_minimal(base_size = 10) +
+  theme(legend.position = "bottom") +
+  guides(color = guide_legend(nrow = 2))
 ```
 :::
+::::::
 
-## Partridge Example: Steps 1–2 — Test Homogeneity of Slopes
+## Fruitfly Example: Steps 1–2 — Test Homogeneity of Slopes
 
 ```{r l15-10-setup}
 #| include: false
@@ -905,7 +1038,37 @@ The five treatment groups share a common slope: body size buys the same amount o
 ::::
 ::::::
 
-## Partridge Example: Step 3 — Fit the Additive ANCOVA
+## Don't Read the `treat` Row of the Interaction Model {.tight-code}
+
+:::::: columns
+::: {.column width="52%"}
+Same model, but with thorax **centered** at its mean:
+
+```{r l15-10c}
+#| echo: true
+#| collapse: true
+p_df_c <- p_df %>%
+  mutate(thorax_c = thorax - mean(thorax))
+
+Anova(lm(longev ~ thorax_c * treat,
+         data = p_df_c), type = "III")
+```
+:::
+
+:::: {.column width="48%"}
+On the last slide `treat` had *F* = 0.08, *p* = 0.99. That does **not** mean treatment does nothing.
+
+With `thorax * treat` the lines may have different slopes, so the gap between groups can change along x. The `treat` row then tests the gap at **thorax = 0 mm**, far outside the data (0.64 to 0.94 mm).
+
+Center thorax and the same row tests the gap at the **mean** thorax length, where the flies actually are: *F* = 20.6, *p* \< 0.0001. The `thorax_c:treat` row does not change at all.
+
+::: callout-important
+**In the interaction model, read only the `x:A` row.** That is why the recipe drops to the additive model before testing treatment. With parallel lines, centering changes nothing.
+:::
+::::
+::::::
+
+## Fruitfly Example: Step 3 — Fit the Additive ANCOVA
 
 - Since the interaction was not significant, we re-run the model without it.
   - **Interpretation:**
@@ -971,7 +1134,7 @@ Here the treatment effect was significant either way. On a smaller or noisier da
 :::::
 :::::::
 
-## Partridge Example: Getting Adjusted Means
+## Fruitfly Example: Getting Adjusted Means
 
 - **The ANOVA table tells us the treatments are different, but not which ones.**
   - Use `emmeans` package to get the adjusted means / perform pairwise comparisons
@@ -991,7 +1154,7 @@ adjusted_means
 ```
 :::
 
-## Partridge Example: Pairwise Comparisons {.tight-code}
+## Fruitfly Example: Pairwise Comparisons {.tight-code}
 
 ::::: columns
 ::: {.column width="55%"}
@@ -1017,7 +1180,7 @@ Every group that actually **mated** differs from the groups that did not, except
 :::
 :::::
 
-## Partridge Example: Pairwise Comparisons — Compact Letters
+## Fruitfly Example: Pairwise Comparisons — Compact Letters
 
 :::::: columns
 ::: {.column width="58%"}
@@ -1056,9 +1219,19 @@ The three non-mating groups are one block. One virgin female pulls longevity dow
 
 ## Visualizing ANCOVA Results
 
-**Visualization Options for ANCOVA**
+::::: columns
+::: {.column width="34%"}
+Four ways to show one result:
 
-::: {.panel column="screen"}
+1.  **Raw data + lines:** the covariate effect, and parallel slopes.
+2.  **Mean covariate (dashed):** where ANCOVA compares the groups.
+3.  **Adjusted means:** diamonds where each line crosses the dashed line.
+4.  **Bars ± 95% CI:** what readers want, but the covariate is hidden.
+
+Panels 3 + 4 together are the publication figure in Part 6.
+:::
+
+::: {.column width="66%"}
 ```{r l15-15}
 #| echo: false
 #| message: false
@@ -1165,8 +1338,9 @@ ggsave(
 )
 ```
 
-![A 2x2 panel comparing four ways to visualize ANCOVA results for the fruitfly data: raw data with regression lines by treatment, the same plot with a reference line at the mean covariate, adjusted means plotted as diamonds at the mean covariate, and a bar chart of adjusted means with confidence-interval error bars.](images/ancova_vis_combined.png){width="4in"}
+![](images/ancova_vis_combined.png){fig-alt="A 2x2 panel comparing four ways to visualize ANCOVA results for the fruitfly data: raw data with regression lines by treatment, the same plot with a reference line at the mean covariate, adjusted means plotted as diamonds at the mean covariate, and a bar chart of adjusted means with confidence-interval error bars." width="82%"}
 :::
+:::::
 
 ## Part 5 · Heterogeneous Slopes & Assumptions {.divider}
 
@@ -1218,13 +1392,15 @@ A significant interaction is usually the **more interesting** result. It says th
 emtrends(g_int, "lake", var = "log_len")
 
 pairs(emtrends(g_int, "lake", var = "log_len"))
+
+test(emtrends(g_int, "lake", var = "log_len"), null = 3)
 ```
 :::
 
 :::: {.column width="48%"}
-`emtrends()` is `emmeans()` for **slopes**. It gives one slope per group, with a standard error, and `pairs()` tests whether they differ.
+`emtrends()` only **estimates** one slope per group, with its SE. `pairs()` tests the slopes against each other; `test(..., null = 3)` tests each against 3, *t* = (*b* − 3)/SE. On log-log axes the slope is the **allometric exponent**: mass ∝ length^*b*^.
 
-On log-log axes the slope is the **allometric exponent**: mass ∝ length^*b*^.
+**Why 3?** Mass tracks volume (length × width × depth). A fish that keeps its shape gets wider and deeper as it gets longer, so mass ∝ length³.
 
 ::: callout-important
 **The biology is in the exponent**
@@ -1232,7 +1408,7 @@ On log-log axes the slope is the **allometric exponent**: mass ∝ length^*b*^.
 - **I8: *b* = 3.11** — not distinguishable from 3 (*p* = 0.058). Isometric: these fish keep their shape as they grow.
 - **I3: *b* = 2.79** — significantly **below** 3 (*p* = 0.029). I3 grayling get relatively **lighter** as they lengthen.
 
-That is a condition difference between the lakes, and an additive ANCOVA would have hidden it entirely.
+An additive ANCOVA would have hidden this condition difference.
 :::
 ::::
 ::::::
@@ -1261,10 +1437,10 @@ pairs(emmeans(g_int, ~ lake | log_len,
 |--------|--------------------|----------|
 | 200 mm | −0.030             | 0.13     |
 | 250 mm | −0.061             | \<0.0001 |
-| 300 mm | −0.107             | \<0.0001 |
+| 300 mm | −0.086             | \<0.0001 |
 :::
 
-At **200 mm the two lakes are indistinguishable.** The gap opens as the fish get longer, and by 300 mm an I3 grayling is about 20% lighter than an I8 grayling of the same length.
+At **200 mm the two lakes are indistinguishable.** The gap opens as the fish get longer, and by 300 mm an I3 grayling is about 18% lighter than an I8 grayling of the same length (10^−0.086^ = 0.82). The lengths go in as `log10()` because the model is on `log_len`.
 
 ::: callout-warning
 **⚠️ `johnson_neyman = TRUE` does not work here**
@@ -1436,8 +1612,12 @@ Without those two groups you could only say "males near females die younger," wh
 
 ## Publication Quality Figure
 
-::: {.panel column="screen"}
+**Left:** the data, the five parallel ANCOVA lines, and each adjusted mean ± 95% CI at the mean thorax length (dashed). **Right:** the same adjusted means as bars, for readers who only want the comparison.
+
 ```{r l15-19}
+#| fig-width: 9
+#| fig-height: 4.4
+#| out-width: "100%"
 #| echo: false
 #| message: false
 #| warning: false
@@ -1550,7 +1730,6 @@ pub_plot2 <- ggplot(
 # Combine plots
 pub_plot1 + pub_plot2 + plot_layout(widths = c(2, 1))
 ```
-:::
 
 ## Summary
 
