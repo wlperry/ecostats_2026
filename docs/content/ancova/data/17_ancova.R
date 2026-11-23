@@ -57,6 +57,27 @@ count(g_df, lake)
 invisible(NULL)
 
 
+# ---- 1b Why a covariate? Grayling first ------------------
+# Raw comparison: are I8 grayling heavier than I3 grayling?
+
+ggplot(g_df, aes(x = lake, y = mass_g)) +
+  geom_boxplot()
+
+# ...but are they also longer?
+
+g_df %>%
+  group_by(lake) %>%
+  summarise(mean_length = mean(length_mm),
+            mean_mass   = mean(mass_g))
+
+# Mass against length: compare the lakes at the SAME length
+
+ggplot(g_df, aes(x = length_mm, y = mass_g, color = lake)) +
+  geom_point()
+
+invisible(NULL)
+
+
 # ==========================================================
 # THE ANCOVA RECIPE   y = response, x = covariate, A = factor
 #
